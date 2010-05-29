@@ -1,3 +1,10 @@
+gmsh (2.4.2.dfsg-4) UNRELEASED; urgency=low
+
+  [Christophe Prud'homme]
+  * moved gmsh from pkg-scicomp to Debian Science
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Sat, 29 May 2010 12:43:39 +0200
+
 gmsh (2.4.2.dfsg-3) unstable; urgency=low
 
   [Christophe Prud'homme]

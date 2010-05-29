@@ -1,7 +1,7 @@
 Source: gmsh
 Section: math
 Priority: optional
-Maintainer: Debian Scientific Computing Team <pkg-scicomp-devel@lists.alioth.debian.org>
+Maintainer: Debian Science Maintainers <debian-science-maintainers@lists.alioth.debian.org>
 Uploaders: Christophe Prud'homme <prudhomm@debian.org>
 Build-Depends: debhelper (>= 7), quilt, cdbs, cmake, gfortran, libgl1-mesa-dev|nvidia-glx-dev,
  libglu1-mesa-dev, libfltk1.1-dev (>=1.1.7),
@@ -11,8 +11,8 @@ Build-Depends: debhelper (>= 7), quilt, cdbs, cmake, gfortran, libgl1-mesa-dev|n
  libmedc-dev (>= 2.3.6),
  libblas-dev | libblas-3gf.so, liblapack-dev | liblapack-3gf.so
 Standards-Version: 3.8.4
-Vcs-Svn: svn://svn.debian.org/svn/pkg-scicomp/gmsh/trunk/
-Vcs-Browser: http://svn.debian.org/wsvn/pkg-scicomp/gmsh/
+Vcs-Svn: svn://svn.debian.org/svn/debian-science/packages/gmsh/trunk
+Vcs-Browser: http://svn.debian.org/wsvn/debian-science/packages/gmsh/trunk
 Homepage: http://www.geuz.org/gmsh/
 
 Package: gmsh
