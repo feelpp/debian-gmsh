@@ -1,0 +1,144 @@
+#! /bin/sh -e
+## 01_port_amd64_gcc40.dpatch by Christophe Prud'homme <prudhomm@debian.org>
+## using patch sent by  Andreas Jochens <aj@andaco.de>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: No description.
+
+[ -f debian/patches/00patch-opts ] && . debian/patches/00patch-opts
+patch_opts="${patch_opts:--f --no-backup-if-mismatch ${2:+-d $2}}"
+
+if [ $# -lt 1 ]; then
+    echo >&2 "`basename $0`: script expects -patch|-unpatch as argument"
+    exit 1
+fi
+case "$1" in
+       -patch) patch $patch_opts -p1 < $0;;
+       -unpatch) patch $patch_opts -p1 -R < $0;;
+	*)
+		echo >&2 "`basename $0`: script expects -patch|-unpatch as argument"
+		exit 1;;
+esac
+
+exit 0
+@DPATCH@
+diff -urN ../tmp-orig/gmsh-1.56.3/Common/Options.cpp ./Common/Options.cpp
+--- ../tmp-orig/gmsh-1.56.3/Common/Options.cpp  2004-11-10 23:45:16.000000000 +0100
++++ ./Common/Options.cpp        2004-12-22 08:39:14.656042608 +0100
+@@ -910,7 +910,7 @@
+       CTX.gl_font_enum = FL_HELVETICA;
+     }
+     else
+-      CTX.gl_font_enum = (int)menu_font_names[index].user_data();
++      CTX.gl_font_enum = (long)menu_font_names[index].user_data();
+   }
+   if(WID && (action & GMSH_GUI)){
+     WID->gen_choice[1]->value(index);
+diff -urN ../tmp-orig/gmsh-1.56.3/Fltk/Callbacks.cpp ./Fltk/Callbacks.cpp
+--- ../tmp-orig/gmsh-1.56.3/Fltk/Callbacks.cpp  2004-11-10 23:45:17.000000000 +0100
++++ ./Fltk/Callbacks.cpp        2004-12-22 08:41:08.514733456 +0100
+@@ -2939,7 +2939,7 @@
+ {
+   char file[256], tmp[256];
+   static int init = 0, first[MAXSOLVERS];
+-  int i, num = (int)data;
++  long i, num = (long)data;
+ 
+   if(!init) {
+     for(i = 0; i < MAXSOLVERS; i++)
+@@ -2967,7 +2967,7 @@
+ void solver_file_open_cb(CALLBACK_ARGS)
+ {
+   char tmp[256];
+-  int num = (int)data;
++  long num = (long)data;
+   sprintf(tmp, "*%s", SINFO[num].extension);
+ 
+   // We allow to create the .pro file... Or should we add a "New file"
+@@ -2988,7 +2988,7 @@
+ void solver_file_edit_cb(CALLBACK_ARGS)
+ {
+   char prog[1024], file[1024], cmd[1024];
+-  int num = (int)data;
++  long num = (long)data;
+   FixWindowsPath(CTX.editor, prog);
+   FixWindowsPath((char*)WID->solver[num].input[0]->value(), file);
+   _replace_multi_format(prog, file, cmd);
+@@ -2997,7 +2997,7 @@
+ 
+ void solver_choose_mesh_cb(CALLBACK_ARGS)
+ {
+-  int num = (int)data;
++  long num = (long)data;
+   if(file_chooser(0, 0, "Open mesh file", "*.msh", 0))
+     WID->solver[num].input[1]->value(file_chooser_get_name(1));
+ }
+@@ -3056,7 +3056,7 @@
+ 
+ void solver_kill_cb(CALLBACK_ARGS)
+ {
+-  int num = (int)data;
++  long num = (long)data;
+   if(SINFO[num].pid > 0) {
+     kill(SINFO[num].pid, 9);
+     Msg(INFO, "Killed %s pid %d", SINFO[num].name, SINFO[num].pid);
+@@ -3066,7 +3066,7 @@
+ 
+ void solver_choose_executable_cb(CALLBACK_ARGS)
+ {
+-  int num = (int)data;
++  long num = (long)data;
+   if(file_chooser(0, 0, "Choose executable",
+ #if defined(WIN32)
+                   "*.exe"
+@@ -3079,7 +3079,7 @@
+ 
+ void solver_ok_cb(CALLBACK_ARGS)
+ {
+-  int num = (int)data;
++  long num = (long)data;
+   int retry = 0;
+   opt_solver_popup_messages(num, GMSH_SET, WID->solver[num].butt[0]->value());
+   opt_solver_merge_views(num, GMSH_SET, WID->solver[num].butt[1]->value());
+@@ -3418,7 +3418,7 @@
+ 
+ void view_options_custom_cb(CALLBACK_ARGS)
+ {
+-  int custom = (int)data;
++  long custom = (long)data;
+     
+   if(custom){
+     WID->view_value[31]->activate();
+@@ -3432,12 +3432,12 @@
+ 
+ void view_options_timestep_cb(CALLBACK_ARGS)
+ {
+-  int links = (int)opt_post_link(0, GMSH_GET, 0);
++  long links = (long)opt_post_link(0, GMSH_GET, 0);
+   for(int i = 0; i < List_Nbr(CTX.post.list); i++) {
+     if((links == 2 || links == 4) ||
+        ((links == 1 || links == 3) && opt_view_visible(i, GMSH_GET, 0)) ||
+        (links == 0 && i == (long int)data)) {
+-      opt_view_timestep(i, GMSH_SET, (int)((Fl_Value_Input *) w)->value());
++      opt_view_timestep(i, GMSH_SET, (long)((Fl_Value_Input *) w)->value());
+     }
+   }
+   Draw();
+@@ -3445,7 +3445,7 @@
+ 
+ void view_options_timestep_decr_cb(CALLBACK_ARGS)
+ {
+-  int links = (int)opt_post_link(0, GMSH_GET, 0);
++  long links = (long)opt_post_link(0, GMSH_GET, 0);
+   for(int i = 0; i < List_Nbr(CTX.post.list); i++) {
+     if((links == 2 || links == 4) ||
+        ((links == 1 || links == 3) && opt_view_visible(i, GMSH_GET, 0)) ||
+@@ -3459,7 +3459,7 @@
+ 
+ void view_options_timestep_incr_cb(CALLBACK_ARGS)
+ {
+-  int links = (int)opt_post_link(0, GMSH_GET, 0);
++  long links = (long)opt_post_link(0, GMSH_GET, 0);
+   for(int i = 0; i < List_Nbr(CTX.post.list); i++) {
+     if((links == 2 || links == 4) ||
+        ((links == 1 || links == 3) && opt_view_visible(i, GMSH_GET, 0)) ||
