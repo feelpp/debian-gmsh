@@ -25,11 +25,12 @@ ifeq ($(WITH_OCC),yes)
  CXXFLAGS += -I/usr/include/opencascade -DHAVE_NO_OCC_CONFIG_H
  CPPFLAGS += -I/usr/include/opencascade -DHAVE_NO_OCC_CONFIG_H
 endif
-ifeq ($(WITH_MPI),yes)
- CFLAGS += -I/usr/include/mpi -DOMPI_SKIP_MPICXX
- CXXFLAGS += -I/usr/include/mpi -DOMPI_SKIP_MPICXX
- CPPFLAGS += -I/usr/include/mpi -DOMPI_SKIP_MPICXX
-endif
+
+# To enable med support
+CFLAGS +=-I/usr/include/mpi  -DOMPI_SKIP_MPICXX
+CXXFLAGS +=-I/usr/include/mpi  -DOMPI_SKIP_MPICXX
+CPPFLAGS +=-I/usr/include/mpi  -DOMPI_SKIP_MPICXX
+
 
 # DEB_CONFIGURE_EXTRA_FLAGS :=       \
 #   --host=$(DEB_HOST_GNU_TYPE)      \
