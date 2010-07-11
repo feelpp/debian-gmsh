@@ -1,0 +1,634 @@
+gmsh (2.4.2.dfsg-5) unstable; urgency=low
+
+  [Christophe Prud'homme]
+  * debian/control: add build-depends on mpi-default-dev
+  * Bug fix: "please add med support", thanks to trophime (Closes:
+    #585871).
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Sun, 11 Jul 2010 14:01:31 +0200
+
+gmsh (2.4.2.dfsg-4) unstable; urgency=low
+
+  [Christophe Prud'homme]
+  * moved gmsh from pkg-scicomp to Debian Science
+  * Bug fix: "please add med support", thanks to trophime (Closes:
+    #585871).
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Fri, 25 Jun 2010 09:17:27 +0200
+
+gmsh (2.4.2.dfsg-3) unstable; urgency=low
+
+  [Christophe Prud'homme]
+  * Bug fix: "FTBFS: make[1]: *** No rule to make target `default&#39;.
+    Stop.", thanks to Lucas Nussbaum (Closes: #577316).
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Thu, 27 May 2010 12:36:33 +0200
+
+gmsh (2.4.2.dfsg-2) unstable; urgency=low
+
+  * debian/control: now build with med-ficher support
+  * debian/control: update standards-version to 3.8.4 (no change)
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Tue, 09 Feb 2010 21:25:21 +0100
+
+gmsh (2.4.2.dfsg-1) unstable; urgency=low
+
+  [Christophe Prud'homme]
+  * New upstream release
+    + solver code refactoring
+    + better IDE integration.
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Sun, 27 Sep 2009 17:36:40 +0200
+
+gmsh (2.4.1.dfsg-1) unstable; urgency=low
+
+  [Christophe Prud'homme]
+  * New upstream release
+    + fixed surface mesh orientation bug introduced in 2.4.0;
+    + mesh and graphics code refactoring;
+    + small usability enhancements and bug fixes.
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Wed, 02 Sep 2009 18:12:15 +0200
+
+gmsh (2.4.0.dfsg-1) UNRELEASED; urgency=low
+
+  [Christophe Prud'homme]
+  * New upstream release
+    + switched build system to CMake;
+    + optionally copy transfinite mesh constraints during geometry
+      transformations;
+    + bumped mesh version format to 2.1 (small change in the
+      $PhysicalNames section, where the group dimension is now required);
+    + ported most plugins to the new post-processing API;
+    + switched from MathEval to MathEx and Flu_Tree_Browser to Fl_Tree;
+    + small bug fixes and improvements all over the place.
+  * debian/rules: use cmake build system
+  * debian/control: tighten libcgns depends
+  * debian/rules: remove Tetgen {cxx,h} files in get-orig-source
+  * debian/rules: enable cgns
+  * debian/rules: update Standards-Version to 3.8.3 (no change)
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Fri, 28 Aug 2009 11:55:06 +0200
+
+gmsh (2.3.1.dfsg-4) unstable; urgency=low
+
+  [Christophe Prud'homme]
+  * Bug fix: "gmsh with cgns write support", thanks to Oliver Borm
+    (Closes: #529972).
+  * debian/rules: make sure that Gmsh is built with occ support on all
+    platforms thanks to Denis Barbier (#536435).
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Mon, 13 Jul 2009 15:49:21 +0200
+
+gmsh (2.3.1.dfsg-3) unstable; urgency=low
+
+  [Christophe Prud'homme]
+  * debian/control: Applied patch by Denis Barbier now that opencascade
+    builds on all arches and Build-depends on libopencascade-modeling-dev
+  * debian/{rules,control}: don't build with mpi support (it doesn't do
+    anything)
+  * debian/control: update Standards-Version to 3.8.2 (no changes)
+  * Added patch by Martin to fix gcc44 compilation failure
+  * Bug fix: "missing #include", thanks to Martin Michlmayr (Closes:
+    #525733).
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Fri, 10 Jul 2009 07:39:49 +0200
+
+gmsh (2.3.1.dfsg-2) unstable; urgency=low
+
+  * debian/{rules,control}: provide the prefix for blas/lapack libraries
+    and build-depends on blas and lapack
+  * debian/control: drop gsl build-depends. It is no more needed, use
+    blas/lapack instead
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Sat, 28 Mar 2009 12:38:50 +0100
+
+gmsh (2.3.1.dfsg-1) unstable; urgency=low
+
+  * New upstream release
+    + removed GSL dependency (Gmsh now simply uses Blas and Lapack);
+    + new per-window visibility;
+    + added support for composite window printing and background images;
+    + fixed string option affectation in parser;
+    + fixed surface mesh orientation for Open Cascade models;
+    + fixed random triangle orientations in Delaunay and Frontal
+    algorithms.
+  * debian/{control,rules}: Build with occ support only on amd64 and i386
+  * debian/rules: find GMSH_VERSION automatically
+  * debian/{rules,control}: enable mpi support for amd64, i386, ia64 and
+    powerpc
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Fri, 20 Mar 2009 08:21:36 +0100
+
+gmsh (2.3.0.dfsg-3) unstable; urgency=low
+
+  * debian/: added prerm and postinst to get rid of two lintian errors
+    prerm-does-not-call-installdocs and postinst-does-not-call-installdocs
+  * debian/control: updated Standards-Version to 3.8.1, no changes
+  * debian/compat: updated dh compat to V7
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Thu, 19 Mar 2009 09:29:02 +0100
+
+gmsh (2.3.0.dfsg-2) unstable; urgency=low
+
+  * debian/control: build-depends on libopencascade-dev
+  * debian/rules: compile with opencascade support as it is now in main
+    and no more in non-free
+  * Bug fix: "gmsh with libopencascade6.2 support", Thanks to Oliver Borm
+    <oli.borm@web.de> (Closes: #506521).
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Mon, 16 Mar 2009 21:31:08 +0100
+
+gmsh (2.3.0.dfsg-1) unstable; urgency=low
+
+  * New upstream release
+    + major graphics and GUI code refactoring;
+    + new full-quad/hexa subdivision algorithm (removed
+      Mesh.RecombineAlgo);
+    + improved automatic transfinite corner selection (now also
+      for volumes);
+    + improved visibility browser; new automatic adaptive visualization
+      for high-order simplices;
+    + modified arrow size, clipping planes and transform options; many
+      improvements and
+    + bug fixes all over the place.
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Tue, 17 Feb 2009 10:12:27 +0100
+
+gmsh (2.2.6.dfsg-2) unstable; urgency=low
+
+  * debian/control: fixed lintian warning "debhelper-but-no-misc-depends"
+  * debian/watch: fixed lintian warning
+    "debian-watch-file-should-mangle-version"
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Wed, 07 Jan 2009 16:02:08 +0100
+
+gmsh (2.2.6.dfsg-1) unstable; urgency=low
+
+  * New upstream release
+    + better transfinite smoothing and automatic corner selection;
+    + fixed high order meshing crashes on Windows and Linux;
+    + new uniform mesh refinement;
+    + fixed various other small bugs.
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Mon, 01 Dec 2008 22:19:58 +0100
+
+gmsh (2.2.5.dfsg-3) unstable; urgency=low
+
+  [Christophe Prud'homme]
+  *  debian/control: get rid of mpi
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Sat, 01 Nov 2008 18:19:49 +0100
+
+gmsh (2.2.5.dfsg-2) unstable; urgency=low
+
+  [Christophe Prud'homme]
+  * debian/control: do not depend on libhdf5-openmpi-dev but rather
+    libopenmpi-dev for now
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Sat, 01 Nov 2008 11:18:44 +0100
+
+gmsh (2.2.5.dfsg-1) unstable; urgency=low
+
+  * New upstream release
+    + Gmsh now requires FLTK 1.1.7 or above;
+    + Various small improvements (STL and VTK mesh IO, Netgen upgrade,
+      Visual C++ support, Fields);
+    + Bug fixes (pyramid interpolation, Chaco crashes).
+
+  * New upstream release (2.2.4)
+    + integrated Metis and Chaco mesh partitioners (many thanks to Stephen
+    Guzik!);
+    + variables can now be deleted in geo files;
+    + added support for point datasets in model-based postprocessing views;
+    + small bug fixes.
+  * debian/{rules,control}: work towards med/hdf5 support
+  * debian/rules: modified get-orig-source to get rid of Metis and
+    generate a .dfsg tarball
+  * debian/README.source: added to document the changes in the Gmsh source
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Sat, 01 Nov 2008 08:33:32 +0100
+
+gmsh (2.2.3-1) unstable; urgency=low
+
+  [Christophe Prud'homme]
+  * new upstream release
+    + enhanced clipping interface;
+    + API cleanup;
+    + fixed various bugs (Plugin(Integrate), high order meshes, surface
+    info crash).
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Tue, 15 Jul 2008 09:41:53 +0200
+
+gmsh (2.2.2-2) unstable; urgency=low
+
+  [Christophe Prud'homme]
+  * remove occ support, it is non-free
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Wed, 02 Jul 2008 00:19:41 +0200
+
+gmsh (2.2.2-1) unstable; urgency=low
+
+  [Christophe Prud'homme]
+  * enable Open Cascade support in gmsh, build-depends on libopencascade-dev
+  * new upstream release (2.2.1 and 2.2.2 changelogs)
+    + added geometrical transformations on volumes;
+    + fixed bug in high order mesh generation;
+    + various small improvements (adaptive views, gui, code cleanup);
+    + bug fixes (high order meshes, Netgen interface).
+  * update Standards-Version to 3.8.0 (no change)
+  * remove obsolete dependencies libglu1-xorg-dev and tetex-bin
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Tue, 01 Jul 2008 10:53:12 +0200
+
+gmsh (2.2.0-2) unstable; urgency=low
+
+  [Christophe Prud'homme]
+  * Bug fix: "gmsh ships no .desktop", thanks to Vassilis Pandis (Closes:
+    #375770). Applied the Ubuntu patch.
+
+  [Daniel Leidert]
+  * debian/control (Vcs-Svn): Fixed.
+    (Build-Depends): Use texlive instead of tetex-bin.
+  * debian/gmsh.doc-base (Section): Fixed accordingly to doc-base (>= 0.8.10).
+  * debian/rules: Removed some variable declarations, that lead to double
+    configuration and seem to be useless.
+    (build/gmsh): Try to avoid multiple runs by using a stamp.
+    (orig-tarball): Renamed to get-orig-source and changed to use uscan.
+  * debian/watch: Added.
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Sun, 18 May 2008 12:46:05 +0200
+
+gmsh (2.2.0-1) unstable; urgency=low
+
+  * New upstream release
+    + new model-based post-processing backend;
+    + added MED I/O for mesh and post-processing;
+    + fixed BDF vertex ordering for 2nd order elements;
+    + replaced Mesh.ConstrainedBackgroundMesh with
+      Mesh.CharacteristicLength{FromPoints,ExtendFromBoundary};
+    + new Fields interface;
+    + control windows are now non-modal by default;
+    + new experimental 2D frontal algorithm;
+    + fixed various bugs.
+  * debian/control: build-dep on libgl1-mesa-dev|nvidia-glx-dev and
+    libglu1-xorg-dev
+  * debian/patches: no need for stdlib.patch anymore
+  * debian/control: renamed XS-Vcs-* to Vcs-*
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Sun, 20 Apr 2008 13:33:44 +0200
+
+gmsh (2.1.1-2) unstable; urgency=low
+
+  * Bug fix: "gmsh: FTBFS: Message.cpp:213: error: &#39;abort&#39; was not
+    declared in this scope", thanks to Lucas Nussbaum (Closes: #474807).
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Thu, 10 Apr 2008 22:18:58 +0200
+
+gmsh (2.1.1-1) unstable; urgency=low
+
+  [ Christophe Prud'homme ]
+  * New upstream release 2.1.1
+    + fixes the bugs discovered in 2.1.0 (second order meshes with quad
+      faces, view->combine with empty views, crash after initial mesh,
+      compilation problems).
+  * New upstream release 2.1.0
+    + new post-processing database;
+    + complete rewrite of post-processing drawing code;
+    + improved surface mesh algorithms;
+    + improved STEP/IGES/BREP support;
+    + new 3D mesh optimization algorithm;
+    + new default native file choosers;
+    + fixed 'could not find extruded vertex' in extrusions;
+    + many improvements and bug fixes all over the place.
+
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Sun, 02 Mar 2008 09:06:49 +0100
+
+gmsh (2.0.8-4) unstable; urgency=low
+
+  [ Christophe Prud'homme ]
+  * debian/control: depend on quilt and cdbs
+  * debian/rules: use quilt and cdbs
+  * Bug fix: "FTBFS with GCC 4.3: duplicate function parameters &amp; co",
+    thanks to Martin Michlmayr (Closes: #454883).
+  * debian/control: update Standards-Version to 3.7.3 (no change)
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Sun, 16 Dec 2007 17:50:13 +0100
+
+gmsh (2.0.8-3) unstable; urgency=low
+
+  [ Christophe Prud'homme ]
+  * debian/control: added Homepage
+  * debian/menu: comply to new menu structure
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Sun, 14 Oct 2007 12:52:38 +0200
+
+gmsh (2.0.8-2) unstable; urgency=low
+
+  * debian/rules: use -O3 to compile gmsh
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Wed, 25 Jul 2007 10:20:57 +0200
+
+gmsh (2.0.8-1) unstable; urgency=low
+
+  [ Christophe Prud'homme ]
+  * New upstream release
+    + unused vertices are not saved in mesh files anymore;
+    + new plugin GUI; automatic GUI font size selection;
+    + renamed Plugin(DecomposeInSimplex) into Plugin(MakeSimplex);
+    + reintroduced enhanced Plugin(SphericalRaise);
+    + clarified meshing algo names;
+    + new option to save groups of nodes in UNV meshes;
+    + new background mesh infrastructure;
+    + many small improvements and small bug fixes.
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Sat, 14 Jul 2007 13:27:49 +0200
+
+gmsh (2.0.7-1) unstable; urgency=low
+
+  * New upstream release
+  * FTBFS with GCC 4.3: missing #includes
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Fri,  6 Apr 2007 17:46:03 +0200
+
+gmsh (2.0.5-2) unstable; urgency=low
+
+  * get rid of option -m32 that triggers segfaults
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Sun,  1 Apr 2007 11:30:43 +0200
+
+gmsh (2.0.5-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Thu, 22 Mar 2007 13:41:10 +0100
+
+gmsh (2.0.4-1) unstable; urgency=low
+
+  * New upstream release
+
+  [ Rafael Laboissiere ]
+  * debian/control: Added XS-Vcs-Svn and XS-Vcs-Browser fields to the Source
+    section
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Wed,  7 Mar 2007 07:44:51 +0100
+
+gmsh (1.65.0-2) unstable; urgency=low
+
+  * Bug fix: "gmsh - unreachable maintainer", thanks to Bastian Blank
+    (Closes: #367340).
+  * Bug fix: "gmsh - FTBFS: strip: Unable to recognise the format of the
+    input file", thanks to Bastian Blank (Closes: #367334).
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Mon, 15 May 2006 20:30:40 +0200
+
+gmsh (1.65.0-1) unstable; urgency=low
+
+  * New upstream release
+    + new Plugin(ExtractEdges)
+    + fixed compilation errors with gcc4.1
+    + replaced Plugin(DisplacementRaise) and Plugin(SphericalRaise) with
+      the more flexible Plugin(Warp)
+    + better handling of discrete curves
+    + new Status command in parser
+    + added option to renumber nodes in .msh files
+      (to avoid holes in the numbering sequence)
+    + fixed 2 special cases in quad->prism extrusion
+    + fixed saving of 2nd order hexas with negative volume
+    + small bug fixes and cleanups.
+  * Bump Standards-Version to 3.7.2 (no changes)
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Sun, 14 May 2006 15:49:29 +0200
+
+gmsh (1.64.1-3) unstable; urgency=low
+
+  * Changed Maintainer to pkg-scicomp Alioth project and added myself to
+    the list of Uploaders
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Thu, 20 Apr 2006 14:15:56 +0200
+
+gmsh (1.64.1-2) unstable; urgency=low
+
+  * Bug fix: "gmsh: FTBFS: build depends on xlibmesa-glu-dev", thanks to
+    Roland Stigge (Closes: #363305).
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Wed, 19 Apr 2006 08:13:03 +0200
+
+gmsh (1.64.1-1) unstable; urgency=low
+
+  * New upstream release
+    + new Plugin(ExtractEdges)
+    + fixed compilation errors with gcc4.1
+    + small cleanups.
+  * Bug fix: "Package explicitely build-depends on g++-3.4", thanks to
+    Matthias Klose (Closes: #342968).
+  * Bug fix: "FTBFS with G++ 4.1: conversion from 'int' to non-scalar
+    type...", thanks to Martin Michlmayr (Closes: #357558).
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Sat, 25 Mar 2006 13:09:38 +0100
+
+gmsh (1.64.0-1) unstable; urgency=low
+
+  * New upstream release
+    + various bug fixes and cleanups.
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Sun, 12 Mar 2006 10:37:14 +0100
+
+gmsh (1.63.2-1) unstable; urgency=low
+
+  * New upstream release
+    + post-processing views can now be exported as meshes
+    + improved background mesh handling (a lot faster, and more accurate)
+    + improved support for input images
+    + new Plugin(ExtractElements)
+    + small bug fixes and enhancements.
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Wed,  1 Feb 2006 08:11:36 +0100
+
+gmsh (1.62.0-1) unstable; urgency=low
+
+  * New upstream release
+    - new option to draw color gradients in the background.
+    - enhanced perspective projection mode.
+    - new "lasso" selection mode (same as "lasso" zoom, but in selection
+    mode).
+    - new "invert selection" button in the visibility browser.
+    - new snapping grid when adding points in the GUI.
+    - nicer normal smoothing.
+    - new extrude syntax (old syntax still available, but deprecated).
+    - various small bug fixes and enhancements.
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Mon, 16 Jan 2006 08:16:13 +0100
+
+gmsh (1.61.3-3) unstable; urgency=low
+
+  * Compile with g++ instead of g++-3.4 on arm
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Wed,  4 Jan 2006 10:37:24 +0100
+
+gmsh (1.61.3-2) unstable; urgency=low
+
+  * Bug fix: "Package explicitely build-depends on g++-3.4", thanks to
+    Matthias Klose (Closes: #342968).
+  * Bug fix: "gmsh: UNV output is broken", thanks to Denis Barbier
+    (Closes: #332491).
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Mon, 12 Dec 2005 08:59:13 +0100
+
+gmsh (1.61.3-1) unstable; urgency=low
+
+  * New upstream release
+
+  * use default compiler on mips/mipsel and try to fix gmsh buildd on these arch
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Thu,  1 Dec 2005 22:30:27 +0100
+
+gmsh (1.61.1-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Sat, 26 Nov 2005 11:27:08 +0100
+
+gmsh (1.60.1-5) unstable; urgency=low
+
+  * recompile with 4.0 and proper libgcc1/libstdc++
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Tue, 22 Nov 2005 09:17:12 +0100
+
+gmsh (1.60.1-4) unstable; urgency=low
+
+  * define CC and CXX to be passed to configure to force gcc 3.4 for arm,
+    mips and mipsel
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Sun, 20 Nov 2005 14:17:52 +0100
+
+gmsh (1.60.1-3) unstable; urgency=low
+
+  * Bug fix: "gmsh: FTBFS: DVI file can't be opened", thanks to Roland
+    Stigge (Closes: #339967).
+  * Attempt to fix arm,mips and mipsel using gcc 3.4 instead of gcc 4
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Sun, 20 Nov 2005 11:47:13 +0100
+
+gmsh (1.60.1-2) unstable; urgency=low
+
+  * Rebuilt with libfltk1.1.
+  * Updated to Standards-Version 3.6.2 (no changes).
+  * Bug fix: "gmsh: FTBFS: ISO C++ forbids declaration of 'Mesh' with no
+    type", thanks to Andreas Jochens (Closes: #324310).
+  * changed my email address to Debian one.
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Wed, 28 Sep 2005 11:42:54 +0200
+
+gmsh (1.60.1-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Tue, 15 Mar 2005 20:51:45 +0100
+
+gmsh (1.59.0-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Mon,  7 Feb 2005 20:45:33 +0100
+
+gmsh (1.58.0-1) unstable; urgency=low
+
+  * New upstream release
+  * Fixed lintian warning description-synopsis-starts-with-a-capital-letter
+  * Patch from A. Jochens does not apply cleanly. Applied it "by hand" and
+    submitted to upstream
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Wed, 12 Jan 2005 14:14:08 +0100
+
+gmsh (1.56.3-2) unstable; urgency=low
+
+  * Use and Build-depends on dpatch
+  * Added patch from Andreas Jochens <aj@andaco.de> for amd64/gcc-4.0. It
+    does not hurt to apply for gcc < 4.0.
+  * Bug fix: "gmsh: FTBFS (amd64/gcc-4.0): cast from 'void*' to 'int'
+    loses precision", thanks to Andreas Jochens (Closes: #286788).
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Tue, 11 Jan 2005 23:42:18 +0100
+
+gmsh (1.56.3-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Wed, 17 Nov 2004 10:36:16 +0100
+
+gmsh (1.55.4-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Mon,  4 Oct 2004 01:30:49 +0200
+
+gmsh (1.54.1-3) unstable; urgency=low
+
+  * make sure that if 'make' fails, it fails at the right place: modify
+    toplevel Makefile/compile with a 'set -e'. Thanks to Goswin von
+    Brederlow <brederlo@informatik.uni-tuebingen.de>.
+
+ -- Christophe Prud'homme <prudhomm@mit.edu>  Mon,  9 Aug 2004 09:07:41 +0200
+
+gmsh (1.54.1-2) unstable; urgency=low
+
+  * added a few files from doc/ : FAQ, VERSIONS, README.cvs and README.gui
+
+ -- Christophe Prud'homme <prudhomm@mit.edu>  Sun, 18 Jul 2004 18:24:10 +0200
+
+gmsh (1.54.1-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Christophe Prud'homme <prudhomm@mit.edu>  Sun, 18 Jul 2004 18:07:21 +0200
+
+gmsh (1.52.0-1) unstable; urgency=low
+
+  * New upstream release
+  * Depends on g++-3.3
+  * Added FAQ from website
+  * added utils/converters and utils/solvers in /usr/share/doc/gmsh
+
+ -- Christophe Prud'homme <prudhomm@mit.edu>  Thu,  6 May 2004 11:21:44 +0200
+
+gmsh (1.51.4-6) unstable; urgency=low
+
+  * added the demos and the tutorial
+
+ -- Christophe Prud'homme <prudhomm@mit.edu>  Thu,  1 Apr 2004 08:50:39 +0200
+
+gmsh (1.51.4-5) unstable; urgency=low
+
+  * added tetex-bin and texinfo to Build-Depends (closes: #240445)
+
+ -- Christophe Prud'homme <prudhomm@mit.edu>  Sat, 27 Mar 2004 21:54:10 +0100
+
+gmsh (1.51.4-4) unstable; urgency=low
+
+  * added xlibmesa-glu-dev to Build-Depends
+
+ -- Christophe Prud'homme <prudhomm@mit.edu>  Sat, 27 Mar 2004 12:56:59 +0100
+
+gmsh (1.51.4-3) unstable; urgency=low
+
+  * updated Standards-Version to 3.6.1
+
+ -- Christophe Prud'homme <prudhomm@mit.edu>  Fri, 26 Mar 2004 10:37:32 +0100
+
+gmsh (1.51.4-2) unstable; urgency=low
+
+  * added libpng12-dev, libjpeg62-dev, zlib1g-dev in Build-Depends
+  * Fix Build-Depends, added xlibmesa-gl-dev (closes: #240147)
+  * removed the (implied) 'A' in the short desciption in the control file
+  * make sure that triangle from Jonathan Shewchuk is disabled using --disable-triangle
+
+ -- Christophe Prud'homme <prudhomm@mit.edu>  Fri, 26 Mar 2004 10:15:01 +0100
+
+gmsh (1.51.4-1) unstable; urgency=low
+
+  * Initial Release.
+
+ -- Christophe Prud'homme <prudhomm@mit.edu>  Tue,  9 Mar 2004 11:24:10 +0100
+
