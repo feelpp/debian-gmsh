@@ -1,3 +1,12 @@
+gmsh (2.4.2.dfsg-5) unstable; urgency=low
+
+  [Christophe Prud'homme]
+  * debian/control: add build-depends on mpi-default-dev
+  * Bug fix: "please add med support", thanks to trophime (Closes:
+    #585871).
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Sun, 11 Jul 2010 14:01:31 +0200
+
 gmsh (2.4.2.dfsg-4) unstable; urgency=low
 
   [Christophe Prud'homme]
