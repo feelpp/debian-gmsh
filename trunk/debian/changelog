@@ -1,3 +1,9 @@
+gmsh (2.5.0~svn20100727-1) experimental; urgency=low
+
+  * New upstream release
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Tue, 27 Jul 2010 10:33:38 +0200
+
 gmsh (2.5.0~svn20100711-1) experimental; urgency=low
 
   [Christophe Prud'homme]
