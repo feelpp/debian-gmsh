@@ -1,0 +1,280 @@
+Index: gmsh-2.4.0.dfsg/Numeric/gmshLinearSystemCSR.cpp
+===================================================================
+--- gmsh-2.4.0.dfsg.orig/Numeric/gmshLinearSystemCSR.cpp	2009-08-28 11:58:20.000000000 +0200
++++ gmsh-2.4.0.dfsg/Numeric/gmshLinearSystemCSR.cpp	2009-08-28 12:00:32.000000000 +0200
+@@ -6,8 +6,9 @@
+ #include "GmshConfig.h"
+ #include "GmshMessage.h"
+ #include "gmshLinearSystemCSR.h"
+-#include <stdlib.h>
+-#include <string.h>
++#include <cstdlib>
++#include <cstdio>
++#include <cstring>
+ 
+ #define SWAP(a,b)  temp=(a);(a)=(b);(b)=temp;
+ #define SWAPI(a,b) tempi=(a);(a)=(b);(b)=tempi;
+@@ -99,18 +100,18 @@
+     delete _b;
+     delete something;
+   }
+-  
++
+   if(_nbRows == 0){
+-    a_ = 0; 
+-    ai_ = 0; 
+-    ptr_ = 0; 
+-    jptr_ = 0; 
++    a_ = 0;
++    ai_ = 0;
++    ptr_ = 0;
++    jptr_ = 0;
+     _b = 0;
+     _x = 0;
+     something = 0;
+     return;
+   }
+-  
++
+   a_    = CSRList_Create (_nbRows, _nbRows, sizeof(double));
+   ai_   = CSRList_Create (_nbRows, _nbRows, sizeof(INDEX_TYPE));
+   ptr_  = CSRList_Create (_nbRows, _nbRows, sizeof(INDEX_TYPE));
+@@ -129,14 +130,14 @@
+ 
+ static void free_ivector(int *v, long nl, long nh)
+ {
+-  // free an int vector allocated with ivector() 
++  // free an int vector allocated with ivector()
+   free((char*)(v+nl-1));
+ }
+ 
+ static int *ivector(long nl, long nh)
+ {
+-  // allocate an int vector with subscript range v[nl..nh] 
+-  int *v;  
++  // allocate an int vector with subscript range v[nl..nh]
++  int *v;
+   v=(int *)malloc((size_t) ((nh-nl+2)*sizeof(int)));
+   if (!v) fprintf(stderr, "allocation failure in ivector()\n");
+   return v-nl+1;
+@@ -159,7 +160,7 @@
+   INDEX_TYPE tempi;
+   scalar a,temp;
+   int    b,c;
+-    
++
+   istack=ivector(1,NSTACK);
+   for (;;) {
+     if (ir-l < M_sort2) {
+@@ -184,7 +185,7 @@
+       ir=istack[jstack];
+       l=istack[jstack-1];
+       jstack -= 2;
+-    } 
++    }
+     else {
+       k=(l+ir) >> 1;
+       SWAP(arr[k -1],arr[l+1 -1])
+@@ -233,7 +234,7 @@
+         istack[jstack]=ir;
+         istack[jstack-1]=i;
+         ir=j-1;
+-      } 
++      }
+       else {
+         istack[jstack]=j-1;
+         istack[jstack-1]=l;
+@@ -244,11 +245,11 @@
+ }
+ 
+ template <class scalar>
+-void sortColumns(int NbLines, 
+-                 int nnz, 
+-                 INDEX_TYPE *ptr, 
+-                 INDEX_TYPE *jptr, 
+-                 INDEX_TYPE *ai, 
++void sortColumns(int NbLines,
++                 int nnz,
++                 INDEX_TYPE *ptr,
++                 INDEX_TYPE *jptr,
++                 INDEX_TYPE *ai,
+                  scalar *a)
+ {
+   // replace pointers by lines
+@@ -264,20 +265,20 @@
+       ptr[_position_temp] = i;
+       if (_position == 0) break;
+     }
+-  }   
+-  _sort2_xkws<double>(nnz,a,ptr,ai);   
++  }
++  _sort2_xkws<double>(nnz,a,ptr,ai);
+   jptr[0] = 0;
+   for(int i=1;i<=NbLines;i++){
+     jptr[i] = jptr[i-1] + count[i-1];
+   }
+-  
++
+   for(int i=0;i<NbLines;i++){
+     for (int j= jptr[i] ; j<jptr[i+1]-1 ; j++){
+       ptr[j] = j+1;
+     }
+     ptr[jptr[i+1]] = 0;
+   }
+-  
++
+   delete[] count;
+ }
+ 
+@@ -290,12 +291,12 @@
+     sortColumns(_b->size(),
+ 		CSRList_Nbr(a_),
+ 		(INDEX_TYPE *) ptr_->array,
+-		(INDEX_TYPE *) jptr_->array, 
+-		(INDEX_TYPE *) ai_->array, 
++		(INDEX_TYPE *) jptr_->array,
++		(INDEX_TYPE *) ai_->array,
+ 		(double*) a_->array);
+   sorted = true;
+ 
+-  gmm::csr_matrix_ref<double*,INDEX_TYPE *,INDEX_TYPE *, 0>  
++  gmm::csr_matrix_ref<double*,INDEX_TYPE *,INDEX_TYPE *, 0>
+     ref((double*)a_->array, (INDEX_TYPE *) ai_->array,
+         (INDEX_TYPE *)jptr_->array, _b->size(), _b->size());
+   gmm::csr_matrix<double,0> M;
+@@ -319,8 +320,8 @@
+     sortColumns(_b->size(),
+ 		CSRList_Nbr(a_),
+ 		(INDEX_TYPE *) ptr_->array,
+-		(INDEX_TYPE *) jptr_->array, 
+-		(INDEX_TYPE *) ai_->array, 
++		(INDEX_TYPE *) jptr_->array,
++		(INDEX_TYPE *) ai_->array,
+ 		(double*) a_->array);
+   sorted = true;
+ 
+@@ -342,8 +343,8 @@
+     sortColumns(_b->size(),
+ 		CSRList_Nbr(a_),
+ 		(INDEX_TYPE *) ptr_->array,
+-		(INDEX_TYPE *) jptr_->array, 
+-		(INDEX_TYPE *) ai_->array, 
++		(INDEX_TYPE *) jptr_->array,
++		(INDEX_TYPE *) ai_->array,
+ 		(double*) a_->array);
+   sorted = true;
+ 
+@@ -352,13 +353,13 @@
+   myVeryCuteTaucsMatrix.rowind = (INDEX_TYPE*)jptr_->array;
+   myVeryCuteTaucsMatrix.colptr = (INDEX_TYPE*)ai_->array;
+   myVeryCuteTaucsMatrix.values.d = (double*) a_->array;
+-  char* options[] = { "taucs.factor.LLT=true", NULL };  
+-  int result = taucs_linsolve(&myVeryCuteTaucsMatrix, 
++  char* options[] = { "taucs.factor.LLT=true", NULL };
++  int result = taucs_linsolve(&myVeryCuteTaucsMatrix,
+                               NULL, 1, &(*_x)[0],&(*_b)[0],
+-                              options,NULL);                         
++                              options,NULL);
+   if (result != TAUCS_SUCCESS){
+     Msg::Error("Taucs Was Not Successfull");
+-  }  
++  }
+   return 1;
+ }
+ #endif
+Index: gmsh-2.4.0.dfsg/Geo/GModelIO_CGNS.cpp
+===================================================================
+--- gmsh-2.4.0.dfsg.orig/Geo/GModelIO_CGNS.cpp	2009-08-28 12:02:45.000000000 +0200
++++ gmsh-2.4.0.dfsg/Geo/GModelIO_CGNS.cpp	2009-08-28 12:03:15.000000000 +0200
+@@ -24,6 +24,7 @@
+ #define omp_destroy_lock(x)
+ #endif
+ 
++#include <cstdio>
+ #include <cstring>
+ #include <iostream>  // DBG
+ #include <map>
+@@ -101,9 +102,9 @@
+     std::strncpy(name, s.c_str(), 32);
+     name[32] = '\0';
+   }
+-  CGNSNameStr(const int d, const char *const fmt = "%d") 
++  CGNSNameStr(const int d, const char *const fmt = "%d")
+   {
+-    std::sprintf(name, fmt, d);
++    sprintf(name, fmt, d);
+   }
+   CGNSNameStr(const CGNSNameStr& cgs) { std::strcpy(name, cgs.name); }
+   // Assignment
+@@ -210,7 +211,7 @@
+  * Purpose
+  * =======
+  *
+- *   
++ *
+  *
+  * I/O
+  * ===
+@@ -449,7 +450,7 @@
+  *   zoneElemConn       - (I) connectivity for the zone using gmsh node ordering
+  *                            (see MElement.h)
+  *                        (O) connectivity using CGNS node ordering
+- *   
++ *
+  ******************************************************************************/
+ 
+ void translateElementMSH2CGNS(ElementConnectivity *const zoneElemConn)
+@@ -560,7 +561,7 @@
+  ******************************************************************************/
+ 
+ void expand_name(std::string &s, const int index, const char *const name)
+-{  
++{
+   std::string::size_type r1 = s.find('&');
+   // Look for and replace "&-&" sub-strings
+   while(r1 != std::string::npos) {
+@@ -703,7 +704,7 @@
+  * I/O
+  * ===
+  *
+- *   model              - (I) 
++ *   model              - (I)
+  *   zoneDefinition     - (I) how to define a zone
+  *   options            - (I) CGNS specific options
+  *   scalingFactor
+@@ -722,7 +723,7 @@
+ //--A task for a thread
+ 
+ template <unsigned DIM>
+-struct ZoneTask 
++struct ZoneTask
+ {
+   MZone<DIM> zone;
+   CGNSNameStr zoneName;
+@@ -734,7 +735,7 @@
+                                         //     processed
+   int indexInOwner;
+   ZoneTask() : status(0), indexInOwner(0) { }
+-  void change_status(const int _status) 
++  void change_status(const int _status)
+   {
+ #pragma omp atomic
+     status = _status;
+@@ -743,7 +744,7 @@
+ 
+ //--Information about a zone
+ 
+-struct ZoneInfo 
++struct ZoneInfo
+ {
+   CGNSNameStr name;
+   int cgIndex;
+@@ -848,7 +849,7 @@
+           int cgIndexCoord;
+           dBuffer.resize(cgZoneSize[0]);
+           // x
+-          for(int i = 0; i != cgZoneSize[0]; ++i) 
++          for(int i = 0; i != cgZoneSize[0]; ++i)
+               dBuffer[i] = writeZone->zoneVertVec[i]->x()*scalingFactor;
+           if(cg_coord_write(cgIndexFile, cgIndexBase, cgIndexZone, RealDouble,
+                             "CoordinateX", &dBuffer[0], &cgIndexCoord))

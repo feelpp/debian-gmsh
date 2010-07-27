@@ -1,0 +1,73 @@
+#!/usr/bin/make -f
+# Sample debian/rules that uses cdbs.  Originaly written by Robert Millan.
+# This file is public domain.
+
+
+DEB_AUTO_CLEANUP_RCS   := yes
+DEB_COMPRESS_EXCLUDE   := .pdf
+
+include /usr/share/cdbs/1/class/cmake.mk
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/rules/patchsys-quilt.mk
+
+#ENABLE_MED=--enable-med
+#ENABLE_MED=--disable-med
+
+#export CXX=g++-4.3
+#export CC=gcc-4.3
+#export CFLAGS= -O3 -I/usr/include/opencascade
+#export CXXFLAGS= -O3 -I/usr/include/opencascade
+
+WITH_OCC=yes
+WITH_MPI=no
+ifeq ($(WITH_OCC),yes)
+ CFLAGS += -I/usr/include/opencascade -DHAVE_NO_OCC_CONFIG_H
+ CXXFLAGS += -I/usr/include/opencascade -DHAVE_NO_OCC_CONFIG_H
+ CPPFLAGS += -I/usr/include/opencascade -DHAVE_NO_OCC_CONFIG_H
+endif
+
+# To enable med support
+CFLAGS +=-I/usr/include/mpi  -DOMPI_SKIP_MPICXX
+CXXFLAGS +=-I/usr/include/mpi  -DOMPI_SKIP_MPICXX
+CPPFLAGS +=-I/usr/include/mpi  -DOMPI_SKIP_MPICXX
+
+
+# DEB_CONFIGURE_EXTRA_FLAGS :=       \
+#   --host=$(DEB_HOST_GNU_TYPE)      \
+#   --build=$(DEB_BUILD_GNU_TYPE)    \
+#   --prefix=/usr                    \
+#   --mandir=\$${prefix}/share/man   \
+#   --infodir=\$${prefix}/share/info \
+#   $(ENABLE_MED)                    \
+#   --enable-cgns=yes                \
+#   --enable-occ=$(WITH_OCC)         \
+#   --enable-mpi=$(WITH_MPI)         \
+#   --disable-metis --disable-tetgen \
+#   --with-blas-lapack-prefix=/usr/lib
+
+DEB_CMAKE_EXTRA_FLAGS= \
+	-DENABLE_METIS=OFF \
+	-DENABLE_TAUCS=OFF \
+	-DENABLE_CGNS=ON \
+	-DENABLE_MPI=ON \
+	-DENABLE_MED=ON \
+	-DENABLE_TETGEN=OFF
+
+DEB_STRIPPED_UPSTREAM_VERSION = $(shell echo $(DEB_UPSTREAM_VERSION) | sed -n -e 's/\.dfsg.*$$//p')
+GMSH_VERSION=$(DEB_STRIPPED_UPSTREAM_VERSION)
+
+build/gmsh::
+	cd $(DEB_BUILDDIR) && $(MAKE) pdf html info
+
+install/gmsh::
+	-rm debian/gmsh/usr/share/doc/gmsh/LICENSE.txt
+
+get-orig-source:
+	uscan --force-download --rename --verbose --upstream-version $(GMSH_VERSION)
+	tar xzf ../gmsh_$(GMSH_VERSION).orig.tar.gz
+	mv gmsh-$(GMSH_VERSION)-source gmsh-$(GMSH_VERSION).dfsg
+	cd gmsh-$(GMSH_VERSION).dfsg/contrib/Metis && rm *.c *.h
+	cd gmsh-$(GMSH_VERSION).dfsg/contrib/Tetgen && rm *.cxx *.h
+	tar czf gmsh_$(GMSH_VERSION).dfsg.orig.tar.gz gmsh-$(GMSH_VERSION).dfsg
+	rm -rf gmsh-$(GMSH_VERSION).dfsg
+	if test -d ../tarballs; then mv gmsh_$(GMSH_VERSION).dfsg.orig.tar.gz ../tarballs; fi

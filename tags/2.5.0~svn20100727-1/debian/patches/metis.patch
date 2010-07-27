@@ -1,0 +1,14 @@
+Index: gmsh-2.2.5/Mesh/Partition.cpp
+===================================================================
+--- gmsh-2.2.5.orig/Mesh/Partition.cpp	2008-10-31 16:35:28.000000000 +0100
++++ gmsh-2.2.5/Mesh/Partition.cpp	2008-10-31 16:35:37.000000000 +0100
+@@ -249,8 +249,8 @@
+         for(int n = graph.getNumVertex(); n--;) ++(*p++);
+       }
+     }
+-    break;
+ #endif
++    break;
+   }
+   return ier;
+ 

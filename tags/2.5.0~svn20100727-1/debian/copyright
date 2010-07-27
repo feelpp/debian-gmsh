@@ -1,0 +1,35 @@
+This package was debianized by Christophe Prud'homme <prudhomm@debian.org> on
+Tue,  9 Mar 2004 11:24:10 +0100.
+
+It was downloaded from http://www.geuz.org/gmsh/#Download
+
+Upstream Authors:  
+
+Christophe Geuzaine <geuzaine@acm.caltech.edu>
+Jean-Francois Remacle <remacle@gce.ucl.ac.be>
+
+Copyright:
+
+/usr/share/common-licenses/GPL-2
+
+Gmsh is copyright (C) 1997-2004 by C. Geuzaine and J.-F. Remacle and
+is distributed under the terms of the GNU General Public License
+(GPL).
+
+----------------------------------------------------------------------
+Chaco version 2.2
+
+This software was developed by Bruce Hendrickson and Robert Leland
+at Sandia National Laboratories under US Department of Energy
+contract DE-AC04-76DP00789 and is copyrighted by Sandia Corporation.
+
+Gmsh - license info and modifications:
+
+Chaco is released under the GNU LGPL v2.1. 
+See http://www.sandia.gov/~bahendr/chaco.html for more info.
+
+Chaco has been slightly modified for integration into the Gmsh program.  Most
+changes are to 'main/interface.c'.  Elsewhere, the 'printf' routine has been
+defined as Gmsh_printf to write through a Gmsh Msg::Info.  All other
+modifications are tagged by 'Gmsh' and 'Gmsh - end'
+----------------------------------------------------------------------

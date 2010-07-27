@@ -1,0 +1,15 @@
+# -*- mode: readme-debian -*- 
+
+
+Removing Metis support
+----------------------
+
+The sources of Gmsh contain Metis, a non-free library, as a module
+that can be disabled. To keep Gmsh clean, its sources are modified and
+Metis has been removed from contrib/Metis.
+The steps are documented in debian/rules in the get-orig-source rule.
+
+Also a quilt patch (see debian/patches) is available to fix a
+compilation issue when using --disable-metis
+
+ -- Christophe Prud'homme <prudhomm@debian.org>, Sat,  1 Nov 2008 08:34:47 +0100
