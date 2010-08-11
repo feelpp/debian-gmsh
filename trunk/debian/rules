@@ -8,7 +8,7 @@ DEB_COMPRESS_EXCLUDE   := .pdf
 
 include /usr/share/cdbs/1/class/cmake.mk
 include /usr/share/cdbs/1/rules/debhelper.mk
-include /usr/share/cdbs/1/rules/patchsys-quilt.mk
+# include /usr/share/cdbs/1/rules/patchsys-quilt.mk
 
 #ENABLE_MED=--enable-med
 #ENABLE_MED=--disable-med
@@ -57,6 +57,7 @@ DEB_STRIPPED_UPSTREAM_VERSION = $(shell echo $(DEB_UPSTREAM_VERSION) | sed -n -e
 GMSH_VERSION=$(DEB_STRIPPED_UPSTREAM_VERSION)
 
 build/gmsh::
+	cd $(DEB_BUILDDIR) && $(MAKE) lib
 	cd $(DEB_BUILDDIR) && $(MAKE) pdf html info
 
 install/gmsh::
