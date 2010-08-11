@@ -3,7 +3,7 @@ Section: math
 Priority: optional
 Maintainer: Debian Science Maintainers <debian-science-maintainers@lists.alioth.debian.org>
 Uploaders: Christophe Prud'homme <prudhomm@debian.org>
-Build-Depends: debhelper (>= 7), quilt, cdbs, cmake, gfortran, libgl1-mesa-dev|nvidia-glx-dev,
+Build-Depends: debhelper (>= 7), cdbs, cmake, gfortran, libgl1-mesa-dev|nvidia-glx-dev,
  libglu1-mesa-dev, libfltk1.1-dev (>=1.1.7),
  libpng12-dev, libjpeg62-dev, zlib1g-dev, texlive, texinfo,
  mpi-default-dev,
@@ -11,7 +11,7 @@ Build-Depends: debhelper (>= 7), quilt, cdbs, cmake, gfortran, libgl1-mesa-dev|n
  libcgns-dev (>= 2.5.3),
  libmedc-dev (>= 2.3.6),
  libblas-dev | libblas-3gf.so, liblapack-dev | liblapack-3gf.so
-Standards-Version: 3.8.4
+Standards-Version: 3.9.1
 Vcs-Svn: svn://svn.debian.org/svn/debian-science/packages/gmsh/trunk
 Vcs-Browser: http://svn.debian.org/wsvn/debian-science/packages/gmsh/trunk
 Homepage: http://www.geuz.org/gmsh/
