@@ -1,3 +1,25 @@
+gmsh (2.5.0~svn20100808-2) experimental; urgency=low
+
+  [Christophe Prud'homme]
+  * debian/rules: add libGmsh.a to the gmsh package
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Wed, 11 Aug 2010 13:53:18 +0200
+
+gmsh (2.5.0~svn20100808-1) experimental; urgency=low
+
+  * New upstream release
+  * Fixed all lintian source warnings
+  * debian/control: updated to Standards-Version 3.9.1 (no change)
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Sun, 08 Aug 2010 10:51:38 +0200
+
+gmsh (2.5.0~svn20100728-1) experimental; urgency=low
+
+  * New upstream release
+  * debian/control: updated to Standards-Version 3.9.0
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Wed, 28 Jul 2010 08:56:14 +0200
+
 gmsh (2.5.0~svn20100727-1) experimental; urgency=low
 
   * New upstream release
