@@ -58,6 +58,7 @@ GMSH_VERSION=$(DEB_STRIPPED_UPSTREAM_VERSION)
 
 build/gmsh::
 	cd $(DEB_BUILDDIR) && $(MAKE) lib
+	cd $(DEB_BUILDDIR) && $(MAKE) shared
 	cd $(DEB_BUILDDIR) && $(MAKE) pdf html info
 
 install/gmsh::
