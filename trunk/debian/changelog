@@ -1,3 +1,31 @@
+gmsh (2.5.0~svn20100831.dfsg-1) experimental; urgency=low
+
+  [Christophe Prud'homme]
+  * New version from svn (rev 7977) that fixes a crash in 2D plots
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Tue, 31 Aug 2010 15:54:07 +0200
+
+gmsh (2.5.0~svn20100808-3) experimental; urgency=low
+
+  [Christophe Prud'homme]
+  * debian/rules: create and package shared lib
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Thu, 12 Aug 2010 13:28:48 +0200
+
+gmsh (2.4.2.dfsg-7) unstable; urgency=low
+
+  [Christophe Prud'homme]
+  * debian/rules: create shared lib
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Thu, 12 Aug 2010 13:11:26 +0200
+
+gmsh (2.4.2.dfsg-6) unstable; urgency=low
+
+  [Christophe Prud'homme]
+  * debian/rules: add libGmsh.a to the gmsh package
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Wed, 11 Aug 2010 14:59:41 +0200
+
 gmsh (2.5.0~svn20100808-2) experimental; urgency=low
 
   [Christophe Prud'homme]
