@@ -1,3 +1,17 @@
+gmsh (2.5.0-1.1) unstable; urgency=low
+
+  * Non-maintainer upload.
+  * New upstream release
+
+ -- Christophe Trophime <christophe.trophime@grenoble.cnrs.fr>  Wed, 20 Oct 2010 09:18:30 +0200
+
+gmsh (2.5.0~svn20100930-1.1) experimental; urgency=low
+
+  * Non-maintainer upload.
+  * New version from svn (rev )
+
+ -- Christophe Trophime <christophe.trophime@grenoble.cnrs.fr>  Tue, 12 Oct 2010 14:03:13 +0200
+
 gmsh (2.5.0~svn20100831.dfsg-1) experimental; urgency=low
 
   [Christophe Prud'homme]
