@@ -8,7 +8,7 @@ DEB_COMPRESS_EXCLUDE   := .pdf
 
 include /usr/share/cdbs/1/class/cmake.mk
 include /usr/share/cdbs/1/rules/debhelper.mk
-# include /usr/share/cdbs/1/rules/patchsys-quilt.mk
+include /usr/share/cdbs/1/rules/patchsys-quilt.mk
 
 #ENABLE_MED=--enable-med
 #ENABLE_MED=--disable-med
@@ -31,6 +31,12 @@ CFLAGS +=-I/usr/include/mpi  -DOMPI_SKIP_MPICXX
 CXXFLAGS +=-I/usr/include/mpi  -DOMPI_SKIP_MPICXX
 CPPFLAGS +=-I/usr/include/mpi  -DOMPI_SKIP_MPICXX
 
+# To enable openmp support
+CFLAGS +=-fopenmp
+CXXFLAGS +=-fopenmp
+CPPFLAGS +=-fopenmp
+LDFLAGS += -fopenmp
+
 
 # DEB_CONFIGURE_EXTRA_FLAGS :=       \
 #   --host=$(DEB_HOST_GNU_TYPE)      \
@@ -46,7 +52,7 @@ CPPFLAGS +=-I/usr/include/mpi  -DOMPI_SKIP_MPICXX
 #   --with-blas-lapack-prefix=/usr/lib
 
 DEB_CMAKE_EXTRA_FLAGS= \
-	-DENABLE_METIS=OFF \
+	-DENABLE_METIS=ON \
 	-DENABLE_TAUCS=OFF \
 	-DENABLE_CGNS=OFF \
 	-DENABLE_MPI=ON \
@@ -59,10 +65,21 @@ GMSH_VERSION=$(DEB_STRIPPED_UPSTREAM_VERSION)
 build/gmsh::
 	cd $(DEB_BUILDDIR) && $(MAKE) lib
 	cd $(DEB_BUILDDIR) && $(MAKE) shared
-	cd $(DEB_BUILDDIR) && $(MAKE) pdf html info
+	# To avoid the texi2dvi pb add LC_ALL=C
+	cd $(DEB_BUILDDIR) && $(MAKE) pdf html info LC_ALL=C
 
 install/gmsh::
 	-rm debian/gmsh/usr/share/doc/gmsh/LICENSE.txt
+
+clean::
+	-rm doc/texinfo/gmsh.vr doc/texinfo/gmsh.fn doc/texinfo/gmsh.ky doc/texinfo/gmsh.pg
+	-rm doc/texinfo/gmsh.toc
+	-rm doc/texinfo/gmsh.log
+	-rm doc/texinfo/gmsh.cp
+	-rm doc/texinfo/gmsh.tp
+	-rm doc/texinfo/gmsh.tps
+	-rm doc/texinfo/gmsh.cps
+	-rm doc/texinfo/gmsh.aux
 
 get-orig-source:
 	uscan --force-download --rename --verbose --upstream-version $(GMSH_VERSION)

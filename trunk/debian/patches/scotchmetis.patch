@@ -1,0 +1,25 @@
+Index: gmsh-2.5.0.dfsg/CMakeLists.txt
+===================================================================
+--- gmsh-2.5.0.dfsg.orig/CMakeLists.txt	2010-10-22 10:20:27.000000000 +0200
++++ gmsh-2.5.0.dfsg/CMakeLists.txt	2010-10-22 10:24:35.000000000 +0200
+@@ -484,11 +484,16 @@
+ endif(ENABLE_MPEG_ENCODE)
+ 
+ if(ENABLE_METIS)
+-  add_subdirectory(contrib/Metis)
+-  include_directories(contrib/Metis)
++  find_library(METIS_LIB metis PATH_SUFFIXES lib)
++  if(METIS_LIB)
++    find_path(METIS_INC "metis.h" PATH_SUFFIXES src include include/metis)
++    if(METIS_INC)
++      list(APPEND EXTERNAL_LIBRARIES ${METIS_LIB})
++      list(APPEND EXTERNAL_INCLUDES ${METIS_INC})
++    endif(METIS_INC)
++  endif(METIS_LIB)
+   set_config_option(HAVE_METIS "Metis")
+-  message("WARNING: By including Metis you have to comply with Metis' special "
+-          "licensing requirements stated in contrib/Metis/README.txt.")
++  message("WARNING: Including ScotchMetis")
+ endif(ENABLE_METIS)
+ 
+ if(HAVE_MESH)

@@ -2,8 +2,8 @@
 
 set -e
 
-if [ "$1" = "configure" ] ; then
-	ldconfig
+if [ "$1" = "remove" ]; then
+    ldconfig
 fi
 
 #DEBHELPER#
