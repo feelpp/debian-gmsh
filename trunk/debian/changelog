@@ -1,10 +1,13 @@
-gmsh (2.5.0.dfsg-1.1) unstable; urgency=low
+gmsh (2.5.0.dfsg-2) unstable; urgency=low
 
-  * Non-maintainer upload.
+  [Christophe Trophime]
   * Add openmp support
   * Add metis support : use scotchmetis
 
- -- Christophe Trophime <christophe.trophime@grenoble.cnrs.fr>  Thu, 21 Oct 2010 16:28:01 +0200
+  [ Christophe Prud'homme ]
+  * Upload
+
+ -- Christophe Prud'homme <prudhomm@debian.org>  Thu, 28 Oct 2010 14:16:40 +0200
 
 gmsh (2.5.0.dfsg-1) unstable; urgency=low
 
