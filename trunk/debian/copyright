@@ -26,7 +26,7 @@ License: GPL-2+
  `/usr/share/common-licenses/GPL-2'.
 
 Files: debian/*
-Copyright: 1997-2010 Christophe Prud'homme <prudhomm@mit.edu>
+Copyright: 1997-2010 Christophe Prud'homme <prudhomm@debian.org>
                 2010 Christophe Trophime <christophe.trophime@grenoble.cnrs.fr>
                 2011 Anton Gladky <gladky.anton@gmail.com>
 License: GPL-2+
