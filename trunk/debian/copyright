@@ -1,35 +1,49 @@
-This package was debianized by Christophe Prud'homme <prudhomm@debian.org> on
-Tue,  9 Mar 2004 11:24:10 +0100.
+Format: http://dep.debian.net/deps/dep5/
+Source: http://www.geuz.org/gmsh/#Download
 
-It was downloaded from http://www.geuz.org/gmsh/#Download
+Files: *
+Copyright: 1997-2011 Christophe Geuzaine <geuzaine@acm.caltech.edu>
+                     Jean-Francois Remacle <remacle@gce.ucl.ac.be>
+License: GPL-2+
+ This program is free software; you can redistribute it
+ and/or modify it under the terms of the GNU General Public
+ License as published by the Free Software Foundation; either
+ version 2 of the License, or any later version.
+ .
+ This program is distributed in the hope that it will be
+ useful, but WITHOUT ANY WARRANTY; without even the implied
+ warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+ PURPOSE.  See the GNU General Public License for more
+ details.
+ .
+ You should have received a copy of the GNU General Public
+ License along with this package; if not, write to the Free
+ Software Foundation, Inc., 51 Franklin St, Fifth Floor,
+ Boston, MA  02110-1301 USA
+ .
+ On Debian systems, the full text of the GNU General Public
+ License version 2 can be found in the file
+ `/usr/share/common-licenses/GPL-2'.
 
-Upstream Authors:  
+Files: debian/*
+Copyright: 1997-2010 Christophe Prud'homme <prudhomm@mit.edu>
+                2010 Christophe Trophime <christophe.trophime@grenoble.cnrs.fr>
+                2011 Anton Gladky <gladky.anton@gmail.com>
+License: GPL-2+
+ The full text see above.
 
-Christophe Geuzaine <geuzaine@acm.caltech.edu>
-Jean-Francois Remacle <remacle@gce.ucl.ac.be>
-
-Copyright:
-
-/usr/share/common-licenses/GPL-2
-
-Gmsh is copyright (C) 1997-2004 by C. Geuzaine and J.-F. Remacle and
-is distributed under the terms of the GNU General Public License
-(GPL).
-
-----------------------------------------------------------------------
-Chaco version 2.2
-
-This software was developed by Bruce Hendrickson and Robert Leland
-at Sandia National Laboratories under US Department of Energy
-contract DE-AC04-76DP00789 and is copyrighted by Sandia Corporation.
-
-Gmsh - license info and modifications:
-
-Chaco is released under the GNU LGPL v2.1. 
-See http://www.sandia.gov/~bahendr/chaco.html for more info.
-
-Chaco has been slightly modified for integration into the Gmsh program.  Most
-changes are to 'main/interface.c'.  Elsewhere, the 'printf' routine has been
-defined as Gmsh_printf to write through a Gmsh Msg::Info.  All other
-modifications are tagged by 'Gmsh' and 'Gmsh - end'
-----------------------------------------------------------------------
+Files: contrib/Chaco/*
+Copyright: 1997-2010 
+License: LGPL-2.1
+ This software was developed by Bruce Hendrickson and Robert Leland
+ at Sandia National Laboratories under US Department of Energy
+ contract DE-AC04-76DP00789 and is copyrighted by Sandia Corporation.
+ .
+ Chaco has been slightly modified for integration into the Gmsh program.  Most
+ changes are to 'main/interface.c'.  Elsewhere, the 'printf' routine has been
+ defined as Gmsh_printf to write through a Gmsh Msg::Info.  All other
+ modifications are tagged by 'Gmsh' and 'Gmsh - end'
+ .
+ On Debian systems, the full text of the GNU LESSER GENERAL PUBLIC 
+ LICENSE version 2.1 can be found in the file
+ `/usr/share/common-licenses/LGPL-2.1'.

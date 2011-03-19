@@ -1,3 +1,6 @@
+Description: links the gmsh with packaged version of ScotchMetis.
+Author: Christophe Trophime <christophe.trophime@grenoble.cnrs.fr>
+
 Index: gmsh-2.5.0.dfsg/CMakeLists.txt
 ===================================================================
 --- gmsh-2.5.0.dfsg.orig/CMakeLists.txt	2010-10-22 10:20:27.000000000 +0200

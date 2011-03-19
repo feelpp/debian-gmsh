@@ -1,3 +1,16 @@
+gmsh (2.5.0.dfsg-3) unstable; urgency=low
+
+  * Switch to dpkg-source 3.0 (quilt) format
+  * debian/copyright has been changed to machine-readable DEP-5 format
+  * Old unused patches are removed
+  * Updated license information, now GPL-2+ instead of GPL-2:
+      http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=617931#10
+  * Move mpi-default-bin from "Recommends" to "Depends". Closes: #605962
+  * sensible-editor and sensible-browser are used. Closes: #618541
+  * Fix spelling errors, fix-spelling-errors.patch
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Sat, 19 Mar 2011 09:52:13 +0100
+
 gmsh (2.5.0.dfsg-2) unstable; urgency=low
 
   [Christophe Trophime]
