@@ -2,9 +2,7 @@ Description: hard-coded browser and editor are replaced by
  default installed in system.
 Author: Anton Gladky <gladky.anton@gmail.com>
 Bug-Debian: http://bugs.debian.org/618541
-Bug: https://geuz.org/trac/gmsh/ticket/115
-Applied-Upstream: https://geuz.org/trac/gmsh/browser/trunk?rev=8833 
-Last-Update: 2011-03-20
+Last-Update: 2011-03-19
 
 --- a/Common/DefaultOptions.h
 +++ b/Common/DefaultOptions.h

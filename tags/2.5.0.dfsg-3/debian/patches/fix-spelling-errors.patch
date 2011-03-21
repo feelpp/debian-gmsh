@@ -1,7 +1,6 @@
 Description: fix spelling errors in messages.
 Author: Anton Gladky <gladky.anton@gmail.com>
-Bug: https://geuz.org/trac/gmsh/ticket/117
-Last-Update: 2011-03-20
+Last-Update: 2011-03-19
 
 --- a/Common/DefaultOptions.h
 +++ b/Common/DefaultOptions.h
