@@ -1,9 +1,9 @@
 gmsh (2.5.0.dfsg-3.1) unstable; urgency=low
 
-  [Christophe Trophime]
-  * Non-maintainer upload.
-  * Add libhdf5-openmpi-dev to Build-Depends (Closes: #613056)
-  [Anton Gladky]
+  [ Christophe Trophime ]
+  * Add mpi-default-dev to Build-Depends (Closes: #613056)
+
+  [ Anton Gladky ]
   * nvidia-glx-dev is deleted from Build-Depends as it is not in sid any more.
   * "or" statements are deleted from Build-Depends, because of:
       http://lists.debian.org/debian-devel/2011/02/msg00738.html
