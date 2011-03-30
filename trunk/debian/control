@@ -9,7 +9,7 @@ Build-Depends: debhelper (>= 7), cdbs, quilt, cmake, gfortran, libgl1-mesa-dev|n
  mpi-default-dev,
  libopencascade-modeling-dev,
  libcgns-dev (>= 2.5.3),
- libmedc-dev (>= 2.3.6), 
+ libmed-dev (>= 2.3.6), libmedc-dev (>= 2.3.6), libhdf5-openmpi-dev,
  libscotchmetis-dev,
  libblas-dev | libblas-3gf.so, liblapack-dev | liblapack-3gf.so
 Standards-Version: 3.9.1
