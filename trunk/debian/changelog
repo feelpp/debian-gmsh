@@ -1,3 +1,10 @@
+gmsh (2.5.0.dfsg-5) unstable; urgency=low
+
+  * Team upload
+  * Use libhdf5-mpi-dev instead of specific arch
+
+ -- Sylvestre Ledru <sylvestre@debian.org>  Thu, 31 Mar 2011 10:27:38 +0200
+
 gmsh (2.5.0.dfsg-4) unstable; urgency=low
 
   [ Christophe Trophime ]
