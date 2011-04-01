@@ -1,3 +1,11 @@
+gmsh (2.5.0.dfsg-6) unstable; urgency=low
+
+  * enable med-support only on platforms, where libhdf5-openmpi-dev is 
+    available: 
+    alpha amd64 i386 ia64 kfreebsd-amd64 kfreebsd-i386 powerpc sparc
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Sat, 02 Apr 2011 00:57:54 +0100
+
 gmsh (2.5.0.dfsg-5) unstable; urgency=low
 
   * Team upload
