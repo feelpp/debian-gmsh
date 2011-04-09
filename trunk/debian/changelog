@@ -1,6 +1,6 @@
 gmsh (2.5.0.dfsg-7) unstable; urgency=low
 
-  * Upload to fix FTBFS (Closes #621003)
+  * Reupload to fix FTBFS due to SCOTCH_ linking (Closes #621003)
 
  -- Anton Gladky <gladky.anton@gmail.com>  Sat, 09 Apr 2011 09:52:43 +0200
 
