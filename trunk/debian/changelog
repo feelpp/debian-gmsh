@@ -1,3 +1,9 @@
+gmsh (2.5.0.dfsg-7) unstable; urgency=low
+
+  * Upload to fix FTBFS (Closes #621003)
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Sat, 09 Apr 2011 09:52:43 +0200
+
 gmsh (2.5.0.dfsg-6) unstable; urgency=low
 
   * enable med-support only on platforms, where libhdf5-openmpi-dev is 
