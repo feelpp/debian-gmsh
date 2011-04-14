@@ -1,6 +1,5 @@
 gmsh (2.5.0.dfsg-7) unstable; urgency=low
 
-  * Reupload to fix FTBFS due to SCOTCH_ linking (Closes #621003)
   * Fix FTBFS on some platforms due to missing space between
       libhdf5-mpi-dev and platform list
 
