@@ -9,7 +9,7 @@ Build-Depends: debhelper (>= 7), cdbs, quilt, cmake, gfortran, libgl1-mesa-dev,
  mpi-default-dev,
  libopencascade-modeling-dev,
  libcgns-dev (>= 2.5.3),
- libmed-dev (>= 2.3.6), libmedc-dev (>= 2.3.6), 
+ libmed-dev (>= 2.3.6), libmedc-dev (>= 2.3.6) [alpha amd64 i386 ia64 kfreebsd-amd64 kfreebsd-i386 powerpc sparc], 
  libhdf5-mpi-dev [alpha amd64 i386 ia64 kfreebsd-amd64 kfreebsd-i386 powerpc sparc],
  libscotchmetis-dev,
  libblas-dev, liblapack-dev
