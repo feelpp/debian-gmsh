@@ -1,0 +1,174 @@
+Description: fix spelling errors in messages.
+Author: Anton Gladky <gladky.anton@gmail.com>
+Bug: https://geuz.org/trac/gmsh/ticket/117
+Last-Update: 2011-03-20
+
+--- a/Common/DefaultOptions.h
++++ b/Common/DefaultOptions.h
+@@ -928,11 +928,11 @@
+   { F|O, "OCCConnectFaces" , opt_geometry_occ_connect_faces , 0. , 
+     "Cut and connect faces in STEP, IGES and BRep models" },
+   { F,   "OffsetX" , opt_geometry_offset0 , 0. , 
+-    "Model diplay offset along X-axis (in model coordinates)" },
++    "Model display offset along X-axis (in model coordinates)" },
+   { F,   "OffsetY" , opt_geometry_offset1 , 0. , 
+-    "Model diplay offset along Y-axis (in model coordinates)" },
++    "Model display offset along Y-axis (in model coordinates)" },
+   { F,   "OffsetZ" , opt_geometry_offset2 , 0. , 
+-    "Model diplay offset along Z-axis (in model coordinates)" },
++    "Model display offset along Z-axis (in model coordinates)" },
+   { F|O, "OldCircle" , opt_geometry_old_circle , 0. , 
+     "Use old circle description (compatibility option for old Gmsh geometries)" },
+   { F|O, "OldNewReg" , opt_geometry_old_newreg , 1. , 
+@@ -1013,7 +1013,7 @@
+   { F|O, "AnisoMax" , opt_mesh_aniso_max, 1.e33,
+     "Maximum anisotropy of the mesh" },
+   { F|O, "AllowSwapAngle" , opt_mesh_allow_swap_edge_angle , 10.0 ,
+-    "Treshold angle (in degrees) between faces normals under which we allow "
++    "Threshold angle (in degrees) between faces normals under which we allow "
+     "an edge swap" }, 
+ 
+   { F|O, "BdfFieldFormat" , opt_mesh_bdf_field_format , 1. , 
+--- a/doc/texinfo/opt_geometry.texi
++++ b/doc/texinfo/opt_geometry.texi
+@@ -110,17 +110,17 @@
+ Saved in: @code{General.OptionsFileName}
+ 
+ @item Geometry.OffsetX
+-Model diplay offset along X-axis (in model coordinates)@*
++Model display offset along X-axis (in model coordinates)@*
+ Default value: @code{0}@*
+ Saved in: @code{-}
+ 
+ @item Geometry.OffsetY
+-Model diplay offset along Y-axis (in model coordinates)@*
++Model display offset along Y-axis (in model coordinates)@*
+ Default value: @code{0}@*
+ Saved in: @code{-}
+ 
+ @item Geometry.OffsetZ
+-Model diplay offset along Z-axis (in model coordinates)@*
++Model display offset along Z-axis (in model coordinates)@*
+ Default value: @code{0}@*
+ Saved in: @code{-}
+ 
+--- a/Common/CommandLine.cpp
++++ b/Common/CommandLine.cpp
+@@ -78,7 +78,7 @@
+   Msg::Direct("  -smoothRatio float    Set smoothing ration between mesh sizes at nodes of a same edge (only used in bamg)");
+   Msg::Direct("  -clcurv               Automatically compute element sizes from curvatures");
+   Msg::Direct("  -epslc1d              Set the accuracy of the evaluation of the LCFIELD for 1D mesh");
+-  Msg::Direct("  -swapangle            Set the treshold angle (in degree) between two adjacent faces");
++  Msg::Direct("  -swapangle            Set the threshold angle (in degree) between two adjacent faces");
+   Msg::Direct("                          below which a swap is allowed");
+   Msg::Direct("  -rand float           Set random perturbation factor");
+   Msg::Direct("  -bgm file             Load background mesh from file");
+@@ -420,7 +420,7 @@
+         if(argv[i]) {
+           CTX::instance()->mesh.allowSwapEdgeAngle = atof(argv[i++]);
+           if(CTX::instance()->mesh.allowSwapEdgeAngle <= 0.0)
+-            Msg::Fatal("Treshold angle for edge swap must be > 0");
++            Msg::Fatal("Threshold angle for edge swap must be > 0");
+         }
+         else
+           Msg::Fatal("Missing number");
+--- a/doc/texinfo/opt_mesh.texi
++++ b/doc/texinfo/opt_mesh.texi
+@@ -25,7 +25,7 @@
+ Saved in: @code{General.OptionsFileName}
+ 
+ @item Mesh.AllowSwapAngle
+-Treshold angle (in degrees) between faces normals under which we allow an edge swap@*
++Threshold angle (in degrees) between faces normals under which we allow an edge swap@*
+ Default value: @code{10}@*
+ Saved in: @code{General.OptionsFileName}
+ 
+--- a/contrib/bamg/bamglib/MeshRead.cpp
++++ b/contrib/bamg/bamglib/MeshRead.cpp
+@@ -360,7 +360,7 @@
+ 	      }
+ 	}
+       else
+-	{ // unkown field
++	{ // unknown field
+ 	  field = ++showfield;
+ 	  if(showfield==1) // just to show one time 
+ 	    if (verbosity>5)
+@@ -896,7 +896,7 @@
+     else if (ftq) Read_ftq(f_in);
+     else 
+       { 
+-	cerr << " Unkown type mesh " << filename << endl;
++	cerr << " Unknown type mesh " << filename << endl;
+ 	MeshError(2);
+       }
+       ConsGeometry(cutoffradian);
+@@ -1200,7 +1200,7 @@
+ 	  }
+       }
+       else
+-	{ // unkown field
++	{ // unknown field
+ 	  field = ++showfield;
+ 	  if(showfield==1) // just to show one time 
+ 	    if (verbosity>3)
+--- a/contrib/bamg/bamglib/MeshWrite.cpp
++++ b/contrib/bamg/bamglib/MeshWrite.cpp
+@@ -74,7 +74,7 @@
+        case mshMesh    :  cout << " msh "      ; break;
+ 	default: 
+ 	  cerr << endl 
+-	       <<  " Unkown type mesh file " << (int) type << " for Writing " << filename <<endl;
++	       <<  " Unknown type mesh file " << (int) type << " for Writing " << filename <<endl;
+ 	  MeshError(1);
+        }     
+      Int4 NbOfTria =  nbt-2*NbOfQuad-NbOutT ;
+@@ -114,7 +114,7 @@
+        case ftqMesh    :  Write_ftq(f)   ; break;
+        case mshMesh    :  Write_msh(f)   ; break;
+ 	default: 
+-	  cerr << " Unkown type mesh file " << (int) type << " for Writing " << filename <<endl;
++	  cerr << " Unknown type mesh file " << (int) type << " for Writing " << filename <<endl;
+ 	  MeshError(1);
+        }
+    else
+--- a/contrib/bamg/bamglib/Meshio.cpp
++++ b/contrib/bamg/bamglib/Meshio.cpp
+@@ -30,7 +30,7 @@
+ #include "Meshio.h"
+ namespace bamg {
+ 
+-const char *OFortranUnFormattedFile::unkown("unkown file name");
++const char *OFortranUnFormattedFile::unkown("unknown file name");
+ void (*MeshIstreamErrorHandler)(ios & ) =0;
+ ///////////////////////////////////////////////////////////
+  void WriteStr(ostream & out,char * str)
+@@ -335,7 +335,7 @@
+   else if (err==3)
+     cerr<< "-- Erreur  write record info " ;
+   else 
+-    cerr << " unkown err " << err ;
++    cerr << " unknown err " << err ;
+ 
+   cerr << " Record number = "    << nb_rec << endl
+        << " read position  in file " << j << " < " << n 
+@@ -358,7 +358,7 @@
+   else if (err==3)
+     cerr<< " Erreur  read record info " ;
+   else 
+-    cerr << " unkown err " << err ;
++    cerr << " unknown err " << err ;
+ 
+   cerr << " Record number = "    << nb_rec << endl
+        << " read position  in file " << j << " < " << n 
+--- a/contrib/mpeg_encode/bsearch.cpp
++++ b/contrib/mpeg_encode/bsearch.cpp
+@@ -153,7 +153,7 @@
+     } else if ( strcmp(alg, "EXHAUSTIVE") == 0 ) {
+ 	bsearchAlg = BSEARCH_EXHAUSTIVE;
+     } else {
+-	throw "Illegal bsearch algoritm";
++	throw "Illegal bsearch algorithm";
+     }
+ }
+ 
