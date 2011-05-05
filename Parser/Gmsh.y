@@ -1,5 +1,5 @@
 %{
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -7,17 +7,19 @@
 #include <string.h>
 #include <stdarg.h>
 #include <time.h>
-#include "Message.h"
+#include "GmshConfig.h"
+#include "GmshMessage.h"
+#include "fullMatrix.h"
 #include "MallocUtils.h"
 #include "ListUtils.h"
 #include "TreeUtils.h"
+#include "StringUtils.h"
 #include "Numeric.h"
 #include "Context.h"
 #include "GModel.h"
 #include "Geo.h"
 #include "GeoInterpolation.h"
 #include "Generator.h"
-#include "Draw.h"
 #include "Options.h"
 #include "Colors.h"
 #include "Parser.h"
@@ -28,6 +30,7 @@
 #include "OS.h"
 #include "CreateFile.h"
 #include "gmshSurface.h"
+#include "gmshLevelset.h"
 #include "Field.h"
 #include "BackgroundMesh.h"
 
@@ -35,21 +38,29 @@
 #include "PView.h"
 #include "PViewDataList.h"
 #include "PluginManager.h"
-static PViewDataList *ViewData;
 #endif
 
-Tree_T *Symbol_T = NULL;
+#if defined(HAVE_OPENGL)
+#include "drawContext.h"
+#endif
 
-extern Context_T CTX;
+// Global parser variables
+std::string gmsh_yyname;
+int gmsh_yyerrorstate = 0;
+int gmsh_yyviewindex = 0;
+std::map<std::string, std::vector<double> > gmsh_yysymbols;
 
+// Static parser variables (accessible only in this file)
+static std::map<std::string, std::string > gmsh_yystringsymbols;
+#if !defined(HAVE_NO_POST)
+static PViewDataList *ViewData;
+#endif
+static std::vector<double> ViewCoord;
+static std::vector<double> *ViewValueList = 0;
+static int *ViewNumList = 0;
 static ExtrudeParams extr;
-
+static int curPhysDim = 0;
 static gmshSurface *myGmshSurface = 0;
-
-static List_T *ViewValueList = 0;
-static double ViewCoord[100];
-static int *ViewNumList = 0, ViewCoordIdx = 0;
-
 #define MAX_RECUR_LOOPS 100
 static int ImbricatedLoop = 0;
 static fpos_t yyposImbricatedLoopsTab[MAX_RECUR_LOOPS];
@@ -57,11 +68,11 @@ static int yylinenoImbricatedLoopsTab[MAX_RECUR_LOOPS];
 static double LoopControlVariablesTab[MAX_RECUR_LOOPS][3];
 static char *LoopControlVariablesNameTab[MAX_RECUR_LOOPS];
 
-void yyerror(char *s);
+void yyerror(const char *s);
 void yymsg(int level, const char *fmt, ...);
 void skip_until(const char *skip, const char *until);
 int PrintListOfDouble(char *format, List_T *list, char *buffer);
-void FixRelativePath(const char *in, char *out);
+fullMatrix<double> ListOfListOfDouble2Matrix(List_T *list);
 %}
 
 %union {
@@ -82,29 +93,31 @@ void FixRelativePath(const char *in, char *out);
 %token tAtan tAtan2 tSinh tCosh tTanh tFabs tFloor tCeil
 %token tFmod tModulo tHypot 
 %token tPrintf tSprintf tStrCat tStrPrefix tStrRelative
-%token tBoundingBox tDraw tToday
+%token tBoundingBox tDraw tToday tSyncModel tCreateTopology tDistanceFunction
 %token tPoint tCircle tEllipse tLine tSphere tPolarSphere tSurface tSpline tVolume
 %token tCharacteristic tLength tParametric tElliptic
-%token tPlane tRuled tTransfinite tComplex tPhysical
-%token tUsing tBump tProgression tPlugin
-%token tRotate tTranslate tSymmetry tDilate tExtrude tDuplicata
-%token tLoop tRecombine tSmoother tDelete tCoherence tIntersect tBoundary
+%token tPlane tRuled tTransfinite tComplex tPhysical tCompound
+%token tUsing tPlugin tDegenerated tOCCShape
+%token tRotate tTranslate tSymmetry tDilate tExtrude tLevelset
+%token tLoop tRecombine tSmoother tSplit tDelete tCoherence tIntersect
 %token tLayers tHole tAlias tAliasWithOptions
 %token tText2D tText3D tInterpolationScheme  tTime tCombine
-%token tBSpline tBezier tNurbs tOrder tKnots
+%token tBSpline tBezier tNurbs tNurbsOrder tNurbsKnots
 %token tColor tColorTable tFor tIn tEndFor tIf tEndIf tExit
 %token tField tReturn tCall tFunction tShow tHide tGetValue
 %token tGMSH_MAJOR_VERSION tGMSH_MINOR_VERSION tGMSH_PATCH_VERSION
 
 %type <d> FExpr FExpr_Single 
-%type <v> VExpr VExpr_Single
+%type <v> VExpr VExpr_Single CircleOptions TransfiniteType
 %type <i> NumericAffectation NumericIncrement PhysicalId
+%type <i> TransfiniteArrangement RecombineAngle
 %type <u> ColorExpr
 %type <c> StringExpr StringExprVar SendToFile
-%type <l> FExpr_Multi ListOfDouble RecursiveListOfDouble
+%type <l> FExpr_Multi ListOfDouble ListOfDoubleOrAll RecursiveListOfDouble
 %type <l> RecursiveListOfListOfDouble 
 %type <l> ListOfColor RecursiveListOfColor 
-%type <l> ListOfShapes Transform Extrude MultipleShape RuledSurfaceOptions
+%type <l> ListOfShapes Transform Extrude MultipleShape 
+%type <l> TransfiniteCorners InSphereCenter
 %type <s> Shape
 
 // Operators (with ascending priority): cf. C language
@@ -156,6 +169,7 @@ GeoFormatItem :
   | Coherence   { return 1; }
   | Loop        { return 1; }
   | Command     { return 1; }
+  | LevelSet    { return 1; }
 ;
 
 SendToFile :
@@ -177,11 +191,10 @@ Printf :
     }
   | tPrintf '(' tBIGSTR ')' SendToFile StringExprVar tEND
     {
-      char tmpstring[1024];
-      FixRelativePath($6, tmpstring);
-      FILE *fp = fopen(tmpstring, $5);
+      std::string tmp = FixRelativePath(gmsh_yyname, $6);
+      FILE *fp = fopen(tmp.c_str(), $5);
       if(!fp){
-	yymsg(0, "Unable to open file '%s'", tmpstring);
+	yymsg(0, "Unable to open file '%s'", tmp.c_str());
       }
       else{
 	fprintf(fp, "%s\n", $3);
@@ -212,11 +225,10 @@ Printf :
       else if(i > 0)
 	yymsg(0, "%d extra argument%s in Printf", i, (i > 1) ? "s" : "");
       else{
-	char tmpstring2[1024];
-	FixRelativePath($8, tmpstring2);
-	FILE *fp = fopen(tmpstring2, $7);
+        std::string tmp = FixRelativePath(gmsh_yyname, $8);
+	FILE *fp = fopen(tmp.c_str(), $7);
 	if(!fp){
-	  yymsg(0, "Unable to open file '%s'", tmpstring2);
+	  yymsg(0, "Unable to open file '%s'", tmp.c_str());
 	}
 	else{
 	  fprintf(fp, "%s\n", tmpstring);
@@ -274,7 +286,7 @@ Views :
     // nothing
     {
 #if !defined(HAVE_NO_POST)
-      ViewData = new PViewDataList(true); 
+      ViewData = new PViewDataList(); 
 #endif
     }
   | Views Element
@@ -286,163 +298,121 @@ Views :
 
 ElementCoords :
     FExpr
-    { ViewCoord[ViewCoordIdx++] = $1; }
+    { ViewCoord.push_back($1); }
   | ElementCoords ',' FExpr
-    { ViewCoord[ViewCoordIdx++] = $3; }
+    { ViewCoord.push_back($3); }
 ;
 
 ElementValues :
     FExpr
-    { if(ViewValueList) List_Add(ViewValueList, &$1); }
+    { if(ViewValueList) ViewValueList->push_back($1); }
   | ElementValues ',' FExpr
-    { if(ViewValueList) List_Add(ViewValueList, &$3); }
+    { if(ViewValueList) ViewValueList->push_back($3); }
 ;
 
 Element : 
     tSTRING 
     {
 #if !defined(HAVE_NO_POST)
-      if(!strcmp($1, "SP")){
-	ViewValueList = ViewData->SP; ViewNumList = &ViewData->NbSP;
+      if(!strncmp($1, "SP", 2)){
+	ViewValueList = &ViewData->SP; ViewNumList = &ViewData->NbSP;
       }
-      else if(!strcmp($1, "VP")){
-	ViewValueList = ViewData->VP; ViewNumList = &ViewData->NbVP;
+      else if(!strncmp($1, "VP", 2)){
+	ViewValueList = &ViewData->VP; ViewNumList = &ViewData->NbVP;
       }
-      else if(!strcmp($1, "TP")){
-	ViewValueList = ViewData->TP; ViewNumList = &ViewData->NbTP;
+      else if(!strncmp($1, "TP", 2)){
+	ViewValueList = &ViewData->TP; ViewNumList = &ViewData->NbTP;
       }
-      else if(!strcmp($1, "SL")){
-	ViewValueList = ViewData->SL; ViewNumList = &ViewData->NbSL;
+      else if(!strncmp($1, "SL", 2)){
+	ViewValueList = &ViewData->SL; ViewNumList = &ViewData->NbSL;
+        if(strlen($1) > 2) ViewData->setOrder2(TYPE_LIN);
       }
-      else if(!strcmp($1, "VL")){
-	ViewValueList = ViewData->VL; ViewNumList = &ViewData->NbVL;
+      else if(!strncmp($1, "VL", 2)){
+	ViewValueList = &ViewData->VL; ViewNumList = &ViewData->NbVL;
+        if(strlen($1) > 2) ViewData->setOrder2(TYPE_LIN);
       }
-      else if(!strcmp($1, "TL")){
-	ViewValueList = ViewData->TL; ViewNumList = &ViewData->NbTL;
+      else if(!strncmp($1, "TL", 2)){
+	ViewValueList = &ViewData->TL; ViewNumList = &ViewData->NbTL;
+        if(strlen($1) > 2) ViewData->setOrder2(TYPE_LIN);
       }
-      else if(!strcmp($1, "ST")){
-	ViewValueList = ViewData->ST; ViewNumList = &ViewData->NbST;
+      else if(!strncmp($1, "ST", 2)){
+	ViewValueList = &ViewData->ST; ViewNumList = &ViewData->NbST;
+        if(strlen($1) > 2) ViewData->setOrder2(TYPE_TRI);
       }
-      else if(!strcmp($1, "VT")){
-	ViewValueList = ViewData->VT; ViewNumList = &ViewData->NbVT;
+      else if(!strncmp($1, "VT", 2)){
+	ViewValueList = &ViewData->VT; ViewNumList = &ViewData->NbVT;
+        if(strlen($1) > 2) ViewData->setOrder2(TYPE_TRI);
       }
-      else if(!strcmp($1, "TT")){
-	ViewValueList = ViewData->TT; ViewNumList = &ViewData->NbTT;
+      else if(!strncmp($1, "TT", 2)){
+	ViewValueList = &ViewData->TT; ViewNumList = &ViewData->NbTT;
+        if(strlen($1) > 2) ViewData->setOrder2(TYPE_TRI);
       }
-      else if(!strcmp($1, "SQ")){
-	ViewValueList = ViewData->SQ; ViewNumList = &ViewData->NbSQ;
+      else if(!strncmp($1, "SQ", 2)){
+	ViewValueList = &ViewData->SQ; ViewNumList = &ViewData->NbSQ;
+        if(strlen($1) > 2) ViewData->setOrder2(TYPE_QUA);
       }
-      else if(!strcmp($1, "VQ")){
-	ViewValueList = ViewData->VQ; ViewNumList = &ViewData->NbVQ;
+      else if(!strncmp($1, "VQ", 2)){
+	ViewValueList = &ViewData->VQ; ViewNumList = &ViewData->NbVQ;
+        if(strlen($1) > 2) ViewData->setOrder2(TYPE_QUA);
       }
-      else if(!strcmp($1, "TQ")){
-	ViewValueList = ViewData->TQ; ViewNumList = &ViewData->NbTQ;
+      else if(!strncmp($1, "TQ", 2)){
+	ViewValueList = &ViewData->TQ; ViewNumList = &ViewData->NbTQ;
+        if(strlen($1) > 2) ViewData->setOrder2(TYPE_QUA);
       }
-      else if(!strcmp($1, "SS")){
-	ViewValueList = ViewData->SS; ViewNumList = &ViewData->NbSS;
+      else if(!strncmp($1, "SS", 2)){
+	ViewValueList = &ViewData->SS; ViewNumList = &ViewData->NbSS;
+        if(strlen($1) > 2) ViewData->setOrder2(TYPE_TET);
       }
-      else if(!strcmp($1, "VS")){
-	ViewValueList = ViewData->VS; ViewNumList = &ViewData->NbVS;
+      else if(!strncmp($1, "VS", 2)){
+	ViewValueList = &ViewData->VS; ViewNumList = &ViewData->NbVS;
+        if(strlen($1) > 2) ViewData->setOrder2(TYPE_TET);
       }
-      else if(!strcmp($1, "TS")){
-	ViewValueList = ViewData->TS; ViewNumList = &ViewData->NbTS;
+      else if(!strncmp($1, "TS", 2)){
+	ViewValueList = &ViewData->TS; ViewNumList = &ViewData->NbTS;
+        if(strlen($1) > 2) ViewData->setOrder2(TYPE_TET);
       }
-      else if(!strcmp($1, "SH")){
-	ViewValueList = ViewData->SH; ViewNumList = &ViewData->NbSH;
+      else if(!strncmp($1, "SH", 2)){
+	ViewValueList = &ViewData->SH; ViewNumList = &ViewData->NbSH;
+        if(strlen($1) > 2) ViewData->setOrder2(TYPE_HEX);
       }
-      else if(!strcmp($1, "VH")){
-	ViewValueList = ViewData->VH; ViewNumList = &ViewData->NbVH;
+      else if(!strncmp($1, "VH", 2)){
+	ViewValueList = &ViewData->VH; ViewNumList = &ViewData->NbVH;
+        if(strlen($1) > 2) ViewData->setOrder2(TYPE_HEX);
       }
-      else if(!strcmp($1, "TH")){
-	ViewValueList = ViewData->TH; ViewNumList = &ViewData->NbTH;
+      else if(!strncmp($1, "TH", 2)){
+	ViewValueList = &ViewData->TH; ViewNumList = &ViewData->NbTH;
+        if(strlen($1) > 2) ViewData->setOrder2(TYPE_HEX);
       }
-      else if(!strcmp($1, "SI")){
-	ViewValueList = ViewData->SI; ViewNumList = &ViewData->NbSI;
+      else if(!strncmp($1, "SI", 2)){
+	ViewValueList = &ViewData->SI; ViewNumList = &ViewData->NbSI;
+        if(strlen($1) > 2) ViewData->setOrder2(TYPE_PRI);
       }
-      else if(!strcmp($1, "VI")){
-	ViewValueList = ViewData->VI; ViewNumList = &ViewData->NbVI;
+      else if(!strncmp($1, "VI", 2)){
+	ViewValueList = &ViewData->VI; ViewNumList = &ViewData->NbVI;
+        if(strlen($1) > 2) ViewData->setOrder2(TYPE_PRI);
       }
-      else if(!strcmp($1, "TI")){
-	ViewValueList = ViewData->TI; ViewNumList = &ViewData->NbTI;
+      else if(!strncmp($1, "TI", 2)){
+	ViewValueList = &ViewData->TI; ViewNumList = &ViewData->NbTI;
+        if(strlen($1) > 2) ViewData->setOrder2(TYPE_PRI);
       }
-      else if(!strcmp($1, "SY")){
-	ViewValueList = ViewData->SY; ViewNumList = &ViewData->NbSY;
+      else if(!strncmp($1, "SY", 2)){
+	ViewValueList = &ViewData->SY; ViewNumList = &ViewData->NbSY;
+        if(strlen($1) > 2) ViewData->setOrder2(TYPE_PYR);
       }
-      else if(!strcmp($1, "VY")){
-	ViewValueList = ViewData->VY; ViewNumList = &ViewData->NbVY;
+      else if(!strncmp($1, "VY", 2)){
+	ViewValueList = &ViewData->VY; ViewNumList = &ViewData->NbVY;
+        if(strlen($1) > 2) ViewData->setOrder2(TYPE_PYR);
       }
-      else if(!strcmp($1, "TY")){
-	ViewValueList = ViewData->TY; ViewNumList = &ViewData->NbTY;
-      }
-      else if(!strcmp($1, "SL2")){
-	ViewValueList = ViewData->SL2; ViewNumList = &ViewData->NbSL2;
-      }
-      else if(!strcmp($1, "VL2")){
-	ViewValueList = ViewData->VL2; ViewNumList = &ViewData->NbVL2;
-      }
-      else if(!strcmp($1, "TL2")){
-	ViewValueList = ViewData->TL2; ViewNumList = &ViewData->NbTL2;
-      }
-      else if(!strcmp($1, "ST2")){
-	ViewValueList = ViewData->ST2; ViewNumList = &ViewData->NbST2;
-      }
-      else if(!strcmp($1, "VT2")){
-	ViewValueList = ViewData->VT2; ViewNumList = &ViewData->NbVT2;
-      }
-      else if(!strcmp($1, "TT2")){
-	ViewValueList = ViewData->TT2; ViewNumList = &ViewData->NbTT2;
-      }
-      else if(!strcmp($1, "SQ2")){
-	ViewValueList = ViewData->SQ2; ViewNumList = &ViewData->NbSQ2;
-      }
-      else if(!strcmp($1, "VQ2")){
-	ViewValueList = ViewData->VQ2; ViewNumList = &ViewData->NbVQ2;
-      }
-      else if(!strcmp($1, "TQ2")){
-	ViewValueList = ViewData->TQ2; ViewNumList = &ViewData->NbTQ2;
-      }
-      else if(!strcmp($1, "SS2")){
-	ViewValueList = ViewData->SS2; ViewNumList = &ViewData->NbSS2;
-      }
-      else if(!strcmp($1, "VS2")){
-	ViewValueList = ViewData->VS2; ViewNumList = &ViewData->NbVS2;
-      }
-      else if(!strcmp($1, "TS2")){
-	ViewValueList = ViewData->TS2; ViewNumList = &ViewData->NbTS2;
-      }
-      else if(!strcmp($1, "SH2")){
-	ViewValueList = ViewData->SH2; ViewNumList = &ViewData->NbSH2;
-      }
-      else if(!strcmp($1, "VH2")){
-	ViewValueList = ViewData->VH2; ViewNumList = &ViewData->NbVH2;
-      }
-      else if(!strcmp($1, "TH2")){
-	ViewValueList = ViewData->TH2; ViewNumList = &ViewData->NbTH2;
-      }
-      else if(!strcmp($1, "SI2")){
-	ViewValueList = ViewData->SI2; ViewNumList = &ViewData->NbSI2;
-      }
-      else if(!strcmp($1, "VI2")){
-	ViewValueList = ViewData->VI2; ViewNumList = &ViewData->NbVI2;
-      }
-      else if(!strcmp($1, "TI2")){
-	ViewValueList = ViewData->TI2; ViewNumList = &ViewData->NbTI2;
-      }
-      else if(!strcmp($1, "SY2")){
-	ViewValueList = ViewData->SY2; ViewNumList = &ViewData->NbSY2;
-      }
-      else if(!strcmp($1, "VY2")){
-	ViewValueList = ViewData->VY2; ViewNumList = &ViewData->NbVY2;
-      }
-      else if(!strcmp($1, "TY2")){
-	ViewValueList = ViewData->TY2; ViewNumList = &ViewData->NbTY2;
+      else if(!strncmp($1, "TY", 2)){
+	ViewValueList = &ViewData->TY; ViewNumList = &ViewData->NbTY;
+        if(strlen($1) > 2) ViewData->setOrder2(TYPE_PYR);
       }
       else{
 	yymsg(0, "Unknown element type '%s'", $1);	
 	ViewValueList = 0; ViewNumList = 0;
       }
 #endif
-      ViewCoordIdx = 0;
+      ViewCoord.clear();
       Free($1);
     }
     '(' ElementCoords ')'
@@ -450,8 +420,8 @@ Element :
 #if !defined(HAVE_NO_POST)
       if(ViewValueList){
 	for(int i = 0; i < 3; i++)
-	  for(int j = 0; j < ViewCoordIdx / 3; j++)
-	    List_Add(ViewValueList, &ViewCoord[3 * j + i]);
+	  for(unsigned int j = 0; j < ViewCoord.size() / 3; j++) 
+	    ViewValueList->push_back(ViewCoord[3 * j + i]);
       }
 #endif
     }
@@ -467,14 +437,14 @@ Text2DValues :
     StringExprVar
     { 
 #if !defined(HAVE_NO_POST)
-      for(int i = 0; i < (int)strlen($1)+1; i++) List_Add(ViewData->T2C, &$1[i]); 
+      for(int i = 0; i < (int)strlen($1) + 1; i++) ViewData->T2C.push_back($1[i]);
 #endif
       Free($1);
     }
   | Text2DValues ',' StringExprVar
     { 
 #if !defined(HAVE_NO_POST)
-      for(int i = 0; i < (int)strlen($3)+1; i++) List_Add(ViewData->T2C, &$3[i]); 
+      for(int i = 0; i < (int)strlen($3) + 1; i++) ViewData->T2C.push_back($3[i]);
 #endif
       Free($3);
     }
@@ -484,11 +454,10 @@ Text2D :
     tText2D '(' FExpr ',' FExpr ',' FExpr ')'
     { 
 #if !defined(HAVE_NO_POST)
-      List_Add(ViewData->T2D, &$3); 
-      List_Add(ViewData->T2D, &$5);
-      List_Add(ViewData->T2D, &$7); 
-      double d = List_Nbr(ViewData->T2C);
-      List_Add(ViewData->T2D, &d); 
+      ViewData->T2D.push_back($3); 
+      ViewData->T2D.push_back($5);
+      ViewData->T2D.push_back($7); 
+      ViewData->T2D.push_back(ViewData->T2C.size()); 
 #endif
     }
     '{' Text2DValues '}' tEND
@@ -503,14 +472,14 @@ Text3DValues :
     StringExprVar
     { 
 #if !defined(HAVE_NO_POST)
-      for(int i = 0; i < (int)strlen($1)+1; i++) List_Add(ViewData->T3C, &$1[i]); 
+      for(int i = 0; i < (int)strlen($1) + 1; i++) ViewData->T3C.push_back($1[i]);
 #endif
       Free($1);
     }
   | Text3DValues ',' StringExprVar
     { 
 #if !defined(HAVE_NO_POST)
-      for(int i = 0; i < (int)strlen($3)+1; i++) List_Add(ViewData->T3C, &$3[i]); 
+      for(int i = 0; i < (int)strlen($3) + 1; i++) ViewData->T3C.push_back($3[i]);
 #endif
       Free($3);
     }
@@ -520,10 +489,9 @@ Text3D :
     tText3D '(' FExpr ',' FExpr ',' FExpr ',' FExpr ')'
     { 
 #if !defined(HAVE_NO_POST)
-      List_Add(ViewData->T3D, &$3); List_Add(ViewData->T3D, &$5);
-      List_Add(ViewData->T3D, &$7); List_Add(ViewData->T3D, &$9); 
-      double d = List_Nbr(ViewData->T3C);
-      List_Add(ViewData->T3D, &d); 
+      ViewData->T3D.push_back($3); ViewData->T3D.push_back($5);
+      ViewData->T3D.push_back($7); ViewData->T3D.push_back($9);
+      ViewData->T3D.push_back(ViewData->T3C.size()); 
 #endif
     }
     '{' Text3DValues '}' tEND
@@ -540,14 +508,16 @@ InterpolationMatrix :
     {
 #if !defined(HAVE_NO_POST)
       int type = 
-	(ViewData->NbSL || ViewData->NbVL) ? 1 : 
-	(ViewData->NbST || ViewData->NbVT) ? 3 : 
-	(ViewData->NbSQ || ViewData->NbVQ) ? 4 : 
-	(ViewData->NbSS || ViewData->NbVS) ? 6 : 
-	(ViewData->NbSI || ViewData->NbVI) ? 9 : 
-      	(ViewData->NbSH || ViewData->NbVH) ? 12 : 
+	(ViewData->NbSL || ViewData->NbVL) ? TYPE_LIN : 
+	(ViewData->NbST || ViewData->NbVT) ? TYPE_TRI : 
+	(ViewData->NbSQ || ViewData->NbVQ) ? TYPE_QUA : 
+	(ViewData->NbSS || ViewData->NbVS) ? TYPE_TET : 
+	(ViewData->NbSY || ViewData->NbVY) ? TYPE_PYR : 
+	(ViewData->NbSI || ViewData->NbVI) ? TYPE_PRI : 
+      	(ViewData->NbSH || ViewData->NbVH) ? TYPE_HEX : 
 	0;
-      ViewData->setInterpolationScheme(type, $3, $6);
+      ViewData->setInterpolationMatrices(type, ListOfListOfDouble2Matrix($3), 
+                                         ListOfListOfDouble2Matrix($6));
 #endif
     }
  |  tInterpolationScheme '{' RecursiveListOfListOfDouble '}' 
@@ -557,13 +527,16 @@ InterpolationMatrix :
     {
 #if !defined(HAVE_NO_POST)
       int type = 
-	(ViewData->NbSL || ViewData->NbVL) ? 1 : 
-	(ViewData->NbST || ViewData->NbVT) ? 3 : 
-	(ViewData->NbSQ || ViewData->NbVQ) ? 4 : 
-	(ViewData->NbSS || ViewData->NbVS) ? 6 : 
-      	(ViewData->NbSH || ViewData->NbVH) ? 12 : 
+	(ViewData->NbSL || ViewData->NbVL) ? TYPE_LIN : 
+	(ViewData->NbST || ViewData->NbVT) ? TYPE_TRI : 
+	(ViewData->NbSQ || ViewData->NbVQ) ? TYPE_QUA : 
+	(ViewData->NbSS || ViewData->NbVS) ? TYPE_TET : 
+      	(ViewData->NbSH || ViewData->NbVH) ? TYPE_HEX : 
 	0;
-      ViewData->setInterpolationScheme(type, $3, $6, $9, $12);
+      ViewData->setInterpolationMatrices(type, ListOfListOfDouble2Matrix($3), 
+                                         ListOfListOfDouble2Matrix($6),
+                                         ListOfListOfDouble2Matrix($9), 
+                                         ListOfListOfDouble2Matrix($12));
 #endif
     }
 ;
@@ -572,7 +545,7 @@ Time :
     tTime 
     {
 #if !defined(HAVE_NO_POST)
-      ViewValueList = ViewData->Time;
+      ViewValueList = &ViewData->Time;
 #endif
     }
    '{' ElementValues '}' tEND
@@ -601,200 +574,151 @@ Affectation :
 
     tSTRING NumericAffectation FExpr tEND
     {
-      Symbol TheSymbol, *pSymbol;
-      TheSymbol.Name = $1;
-      if(!(pSymbol = (Symbol*)Tree_PQuery(Symbol_T, &TheSymbol))){
-	if(!$2){
-	  TheSymbol.val = List_Create(1, 1, sizeof(double));
-	  List_Put(TheSymbol.val, 0, &$3);
-	  Tree_Add(Symbol_T, &TheSymbol);
-	}
-	else{
+      if(!gmsh_yysymbols.count($1)){
+	if(!$2)
+	  gmsh_yysymbols[$1].push_back($3);
+	else
 	  yymsg(0, "Unknown variable '%s'", $1);
-	  Free($1);
-	}
       }
       else{
-	double *pd = (double*)List_Pointer_Fast(pSymbol->val, 0); 
 	switch($2){
-	case 0 : *pd = $3; break;
-	case 1 : *pd += $3; break;
-	case 2 : *pd -= $3; break;
-	case 3 : *pd *= $3; break;
+	case 0 : gmsh_yysymbols[$1][0] = $3; break;
+	case 1 : gmsh_yysymbols[$1][0] += $3; break;
+	case 2 : gmsh_yysymbols[$1][0] -= $3; break;
+	case 3 : gmsh_yysymbols[$1][0] *= $3; break;
 	case 4 : 
-	  if($3) *pd /= $3; 
+	  if($3) gmsh_yysymbols[$1][0] /= $3; 
 	  else yymsg(0, "Division by zero in '%s /= %g'", $1, $3);
 	  break;
 	}
-	Free($1);
       }
+      Free($1);
     }
   | tSTRING '[' FExpr ']' NumericAffectation FExpr tEND
     {
-      Symbol TheSymbol, *pSymbol;
-      TheSymbol.Name = $1;
-      if(!(pSymbol = (Symbol*)Tree_PQuery(Symbol_T, &TheSymbol))){
+      int index = (int)$3;
+      if(!gmsh_yysymbols.count($1)){
 	if(!$5){
-	  TheSymbol.val = List_Create(5, 5, sizeof(double));
-	  List_Put(TheSymbol.val, (int)$3, &$6);
-	  Tree_Add(Symbol_T, &TheSymbol);
+	  gmsh_yysymbols[$1].resize(index + 1, 0.);
+	  gmsh_yysymbols[$1][index] = $6;
 	}
-	else{
+	else
 	  yymsg(0, "Unknown variable '%s'", $1);
-	  Free($1);
-	}
       }
       else{
-	double *pd;
-	if((pd = (double*)List_Pointer_Test(pSymbol->val, (int)$3))){
-	  switch($5){
-	  case 0 : *pd = $6; break;
-	  case 1 : *pd += $6; break;
-	  case 2 : *pd -= $6; break;
-	  case 3 : *pd *= $6; break;
-	  case 4 : 
-	    if($6) *pd /= $6; 
-	    else yymsg(0, "Division by zero in '%s[%d] /= %g'", $1, (int)$3, $6);
-	    break;
-	  }
+	if((int)gmsh_yysymbols[$1].size() < index + 1)
+	  gmsh_yysymbols[$1].resize(index + 1, 0.);
+	switch($5){
+	case 0 : gmsh_yysymbols[$1][index] = $6; break;
+	case 1 : gmsh_yysymbols[$1][index] += $6; break;
+	case 2 : gmsh_yysymbols[$1][index] -= $6; break;
+	case 3 : gmsh_yysymbols[$1][index] *= $6; break;
+	case 4 : 
+	  if($6) gmsh_yysymbols[$1][index] /= $6; 
+	  else yymsg(0, "Division by zero in '%s[%d] /= %g'", $1, index, $6);
+	  break;
 	}
-	else{
-	  if(!$5)
-	    List_Put(pSymbol->val, (int)$3, &$6);
-	  else
-	    yymsg(0, "Uninitialized variable '%s[%d]'", $1, (int)$3);
-	}
-	Free($1);
       }
+      Free($1);
     }
   | tSTRING '[' '{' RecursiveListOfDouble '}' ']' NumericAffectation ListOfDouble tEND
     {
       if(List_Nbr($4) != List_Nbr($8)){
 	yymsg(0, "Incompatible array dimensions in affectation");
-	Free($1);
       }
       else{
-	Symbol TheSymbol, *pSymbol;
-	TheSymbol.Name = $1;
-	if(!(pSymbol = (Symbol*)Tree_PQuery(Symbol_T, &TheSymbol))){
+	if(!gmsh_yysymbols.count($1)){
 	  if(!$7){
-	    TheSymbol.val = List_Create(5, 5, sizeof(double));
 	    for(int i = 0; i < List_Nbr($4); i++){
-	      List_Put(TheSymbol.val, (int)(*(double*)List_Pointer($4, i)),
-		       (double*)List_Pointer($8, i));
+	      int index = (int)(*(double*)List_Pointer($4, i));
+	      gmsh_yysymbols[$1].resize(index + 1, 0.);
+	      gmsh_yysymbols[$1][index] = *(double*)List_Pointer($8, i);
 	    }
-	    Tree_Add(Symbol_T, &TheSymbol);
 	  }
-	  else{
+	  else
 	    yymsg(0, "Unknown variable '%s'", $1);
-	    Free($1);
-	  }
 	}
 	else{
 	  for(int i = 0; i < List_Nbr($4); i++){
-	    int j = (int)(*(double*)List_Pointer($4, i));
+	    int index = (int)(*(double*)List_Pointer($4, i));
 	    double d = *(double*)List_Pointer($8, i);
-	    double *pd;
-	    if((pd = (double*)List_Pointer_Test(pSymbol->val, j))){
-	      switch($7){
-	      case 0 : *pd = d; break;
-	      case 1 : *pd += d; break;
-	      case 2 : *pd -= d; break;
-	      case 3 : *pd *= d; break;
-	      case 4 : 
-		if($8) *pd /= d; 
-		else yymsg(0, "Division by zero in '%s[%d] /= %g'", $1, j, d);
-		break;
-	      }
-	    }
-	    else{
-	      if(!$7)
-		List_Put(pSymbol->val, j, &d);
-	      else
-		yymsg(0, "Uninitialized variable '%s[%d]'", $1, j);	  
+	    if((int)gmsh_yysymbols[$1].size() < index + 1)
+	      gmsh_yysymbols[$1].resize(index + 1, 0.);
+	    switch($7){
+	    case 0 : gmsh_yysymbols[$1][index] = d; break;
+	    case 1 : gmsh_yysymbols[$1][index] += d; break;
+	    case 2 : gmsh_yysymbols[$1][index] -= d; break;
+	    case 3 : gmsh_yysymbols[$1][index] *= d; break;
+	    case 4 : 
+	      if($8) gmsh_yysymbols[$1][index] /= d; 
+	      else yymsg(0, "Division by zero in '%s[%d] /= %g'", $1, index, d);
+	      break;
 	    }
 	  }
-	  Free($1);
 	}
       }
+      Free($1);
       List_Delete($4);
       List_Delete($8);
     }
   | tSTRING '[' ']' tAFFECT ListOfDouble tEND
     {
-      Symbol TheSymbol, *pSymbol;
-      TheSymbol.Name = $1;
-      if(!(pSymbol = (Symbol*)Tree_PQuery(Symbol_T, &TheSymbol))){
-	TheSymbol.val = List_Create(5, 5, sizeof(double));
-	List_Copy($5, TheSymbol.val);
-	Tree_Add(Symbol_T, &TheSymbol);
-      }
-      else{
-	List_Reset(pSymbol->val);
-	List_Copy($5, pSymbol->val);
-	Free($1);
-      }
+      if(gmsh_yysymbols.count($1))
+	gmsh_yysymbols[$1].clear();
+      gmsh_yysymbols[$1] = std::vector<double>();
+      for(int i = 0; i < List_Nbr($5); i++)
+        gmsh_yysymbols[$1].push_back(*(double*)List_Pointer($5, i));
+      Free($1);
       List_Delete($5);
     }
   | tSTRING '[' ']' tAFFECTPLUS ListOfDouble tEND
     {
       // appends to the list
-      Symbol TheSymbol, *pSymbol;
-      TheSymbol.Name = $1;
-      if(!(pSymbol = (Symbol*)Tree_PQuery(Symbol_T, &TheSymbol))){
-	TheSymbol.val = List_Create(5, 5, sizeof(double));
-	List_Copy($5, TheSymbol.val);
-	Tree_Add(Symbol_T, &TheSymbol);
-      }
-      else{
-	for(int i = 0; i < List_Nbr($5); i++)
-	  List_Add(pSymbol->val, List_Pointer($5, i));
-	Free($1);
-      }
+      for(int i = 0; i < List_Nbr($5); i++)
+	gmsh_yysymbols[$1].push_back(*(double*)List_Pointer($5, i));
+      Free($1);
       List_Delete($5);
     }
   | tSTRING NumericIncrement tEND
     {
-      Symbol TheSymbol, *pSymbol;
-      TheSymbol.Name = $1;
-      if(!(pSymbol = (Symbol*)Tree_PQuery(Symbol_T, &TheSymbol)))
+      if(!gmsh_yysymbols.count($1))
 	yymsg(0, "Unknown variable '%s'", $1); 
       else
-	*(double*)List_Pointer_Fast(pSymbol->val, 0) += $2;
+	gmsh_yysymbols[$1][0] += $2;
       Free($1);
     }
   | tSTRING '[' FExpr ']' NumericIncrement tEND
     {
-      Symbol TheSymbol, *pSymbol;
-      TheSymbol.Name = $1;
-      if(!(pSymbol = (Symbol*)Tree_PQuery(Symbol_T, &TheSymbol)))
+      if(!gmsh_yysymbols.count($1))
 	yymsg(0, "Unknown variable '%s'", $1); 
       else{
-	double *pd;
-	if((pd = (double*)List_Pointer_Test(pSymbol->val, (int)$3)))
-	  *pd += $5;
-	else
-	  yymsg(0, "Uninitialized variable '%s[%d]'", $1, (int)$3);
+	int index = (int)$3;
+	if((int)gmsh_yysymbols[$1].size() < index + 1)
+	  gmsh_yysymbols[$1].resize(index + 1, 0.);
+	gmsh_yysymbols[$1][index] += $5;
       }
       Free($1);
     }
-
   | tSTRING tAFFECT StringExpr tEND 
     { 
-      Msg::Warning("Named string expressions not implemented yet");
+      gmsh_yystringsymbols[$1] = std::string($3);
+      Free($1);
+      Free($3);
     }
 
   // Option Strings
 
   | tSTRING '.' tSTRING tAFFECT StringExpr tEND 
     { 
-      StringOption(GMSH_SET|GMSH_GUI, $1, 0, $3, $5);
-      Free($1); Free($3);
+      std::string tmp($5);
+      StringOption(GMSH_SET|GMSH_GUI, $1, 0, $3, tmp);
+      Free($1); Free($3); Free($5)
     }
   | tSTRING '[' FExpr ']' '.' tSTRING tAFFECT StringExpr tEND 
     { 
-      StringOption(GMSH_SET|GMSH_GUI, $1, (int)$3, $6, $8);
-      Free($1); Free($6);
+      std::string tmp($8);
+      StringOption(GMSH_SET|GMSH_GUI, $1, (int)$3, $6, tmp);
+      Free($1); Free($6); Free($8)
     }
 
   // Option Numbers
@@ -871,7 +795,7 @@ Affectation :
 
   | tSTRING '.' tColorTable tAFFECT ListOfColor tEND 
     {
-      GmshColorTable *ct = Get_ColorTable(0);
+      GmshColorTable *ct = GetColorTable(0);
       if(!ct)
 	yymsg(0, "View[%d] does not exist", 0);
       else{
@@ -891,7 +815,7 @@ Affectation :
     }
   | tSTRING '[' FExpr ']' '.' tColorTable tAFFECT ListOfColor tEND 
     {
-      GmshColorTable *ct = Get_ColorTable((int)$3);
+      GmshColorTable *ct = GetColorTable((int)$3);
       if(!ct)
 	yymsg(0, "View[%d] does not exist", (int)$3);
       else{
@@ -914,16 +838,14 @@ Affectation :
 
   | tSTRING tField tAFFECT FExpr tEND
     {
-      if(!strcmp($1,"Background")){
+      if(!strcmp($1,"Background"))
 	GModel::current()->getFields()->background_field = (int)$4;
-      }
-      else{
+      else
 	yymsg(0, "Unknown command %s Field", $1);
-      }
     }
   | tField '[' FExpr ']' tAFFECT tSTRING tEND
     {
-      if(!GModel::current()->getFields()->new_field((int)$3, $6))
+      if(!GModel::current()->getFields()->newField((int)$3, $6))
 	yymsg(0, "Cannot create field %i of type '%s'", (int)$3, $6);
       Free($6);
     }
@@ -933,15 +855,15 @@ Affectation :
       if(field){
 	FieldOption *option = field->options[$6];
 	if(option){
-	  try { option->numerical_value($8); }
+	  try { option->numericalValue($8); }
 	  catch(...){
 	    yymsg(0, "Cannot assign a numerical value to option '%s' "
-		  "in field %i of type '%s'", $6, (int)$3, field->get_name());
+		  "in field %i of type '%s'", $6, (int)$3, field->getName());
 	  }
 	}
 	else
 	  yymsg(0, "Unknown option '%s' in field %i of type '%s'",
-		$6, (int)$3, field->get_name());
+		$6, (int)$3, field->getName());
       }
       else
 	yymsg(0, "No field with id %i", (int)$3);
@@ -956,12 +878,12 @@ Affectation :
 	  try { option->string() = $8; }
 	  catch (...){
 	    yymsg(0, "Cannot assign a string value to  option '%s' "
-		  "in field %i of type '%s'", $6, (int)$3, field->get_name());
+		  "in field %i of type '%s'", $6, (int)$3, field->getName());
 	  }
 	}
 	else 
 	  yymsg(0, "Unknown option '%s' in field %i of type '%s'", 
-		$6, (int)$3, field->get_name());
+		$6, (int)$3, field->getName());
       }
       else 
 	yymsg(0, "No field with id %i", (int)$3);
@@ -984,7 +906,7 @@ Affectation :
 	}
 	else
 	  yymsg(0, "Unknown option '%s' in field %i of type '%s'",
-		$6, (int)$3, field->get_name());
+		$6, (int)$3, field->getName());
       }
       else 
 	yymsg(0, "No field with id %i", (int)$3);
@@ -998,7 +920,7 @@ Affectation :
     {
 #if !defined(HAVE_NO_POST)
       try {
-	GMSH_PluginManager::instance()->setPluginOption($3, $6, $8); 
+	PluginManager::instance()->setPluginOption($3, $6, $8); 
       }
       catch (...) {
 	yymsg(0, "Unknown option '%s' or plugin '%s'", $6, $3);
@@ -1010,13 +932,13 @@ Affectation :
     {
 #if !defined(HAVE_NO_POST)
       try {
-	GMSH_PluginManager::instance()->setPluginOption($3, $6, $8); 
+	PluginManager::instance()->setPluginOption($3, $6, $8); 
       }
       catch (...) {
 	yymsg(0, "Unknown option '%s' or plugin '%s'", $6, $3);
       }
 #endif
-      Free($3); Free($6);
+      Free($3); Free($6); Free($8);
     }
 ;
 
@@ -1030,27 +952,36 @@ PhysicalId :
   | StringExpr
     { 
       $$ = GModel::current()->setPhysicalName
-	(std::string($1), ++GModel::current()->getGEOInternals()->MaxPhysicalNum);
+        (std::string($1), curPhysDim, 
+         ++GModel::current()->getGEOInternals()->MaxPhysicalNum);
       Free($1);
     }
 ;
 
-RuledSurfaceOptions :
+InSphereCenter :
     // nothing
     {
       $$ = 0;
     }
   | tIn tSphere '{' FExpr '}'
     {
-      $$ = List_Create(4, 4, sizeof(double));
+      $$ = List_Create(1, 1, sizeof(Vertex*));
       Vertex *v = FindPoint((int)$4);
       if(!v)
 	yymsg(0, "Unknown point %d", (int)$4);
       else{
-	List_Add($$, &v->Pos.X);
-	List_Add($$, &v->Pos.Y);
-	List_Add($$, &v->Pos.Z);
+	List_Add($$, &v);
       }
+    }
+;
+
+CircleOptions :
+    {
+      for(int i = 0; i < 4; i++) $$[i] = 0.;
+    }
+  | tPlane VExpr
+    {
+      for(int i = 0; i < 4; i++) $$[i] = $2[i];
     }
 ;
 
@@ -1065,10 +996,11 @@ Shape :
 	yymsg(0, "Point %d already exists", num);
       }
       else{
-	double x = CTX.geom.scaling_factor * $6[0];
-	double y = CTX.geom.scaling_factor * $6[1];
-	double z = CTX.geom.scaling_factor * $6[2];
-	double lc = CTX.geom.scaling_factor * $6[3];
+	double x = CTX::instance()->geom.scalingFactor * $6[0];
+	double y = CTX::instance()->geom.scalingFactor * $6[1];
+	double z = CTX::instance()->geom.scalingFactor * $6[2];
+	double lc = CTX::instance()->geom.scalingFactor * $6[3];
+	if(lc == 0.) lc = MAX_LC; // no mesh size given at the point
 	Vertex *v;
 	if(!myGmshSurface)
 	  v = Create_Vertex(num, x, y, z, lc, 1.0);
@@ -1080,19 +1012,23 @@ Shape :
       $$.Type = MSH_POINT;
       $$.Num = num;
     }
-  | tPhysical tPoint '(' PhysicalId ')' tAFFECT ListOfDouble tEND
+  | tPhysical tPoint 
     {
-      int num = (int)$4;
+      curPhysDim = 0;
+    }
+    '(' PhysicalId ')' tAFFECT ListOfDouble tEND
+    {
+      int num = (int)$5;
       if(FindPhysicalGroup(num, MSH_PHYSICAL_POINT)){
 	yymsg(0, "Physical point %d already exists", num);
       }
       else{
-	List_T *temp = ListOfDouble2ListOfInt($7);
+	List_T *temp = ListOfDouble2ListOfInt($8);
 	PhysicalGroup *p = Create_PhysicalGroup(num, MSH_PHYSICAL_POINT, temp);
 	List_Delete(temp);
 	List_Add(GModel::current()->getGEOInternals()->PhysicalGroups, &p);
       }
-      List_Delete($7);
+      List_Delete($8);
       $$.Type = MSH_PHYSICAL_POINT;
       $$.Num = num;
     }
@@ -1136,6 +1072,28 @@ Shape :
       $$.Type = MSH_SEGM_LINE;
       $$.Num = num;
     }
+  | tDegenerated tLine ListOfDouble tEND
+    {
+      for (int i = 0; i < List_Nbr($3); i++){
+	double dnum;
+	List_Read($3, i, &dnum);
+	int num = (int) fabs(dnum);
+	Curve *c = FindCurve(num);
+	if (c){
+	  c->degenerated = true;
+	}
+	else{
+	  GEdge *ge = GModel::current()->getEdgeByTag(num);
+	  if (!ge){
+	    yymsg(0, "Curve %d does not exist", num);
+	  }
+	  else{
+	    ge->setTooSmall(true);
+	  }
+	}
+      }
+    }
+
   | tSpline '(' FExpr ')' tAFFECT ListOfDouble tEND
     {
       int num = (int)$3;
@@ -1154,7 +1112,7 @@ Shape :
       $$.Type = MSH_SEGM_SPLN;
       $$.Num = num;
     }
-  | tCircle '(' FExpr ')'  tAFFECT ListOfDouble tEND
+  | tCircle '(' FExpr ')'  tAFFECT ListOfDouble CircleOptions tEND
     {
       int num = (int)$3;
       if(FindCurve(num)){
@@ -1164,41 +1122,27 @@ Shape :
 	List_T *temp = ListOfDouble2ListOfInt($6);
 	Curve *c = Create_Curve(num, MSH_SEGM_CIRC, 2, temp, NULL,
 				-1, -1, 0., 1.);
-	Tree_Add(GModel::current()->getGEOInternals()->Curves, &c);
-	CreateReversedCurve(c);
-	List_Delete(temp);
-      }
-      List_Delete($6);
-      $$.Type = MSH_SEGM_CIRC;
-      $$.Num = num;
-    }
-  | tCircle '(' FExpr ')'  tAFFECT ListOfDouble tPlane VExpr tEND
-    {
-      int num = (int)$3;
-      if(FindCurve(num)){
-	yymsg(0, "Curve %d already exists", num);
-      }
-      else{
-	List_T *temp = ListOfDouble2ListOfInt($6);
-	Curve *c = Create_Curve(num, MSH_SEGM_CIRC, 2, temp, NULL,
-				-1, -1, 0., 1.);
-	c->Circle.n[0] = $8[0];
-	c->Circle.n[1] = $8[1];
-	c->Circle.n[2] = $8[2];
-	End_Curve(c);
+        if($7[0] || $7[1] || $7[2]){
+          c->Circle.n[0] = $7[0];
+          c->Circle.n[1] = $7[1];
+          c->Circle.n[2] = $7[2];
+          End_Curve(c);
+        }
 	Tree_Add(GModel::current()->getGEOInternals()->Curves, &c);
 	Curve *rc = CreateReversedCurve(c);
-	rc->Circle.n[0] = $8[0];
-	rc->Circle.n[1] = $8[1];
-	rc->Circle.n[2] = $8[2];
-	End_Curve(rc);
+        if($7[0] || $7[1] || $7[2]){
+          rc->Circle.n[0] = $7[0];
+          rc->Circle.n[1] = $7[1];
+          rc->Circle.n[2] = $7[2];
+          End_Curve(rc);
+        }
 	List_Delete(temp);
       }
       List_Delete($6);
       $$.Type = MSH_SEGM_CIRC;
       $$.Num = num;
     }
-  | tEllipse '(' FExpr ')'  tAFFECT ListOfDouble tEND
+  | tEllipse '(' FExpr ')'  tAFFECT ListOfDouble CircleOptions tEND
     {
       int num = (int)$3;
       if(FindCurve(num)){
@@ -1208,58 +1152,24 @@ Shape :
 	List_T *temp = ListOfDouble2ListOfInt($6);
 	Curve *c = Create_Curve(num, MSH_SEGM_ELLI, 2, temp, NULL,
 				-1, -1, 0., 1.);
-	Tree_Add(GModel::current()->getGEOInternals()->Curves, &c);
-	CreateReversedCurve(c);
-	List_Delete(temp);
-      }
-      List_Delete($6);
-      $$.Type = MSH_SEGM_ELLI;
-      $$.Num = num;
-    }
-  | tEllipse '(' FExpr ')'  tAFFECT ListOfDouble tPlane VExpr tEND
-    {
-      int num = (int)$3;
-      if(FindCurve(num)){
-	yymsg(0, "Curve %d already exists", num);
-      }
-      else{
-	List_T *temp = ListOfDouble2ListOfInt($6);
-	Curve *c = Create_Curve(num, MSH_SEGM_ELLI, 2, temp, NULL,
-				-1, -1, 0., 1.);
-	c->Circle.n[0] = $8[0];
-	c->Circle.n[1] = $8[1];
-	c->Circle.n[2] = $8[2];
-	End_Curve(c);
+        if($7[0] || $7[1] || $7[2]){
+          c->Circle.n[0] = $7[0];
+          c->Circle.n[1] = $7[1];
+          c->Circle.n[2] = $7[2];
+          End_Curve(c);
+        }
 	Tree_Add(GModel::current()->getGEOInternals()->Curves, &c);
 	Curve *rc = CreateReversedCurve(c);
-	rc->Circle.n[0] = $8[0];
-	rc->Circle.n[1] = $8[1];
-	rc->Circle.n[2] = $8[2];
-	End_Curve(c);
+        if($7[0] || $7[1] || $7[2]){
+          rc->Circle.n[0] = $7[0];
+          rc->Circle.n[1] = $7[1];
+          rc->Circle.n[2] = $7[2];
+          End_Curve(rc);
+        }
 	List_Delete(temp);
       }
       List_Delete($6);
       $$.Type = MSH_SEGM_ELLI;
-      $$.Num = num;
-    }
-  | tParametric '(' FExpr ')' tAFFECT 
-      '{' FExpr ',' FExpr ',' tBIGSTR ',' tBIGSTR ',' tBIGSTR '}' tEND
-    {
-      int num = (int)$3;
-      if(FindCurve(num)){
-	yymsg(0, "Curve %d already exists", num);
-      }
-      else{
-	Curve *c = Create_Curve(num, MSH_SEGM_PARAMETRIC, 2, NULL, NULL,
-				-1, -1, $7, $9);
-	strcpy(c->functu, $11);
-	strcpy(c->functv, $13);
-	strcpy(c->functw, $15);
-	Tree_Add(GModel::current()->getGEOInternals()->Curves, &c);
-	CreateReversedCurve(c);
-      }
-      Free($11); Free($13); Free($15);
-      $$.Type = MSH_SEGM_PARAMETRIC;
       $$.Num = num;
     }
   | tBSpline '(' FExpr ')' tAFFECT ListOfDouble tEND
@@ -1298,7 +1208,7 @@ Shape :
       $$.Type = MSH_SEGM_BEZIER;
       $$.Num = num;
     }
-  | tNurbs  '(' FExpr ')' tAFFECT ListOfDouble tKnots ListOfDouble tOrder FExpr tEND
+  | tNurbs  '(' FExpr ')' tAFFECT ListOfDouble tNurbsKnots ListOfDouble tNurbsOrder FExpr tEND
     {
       int num = (int)$3;
       if(List_Nbr($6) + (int)$10 + 1 != List_Nbr($8)){
@@ -1341,19 +1251,23 @@ Shape :
       $$.Type = MSH_SEGM_LOOP;
       $$.Num = num;
     }
-  | tPhysical tLine '(' PhysicalId ')' tAFFECT ListOfDouble tEND
+  | tPhysical tLine 
     {
-      int num = (int)$4;
+      curPhysDim = 1;
+    }
+    '(' PhysicalId ')' tAFFECT ListOfDouble tEND
+    {
+      int num = (int)$5;
       if(FindPhysicalGroup(num, MSH_PHYSICAL_LINE)){
 	yymsg(0, "Physical line %d already exists", num);
       }
       else{
-	List_T *temp = ListOfDouble2ListOfInt($7);
+	List_T *temp = ListOfDouble2ListOfInt($8);
 	PhysicalGroup *p = Create_PhysicalGroup(num, MSH_PHYSICAL_LINE, temp);
 	List_Delete(temp);
 	List_Add(GModel::current()->getGEOInternals()->PhysicalGroups, &p);
       }
-      List_Delete($7);
+      List_Delete($8);
       $$.Type = MSH_PHYSICAL_LINE;
       $$.Num = num;
     }
@@ -1378,7 +1292,7 @@ Shape :
       $$.Type = MSH_SURF_PLAN;
       $$.Num = num;
     }
-  | tRuled tSurface '(' FExpr ')' tAFFECT ListOfDouble RuledSurfaceOptions tEND
+  | tRuled tSurface '(' FExpr ')' tAFFECT ListOfDouble InSphereCenter tEND
     {
       int num = (int)$4, type = 0;
       if(FindSurface(num)){
@@ -1409,7 +1323,7 @@ Shape :
 	  setSurfaceGeneratrices(s, temp);
 	  List_Delete(temp);
 	  End_Surface(s);
-	  s->RuledSurfaceOptions = $8;
+	  s->InSphereCenter = $8;
 	  Tree_Add(GModel::current()->getGEOInternals()->Surfaces, &s);
 	}
       }
@@ -1502,7 +1416,45 @@ Shape :
       $$.Type = MSH_SURF_LOOP;
       $$.Num = num;
     }
-  | tPhysical tSurface '(' PhysicalId ')' tAFFECT ListOfDouble tEND
+  | tPhysical tSurface 
+    {
+      curPhysDim = 2;
+    }
+    '(' PhysicalId ')' tAFFECT ListOfDouble tEND
+    {
+      int num = (int)$5;
+      if(FindPhysicalGroup(num, MSH_PHYSICAL_SURFACE)){
+	yymsg(0, "Physical surface %d already exists", num);
+      }
+      else{
+	List_T *temp = ListOfDouble2ListOfInt($8);
+	PhysicalGroup *p = Create_PhysicalGroup(num, MSH_PHYSICAL_SURFACE, temp);
+	List_Delete(temp);
+	List_Add(GModel::current()->getGEOInternals()->PhysicalGroups, &p);
+      }
+      List_Delete($8);
+      $$.Type = MSH_PHYSICAL_SURFACE;
+      $$.Num = num;
+    }
+  | tCompound tVolume '(' FExpr ')' tAFFECT ListOfDouble tEND
+    {
+      int num = (int)$4;
+      if(FindPhysicalGroup(num, MSH_PHYSICAL_VOLUME)){
+	yymsg(0, "Physical volume %d already exists", num);
+      }
+      else{
+	List_T *temp = ListOfDouble2ListOfInt($7);
+	List_T *S[4] = {temp, 0, 0, 0};
+	PhysicalGroup *p = Create_PhysicalGroup(num, MSH_PHYSICAL_VOLUME, temp, S);
+	List_Delete(temp);
+        List_Add(GModel::current()->getGEOInternals()->PhysicalGroups, &p);
+      }
+      List_Delete($7);
+      $$.Type = MSH_PHYSICAL_VOLUME;
+      $$.Num = num;
+    }
+  | tCompound tSurface '(' FExpr ')' tAFFECT ListOfDouble tSTRING 
+      '{' RecursiveListOfListOfDouble '}' tEND
     {
       int num = (int)$4;
       if(FindPhysicalGroup(num, MSH_PHYSICAL_SURFACE)){
@@ -1510,15 +1462,59 @@ Shape :
       }
       else{
 	List_T *temp = ListOfDouble2ListOfInt($7);
-	PhysicalGroup *p = Create_PhysicalGroup(num, MSH_PHYSICAL_SURFACE, temp);
+	List_T *S[4] = {0, 0, 0, 0};
+	for (int i = 0; i < List_Nbr($10); i++){
+	  List_T *ll;
+	  List_Read($10, i, &ll);
+	  S[i] = ListOfDouble2ListOfInt(ll);
+          List_Delete(ll);
+	}
+	PhysicalGroup *p = Create_PhysicalGroup(num, MSH_PHYSICAL_SURFACE, temp, S);
 	List_Delete(temp);
-	List_Add(GModel::current()->getGEOInternals()->PhysicalGroups, &p);
+	for (int i = 0; i < List_Nbr($10); i++)
+	  List_Delete(S[i]);
+        List_Add(GModel::current()->getGEOInternals()->PhysicalGroups, &p);
+      }
+      List_Delete($7);
+      List_Delete($10);
+      Free($8);
+      $$.Type = MSH_PHYSICAL_SURFACE;
+      $$.Num = num;
+    }
+  | tCompound tSurface '(' FExpr ')' tAFFECT ListOfDouble tEND
+    {
+      int num = (int)$4;
+      if(FindPhysicalGroup(num, MSH_PHYSICAL_SURFACE)){
+	yymsg(0, "Physical surface %d already exists", num);
+      }
+      else{
+	List_T *temp = ListOfDouble2ListOfInt($7);
+	List_T *S[4] = {0, 0, 0, 0};
+	PhysicalGroup *p = Create_PhysicalGroup(num, MSH_PHYSICAL_SURFACE, temp, S);
+	List_Delete(temp);
+        List_Add(GModel::current()->getGEOInternals()->PhysicalGroups, &p);
       }
       List_Delete($7);
       $$.Type = MSH_PHYSICAL_SURFACE;
       $$.Num = num;
     }
-
+  | tCompound tLine '(' FExpr ')' tAFFECT ListOfDouble tEND
+    {
+      int num = (int)$4;
+      if(FindPhysicalGroup(num, MSH_PHYSICAL_LINE)){
+	yymsg(0, "Physical line %d already exists", num);
+      }
+      else{
+	List_T *temp = ListOfDouble2ListOfInt($7);
+	List_T *S[4] = {temp, 0, 0, 0};
+	PhysicalGroup *p = Create_PhysicalGroup(num, MSH_PHYSICAL_LINE, temp, S);
+	List_Delete(temp);
+        List_Add(GModel::current()->getGEOInternals()->PhysicalGroups, &p);
+      }
+      List_Delete($7);
+      $$.Type = MSH_PHYSICAL_LINE;
+      $$.Num = num;
+    }
   // Volumes
 
   // for backward compatibility:
@@ -1557,22 +1553,42 @@ Shape :
       $$.Type = MSH_VOLUME;
       $$.Num = num;
     }
-  | tPhysical tVolume '(' PhysicalId ')' tAFFECT ListOfDouble tEND
+
+  | tOCCShape '(' tBIGSTR ',' ListOfDouble ',' tBIGSTR ')' tEND
     {
-      int num = (int)$4;
+#if defined(HAVE_OCC)
+      std::vector<double> data;
+      for (int i = 0 ; i < List_Nbr($5); i++){
+        double d; List_Read($5, i, &d);
+        data.push_back(d);
+      }
+      GModel::current()->addShape($3, data, $7);
+      Free($3); Free($7);
+      List_Delete($5);
+#endif
+    }
+
+  | tPhysical tVolume 
+    {
+      curPhysDim = 3;
+    }
+    '(' PhysicalId ')' tAFFECT ListOfDouble tEND
+    {
+      int num = (int)$5;
       if(FindPhysicalGroup(num, MSH_PHYSICAL_VOLUME)){
 	yymsg(0, "Physical volume %d already exists", num);
       }
       else{
-	List_T *temp = ListOfDouble2ListOfInt($7);
+	List_T *temp = ListOfDouble2ListOfInt($8);
 	PhysicalGroup *p = Create_PhysicalGroup(num, MSH_PHYSICAL_VOLUME, temp);
 	List_Delete(temp);
 	List_Add(GModel::current()->getGEOInternals()->PhysicalGroups, &p);
       }
-      List_Delete($7);
+      List_Delete($8);
       $$.Type = MSH_PHYSICAL_VOLUME;
       $$.Num = num;
     }
+
 ;
 
 //  T R A N S F O R M
@@ -1598,15 +1614,24 @@ Transform :
       DilatShapes($3[0], $3[1], $3[2], $5, $8);
       $$ = $8;
     }
-  | tDuplicata '{' MultipleShape '}'
+  | tSTRING '{' MultipleShape '}'
     {
       $$ = List_Create(3, 3, sizeof(Shape));
-      for(int i = 0; i < List_Nbr($3); i++){
-	Shape TheShape;
-	List_Read($3, i, &TheShape);
-	CopyShape(TheShape.Type, TheShape.Num, &TheShape.Num);
-	List_Add($$, &TheShape);
+      if(!strcmp($1, "Duplicata")){
+        for(int i = 0; i < List_Nbr($3); i++){
+          Shape TheShape;
+          List_Read($3, i, &TheShape);
+          CopyShape(TheShape.Type, TheShape.Num, &TheShape.Num);
+          List_Add($$, &TheShape);
+        }
       }
+      else if(!strcmp($1, "Boundary")){
+        BoundaryShapes($3, $$);
+      }
+      else{
+        yymsg(0, "Unknown command on multiple shapes: '%s'", $1);
+      }
+      Free($1);
       List_Delete($3);
     }
   | tIntersect tLine '{' RecursiveListOfDouble '}' tSurface '{' FExpr '}' 
@@ -1615,11 +1640,13 @@ Transform :
       IntersectCurvesWithSurface($4, (int)$8, $$);
       List_Delete($4);
     }
-  | tBoundary '{' MultipleShape '}'
-    { 
-      $$ = List_Create(2, 1, sizeof(Shape));
-      BoundaryShapes($3, $$);
-      List_Delete($3);
+  | tSplit tLine '(' FExpr ')' '{' RecursiveListOfDouble '}' tEND
+    {
+      $$ = List_Create(2, 1, sizeof(Shape*));
+      List_T *tmp = ListOfDouble2ListOfInt($7);
+      List_Delete($7);
+      SplitCurve((int)$4, tmp, $$);
+      List_Delete(tmp);
     }
 ;
 
@@ -1644,13 +1671,13 @@ ListOfShapes :
 	List_Read($4, i, &d);
 	Shape TheShape;
 	TheShape.Num = (int)d;
-	Vertex *v = FindPoint(TheShape.Num);
+	Vertex *v = FindPoint(std::abs(TheShape.Num));
 	if(v){
 	  TheShape.Type = MSH_POINT;
 	  List_Add($$, &TheShape);
 	}
 	else{
-	  GVertex *gv = GModel::current()->getVertexByTag(TheShape.Num);
+	  GVertex *gv = GModel::current()->getVertexByTag(std::abs(TheShape.Num));
 	  if(gv){
 	    TheShape.Type = MSH_POINT_FROM_GMODEL;
 	    List_Add($$, &TheShape);
@@ -1667,13 +1694,13 @@ ListOfShapes :
 	List_Read($4, i, &d);
 	Shape TheShape;
 	TheShape.Num = (int)d;
-	Curve *c = FindCurve(TheShape.Num);
+	Curve *c = FindCurve(std::abs(TheShape.Num));
 	if(c){
 	  TheShape.Type = c->Typ;
 	  List_Add($$, &TheShape);
 	}
 	else{
-	  GEdge *ge = GModel::current()->getEdgeByTag(TheShape.Num);
+	  GEdge *ge = GModel::current()->getEdgeByTag(std::abs(TheShape.Num));
 	  if(ge){
 	    TheShape.Type = MSH_SEGM_FROM_GMODEL;
 	    List_Add($$, &TheShape);
@@ -1690,13 +1717,13 @@ ListOfShapes :
 	List_Read($4, i, &d);
 	Shape TheShape;
 	TheShape.Num = (int)d;
-	Surface *s = FindSurface(TheShape.Num);
+	Surface *s = FindSurface(std::abs(TheShape.Num));
 	if(s){
 	  TheShape.Type = s->Typ;
 	  List_Add($$, &TheShape);
 	}
 	else{
-	  GFace *gf = GModel::current()->getFaceByTag(TheShape.Num);
+	  GFace *gf = GModel::current()->getFaceByTag(std::abs(TheShape.Num));
 	  if(gf){
 	    TheShape.Type = MSH_SURF_FROM_GMODEL;
 	    List_Add($$, &TheShape);
@@ -1713,13 +1740,13 @@ ListOfShapes :
 	List_Read($4, i, &d);
 	Shape TheShape;
 	TheShape.Num = (int)d;
-	Volume *v = FindVolume(TheShape.Num);
+	Volume *v = FindVolume(std::abs(TheShape.Num));
 	if(v){
 	  TheShape.Type = v->Typ;
 	  List_Add($$, &TheShape);
 	}
 	else{
-	  GRegion *gr = GModel::current()->getRegionByTag(TheShape.Num);
+	  GRegion *gr = GModel::current()->getRegionByTag(std::abs(TheShape.Num));
 	  if(gr){
 	    TheShape.Type = MSH_VOLUME_FROM_GMODEL;
 	    List_Add($$, &TheShape);
@@ -1730,6 +1757,344 @@ ListOfShapes :
       }
     }
 ;
+
+//  L E V E L S E T
+
+LevelSet :
+    tLevelset tPlane '(' FExpr ')' tAFFECT ListOfDouble tEND
+    {
+#if defined(HAVE_DINTEGRATION)
+      if(List_Nbr($7) == 4){
+        int t = (int)$4;
+        if(FindLevelSet(t)){
+	  yymsg(0, "Levelset %d already exists", t);
+        }
+        else {
+          double d[4];
+          for(int i = 0; i < 4; i++)
+            List_Read($7, i, &d[i]);
+          gLevelset *ls = new gLevelsetPlane(d[0], d[1], d[2], d[3], t);
+          LevelSet *l = Create_LevelSet(ls->getTag(), ls);
+          Tree_Add(GModel::current()->getGEOInternals()->LevelSets, &l);
+        }
+      }
+      else
+        yymsg(0, "Wrong levelset definition (%d)", $4);
+#endif
+    }
+  | tLevelset tPlane '(' FExpr ')' tAFFECT '{' VExpr ',' VExpr ',' 
+                                               RecursiveListOfDouble '}' tEND
+    {
+#if defined(HAVE_DINTEGRATION)
+      if(List_Nbr($12) == 0){
+        int t = (int)$4;
+        if(FindLevelSet(t)){
+	  yymsg(0, "Levelset %d already exists", t);
+        }
+        else {
+          double pt[3] = {$8[0], $8[1], $8[2]};
+          double n[3] = {$10[0], $10[1], $10[2]};
+          gLevelset *ls = new gLevelsetPlane(pt, n, t);
+          LevelSet *l = Create_LevelSet(ls->getTag(), ls);
+          Tree_Add(GModel::current()->getGEOInternals()->LevelSets, &l);
+        }
+      }
+      else
+        yymsg(0, "Wrong levelset definition (%d)", $4);
+#endif
+    }
+  | tLevelset tPlane '(' FExpr ')' tAFFECT '{' VExpr ',' VExpr ',' VExpr ',' 
+                                               RecursiveListOfDouble '}' tEND
+    {
+#if defined(HAVE_DINTEGRATION)
+      if(List_Nbr($14) == 0){
+        int t = (int)$4;
+        if(FindLevelSet(t)){
+	  yymsg(0, "Levelset %d already exists", t);
+        }
+        else {
+          double pt1[3] = {$8[0], $8[1], $8[2]};
+          double pt2[3] = {$10[0], $10[1], $10[2]};
+          double pt3[3] = {$12[0], $12[1], $12[2]};
+          gLevelset *ls = new gLevelsetPlane(pt1, pt2, pt3, t);
+          LevelSet *l = Create_LevelSet(ls->getTag(), ls);
+          Tree_Add(GModel::current()->getGEOInternals()->LevelSets, &l);
+        }
+      }
+      else
+        yymsg(0, "Wrong levelset definition (%d)", $4);
+#endif
+    }
+  | tLevelset tSphere '(' FExpr ')' tAFFECT '{' VExpr ',' RecursiveListOfDouble '}' tEND
+    {
+#if defined(HAVE_DINTEGRATION)
+      if(List_Nbr($10) == 1){
+        int t = (int)$4;
+        if(FindLevelSet(t)){
+	  yymsg(0, "Levelset %d already exists", t);
+        }
+        else {
+          double d;
+          List_Read($10, 0, &d);
+          gLevelset *ls = new gLevelsetSphere($8[0], $8[1], $8[2], d, t);
+          LevelSet *l = Create_LevelSet(ls->getTag(), ls);
+          Tree_Add(GModel::current()->getGEOInternals()->LevelSets, &l);
+        }
+      }
+      else
+        yymsg(0, "Wrong levelset definition (%d)", $4);
+#endif
+    }
+  | tLevelset tSTRING '(' FExpr ')' tAFFECT ListOfDouble tEND
+    {
+#if defined(HAVE_DINTEGRATION)
+      if(!strcmp($2, "Union")){
+        int t = (int)$4;
+        if(FindLevelSet(t)){
+	  yymsg(0, "Levelset %d already exists", t);
+        }
+        else {
+          std::vector<const gLevelset *> vl;
+          for(int i = 0; i < List_Nbr($7); i++) {
+            double d; List_Read($7, i, &d);
+            LevelSet *pl = FindLevelSet((int)d);
+	    if(!pl) yymsg(0, "Levelset Union %d : unknown levelset %d", t, (int)d);
+            else vl.push_back(pl->ls);
+          }
+          gLevelset *ls = new gLevelsetUnion(vl);
+          LevelSet *l = Create_LevelSet(t, ls);
+          Tree_Add(GModel::current()->getGEOInternals()->LevelSets, &l);
+        }
+      }
+      else if(!strcmp($2, "Intersection")){
+        int t = (int)$4;
+        if(FindLevelSet(t)){
+	  yymsg(0, "Levelset %d already exists", t);
+        }
+        else {
+          std::vector<const gLevelset *> vl;
+          for(int i = 0; i < List_Nbr($7); i++) {
+            double d; List_Read($7, i, &d);
+            LevelSet *pl = FindLevelSet((int)d);
+	    if(!pl) yymsg(0, "Levelset Intersection %d : unknown levelset %d", t, (int)d);
+            else vl.push_back(pl->ls);
+          }
+          gLevelset *ls = new gLevelsetIntersection(vl);
+          LevelSet *l = Create_LevelSet(t, ls);
+          Tree_Add(GModel::current()->getGEOInternals()->LevelSets, &l);
+        }
+      }
+      else if(!strcmp($2, "Cut")){
+        int t = (int)$4;
+        if(FindLevelSet(t)){
+	  yymsg(0, "Levelset %d already exists", t);
+        }
+        else {
+          std::vector<const gLevelset *> vl;
+          for(int i = 0; i < List_Nbr($7); i++) {
+            double d; List_Read($7, i, &d);
+            LevelSet *pl = FindLevelSet((int)d);
+	    if(!pl) yymsg(0, "Levelset Cut %d : unknown levelset %d", t, (int)d);
+            else vl.push_back(pl->ls);
+          }
+          gLevelset *ls = new gLevelsetCut(vl);
+          LevelSet *l = Create_LevelSet(t, ls);
+          Tree_Add(GModel::current()->getGEOInternals()->LevelSets, &l);
+        }
+      }
+      else if(!strcmp($2, "Crack")){
+        int t = (int)$4;
+        if(FindLevelSet(t)){
+	  yymsg(0, "Levelset %d already exists", t);
+        }
+        else {
+          std::vector<const gLevelset *> vl;
+          for(int i = 0; i < List_Nbr($7); i++) {
+            double d; List_Read($7, i, &d);
+            LevelSet *pl = FindLevelSet((int)d);
+	    if(!pl) yymsg(0, "Levelset Crack %d : unknown levelset %d", t, (int)d);
+            else vl.push_back(pl->ls);
+          }
+          gLevelset *ls = new gLevelsetCrack(vl);
+          LevelSet *l = Create_LevelSet(t, ls);
+          Tree_Add(GModel::current()->getGEOInternals()->LevelSets, &l);
+        }
+      }
+      else if(!strcmp($2, "Reverse")){
+        int t = (int)$4;
+        if(FindLevelSet(t)){
+	  yymsg(0, "Levelset %d already exists", t);
+        }
+        else {
+          double d;
+          List_Read($7, 0, &d);
+          LevelSet *pl = FindLevelSet((int)d);
+          gLevelset *ls = NULL;
+          if(!pl) yymsg(0, "Levelset Reverse %d : unknown levelset %d", t, (int)d);
+          else ls = new gLevelsetReverse(pl->ls);
+          LevelSet *l = Create_LevelSet(t, ls);
+          Tree_Add(GModel::current()->getGEOInternals()->LevelSets, &l);
+        }
+      }
+#if !defined(HAVE_NO_POST)
+      else if(!strcmp($2, "PostView")){
+        int t = (int)$4;
+        if(FindLevelSet(t)){
+	  yymsg(0, "Levelset %d already exists", t);
+        }
+        else {
+          if(List_Nbr($7) > 0){
+            double d; List_Read($7, 0, &d);
+            gLevelset *ls = new gLevelsetPostView((int)d, t);
+            LevelSet *l = Create_LevelSet(ls->getTag(), ls);
+            Tree_Add(GModel::current()->getGEOInternals()->LevelSets, &l);
+          }
+        }
+      }
+#endif
+      else
+        yymsg(0, "Wrong levelset definition (%d)", $4);
+      Free($2);
+#endif
+    }
+  | tLevelset tSTRING '(' FExpr ')' tAFFECT tBIGSTR tEND
+    {
+#if defined(HAVE_DINTEGRATION)
+      if(!strcmp($2, "MathEval")){
+        int t = (int)$4;
+        if(FindLevelSet(t)){
+	  yymsg(0, "Levelset %d already exists", t);
+        }
+        else {
+          gLevelset *ls = new gLevelsetMathEval($7, t);
+          LevelSet *l = Create_LevelSet(ls->getTag(), ls);
+          Tree_Add(GModel::current()->getGEOInternals()->LevelSets, &l);
+        }
+      }
+      else
+        yymsg(0, "Wrong levelset definition");
+      Free($2); Free($7);
+#endif
+    }
+  | tLevelset tSTRING '{' FExpr '}' tEND
+    {
+#if defined(HAVE_DINTEGRATION)
+      if(!strcmp($2, "CutMesh")){
+        int t = (int)$4;
+        GModel *GM = GModel::current();
+        GM->buildCutGModel(FindLevelSet(t)->ls);
+        GM->setVisibility(0);
+      }
+      else
+        yymsg(0, "Wrong levelset definition");
+      Free($2);
+#endif
+    }
+  | tLevelset tSTRING '(' FExpr ')' tAFFECT '{' VExpr ',' VExpr ',' 
+                                                RecursiveListOfDouble '}' tEND
+    {
+#if defined(HAVE_DINTEGRATION)
+      if(!strcmp($2, "Cylinder") && List_Nbr($12) == 1){
+        int t = (int)$4;
+        if(FindLevelSet(t)){
+	  yymsg(0, "Levelset %d already exists", t);
+        }
+        else {
+          double d;
+          List_Read($12, 0, &d);
+          double pt[3] = {$8[0], $8[1], $8[2]};
+          double dir[3] = {$10[0], $10[1], $10[2]};
+          gLevelset *ls = new gLevelsetGenCylinder(pt, dir, d, t);
+          LevelSet *l = Create_LevelSet(ls->getTag(), ls);
+          Tree_Add(GModel::current()->getGEOInternals()->LevelSets, &l);
+        }
+      }
+      else if(!strcmp($2, "Cone") && List_Nbr($12) == 1){
+        int t = (int)$4;
+        if(FindLevelSet(t)){
+	  yymsg(0, "Levelset %d already exists", t);
+        }
+        else {
+          double d;
+          List_Read($12, 0, &d);
+          double pt[3] = {$8[0], $8[1], $8[2]};
+          double dir[3] = {$10[0], $10[1], $10[2]};
+          gLevelset *ls = new gLevelsetCone(pt, dir, d, t);
+          LevelSet *l = Create_LevelSet(ls->getTag(), ls);
+          Tree_Add(GModel::current()->getGEOInternals()->LevelSets, &l);
+        }
+      }
+      else if(!strcmp($2, "Cylinder") && List_Nbr($12) == 2){
+        int t = (int)$4;
+        if(FindLevelSet(t)){
+	  yymsg(0, "Levelset %d already exists", t);
+        }
+        else {
+          double d[2];
+          for(int i = 0; i < 2; i++)
+            List_Read($12, i, &d[i]);
+          double pt[3] = {$8[0], $8[1], $8[2]};
+          double dir[3] = {$10[0], $10[1], $10[2]};
+          gLevelset *ls = new gLevelsetCylinder(pt, dir, d[0], d[1], t);
+          LevelSet *l = Create_LevelSet(ls->getTag(), ls);
+          Tree_Add(GModel::current()->getGEOInternals()->LevelSets, &l);
+        }
+      }
+      else if(!strcmp($2, "Cylinder") && List_Nbr($12) == 3){
+        int t = (int)$4;
+        if(FindLevelSet(t)){
+	  yymsg(0, "Levelset %d already exists", t);
+        }
+        else {
+          double d[3];
+          for(int i = 0; i < 3; i++)
+            List_Read($12, i, &d[i]);
+          double pt[3] = {$8[0], $8[1], $8[2]};
+          double dir[3] = {$10[0], $10[1], $10[2]};
+          gLevelset *ls = new gLevelsetCylinder(pt, dir, d[0], d[1], d[2], t);
+          LevelSet *l = Create_LevelSet(ls->getTag(), ls);
+          Tree_Add(GModel::current()->getGEOInternals()->LevelSets, &l);
+        }
+      }
+      else if(!strcmp($2, "Ellipsoid") && List_Nbr($12) == 3){
+        int t = (int)$4;
+        if(FindLevelSet(t)){
+	  yymsg(0, "Levelset %d already exists", t);
+        }
+        else {
+          double d[3];
+          for(int i = 0; i < 3; i++)
+            List_Read($12, i, &d[i]);
+          double pt[3] = {$8[0], $8[1], $8[2]};
+          double dir[3] = {$10[0], $10[1], $10[2]};
+          gLevelset *ls = new gLevelsetEllipsoid(pt, dir, d[0], d[1], d[2], t);
+          LevelSet *l = Create_LevelSet(ls->getTag(), ls);
+          Tree_Add(GModel::current()->getGEOInternals()->LevelSets, &l);
+        }
+      }
+      else if(!strcmp($2, "Quadric") && List_Nbr($12) == 5){
+        int t = (int)$4;
+        if(FindLevelSet(t)){
+	  yymsg(0, "Levelset %d already exists", t);
+        }
+        else {
+          double d[5];
+          for(int i = 0; i < 5; i++)
+            List_Read($12, i, &d[i]);
+          double pt[3] = {$8[0], $8[1], $8[2]};
+          double dir[3] = {$10[0], $10[1], $10[2]};
+          gLevelset *ls = new gLevelsetGeneralQuadric(pt, dir, d[0], d[1], 
+                                                      d[2], d[3], d[4], t);
+          LevelSet *l = Create_LevelSet(ls->getTag(), ls);
+          Tree_Add(GModel::current()->getGEOInternals()->LevelSets, &l);
+        }
+      }
+      else
+        yymsg(0, "Wrong levelset definition (%d)", $4);
+      Free($2);
+#endif
+    }
+  ;
 
 //  D E L E T E
 
@@ -1745,7 +2110,7 @@ Delete :
     }
   | tDelete tField '[' FExpr ']' tEND
     {
-      GModel::current()->getFields()->delete_field((int)$4);
+      GModel::current()->getFields()->deleteField((int)$4);
     }
   | tDelete tSTRING '[' FExpr ']' tEND
     {
@@ -1765,6 +2130,12 @@ Delete :
   | tDelete tSTRING tEND
     {
       if(!strcmp($2, "Meshes") || !strcmp($2, "All")){
+        for(unsigned int i = 0; i < GModel::list.size(); i++){
+          GModel::list[i]->destroy();
+          GModel::list[i]->getGEOInternals()->destroy();
+        }
+      }
+      else if(!strcmp($2, "Model")){
 	GModel::current()->destroy();
 	GModel::current()->getGEOInternals()->destroy();
       }
@@ -1772,8 +2143,15 @@ Delete :
 	GModel::current()->getGEOInternals()->reset_physicals();
 	GModel::current()->deletePhysicalGroups();
       }
-      else
-	yymsg(0, "Unknown command 'Delete %s'", $2);
+      else if(!strcmp($2, "Variables")){
+	gmsh_yysymbols.clear();
+      }
+      else{
+	if(gmsh_yysymbols.count($2))
+	  gmsh_yysymbols.erase($2);
+	else
+	  yymsg(0, "Unknown object or expression to delete '%s'", $2);
+      }
       Free($2);
     }
   | tDelete tSTRING tSTRING tEND
@@ -1807,13 +2185,13 @@ Colorify :
 //  V I S I B I L I T Y
 
 Visibility :
-    tShow StringExprVar tEND
+    tShow tBIGSTR tEND
     {
       for(int i = 0; i < 4; i++)
 	VisibilityShape($2, i, 1);
       Free($2);
     }
-  | tHide StringExprVar tEND
+  | tHide tBIGSTR tEND
     {
       for(int i = 0; i < 4; i++)
 	VisibilityShape($2, i, 0);
@@ -1845,8 +2223,7 @@ Command :
     tSTRING StringExpr tEND
     {
       if(!strcmp($1, "Include")){
-	char tmpstring[1024];
-	FixRelativePath($2, tmpstring);
+        std::string tmp = FixRelativePath(gmsh_yyname, $2);
 	// Warning: we *don't* close included files (to allow user
 	// functions in these files). If you need to include many many
 	// files and don't have functions in the files, use "Merge"
@@ -1854,35 +2231,28 @@ Command :
 	// open simultaneously. The right solution would be of course
 	// to modify FunctionManager to reopen the files instead of
 	// using the FILE pointer, but hey, I'm lazy...
-	Msg::StatusBar(2, true, "Reading '%s'", tmpstring);
-	ParseFile(tmpstring, 0, 1);
+	Msg::StatusBar(2, true, "Reading '%s'", tmp.c_str());
+	ParseFile(tmp, false, true);
 	SetBoundingBox();
-	Msg::StatusBar(2, true, "Read '%s'", tmpstring);
+	Msg::StatusBar(2, true, "Read '%s'", tmp.c_str());
       }
       else if(!strcmp($1, "Print")){
-#if defined(HAVE_FLTK)
 	// make sure we have the latest data from GEO_Internals in GModel
 	// (fixes bug where we would have no geometry in the picture if
 	// the print command is in the same file as the geometry)
 	GModel::current()->importGEOInternals();
-	char tmpstring[1024];
-	FixRelativePath($2, tmpstring);
-	CreateOutputFile(tmpstring, CTX.print.format);
-#endif
+        std::string tmp = FixRelativePath(gmsh_yyname, $2);
+	CreateOutputFile(tmp, CTX::instance()->print.format);
       }
       else if(!strcmp($1, "Save")){
-#if defined(HAVE_FLTK)
 	GModel::current()->importGEOInternals();
-	char tmpstring[1024];
-	FixRelativePath($2, tmpstring);
-	CreateOutputFile(tmpstring, CTX.mesh.format);
-#endif
+        std::string tmp = FixRelativePath(gmsh_yyname, $2);
+	CreateOutputFile(tmp, CTX::instance()->mesh.format);
       }
       else if(!strcmp($1, "Merge") || !strcmp($1, "MergeWithBoundingBox")){
 	// MergeWithBoundingBox is deprecated
-	char tmpstring[1024];
-	FixRelativePath($2, tmpstring);
-	MergeFile(tmpstring, 1);
+        std::string tmp = FixRelativePath(gmsh_yyname, $2);
+	MergeFile(tmp, true);
       }
       else if(!strcmp($1, "System"))
 	SystemCall($2);
@@ -1896,9 +2266,8 @@ Command :
       if(!strcmp($1, "Save") && !strcmp($2, "View")){
 	int index = (int)$4;
 	if(index >= 0 && index < (int)PView::list.size()){
-	  char tmpstring[1024];
-	  FixRelativePath($6, tmpstring);
-	  PView::list[index]->write(tmpstring, CTX.post.file_format);
+          std::string tmp = FixRelativePath(gmsh_yyname, $6);
+	  PView::list[index]->write(tmp, CTX::instance()->post.fileFormat);
 	}
 	else
 	  yymsg(0, "Unknown view %d", index);
@@ -1914,7 +2283,7 @@ Command :
       if(!strcmp($1, "Background") && !strcmp($2, "Mesh")  && !strcmp($3, "View")){
 	int index = (int)$5;
 	if(index >= 0 && index < (int)PView::list.size())
-	  GModel::current()->getFields()->set_background_mesh(index);
+	  GModel::current()->getFields()->setBackgroundMesh(index);
 	else
 	  yymsg(0, "Unknown view %d", index);
       }
@@ -1929,14 +2298,14 @@ Command :
 	SleepInSeconds($2);
       }
       else if(!strcmp($1, "Remesh")){
-	Msg::Error("Surface remeshing must be reinterfaced");
+	yymsg(0, "Surface remeshing must be reinterfaced");
       }
       else if(!strcmp($1, "Mesh")){
-	int lock = CTX.threads_lock;
-	CTX.threads_lock = 0;
+	int lock = CTX::instance()->lock;
+	CTX::instance()->lock = 0;
 	GModel::current()->importGEOInternals();
 	GModel::current()->mesh((int)$2);
-	CTX.threads_lock = lock;
+	CTX::instance()->lock = lock;
       }
       else
 	yymsg(0, "Unknown command '%s'", $1);
@@ -1946,7 +2315,7 @@ Command :
      {
 #if !defined(HAVE_NO_POST)
        try {
-	 GMSH_PluginManager::instance()->action($3, $6, 0);
+	 PluginManager::instance()->action($3, $6, 0);
        }
        catch(...) {
 	 yymsg(0, "Unknown action '%s' or plugin '%s'", $6, $3);
@@ -1958,21 +2327,21 @@ Command :
     {
 #if !defined(HAVE_NO_POST)
       if(!strcmp($2, "ElementsFromAllViews"))
-	PView::combine(false, 1, CTX.post.combine_remove_orig);
+	PView::combine(false, 1, CTX::instance()->post.combineRemoveOrig);
       else if(!strcmp($2, "ElementsFromVisibleViews"))
-	PView::combine(false, 0, CTX.post.combine_remove_orig);
+	PView::combine(false, 0, CTX::instance()->post.combineRemoveOrig);
       else if(!strcmp($2, "ElementsByViewName"))
-	PView::combine(false, 2, CTX.post.combine_remove_orig);
+	PView::combine(false, 2, CTX::instance()->post.combineRemoveOrig);
       else if(!strcmp($2, "TimeStepsFromAllViews"))
-	PView::combine(true, 1, CTX.post.combine_remove_orig);
+	PView::combine(true, 1, CTX::instance()->post.combineRemoveOrig);
       else if(!strcmp($2, "TimeStepsFromVisibleViews"))
-	PView::combine(true, 0, CTX.post.combine_remove_orig);
+	PView::combine(true, 0, CTX::instance()->post.combineRemoveOrig);
       else if(!strcmp($2, "TimeStepsByViewName"))
-	PView::combine(true, 2, CTX.post.combine_remove_orig);
+	PView::combine(true, 2, CTX::instance()->post.combineRemoveOrig);
       else if(!strcmp($2, "Views"))
-	PView::combine(false, 1, CTX.post.combine_remove_orig);
+	PView::combine(false, 1, CTX::instance()->post.combineRemoveOrig);
       else if(!strcmp($2, "TimeSteps"))
-	PView::combine(true, 2, CTX.post.combine_remove_orig);
+	PView::combine(true, 2, CTX::instance()->post.combineRemoveOrig);
       else
 	yymsg(0, "Unknown 'Combine' command");
 #endif
@@ -1982,28 +2351,40 @@ Command :
     {
       exit(0);
     } 
+   | tSyncModel tEND
+    {
+      // FIXME: this is a hack to force a transfer from the old DB to
+      // the new DB. This will become unnecessary if/when we fill the 
+      // GModel directly during parsing.
+      GModel::current()->importGEOInternals();
+    } 
    | tBoundingBox tEND
     {
-      CTX.forced_bbox = 0;
+      CTX::instance()->forcedBBox = 0;
+      GModel::current()->importGEOInternals();
       SetBoundingBox();
     } 
    | tBoundingBox '{' FExpr ',' FExpr ',' FExpr ',' FExpr ',' FExpr ',' FExpr '}' tEND
     {
-      CTX.forced_bbox = 1;
+      CTX::instance()->forcedBBox = 1;
       SetBoundingBox($3, $5, $7, $9, $11, $13);
     } 
    | tDraw tEND
     {
-#if defined(HAVE_FLTK)
-      Draw();
+#if defined(HAVE_OPENGL)
+      drawContext::global()->draw();
 #endif
     }
+   | tCreateTopology tEND
+    {
+       GModel::current()->createTopologyFromMesh();
+    }
+
 ;
 
 // L O O P  
 
-Loop :   
-
+Loop :
     tFor '(' FExpr tDOTS FExpr ')'
     {
       LoopControlVariablesTab[ImbricatedLoop][0] = $3;
@@ -2044,15 +2425,8 @@ Loop :
       LoopControlVariablesTab[ImbricatedLoop][1] = $7;
       LoopControlVariablesTab[ImbricatedLoop][2] = 1.0;
       LoopControlVariablesNameTab[ImbricatedLoop] = $2;
-      Symbol TheSymbol, *pSymbol;
-      TheSymbol.Name = $2;
-      if(!(pSymbol = (Symbol*)Tree_PQuery(Symbol_T, &TheSymbol))){
-	TheSymbol.val = List_Create(1, 1, sizeof(double));
-	List_Put(TheSymbol.val, 0, &$5);
-	Tree_Add(Symbol_T, &TheSymbol);
-      }
-      else
-	List_Write(pSymbol->val, 0, &$5);
+      gmsh_yysymbols[$2].resize(1);
+      gmsh_yysymbols[$2][0] = $5;
       fgetpos(gmsh_yyin, &yyposImbricatedLoopsTab[ImbricatedLoop]);
       yylinenoImbricatedLoopsTab[ImbricatedLoop] = gmsh_yylineno;
       if($5 > $7) 
@@ -2070,15 +2444,8 @@ Loop :
       LoopControlVariablesTab[ImbricatedLoop][1] = $7;
       LoopControlVariablesTab[ImbricatedLoop][2] = $9;
       LoopControlVariablesNameTab[ImbricatedLoop] = $2;
-      Symbol TheSymbol, *pSymbol;
-      TheSymbol.Name = $2;
-      if(!(pSymbol = (Symbol*)Tree_PQuery(Symbol_T, &TheSymbol))){
-	TheSymbol.val = List_Create(1, 1, sizeof(double));
-	List_Put(TheSymbol.val, 0, &$5);
-	Tree_Add(Symbol_T, &TheSymbol);
-      }
-      else
-	List_Write(pSymbol->val, 0, &$5);
+      gmsh_yysymbols[$2].resize(1);
+      gmsh_yysymbols[$2][0] = $5;
       fgetpos(gmsh_yyin, &yyposImbricatedLoopsTab[ImbricatedLoop]);
       yylinenoImbricatedLoopsTab[ImbricatedLoop] = gmsh_yylineno;
       if(($9 > 0. && $5 > $7) || ($9 < 0. && $5 < $7))
@@ -2105,12 +2472,10 @@ Loop :
 	  LoopControlVariablesTab[ImbricatedLoop - 1][0] +=
 	    LoopControlVariablesTab[ImbricatedLoop - 1][2];
 	  if(LoopControlVariablesNameTab[ImbricatedLoop - 1]){
-	    Symbol TheSymbol, *pSymbol;
-	    TheSymbol.Name = LoopControlVariablesNameTab[ImbricatedLoop - 1];
-	    if(!(pSymbol = (Symbol*)Tree_PQuery(Symbol_T, &TheSymbol)))
+	    if(!gmsh_yysymbols.count(LoopControlVariablesNameTab[ImbricatedLoop - 1]))
 	      yymsg(0, "Unknown loop variable");
 	    else
-	      *(double*)List_Pointer_Fast(pSymbol->val, 0) += 
+	      gmsh_yysymbols[LoopControlVariablesNameTab[ImbricatedLoop - 1]][0] +=
 		LoopControlVariablesTab[ImbricatedLoop - 1][2];
 	  }
 	  fsetpos(gmsh_yyin, &yyposImbricatedLoopsTab[ImbricatedLoop - 1]);
@@ -2122,22 +2487,22 @@ Loop :
     }
   | tFunction tSTRING
     {
-      if(!FunctionManager::Instance()->createFunction($2, gmsh_yyin, gmsh_yyname,
-						      gmsh_yylineno))
+      if(!FunctionManager::Instance()->createFunction
+         ($2, gmsh_yyin, gmsh_yyname, gmsh_yylineno))
 	yymsg(0, "Redefinition of function %s", $2);
       skip_until(NULL, "Return");
       //FIXME: wee leak $2
     }
   | tReturn
     {
-      if(!FunctionManager::Instance()->leaveFunction(&gmsh_yyin, gmsh_yyname,
-						     gmsh_yylineno))
+      if(!FunctionManager::Instance()->leaveFunction
+         (&gmsh_yyin, gmsh_yyname, gmsh_yylineno))
 	yymsg(0, "Error while exiting function");
     } 
   | tCall tSTRING tEND
     {
-      if(!FunctionManager::Instance()->enterFunction($2, &gmsh_yyin, gmsh_yyname,
-						     gmsh_yylineno))
+      if(!FunctionManager::Instance()->enterFunction
+         ($2, &gmsh_yyin, gmsh_yyname, gmsh_yylineno))
 	yymsg(0, "Unknown function %s", $2);
       //FIXME: wee leak $2
     } 
@@ -2224,20 +2589,6 @@ Extrude :
       ExtrudeShapes(BOUNDARY_LAYER, $3, 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
 		    &extr, $$);
       List_Delete($3);
-    }
-  | tExtrude tSTRING '[' FExpr ']' '{' ListOfShapes 
-    {
-      extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
-    }
-                       ExtrudeParameters '}'
-    {
-      $$ = List_Create(2, 1, sizeof(Shape));
-      extr.mesh.ViewIndex = (int)$4;
-      ExtrudeShapes(BOUNDARY_LAYER, $7, 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
-		    &extr, $$);
-      extr.mesh.ViewIndex = -1;
-      Free($2);
-      List_Delete($7);
     }
 
   // Deprecated extrude commands (for backward compatibility)
@@ -2493,185 +2844,303 @@ ExtrudeParameter :
     }
 ;
 
-//  T R A N S F I N I T E
+//  T R A N S F I N I T E ,   R E C O M B I N E   &   S M O O T H I N G
+
+TransfiniteType : 
+    {
+      $$[0] = $$[1] = 1.;
+    }
+  | tUsing tSTRING FExpr
+    {
+      if(!strcmp($2, "Progression") || !strcmp($2, "Power"))
+        $$[0] = 1.;
+      else if(!strcmp($2, "Bump"))
+        $$[0] = 2.;
+      else{
+        yymsg(0, "Unknown transfinite mesh type");
+        $$[0] = 1.;
+      }
+      $$[1] = $3;
+      Free($2);
+    }
+;
+
+TransfiniteArrangement : 
+    {
+      $$ = -1; // left
+    }
+  | tSTRING
+    {
+      if(!strcmp($1, "Right"))
+        $$ = 1;
+      else if(!strcmp($1, "Left"))
+        $$ = -1;
+      else // alternated
+        $$ = 0;
+      Free($1);
+    }
+;
+
+TransfiniteCorners :
+   {
+     $$ = List_Create(1, 1, sizeof(double));
+   }
+ | tAFFECT ListOfDouble
+   {
+     $$ = $2;
+   }
+
+RecombineAngle : 
+    {
+      $$ = 45;
+    }
+  | tAFFECT FExpr
+    {
+      $$ = (int)$2;
+    }
+;
 
 Transfinite : 
-    tTransfinite tLine ListOfDouble tAFFECT FExpr tEND
+    tTransfinite tLine ListOfDoubleOrAll tAFFECT FExpr TransfiniteType tEND
     {
-      for(int i = 0; i < List_Nbr($3); i++){
-	double d;
-	List_Read($3, i, &d);
-	int j = (int)fabs(d);
-        Curve *c = FindCurve(j);
-	if(!c)
-	  yymsg(1, "Unknown curve %d", j);
-	else{
-	  c->Method = MESH_TRANSFINITE;
-	  c->nbPointsTransfinite = ($5 > 2) ? (int)$5 : 2;
-	  c->typeTransfinite = sign(d);
-	  c->coeffTransfinite = 1.0;
-	}
+      int type = (int)$6[0];
+      double coef = fabs($6[1]);
+      if(!$3){
+        List_T *tmp = Tree2List(GModel::current()->getGEOInternals()->Curves);
+        if(List_Nbr(tmp)){
+          for(int i = 0; i < List_Nbr(tmp); i++){
+            Curve *c;
+            List_Read(tmp, i, &c);
+            c->Method = MESH_TRANSFINITE;
+            c->nbPointsTransfinite = ($5 > 2) ? (int)$5 : 2;
+            c->typeTransfinite = type;
+            c->coeffTransfinite = coef;
+          }
+        }
+        else{
+          for(GModel::eiter it = GModel::current()->firstEdge(); 
+              it != GModel::current()->lastEdge(); it++){
+            (*it)->meshAttributes.Method = MESH_TRANSFINITE;
+            (*it)->meshAttributes.nbPointsTransfinite = ($5 > 2) ? (int)$5 : 2;
+            (*it)->meshAttributes.typeTransfinite = type;
+            (*it)->meshAttributes.coeffTransfinite = coef;
+          }
+        }
+        List_Delete(tmp);
       }
-      List_Delete($3);
-    }
-  | tTransfinite tLine ListOfDouble tAFFECT FExpr tUsing tProgression FExpr tEND
-    {
-      for(int i = 0; i < List_Nbr($3); i++){
-	double d;
-	List_Read($3, i, &d);
-	int j = (int)fabs(d);
-        Curve *c = FindCurve(j);
-	if(!c)
-	  yymsg(1, "Unknown curve %d", j);
-	else{
-	  c->Method = MESH_TRANSFINITE;
-	  c->nbPointsTransfinite = ($5 > 2) ? (int)$5 : 2;
-	  c->typeTransfinite = sign(d); // Progresion : code 1 ou -1
-	  c->coeffTransfinite = fabs($8);
-	}
-      }
-      List_Delete($3);
-    }
-  | tTransfinite tLine ListOfDouble tAFFECT FExpr tUsing tBump FExpr tEND
-    {
-      for(int i = 0; i < List_Nbr($3); i++){
-	double d;
-	List_Read($3, i, &d);
-	int j = (int)fabs(d);
-        Curve *c = FindCurve(j);
-	if(!c)
-	  yymsg(1, "Unknown curve %d", j);
-	else{
-	  c->Method = MESH_TRANSFINITE;
-	  c->nbPointsTransfinite = ($5 > 2) ? (int)$5 : 2;
-	  c->typeTransfinite = 2 * sign(d); // Bump : code 2 ou -2
-	  c->coeffTransfinite = fabs($8);
-	}
-      }
-      List_Delete($3);
-    }
-  | tTransfinite tSurface '{' FExpr '}' tAFFECT ListOfDouble tEND
-    {
-      Surface *s = FindSurface((int)$4);
-      if(!s)
-	yymsg(1, "Unknown surface %d", (int)$4);
       else{
-	s->Method = MESH_TRANSFINITE;
-	s->Recombine_Dir = -1;
-	int k = List_Nbr($7);
-	if(k != 3 && k != 4){
-	  yymsg(0, "Wrong definition of Transfinite Surface %d: "
-		"%d points instead of 3 or 4" , (int)$4, k);
-	}
-	else{
-	  List_Reset(s->TrsfPoints);
-	  for(int i = 0; i < k; i++){
-	    double d;
-	    List_Read($7, i, &d);
-	    int j = (int)fabs(d);
-	    Vertex *v = FindPoint(j);
-	    if(!v)
-	      yymsg(1, "Unknown point %d", j);
-	    else
-	      List_Add(s->TrsfPoints, &v);
-	  }
-	}
+        for(int i = 0; i < List_Nbr($3); i++){
+          double d;
+          List_Read($3, i, &d);
+          int j = (int)fabs(d);
+          for(int sign = -1; sign <= 1; sign += 2){
+            Curve *c = FindCurve(sign * j);
+            if(c){
+              c->Method = MESH_TRANSFINITE;
+              c->nbPointsTransfinite = ($5 > 2) ? (int)$5 : 2;
+              c->typeTransfinite = type * sign(d);
+              c->coeffTransfinite = coef;
+            }
+            else{
+              GEdge *ge = GModel::current()->getEdgeByTag(sign * j);
+              if(ge){
+                ge->meshAttributes.Method = MESH_TRANSFINITE;
+                ge->meshAttributes.nbPointsTransfinite = ($5 > 2) ? (int)$5 : 2;
+                ge->meshAttributes.typeTransfinite = type * sign(d);
+                ge->meshAttributes.coeffTransfinite = coef;
+              }
+              else if(sign > 0)
+                yymsg(0, "Unknown line %d", j);
+            }
+          }
+        }
+        List_Delete($3);
       }
-      List_Delete($7);
     }
-  | tTransfinite tSurface '{' FExpr '}' tAFFECT ListOfDouble tSTRING tEND
+  | tTransfinite tSurface ListOfDoubleOrAll TransfiniteCorners TransfiniteArrangement tEND
     {
-      Surface *s = FindSurface((int)$4);
-      if(!s)
-	yymsg(1, "Unknown surface %d", (int)$4);
-      else{
-	s->Method = MESH_TRANSFINITE;
-	int k = List_Nbr($7);
-	if(k != 3 && k != 4){
-	  yymsg(0, "Wrong definition of Transfinite Surface %d: "
-		"%d points instead of 3 or 4" , (int)$4, k);
-	}
-	else{
-	  List_Reset(s->TrsfPoints);
-	  if (!strcmp($8, "Right"))
-	    s->Recombine_Dir = 1;
-	  else if (!strcmp($8, "Left"))
-	    s->Recombine_Dir = -1;
-	  else
-	    s->Recombine_Dir = 0;
-	  for(int i = 0; i < k; i++){
-	    double d;
-	    List_Read($7, i, &d);
-	    int j = (int)fabs(d);
-	    Vertex *v = FindPoint(j);
-	    if(!v)
-	      yymsg(1, "Unknown point %d", j);
-	    else
-	      List_Add(s->TrsfPoints, &v);
-	  }
-	}
+      int k = List_Nbr($4);
+      if(k != 0 && k != 3 && k != 4){
+        yymsg(0, "Wrong definition of Transfinite Surface: 0, 3 or 4 points needed");
       }
-      List_Delete($7);
-      Free($8);
+      else{
+        if(!$3){
+          List_T *tmp = Tree2List(GModel::current()->getGEOInternals()->Surfaces);
+          if(List_Nbr(tmp)){
+            for(int i = 0; i < List_Nbr(tmp); i++){
+              Surface *s;
+              List_Read(tmp, i, &s);
+              s->Method = MESH_TRANSFINITE;
+              s->Recombine_Dir = $5;
+              List_Reset(s->TrsfPoints);
+            }
+          }
+          else{
+            for(GModel::fiter it = GModel::current()->firstFace(); 
+                it != GModel::current()->lastFace(); it++){
+              (*it)->meshAttributes.Method = MESH_TRANSFINITE;
+              (*it)->meshAttributes.transfiniteArrangement = $5;
+            }
+          }
+          List_Delete(tmp);
+        }
+        else{
+          for(int i = 0; i < List_Nbr($3); i++){
+            double d;
+            List_Read($3, i, &d);
+            Surface *s = FindSurface((int)d);
+            if(s){
+              s->Method = MESH_TRANSFINITE;
+              s->Recombine_Dir = $5;
+              List_Reset(s->TrsfPoints);
+              for(int j = 0; j < k; j++){
+                double p;
+                List_Read($4, j, &p);
+                Vertex *v = FindPoint((int)fabs(p));
+                if(v)
+                  List_Add(s->TrsfPoints, &v);
+                else
+                  yymsg(0, "Unknown point %d", (int)fabs(p));
+              }
+            }
+            else{
+              GFace *gf = GModel::current()->getFaceByTag((int)d);
+              if(gf){
+                gf->meshAttributes.Method = MESH_TRANSFINITE;
+                gf->meshAttributes.transfiniteArrangement = $5;
+                for(int j = 0; j < k; j++){
+                  double p;
+                  List_Read($4, j, &p);
+                  GVertex *gv = GModel::current()->getVertexByTag((int)fabs(p));
+                  if(gv)
+                    gf->meshAttributes.corners.push_back(gv);
+                  else
+                    yymsg(0, "Unknown point %d", (int)fabs(p));
+                }
+              }
+              else
+                yymsg(0, "Unknown surface %d", (int)d);
+            }
+          }
+          List_Delete($3);
+        }
+      }
+      List_Delete($4);
     }
   | tElliptic tSurface '{' FExpr '}' tAFFECT ListOfDouble tEND
     {
       yymsg(1, "Elliptic Surface is deprecated: use Transfinite instead (with smoothing)");
       List_Delete($7);
     }
-  | tTransfinite tVolume '{' FExpr '}' tAFFECT ListOfDouble tEND
+  | tTransfinite tVolume ListOfDoubleOrAll TransfiniteCorners tEND
     {
-      Volume *v = FindVolume((int)$4);
-      if(!v)
-	yymsg(1, "Unknown volume %d", (int)$4);
+      int k = List_Nbr($4);
+      if(k != 0 && k != 6 && k != 8){
+        yymsg(0, "Wrong definition of Transfinite Volume: "
+              "%d points instead of 6 or 8", k);
+      }
       else{
-	v->Method = MESH_TRANSFINITE;
-	int k = List_Nbr($7);
-	if(k != 6 && k != 8)
-	  yymsg(0, "Wrong definition of Transfinite Volume %d: "
-		"%d points instead of 6 or 8" , (int)$4, k);
-	else{
-	  List_Reset(v->TrsfPoints);
-	  for(int i = 0; i < k; i++){
-	    double d;
-	    List_Read($7, i, &d);
-	    int j = (int)fabs(d);
-	    Vertex *vert = FindPoint(j);
-	    if(!vert)
-	      yymsg(1, "Unknown point %d", j);
-	    else
-	      List_Add(v->TrsfPoints, &vert);
-	  }
-	}
-      }
-      List_Delete($7);
-    }
-  | tRecombine tSurface ListOfDouble tAFFECT FExpr tEND
-    {
-      for(int i = 0; i < List_Nbr($3); i++){
-	double d;
-	List_Read($3, i, &d);
-	int j = (int)d;
-	Surface *s = FindSurface(j);
-	if(s){
-	  s->Recombine = 1;
-	  s->RecombineAngle = $5;
-	}
-      }
-      List_Delete($3);
-    }
-  | tRecombine tSurface ListOfDouble tEND
-    {
-      for(int i = 0; i < List_Nbr($3); i++){
-	double d;
-	List_Read($3, i, &d);
-	int j = (int)d;
-        Surface *s = FindSurface(j);
-	if(s){
-	  s->Recombine = 1;
+        if(!$3){
+          List_T *tmp = Tree2List(GModel::current()->getGEOInternals()->Volumes);
+          if(List_Nbr(tmp)){
+            for(int i = 0; i < List_Nbr(tmp); i++){
+              Volume *v;
+              List_Read(tmp, i, &v);
+              v->Method = MESH_TRANSFINITE;
+              List_Reset(v->TrsfPoints);
+            }
+          }
+          else{
+            for(GModel::riter it = GModel::current()->firstRegion(); 
+                it != GModel::current()->lastRegion(); it++){
+              (*it)->meshAttributes.Method = MESH_TRANSFINITE;
+            }
+          }
+          List_Delete(tmp);
+        }
+        else{
+          for(int i = 0; i < List_Nbr($3); i++){
+            double d;
+            List_Read($3, i, &d);
+            Volume *v = FindVolume((int)d);
+            if(v){
+              v->Method = MESH_TRANSFINITE;
+              List_Reset(v->TrsfPoints);
+              for(int i = 0; i < k; i++){
+                double p;
+                List_Read($4, i, &p);
+                Vertex *vert = FindPoint((int)fabs(p));
+                if(vert)
+                  List_Add(v->TrsfPoints, &vert);
+                else
+                  yymsg(0, "Unknown point %d", (int)fabs(p));
+              }
+            }
+            else{
+              GRegion *gr = GModel::current()->getRegionByTag((int)d);
+              if(gr){
+                gr->meshAttributes.Method = MESH_TRANSFINITE;
+                for(int i = 0; i < k; i++){
+                  double p;
+                  List_Read($4, i, &p);
+                  GVertex *gv = GModel::current()->getVertexByTag((int)fabs(p));
+                  if(gv)
+                    gr->meshAttributes.corners.push_back(gv);
+                  else
+                    yymsg(0, "Unknown point %d", (int)fabs(p));
+                }
+              }
+              else
+                yymsg(0, "Unknown volume %d", (int)d);
+            }
+          }
+          List_Delete($3);
         }
       }
-      List_Delete($3);
+      List_Delete($4);
+    }
+  | tRecombine tSurface ListOfDoubleOrAll RecombineAngle tEND
+    {
+      if(!$3){
+	List_T *tmp = Tree2List(GModel::current()->getGEOInternals()->Surfaces);
+        if(List_Nbr(tmp)){
+          for(int i = 0; i < List_Nbr(tmp); i++){
+            Surface *s;
+            List_Read(tmp, i, &s);
+            s->Recombine = 1;
+            s->RecombineAngle = $4;
+          }
+        }
+        else{
+          for(GModel::fiter it = GModel::current()->firstFace(); 
+              it != GModel::current()->lastFace(); it++){
+            (*it)->meshAttributes.recombine = 1;
+            (*it)->meshAttributes.recombineAngle = $4;
+          }
+        }
+        List_Delete(tmp);
+      }
+      else{
+        for(int i = 0; i < List_Nbr($3); i++){
+          double d;
+          List_Read($3, i, &d);
+          Surface *s = FindSurface((int)d);
+          if(s){
+            s->Recombine = 1;
+            s->RecombineAngle = $4;
+          }
+          else{
+            GFace *gf = GModel::current()->getFaceByTag((int)d);
+            if(gf){
+              gf->meshAttributes.recombine = 1;
+              gf->meshAttributes.recombineAngle = $4;
+            }
+            else
+              yymsg(1, "Unknown surface %d", (int)d);
+          }
+        }
+        List_Delete($3);
+      }
     }
   | tSmoother tSurface ListOfDouble tAFFECT FExpr tEND
     {
@@ -2680,7 +3149,16 @@ Transfinite :
 	List_Read($3, i, &d);
 	int j = (int)d;
 	Surface *s = FindSurface(j);
-	if(s) s->TransfiniteSmoothing = $5;
+	if(s){
+          s->TransfiniteSmoothing = (int)$5;
+        }
+        else{
+	  GFace *gf = GModel::current()->getFaceByTag(j);
+	  if(gf)
+            gf->meshAttributes.transfiniteSmoothing = (int)$5;
+          else
+	    yymsg(1, "Unknown surface %d", (int)$5);
+        }
       }
       List_Delete($3);
     }
@@ -2693,14 +3171,48 @@ Embedding :
     tPoint '{' RecursiveListOfDouble '}' tIn tSurface '{' FExpr '}' tEND
     { 
       Surface *s = FindSurface((int)$8);
-      if(s)
+      if(s){
 	setSurfaceEmbeddedPoints(s, $3);
+      }
+      else{
+        GFace *gf = GModel::current()->getFaceByTag((int)$8);
+        if(gf){
+          for(int i = 0; i < List_Nbr($3); i++){
+            int iPoint;
+            List_Read($3, i, &iPoint);
+            GVertex *gv = GModel::current()->getVertexByTag(iPoint);
+            if(gv)
+              gf->addEmbeddedVertex(gv);
+            else
+              yymsg(0, "Unknown point %d", iPoint);
+          }
+        }
+        else
+          yymsg(0, "Unknown surface %d", (int)$8);
+      }
     }
   | tLine '{' RecursiveListOfDouble '}' tIn tSurface '{' FExpr '}' tEND
     {
       Surface *s = FindSurface((int)$8);
-      if(s)
+      if(s){
 	setSurfaceEmbeddedCurves(s, $3);
+      }
+      else{
+        GFace *gf = GModel::current()->getFaceByTag((int)$8);
+        if(gf){
+          for(int i = 0; i < List_Nbr($3); i++){
+            int iCurve;
+            List_Read($3, i, &iCurve);
+            GEdge *ge = GModel::current()->getEdgeByTag(iCurve);
+            if(ge)
+              gf->addEmbeddedEdge(ge);
+            else
+              yymsg(0, "Unknown line %d", iCurve);
+          }
+        }
+        else
+          yymsg(0, "Unknown surface %d", (int)$8);
+      }
     }
   | tLine '{' RecursiveListOfDouble '}' tIn tVolume '{' FExpr '}' tEND
     {
@@ -2717,6 +3229,16 @@ Coherence :
     tCoherence tEND
     { 
       ReplaceAllDuplicates();
+    }
+  | tCoherence tSTRING tEND
+    { 
+      if(!strcmp($2, "Geometry"))
+        ReplaceAllDuplicates();
+      else if(!strcmp($2, "Mesh"))
+        GModel::current()->removeDuplicateMeshVertices(CTX::instance()->geom.tolerance);
+      else
+        yymsg(0, "Unknown coherence command");
+      Free($2);
     }
 ;
 
@@ -2805,22 +3327,20 @@ FExpr_Single :
   | tPi       { $$ = 3.141592653589793; }
   | tMPI_Rank { $$ = Msg::GetCommRank(); }
   | tMPI_Size { $$ = Msg::GetCommSize(); }
-  | tGMSH_MAJOR_VERSION { $$ = Get_GmshMajorVersion(); }
-  | tGMSH_MINOR_VERSION { $$ = Get_GmshMinorVersion(); }
-  | tGMSH_PATCH_VERSION { $$ = Get_GmshPatchVersion(); }
+  | tGMSH_MAJOR_VERSION { $$ = GetGmshMajorVersion(); }
+  | tGMSH_MINOR_VERSION { $$ = GetGmshMinorVersion(); }
+  | tGMSH_PATCH_VERSION { $$ = GetGmshPatchVersion(); }
 
   // Variables
 
   | tSTRING
     {
-      Symbol TheSymbol, *pSymbol;
-      TheSymbol.Name = $1;
-      if(!(pSymbol = (Symbol*)Tree_PQuery(Symbol_T, &TheSymbol))) {
+      if(!gmsh_yysymbols.count($1)){
 	yymsg(0, "Unknown variable '%s'", $1);
 	$$ = 0.;
       }
       else
-	$$ = *(double*)List_Pointer_Fast(pSymbol->val, 0);
+	$$ = gmsh_yysymbols[$1][0];
       Free($1);
     }
   // This is for GetDP compatibility (we should generalize it so
@@ -2830,76 +3350,62 @@ FExpr_Single :
     {
       char tmpstring[1024];
       sprintf(tmpstring, "%s_%d", $1, (int)$4) ;
-      Symbol TheSymbol, *pSymbol;
-      TheSymbol.Name = tmpstring;
-      if(!(pSymbol = (Symbol*)Tree_PQuery(Symbol_T, &TheSymbol))) {
+      if(!gmsh_yysymbols.count(tmpstring)){
 	yymsg(0, "Unknown variable '%s'", tmpstring);
 	$$ = 0.;
       }
       else
-	$$ = *(double*)List_Pointer_Fast(pSymbol->val, 0);
+	$$ = gmsh_yysymbols[tmpstring][0];
       Free($1);
     }
   | tSTRING '[' FExpr ']'
     {
-      Symbol TheSymbol, *pSymbol;
-      TheSymbol.Name = $1;
-      if(!(pSymbol = (Symbol*)Tree_PQuery(Symbol_T, &TheSymbol))) {
+      int index = (int)$3;
+      if(!gmsh_yysymbols.count($1)){
 	yymsg(0, "Unknown variable '%s'", $1);
 	$$ = 0.;
       }
-      else{
-	double *pd;
-	if((pd = (double*)List_Pointer_Test(pSymbol->val, (int)$3)))
-	  $$ = *pd;
-	else{
-	  yymsg(0, "Uninitialized variable '%s[%d]'", $1, (int)$3);
-	  $$ = 0.;
-	}
+      else if((int)gmsh_yysymbols[$1].size() < index + 1){
+	yymsg(0, "Uninitialized variable '%s[%d]'", $1, index);
+	$$ = 0.;
       }
+      else
+	$$ = gmsh_yysymbols[$1][index];
       Free($1);
     }
   | '#' tSTRING '[' ']'
     {
-      Symbol TheSymbol, *pSymbol;
-      TheSymbol.Name = $2;
-      if(!(pSymbol = (Symbol*)Tree_PQuery(Symbol_T, &TheSymbol))) {
+      if(!gmsh_yysymbols.count($2)){
 	yymsg(0, "Unknown variable '%s'", $2);
 	$$ = 0.;
       }
       else
-	$$ = List_Nbr(pSymbol->val);
+	$$ = gmsh_yysymbols[$2].size();
       Free($2);
     }
   | tSTRING NumericIncrement
     {
-      Symbol TheSymbol, *pSymbol;
-      TheSymbol.Name = $1;
-      if(!(pSymbol = (Symbol*)Tree_PQuery(Symbol_T, &TheSymbol))) {
+      if(!gmsh_yysymbols.count($1)){
 	yymsg(0, "Unknown variable '%s'", $1);
 	$$ = 0.;
       }
       else
-	$$ = (*(double*)List_Pointer_Fast(pSymbol->val, 0) += $2);
+	$$ = (gmsh_yysymbols[$1][0] += $2);
       Free($1);
     }
   | tSTRING '[' FExpr ']' NumericIncrement
     {
-      Symbol TheSymbol, *pSymbol;
-      TheSymbol.Name = $1;
-      if(!(pSymbol = (Symbol*)Tree_PQuery(Symbol_T, &TheSymbol))) {
+      int index = (int)$3;
+      if(!gmsh_yysymbols.count($1)){
 	yymsg(0, "Unknown variable '%s'", $1);
 	$$ = 0.;
       }
-      else{
-	double *pd;
-	if((pd = (double*)List_Pointer_Test(pSymbol->val, (int)$3)))
-	  $$ = (*pd += $5);
-	else{
-	  yymsg(0, "Uninitialized variable '%s[%d]'", $1, (int)$3);
-	  $$ = 0.;
-	}
+      else if((int)gmsh_yysymbols[$1].size() < index + 1){
+	yymsg(0, "Uninitialized variable '%s[%d]'", $1, index);
+	$$ = 0.;
       }
+      else
+	$$ = (gmsh_yysymbols[$1][index] += $5);
       Free($1);
     }
 
@@ -3033,6 +3539,22 @@ ListOfDouble :
     }
 ;
 
+ListOfDoubleOrAll :
+    ListOfDouble 
+    { 
+      $$ = $1; 
+    }
+  | tBIGSTR
+    {
+      if(!strcmp($1, "*") || !strcmp($1, "all"))
+        $$ = 0;
+      else{
+        yyerror("Unknown special string for list replacement");
+        $$ = List_Create(2, 1, sizeof(double));
+      }
+    }
+;
+
 FExpr_Multi :
     '-' FExpr_Multi %prec UNARYPREC
     {
@@ -3053,7 +3575,8 @@ FExpr_Multi :
   | FExpr tDOTS FExpr
     { 
       $$ = List_Create(2, 1, sizeof(double)); 
-      for(double d = $1; ($1 < $3) ? (d <= $3) : (d >= $3); ($1 < $3) ? (d += 1.) : (d -= 1.)) 
+      for(double d = $1; ($1 < $3) ? (d <= $3) : (d >= $3); 
+          ($1 < $3) ? (d += 1.) : (d -= 1.)) 
 	List_Add($$, &d);
     }
   | FExpr tDOTS FExpr tDOTS FExpr
@@ -3110,37 +3633,25 @@ FExpr_Multi :
   | tSTRING '[' ']'
     {
       $$ = List_Create(2, 1, sizeof(double));
-      Symbol TheSymbol, *pSymbol;
-      TheSymbol.Name = $1;
-      if(!(pSymbol = (Symbol*)Tree_PQuery(Symbol_T, &TheSymbol))) {
+      if(!gmsh_yysymbols.count($1))
 	yymsg(0, "Unknown variable '%s'", $1);
-	double d = 0.0;
-	List_Add($$, &d);
-      }
-      else{
-	for(int i = 0; i < List_Nbr(pSymbol->val); i++)
-	  List_Add($$, (double*)List_Pointer_Fast(pSymbol->val, i));
-      }
+      else
+	for(unsigned int i = 0; i < gmsh_yysymbols[$1].size(); i++)
+	  List_Add($$, &gmsh_yysymbols[$1][i]);
       Free($1);
     }
   | tSTRING '[' '{' RecursiveListOfDouble '}' ']'
     {
       $$ = List_Create(2, 1, sizeof(double));
-      Symbol TheSymbol, *pSymbol;
-      TheSymbol.Name = $1;
-      if(!(pSymbol = (Symbol*)Tree_PQuery(Symbol_T, &TheSymbol))) {
+      if(!gmsh_yysymbols.count($1))
 	yymsg(0, "Unknown variable '%s'", $1);
-	double d = 0.0;
-	List_Add($$, &d);
-      }
       else{
 	for(int i = 0; i < List_Nbr($4); i++){
-	  int j = (int)(*(double*)List_Pointer_Fast($4, i));
-	  double *pd;
-	  if((pd = (double*)List_Pointer_Test(pSymbol->val, j)))
-	    List_Add($$, pd);
+	  int index = (int)(*(double*)List_Pointer_Fast($4, i));
+	  if((int)gmsh_yysymbols[$1].size() < index + 1)
+	    yymsg(0, "Uninitialized variable '%s[%d]'", $1, index);
 	  else
-	    yymsg(0, "Uninitialized variable '%s[%d]'", $1, j);	  
+	    List_Add($$, &gmsh_yysymbols[$1][index]);
 	}
       }
       Free($1);
@@ -3176,24 +3687,24 @@ RecursiveListOfDouble :
 ColorExpr :
     '{' FExpr ',' FExpr ',' FExpr ',' FExpr '}'
     {
-      $$ = CTX.PACK_COLOR((int)$2, (int)$4, (int)$6, (int)$8);
+      $$ = CTX::instance()->packColor((int)$2, (int)$4, (int)$6, (int)$8);
     }
   | '{' FExpr ',' FExpr ',' FExpr '}'
     {
-      $$ = CTX.PACK_COLOR((int)$2, (int)$4, (int)$6, 255);
+      $$ = CTX::instance()->packColor((int)$2, (int)$4, (int)$6, 255);
     }
 /* shift/reduce conflict
   | '{' tSTRING ',' FExpr '}'
     {
       int flag;
-      $$ = Get_ColorForString(ColorString, (int)$4, $2, &flag);
+      $$ = GetColorForString(ColorString, (int)$4, $2, &flag);
       if(flag) yymsg(0, "Unknown color '%s'", $2);
     }
 */
   | tSTRING
     {
       int flag;
-      $$ = Get_ColorForString(ColorString, -1, $1, &flag);
+      $$ = GetColorForString(ColorString, -1, $1, &flag);
       if(flag) yymsg(0, "Unknown color '%s'", $1);
       Free($1);
     }
@@ -3214,7 +3725,7 @@ ListOfColor :
   | tSTRING '[' FExpr ']' '.' tColorTable
     {
       $$ = List_Create(256, 10, sizeof(unsigned int));
-      GmshColorTable *ct = Get_ColorTable((int)$3);
+      GmshColorTable *ct = GetColorTable((int)$3);
       if(!ct)
 	yymsg(0, "View[%d] does not exist", (int)$3);
       else{
@@ -3244,7 +3755,32 @@ StringExprVar :
     }
   | tSTRING
     {
-      Msg::Warning("Named string expressions not implemented yet");
+      if(!gmsh_yystringsymbols.count($1)){
+	yymsg(0, "Unknown string variable '%s'", $1);
+	$$ = $1;
+      }
+      else{
+	std::string val = gmsh_yystringsymbols[$1];
+	$$ = (char *)Malloc((val.size() + 1) * sizeof(char));
+	strcpy($$, val.c_str());
+	Free($1);
+      }
+    }
+  | tSTRING '.' tSTRING
+    { 
+      std::string out;
+      StringOption(GMSH_GET, $1, 0, $3, out);
+      $$ = (char*)Malloc((out.size() + 1) * sizeof(char));
+      strcpy($$, out.c_str());
+      Free($1); Free($3);
+    }
+  | tSTRING '[' FExpr ']' '.' tSTRING
+    { 
+      std::string out;
+      StringOption(GMSH_GET, $1, (int)$3, $6, out);
+      $$ = (char*)Malloc((out.size() + 1) * sizeof(char));
+      strcpy($$, out.c_str());
+      Free($1); Free($6);
     }
 ;
 
@@ -3255,7 +3791,7 @@ StringExpr :
     }
   | tToday
     {
-      $$ = (char *)Malloc(32*sizeof(char));
+      $$ = (char *)Malloc(32 * sizeof(char));
       time_t now;
       time(&now);
       strcpy($$, ctime(&now));
@@ -3263,7 +3799,7 @@ StringExpr :
     }
   | tStrCat '(' StringExprVar ',' StringExprVar ')'
     {
-      $$ = (char *)Malloc((strlen($3)+strlen($5)+1)*sizeof(char));
+      $$ = (char *)Malloc((strlen($3) + strlen($5) + 1) * sizeof(char));
       strcpy($$, $3);
       strcat($$, $5);
       Free($3);
@@ -3271,7 +3807,7 @@ StringExpr :
     }
   | tStrPrefix '(' StringExprVar ')'
     {
-      $$ = (char *)Malloc((strlen($3)+1)*sizeof(char));
+      $$ = (char *)Malloc((strlen($3) + 1) * sizeof(char));
       int i;
       for(i = strlen($3) - 1; i >= 0; i--){
 	if($3[i] == '.'){
@@ -3285,7 +3821,7 @@ StringExpr :
     }
   | tStrRelative '(' StringExprVar ')'
     {
-      $$ = (char *)Malloc((strlen($3)+1)*sizeof(char));
+      $$ = (char *)Malloc((strlen($3) + 1) * sizeof(char));
       int i;
       for(i = strlen($3) - 1; i >= 0; i--){
 	if($3[i] == '/' || $3[i] == '\\')
@@ -3314,52 +3850,15 @@ StringExpr :
 	$$ = $3;
       }
       else{
-	$$ = (char*)Malloc((strlen(tmpstring)+1)*sizeof(char));
+	$$ = (char*)Malloc((strlen(tmpstring) + 1) * sizeof(char));
 	strcpy($$, tmpstring);
 	Free($3);
       }
       List_Delete($5);
     }
-  | tSprintf '(' tSTRING '.' tSTRING ')'
-    { 
-      const char *val = "";
-      StringOption(GMSH_GET, $3, 0, $5, val);
-      $$ = (char*)Malloc((strlen(val) + 1) * sizeof(char));
-      strcpy($$, val);
-      Free($3); Free($5);
-    }
-  | tSprintf '(' tSTRING '[' FExpr ']' '.' tSTRING ')'
-    { 
-      const char *val = "";
-      StringOption(GMSH_GET, $3, (int)$5, $8, val);
-      $$ = (char*)Malloc((strlen(val) + 1) * sizeof(char));
-      strcpy($$, val);
-      Free($3); Free($8);
-    }
 ;
 
 %%
-
-void DeleteSymbol(void *a, void *b)
-{
-  Symbol *s = (Symbol*)a;
-  Free(s->Name);
-  List_Delete(s->val);
-}
-
-int CompareSymbols (const void *a, const void *b)
-{
-  return(strcmp(((Symbol*)a)->Name, ((Symbol*)b)->Name));
-}
-
-void InitSymbols()
-{
-  if(Symbol_T){
-    Tree_Action(Symbol_T, DeleteSymbol);
-    Tree_Delete(Symbol_T);
-  }
-  Symbol_T = Tree_Create(sizeof(Symbol), CompareSymbols);
-}
 
 int PrintListOfDouble(char *format, List_T *list, char *buffer)
 {
@@ -3396,25 +3895,33 @@ int PrintListOfDouble(char *format, List_T *list, char *buffer)
   return 0;
 }
 
-void FixRelativePath(const char *in, char *out)
+fullMatrix<double> ListOfListOfDouble2Matrix(List_T *list)
 {
-  if(in[0] == '/' || in[0] == '\\' || (strlen(in)>2 && in[1] == ':')){
-    // do nothing: 'in' is an absolute path
-    strcpy(out, in);
+  int M = List_Nbr(list);
+  int N = 0;
+  for(int i = 0; i < M; i++){
+    List_T *line = *(List_T**)List_Pointer_Fast(list, i);
+    N = std::max(N, List_Nbr(line));
   }
-  else{
-    // append 'in' to the path of the parent file
-    strcpy(out, gmsh_yyname);
-    int i = strlen(out) - 1 ;
-    while(i >= 0 && gmsh_yyname[i] != '/' && gmsh_yyname[i] != '\\') i-- ;
-    out[i+1] = '\0';
-    strcat(out, in);
+  fullMatrix<double> mat(M, N);
+  for(int i = 0; i < M; i++){
+    List_T *line = *(List_T**)List_Pointer_Fast(list, i);
+    for(int j = 0; j < List_Nbr(line); j++){
+      double val;
+      List_Read(line, j, &val);
+      mat(i, j) = val;
+    }
   }
+  for(int i = 0; i < List_Nbr(list); i++)
+    List_Delete(*(List_T**)List_Pointer(list, i));
+  List_Delete(list);
+  return mat;
 }
 
-void yyerror(char *s)
+void yyerror(const char *s)
 {
-  Msg::Error("'%s', line %d : %s (%s)", gmsh_yyname, gmsh_yylineno - 1, s, gmsh_yytext);
+  Msg::Error("'%s', line %d : %s (%s)", gmsh_yyname.c_str(), gmsh_yylineno - 1,
+             s, gmsh_yytext);
   gmsh_yyerrorstate++;
 }
 
@@ -3428,9 +3935,9 @@ void yymsg(int level, const char *fmt, ...)
   va_end(args);
 
   if(level == 0){
-    Msg::Error("'%s', line %d : %s", gmsh_yyname, gmsh_yylineno - 1, tmp);
+    Msg::Error("'%s', line %d : %s", gmsh_yyname.c_str(), gmsh_yylineno - 1, tmp);
     gmsh_yyerrorstate++;
   }
   else
-    Msg::Warning("'%s', line %d : %s", gmsh_yyname, gmsh_yylineno - 1, tmp);
+    Msg::Warning("'%s', line %d : %s", gmsh_yyname.c_str(), gmsh_yylineno - 1, tmp);
 }

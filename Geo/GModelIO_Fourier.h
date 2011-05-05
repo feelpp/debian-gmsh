@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -7,6 +7,7 @@
 #define _GMODEL_IO_FOURIER_H_
 
 #include <vector>
+#include "GmshConfig.h"
 #include "GModel.h"
 
 #if defined(HAVE_FOURIER_MODEL)
@@ -27,10 +28,9 @@ class FM_Internals {
   void buildGModel(FM::Reader* reater, GModel* model);
 
   FM::Reader* getReader(int tag) 
-    { 
-      if (tag < reader.size())
-	return reader[tag]; 
-    }
+  { 
+    if(tag < (int)reader.size()) return reader[tag];
+  }
   int getSize() { return reader.size(); }
   FM::Reader* current() { return reader[reader.size() - 1]; }
 };

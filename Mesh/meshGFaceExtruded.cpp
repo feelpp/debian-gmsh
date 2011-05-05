@@ -1,19 +1,19 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
 #include <set>
 #include "GModel.h"
-#include "MElement.h"
+#include "MLine.h"
+#include "MTriangle.h"
+#include "MQuadrangle.h"
 #include "ExtrudeParams.h"
 #include "Context.h"
-#include "Message.h"
-
-extern Context_T CTX;
+#include "GmshMessage.h"
 
 static void createQuaTri(std::vector<MVertex*> &v, GFace *to,
-			 std::set<std::pair<MVertex*, MVertex*> > *constrainedEdges)
+                         std::set<std::pair<MVertex*, MVertex*> > *constrainedEdges)
 {
   ExtrudeParams *ep = to->meshAttributes.extrude;
 
@@ -46,8 +46,8 @@ static void createQuaTri(std::vector<MVertex*> &v, GFace *to,
 }
 
 static void extrudeMesh(GEdge *from, GFace *to,
-			std::set<MVertex*, MVertexLessThanLexicographic> &pos,
-			std::set<std::pair<MVertex*, MVertex*> > *constrainedEdges)
+                        std::set<MVertex*, MVertexLessThanLexicographic> &pos,
+                        std::set<std::pair<MVertex*, MVertex*> > *constrainedEdges)
 {
   ExtrudeParams *ep = to->meshAttributes.extrude;
 
@@ -107,7 +107,7 @@ static void extrudeMesh(GEdge *from, GFace *to,
 }
 
 static void copyMesh(GFace *from, GFace *to,
-		     std::set<MVertex*, MVertexLessThanLexicographic> &pos)
+                     std::set<MVertex*, MVertexLessThanLexicographic> &pos)
 {
   ExtrudeParams *ep = to->meshAttributes.extrude;
 
@@ -180,7 +180,7 @@ int MeshExtrudedSurface(GFace *gf,
 
   // build a set with all the vertices on the boundary of the face gf
   double old_tol = MVertexLessThanLexicographic::tolerance; 
-  MVertexLessThanLexicographic::tolerance = 1.e-12 * CTX.lc;
+  MVertexLessThanLexicographic::tolerance = 1.e-12 * CTX::instance()->lc;
 
   std::set<MVertex*, MVertexLessThanLexicographic> pos;
   std::list<GEdge*> edges = gf->edges();

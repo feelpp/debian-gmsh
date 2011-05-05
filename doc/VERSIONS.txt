@@ -1,4 +1,47 @@
-$Id: VERSIONS.txt,v 1.2 2008-07-14 19:02:22 geuzaine Exp $
+$Id: VERSIONS.txt,v 1.61 2009-09-21 17:38:55 geuzaine Exp $
+
+2.4.2 (Sep 21, 2009): solver code refactoring.
+
+2.4.1 (Sep 1, 2009): fixed surface mesh orientation bug introduced in
+2.4.0; mesh and graphics code refactoring, small usability
+enhancements and bug fixes.
+
+2.4.0 (Aug 22, 2009): switched build system to CMake; optionally copy
+transfinite mesh contraints during geometry transformations; bumped
+mesh version format to 2.1 (small change in the $PhysicalNames
+section, where the group dimension is now required); ported most
+plugins to the new post-processing API; switched from MathEval to
+MathEx and Flu_Tree_Browser to Fl_Tree; small bug fixes and
+improvements all over the place.
+
+2.3.1 (Mar 18, 2009): removed GSL dependency (Gmsh now simply uses
+Blas and Lapack); new per-window visibility; added support for
+composite window printing and background images; fixed string option
+affectation in parser; fixed surface mesh orientation for Open Cascade
+models; fixed random triangle orientations in Delaunay and Frontal
+algorithms.
+
+2.3.0 (Jan 23, 2009): major graphics and GUI code refactoring; new
+full-quad/hexa subdivision algorithm (removed Mesh.RecombineAlgo);
+improved automatic transfinite corner selection (now also for
+volumes); improved visibility browser; new automatic adaptive
+visualization for high-order simplices; modified arrow size, clipping
+planes and transform options; many improvements and bug fixes all over
+the place.
+
+2.2.6 (Nov 21, 2008): better transfinite smoothing and automatic
+corner selection; fixed high order meshing crashes on Windows and
+Linux; new uniform mesh refinement (thanks Brian!); fixed various
+other small bugs.
+
+2.2.5 (Oct 25, 2008): Gmsh now requires FLTK 1.1.7 or above; various
+small improvements (STL and VTK mesh IO, Netgen upgrade, Visual C++
+support, Fields, Mesh.{Msh,Stl,...}Binary changed to Mesh.Bindary) and
+bug fixes (pyramid interpolation, Chaco crashes).
+
+2.2.4 (Aug 14, 2008): integrated Metis and Chaco mesh partitioners;
+variables can now be deleted in geo files; added support for point
+datasets in model-based postprocessing views; small bug fixes.
 
 2.2.3 (Jul 14, 2008): enhanced clipping interface; API cleanup; fixed
 various bugs (Plugin(Integrate), high order meshes, surface info
@@ -7,7 +50,7 @@ crash).
 2.2.2 (Jun 20, 2008): added geometrical transformations on volumes;
 fixed bug in high order mesh generation.
 
-2.2.1 (Jun 15, 2008): various small improvements (adaptive views, gui,
+2.2.1 (Jun 15, 2008): various small improvements (adaptive views, GUI,
 code cleanup) and bug fixes (high order meshes, Netgen interface).
 
 2.2.0 (Apr 19, 2008): new model-based post-processing backend; added
@@ -381,9 +424,9 @@ Shewchuk's Triangle as an alternative isotropic 2D mesh generator;
 added AngleSmoothNormals to control sharp edge display with smoothed
 normals; fixed random crash for lighted 3D iso surfaces.
 
-1.23: fixed duplicate elements generation + non-matching tetrahedra
-faces in 3D extruded meshes; better display of displacement maps;
-fixed interactive ellipsis construction; generalized boundary
+1.23 (Aug, 2001): fixed duplicate elements generation + non-matching
+tetrahedra faces in 3D extruded meshes; better display of displacement
+maps; fixed interactive ellipsis construction; generalized boundary
 operator; added new explode option for post-processing views; enhanced
 link view behavior (to update only the changed items); added new
 default plugins: Skin, Transform, Smooth; fixed various other small

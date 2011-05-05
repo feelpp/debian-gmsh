@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -30,18 +30,9 @@ extern "C"
   }
 }
 
-void GMSH_TransformPlugin::getName(char *name) const
+std::string GMSH_TransformPlugin::getHelp() const
 {
-  strcpy(name, "Transform");
-}
-
-void GMSH_TransformPlugin::getInfos(char *author, char *copyright,
-                                    char *help_text) const
-{
-  strcpy(author, "C. Geuzaine");
-  strcpy(copyright, "DGR (www.multiphysics.com)");
-  strcpy(help_text,
-         "Plugin(Transform) transforms the homogeneous\n"
+  return "Plugin(Transform) transforms the homogeneous\n"
          "node coordinates (x,y,z,1) of the elements in\n"
          "the view `iView' by the matrix\n"
          "[`A11' `A12' `A13' `Tx']\n"
@@ -51,7 +42,7 @@ void GMSH_TransformPlugin::getInfos(char *author, char *copyright,
          "elements is reversed. If `iView' < 0, the plugin\n"
          "is run on the current view.\n"
          "\n"
-         "Plugin(Transform) is executed in-place.\n");
+         "Plugin(Transform) is executed in-place.\n";
 }
 
 int GMSH_TransformPlugin::getNbOptions() const
@@ -62,11 +53,6 @@ int GMSH_TransformPlugin::getNbOptions() const
 StringXNumber *GMSH_TransformPlugin::getOption(int iopt)
 {
   return &TransformOptions_Number[iopt];
-}
-
-void GMSH_TransformPlugin::catchErrorMessage(char *errorMessage) const
-{
-  strcpy(errorMessage, "Transform failed...");
 }
 
 PView *GMSH_TransformPlugin::execute(PView *v)
@@ -99,10 +85,10 @@ PView *GMSH_TransformPlugin::execute(PView *v)
   for(int step = 0; step < data1->getNumTimeSteps(); step++){
     for(int ent = 0; ent < data1->getNumEntities(step); ent++){
       for(int ele = 0; ele < data1->getNumElements(step, ent); ele++){
-	if(data1->skipElement(step, ent, ele)) continue;
-	if(swap) data1->revertElement(step, ent, ele);
-	for(int nod = 0; nod < data1->getNumNodes(step, ent, ele); nod++)
-	  data1->tagNode(step, ent, ele, nod, 0);
+        if(data1->skipElement(step, ent, ele)) continue;
+        if(swap) data1->revertElement(step, ent, ele);
+        for(int nod = 0; nod < data1->getNumNodes(step, ent, ele); nod++)
+          data1->tagNode(step, ent, ele, nod, 0);
       }
     }
   }
@@ -111,19 +97,19 @@ PView *GMSH_TransformPlugin::execute(PView *v)
   for(int step = 0; step < data1->getNumTimeSteps(); step++){
     for(int ent = 0; ent < data1->getNumEntities(step); ent++){
       for(int ele = 0; ele < data1->getNumElements(step, ent); ele++){
-	if(data1->skipElement(step, ent, ele)) continue;
-	for(int nod = 0; nod < data1->getNumNodes(step, ent, ele); nod++){
-	  double x, y, z;
-	  int tag = data1->getNode(step, ent, ele, nod, x, y, z);
-	  if(!tag){
-	    double x2, y2, z2;
-	    x2 = mat[0][0] * x + mat[0][1] * y + mat[0][2] * z + mat[0][3];
-	    y2 = mat[1][0] * x + mat[1][1] * y + mat[1][2] * z + mat[1][3];
-	    z2 = mat[2][0] * x + mat[2][1] * y + mat[2][2] * z + mat[2][3];
-	    data1->setNode(step, ent, ele, nod, x2, y2, z2);
-	    data1->tagNode(step, ent, ele, nod, 1);
-	  }
-	}
+        if(data1->skipElement(step, ent, ele)) continue;
+        for(int nod = 0; nod < data1->getNumNodes(step, ent, ele); nod++){
+          double x, y, z;
+          int tag = data1->getNode(step, ent, ele, nod, x, y, z);
+          if(!tag){
+            double x2, y2, z2;
+            x2 = mat[0][0] * x + mat[0][1] * y + mat[0][2] * z + mat[0][3];
+            y2 = mat[1][0] * x + mat[1][1] * y + mat[1][2] * z + mat[1][3];
+            z2 = mat[2][0] * x + mat[2][1] * y + mat[2][2] * z + mat[2][3];
+            data1->setNode(step, ent, ele, nod, x2, y2, z2);
+            data1->tagNode(step, ent, ele, nod, 1);
+          }
+        }
       }
     }
   }

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -24,18 +24,9 @@ extern "C"
   }
 }
 
-void GMSH_SphericalRaisePlugin::getName(char *name) const
+std::string GMSH_SphericalRaisePlugin::getHelp() const
 {
-  strcpy(name, "Spherical Raise");
-}
-
-void GMSH_SphericalRaisePlugin::getInfos(char *author, char *copyright,
-                                         char *help_text) const
-{
-  strcpy(author, "C. Geuzaine");
-  strcpy(copyright, "DGR (www.multiphysics.com)");
-  strcpy(help_text,
-         "Plugin(SphericalRaise) transforms the\n"
+  return "Plugin(SphericalRaise) transforms the\n"
          "coordinates of the elements in the view\n"
          "`iView' using the values associated with the\n"
          "`TimeStep'-th time step. Instead of elevating\n"
@@ -49,7 +40,7 @@ void GMSH_SphericalRaisePlugin::getInfos(char *author, char *copyright,
          "If `iView' < 0, the plugin is run on the current\n"
          "view.\n"
          "\n"
-         "Plugin(SphericalRaise) is executed in-place.\n");
+         "Plugin(SphericalRaise) is executed in-place.\n";
 }
 
 int GMSH_SphericalRaisePlugin::getNbOptions() const
@@ -60,11 +51,6 @@ int GMSH_SphericalRaisePlugin::getNbOptions() const
 StringXNumber *GMSH_SphericalRaisePlugin::getOption(int iopt)
 {
   return &SphericalRaiseOptions_Number[iopt];
-}
-
-void GMSH_SphericalRaisePlugin::catchErrorMessage(char *errorMessage) const
-{
-  strcpy(errorMessage, "SphericalRaise failed...");
 }
 
 PView *GMSH_SphericalRaisePlugin::execute(PView *v)
@@ -93,9 +79,9 @@ PView *GMSH_SphericalRaisePlugin::execute(PView *v)
   for(int step = 0; step < data1->getNumTimeSteps(); step++){
     for(int ent = 0; ent < data1->getNumEntities(step); ent++){
       for(int ele = 0; ele < data1->getNumElements(step, ent); ele++){
-	if(data1->skipElement(step, ent, ele)) continue;
-	for(int nod = 0; nod < data1->getNumNodes(step, ent, ele); nod++)
-	  data1->tagNode(step, ent, ele, nod, 0);
+        if(data1->skipElement(step, ent, ele)) continue;
+        for(int nod = 0; nod < data1->getNumNodes(step, ent, ele); nod++)
+          data1->tagNode(step, ent, ele, nod, 0);
       }
     }
   }
@@ -104,25 +90,25 @@ PView *GMSH_SphericalRaisePlugin::execute(PView *v)
   for(int step = 0; step < data1->getNumTimeSteps(); step++){
     for(int ent = 0; ent < data1->getNumEntities(step); ent++){
       for(int ele = 0; ele < data1->getNumElements(step, ent); ele++){
-	if(data1->skipElement(step, ent, ele)) continue;
-	for(int nod = 0; nod < data1->getNumNodes(step, ent, ele); nod++){
-	  double x, y, z;
-	  int tag = data1->getNode(step, ent, ele, nod, x, y, z);
-	  if(!tag){
-	    double r[3], val;
-	    r[0] = x - center[0];
-	    r[1] = y - center[1];
-	    r[2] = z - center[2];
-	    norme(r);
-	    data1->getScalarValue(step, ent, ele, nod, val);
-	    double coef = offset + raise * val;
-	    x += coef * r[0];
-	    y += coef * r[1];
-	    z += coef * r[2];
-	    data1->setNode(step, ent, ele, nod, x, y, z);
-	    data1->tagNode(step, ent, ele, nod, 1);
-	  }
-	}
+        if(data1->skipElement(step, ent, ele)) continue;
+        for(int nod = 0; nod < data1->getNumNodes(step, ent, ele); nod++){
+          double x, y, z;
+          int tag = data1->getNode(step, ent, ele, nod, x, y, z);
+          if(!tag){
+            double r[3], val;
+            r[0] = x - center[0];
+            r[1] = y - center[1];
+            r[2] = z - center[2];
+            norme(r);
+            data1->getScalarValue(step, ent, ele, nod, val);
+            double coef = offset + raise * val;
+            x += coef * r[0];
+            y += coef * r[1];
+            z += coef * r[2];
+            data1->setNode(step, ent, ele, nod, x, y, z);
+            data1->tagNode(step, ent, ele, nod, 1);
+          }
+        }
       }
     }
   }

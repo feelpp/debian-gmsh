@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -6,6 +6,11 @@
 #ifndef _GEDGE_H_
 #define _GEDGE_H_
 
+#include <list>
+#include <string>
+#include <vector>
+#include <set>
+#include <stdio.h>
 #include "GEntity.h"
 #include "GVertex.h"
 #include "SVector3.h"
@@ -15,19 +20,26 @@
 class MElement;
 class MLine;
 class ExtrudeParams;
+class GEdgeCompound;
 
 // A model edge.
 class GEdge : public GEntity {
  private:
   double _length;
+  bool _tooSmall;
 
  protected:
   GVertex *v0, *v1;
+  GEdgeCompound *compound; // this model edge belongs to a compound 
   std::list<GFace *> l_faces;
+  std::set<GFace *> bl_faces;
 
  public:
   GEdge(GModel *model, int tag, GVertex *_v0, GVertex *_v1);
   virtual ~GEdge();
+
+  // delete mesh data
+  virtual void deleteMesh();
 
   // get the start/end vertices of the edge
   GVertex *getBeginVertex() const { return v0; }
@@ -44,25 +56,29 @@ class GEdge : public GEntity {
   virtual void setVisibility(char val, bool recursive=false);
 
   // true if the edge is a seam for the given face.
-  virtual bool isSeam(GFace *face) const { return false; }
+  virtual bool isSeam(const GFace *face) const { return false; }
 
   // get the bounding box
   virtual SBoundingBox3d bounds() const;
 
-  // faces that bound this entity bounds
-  virtual std::list<GFace*> faces() const { return l_faces; }
+  // get the oriented bounding box
+  virtual SOrientedBoundingBox getOBB();
 
-  // get the parameter location for a point in space on the edge
-  virtual double parFromPoint(const SPoint3 &) const = 0;
+  // faces that this entity bounds
+  virtual std::list<GFace*> faces() const { return l_faces; }
 
   // get the point for the given parameter location
   virtual GPoint point(double p) const = 0;
-
-  // get the closest point on the edge to the given point
-  virtual GPoint closestPoint(const SPoint3 & queryPoint) const;
-
+  
   // true if the edge contains the given parameter
   virtual bool containsParam(double pt) const;
+
+  // get the position for the given parameter location
+  virtual SVector3 position(double p) const
+  {
+    GPoint gp = point(p);
+    return SVector3(gp.x(), gp.y(), gp.z());
+  }
 
   // get first derivative of edge at the given parameter
   virtual SVector3 firstDer(double par) const = 0;
@@ -70,18 +86,12 @@ class GEdge : public GEntity {
   // get second derivative of edge at the given parameter (default
   // implentation using central differences)
   virtual SVector3 secondDer(double par) const;
-
+  
   // get the curvature
   virtual double curvature(double par) const;
 
   // reparmaterize the point onto the given face
-  virtual SPoint2 reparamOnFace(GFace *face, double epar,int dir) const;
-
-  // recompute the mesh partitions defined on this edge
-  void recomputeMeshPartitions();
-
-  // delete the mesh partitions defined on this edge
-  void deleteMeshPartitions();
+  virtual SPoint2 reparamOnFace(const GFace *face, double epar, int dir) const;
 
   // return the minimum number of segments used for meshing the edge
   virtual int minimumMeshSegments() const { return 1; }
@@ -91,6 +101,9 @@ class GEdge : public GEntity {
 
   // return a type-specific additional information string
   virtual std::string getAdditionalInfoString();
+
+  // export in GEO format
+  virtual void writeGEO(FILE *fp);
 
   // tell if the edge is a 3D edge (in opposition with a trimmed curve on a surface)
   virtual bool is3D() const { return true; }
@@ -104,10 +117,21 @@ class GEdge : public GEntity {
   virtual double prescribedMeshSizeAtVertex() const { return meshAttributes.meshSize; }
 
   // true if start == end and no more than 2 segments
-  bool isMeshDegenerated() const{ return (v0 == v1 && mesh_vertices.size() < 2); }
+  void setTooSmall(bool b) { _tooSmall = b; }
+  bool isMeshDegenerated() const 
+  { return _tooSmall || (v0 == v1 && mesh_vertices.size() < 2); }
 
-  // get number of elements in the mesh and get element by index
+  // number of types of elements
+  int getNumElementTypes() const { return 1; }
+
+  // get total/by-type number of elements in the mesh
   unsigned int getNumMeshElements();
+  void getNumMeshElements(unsigned *const c) const;
+
+  // get the start of the array of a type of element
+  MElement *const *getStartElementType(int type) const;
+
+  // get the element at the given index
   MElement *getMeshElement(unsigned int index);
 
   // reset the mesh attributes to default values
@@ -115,6 +139,32 @@ class GEdge : public GEntity {
 
   // true if entity is periodic in the "dim" direction.
   virtual bool periodic(int dim) const { return v0 == v1; }
+
+  // true if edge is used in hyperbolic layer on face gf
+  virtual bool inHyperbolicLayer(GFace *gf)
+  {
+    return bl_faces.find(gf) != bl_faces.end();
+  }
+
+  virtual void flagInHyperbolicLayer(GFace *gf) { bl_faces.insert(gf); }
+
+  // get bounds of parametric coordinate 
+  virtual Range<double> parBounds(int i) const = 0;
+  
+  // return the point on the face closest to the given point
+  virtual GPoint closestPoint(const SPoint3 &queryPoint, double &param) const;
+
+  // return the parmater location on the edge given a point in space
+  // that is on the edge
+  virtual double parFromPoint(const SPoint3 &P) const;
+  
+  // compute the parameter U from a point XYZ
+  virtual bool XYZToU(const double X, const double Y, const double Z,
+                      double &U, const double relax=0.5) const;
+
+  // compound
+  void setCompound(GEdgeCompound *gec) { compound = gec; }
+  GEdgeCompound *getCompound() const { return compound; }
 
   struct {
     char Method;

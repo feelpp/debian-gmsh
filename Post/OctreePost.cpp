@@ -1,16 +1,15 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
 #include "Octree.h"
 #include "OctreePost.h"
-#include "ListUtils.h"
 #include "PView.h"
 #include "PViewDataList.h"
 #include "PViewDataGModel.h"
 #include "Numeric.h"
-#include "Message.h"
+#include "GmshMessage.h"
 #include "shapeFunctions.h"
 #include "GModel.h"
 #include "MElement.h"
@@ -26,7 +25,6 @@ static void minmax(int n, double *X, double *Y, double *Z,
   max[0] = X[0];
   max[1] = Y[0];
   max[2] = Z[0];
-
   for(int i = 1; i < n; i++) {
     min[0] = (X[i] < min[0]) ? X[i] : min[0];
     min[1] = (Y[i] < min[1]) ? Y[i] : min[1];
@@ -193,14 +191,10 @@ void pyrCentroid(void *a, double *x)
   centroid(5, X, Y, Z, x);
 }
 
-static void addListOfStuff(Octree *o, List_T *l, int nbelm)
+static void addListOfStuff(Octree *o, std::vector<double> &l, int nbelm)
 {
-  if(!l) return;
- 
-  for(int i = 0; i < List_Nbr(l); i += nbelm){
-    double * X = (double *)List_Pointer_Fast(l, i);
-    Octree_Insert(X, o);
-  }
+  for(unsigned int i = 0; i < l.size(); i += nbelm)
+    Octree_Insert(&l[i], o);
 }
 
 // OctreePost implementation
@@ -222,16 +216,17 @@ OctreePost::OctreePost(PView *v)
 {
   _theViewDataGModel = dynamic_cast<PViewDataGModel*>(_theView->getData());
 
-  if(_theViewDataGModel) return; // the octree is available in the model
+  if(_theViewDataGModel) return; // the octree is already available in the model
 
-  _theViewDataList = dynamic_cast<PViewDataList*>(_theView->getData());
+  // use adaptive data if available
+  _theViewDataList = dynamic_cast<PViewDataList*>(_theView->getData(true));
 
   if(_theViewDataList){
-    SBoundingBox3d bb = v->getData()->getBoundingBox();
+    SBoundingBox3d bb = _theViewDataList->getBoundingBox();
     double min[3] = {bb.min().x(), bb.min().y(), bb.min().z()};
     double size[3] = {bb.max().x() - bb.min().x(),
-		      bb.max().y() - bb.min().y(),
-		      bb.max().z() - bb.min().z()};                   
+                      bb.max().y() - bb.min().y(),
+                      bb.max().z() - bb.min().z()};                   
     const int maxElePerBucket = 100; // memory vs. speed trade-off
     
     PViewDataList *l = _theViewDataList;
@@ -339,7 +334,7 @@ bool OctreePost::_getValue(void *in, int dim, int nbNod, int nbComp,
 } 
 
 bool OctreePost::_getValue(void *in, int nbComp, double P[3], int timestep,
-			   double *values, double *elementSize)
+                           double *values, double *elementSize)
 {
   if(!in) return false;
 
@@ -364,12 +359,12 @@ bool OctreePost::_getValue(void *in, int nbComp, double P[3], int timestep,
       for(int nod = 0; nod < e->getNumVertices(); nod++){
         for(int comp = 0; comp < nbComp; comp++){
           if(!_theViewDataGModel->getValueByIndex(step, dataIndex[nod], nod, comp, 
-						  nodeval[nod * nbComp + comp]))
+                                                  nodeval[nod * nbComp + comp]))
             return false;
         }
       }
       for(int comp = 0; comp < nbComp; comp++){
-        double val = e->interpolate(nodeval, U[0], U[1], U[2], nbComp);
+        double val = e->interpolate(&nodeval[comp], U[0], U[1], U[2], nbComp);
         if(timestep < 0)
           values[nbComp * step + comp] = val;
         else
@@ -411,6 +406,22 @@ bool OctreePost::searchScalar(double x, double y, double z, double *values,
   }
   
   return false;
+}
+
+bool OctreePost::searchScalarWithTol(double x, double y, double z, double *values, 
+                                     int step, double *size, double tol)
+{
+  bool a = searchScalar(x, y, z, values, step, size);
+  if(!a && tol != 0.){
+    double oldtol1 = element::getTolerance();
+    double oldtol2 = MElement::getTolerance();
+    element::setTolerance(tol);
+    MElement::setTolerance(tol);
+    a = searchScalar(x, y, z, values, step, size);
+    element::setTolerance(oldtol1);
+    MElement::setTolerance(oldtol2);
+  }    
+  return a;
 }
 
 bool OctreePost::searchVector(double x, double y, double z, double *values, 

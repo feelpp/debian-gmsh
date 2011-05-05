@@ -34,6 +34,11 @@ Z-axis label@*
 Default value: @code{""}@*
 Saved in: @code{General.OptionsFileName}
 
+@item General.BackgroundImageFileName
+Background image file in JPEG or PNG format@*
+Default value: @code{""}@*
+Saved in: @code{General.OptionsFileName}
+
 @item General.DefaultFileName
 Default project file name@*
 Default value: @code{"untitled.geo"}@*
@@ -179,10 +184,15 @@ Draw background gradient (0=none, 1=vertical, 2=horizontal, 3=radial)@*
 Default value: @code{1}@*
 Saved in: @code{General.OptionsFileName}
 
-@item General.Clip0
-Enable clipping plane 0 (Geometry=2^0, Mesh=2^1, View[i]=2^(2+i))@*
-Default value: @code{0}@*
-Saved in: @code{-}
+@item General.BackgroundImagePositionX
+X position (in pixels) of background image (< 0: measure from right edge; >= 1e5: centered)@*
+Default value: @code{100000}@*
+Saved in: @code{General.OptionsFileName}
+
+@item General.BackgroundImagePositionY
+Y position (in pixels) of background image (< 0: measure from bottom edge; >= 1e5: centered)@*
+Default value: @code{100000}@*
+Saved in: @code{General.OptionsFileName}
 
 @item General.Clip0A
 First coefficient in equation for clipping plane 0 (`A' in `AX+BY+CZ+D=0')@*
@@ -204,19 +214,14 @@ Fourth coefficient in equation for clipping plane 0 (`D' in `AX+BY+CZ+D=0')@*
 Default value: @code{0}@*
 Saved in: @code{-}
 
-@item General.Clip1
-Enable clipping plane 1 (Geometry=2^0, Mesh=2^1, View[i]=2^(2+i))@*
-Default value: @code{0}@*
-Saved in: @code{-}
-
 @item General.Clip1A
 First coefficient in equation for clipping plane 1@*
-Default value: @code{1}@*
+Default value: @code{0}@*
 Saved in: @code{-}
 
 @item General.Clip1B
 Second coefficient in equation for clipping plane 1@*
-Default value: @code{0}@*
+Default value: @code{1}@*
 Saved in: @code{-}
 
 @item General.Clip1C
@@ -229,14 +234,9 @@ Fourth coefficient in equation for clipping plane 1@*
 Default value: @code{0}@*
 Saved in: @code{-}
 
-@item General.Clip2
-Enable clipping plane 2 (Geometry=2^0, Mesh=2^1, View[i]=2^(2+i))@*
-Default value: @code{0}@*
-Saved in: @code{-}
-
 @item General.Clip2A
 First coefficient in equation for clipping plane 2@*
-Default value: @code{1}@*
+Default value: @code{0}@*
 Saved in: @code{-}
 
 @item General.Clip2B
@@ -246,7 +246,7 @@ Saved in: @code{-}
 
 @item General.Clip2C
 Third coefficient in equation for clipping plane 2@*
-Default value: @code{0}@*
+Default value: @code{1}@*
 Saved in: @code{-}
 
 @item General.Clip2D
@@ -254,14 +254,9 @@ Fourth coefficient in equation for clipping plane 2@*
 Default value: @code{0}@*
 Saved in: @code{-}
 
-@item General.Clip3
-Enable clipping plane 3 (Geometry=2^0, Mesh=2^1, View[i]=2^(2+i))@*
-Default value: @code{0}@*
-Saved in: @code{-}
-
 @item General.Clip3A
 First coefficient in equation for clipping plane 3@*
-Default value: @code{1}@*
+Default value: @code{-1}@*
 Saved in: @code{-}
 
 @item General.Clip3B
@@ -279,19 +274,14 @@ Fourth coefficient in equation for clipping plane 3@*
 Default value: @code{0}@*
 Saved in: @code{-}
 
-@item General.Clip4
-Enable clipping plane 4 (Geometry=2^0, Mesh=2^1, View[i]=2^(2+i))@*
-Default value: @code{0}@*
-Saved in: @code{-}
-
 @item General.Clip4A
 First coefficient in equation for clipping plane 4@*
-Default value: @code{1}@*
+Default value: @code{0}@*
 Saved in: @code{-}
 
 @item General.Clip4B
 Second coefficient in equation for clipping plane 4@*
-Default value: @code{0}@*
+Default value: @code{-1}@*
 Saved in: @code{-}
 
 @item General.Clip4C
@@ -304,14 +294,9 @@ Fourth coefficient in equation for clipping plane 4@*
 Default value: @code{0}@*
 Saved in: @code{-}
 
-@item General.Clip5
-Enable clipping plane 5 (Geometry=2^0, Mesh=2^1, View[i]=2^(2+i))@*
-Default value: @code{0}@*
-Saved in: @code{-}
-
 @item General.Clip5A
 First coefficient in equation for clipping plane 5@*
-Default value: @code{1}@*
+Default value: @code{0}@*
 Saved in: @code{-}
 
 @item General.Clip5B
@@ -321,7 +306,7 @@ Saved in: @code{-}
 
 @item General.Clip5C
 Third coefficient in equation for clipping plane 5@*
-Default value: @code{0}@*
+Default value: @code{-1}@*
 Saved in: @code{-}
 
 @item General.Clip5D
@@ -631,17 +616,17 @@ Saved in: @code{General.SessionFileName}
 
 @item General.MaxX
 Maximum model coordinate along the X-axis (read-only)@*
-Default value: @code{1}@*
+Default value: @code{0}@*
 Saved in: @code{-}
 
 @item General.MaxY
 Maximum model coordinate along the Y-axis (read-only)@*
-Default value: @code{1}@*
+Default value: @code{0}@*
 Saved in: @code{-}
 
 @item General.MaxZ
 Maximum model coordinate along the Z-axis (read-only)@*
-Default value: @code{1}@*
+Default value: @code{0}@*
 Saved in: @code{-}
 
 @item General.MenuPositionX
@@ -653,6 +638,11 @@ Saved in: @code{General.SessionFileName}
 Vertical position (in pixels) of the upper left corner of the menu window@*
 Default value: @code{50}@*
 Saved in: @code{General.SessionFileName}
+
+@item General.MessageAutoScroll
+Automatically scroll message window@*
+Default value: @code{1}@*
+Saved in: @code{General.OptionsFileName}
 
 @item General.MessagePositionX
 Horizontal position (in pixels) of the upper left corner of the message window@*
@@ -766,7 +756,7 @@ Saved in: @code{General.OptionsFileName}
 
 @item General.QuadricSubdivisions
 Number of subdivisions used to draw points or lines as spheres or cylinders@*
-Default value: @code{8}@*
+Default value: @code{6}@*
 Saved in: @code{General.OptionsFileName}
 
 @item General.RotationX
@@ -845,12 +835,12 @@ Default value: @code{1}@*
 Saved in: @code{General.OptionsFileName}
 
 @item General.SmallAxesPositionX
-X position of small axes (use negative values for right alignment)@*
+X position (in pixels) of small axes (< 0: measure from right edge; >= 1e5: centered)@*
 Default value: @code{-60}@*
 Saved in: @code{General.OptionsFileName}
 
 @item General.SmallAxesPositionY
-Y position of small axes (use negative values for bottom alignment)@*
+Y position (in pixels) of small axes (< 0: measure from bottom edge; >= 1e5: centered)@*
 Default value: @code{-40}@*
 Saved in: @code{General.OptionsFileName}
 
@@ -941,7 +931,7 @@ Saved in: @code{General.OptionsFileName}
 
 @item General.Verbosity
 Level of information printed during processing (0=no information)@*
-Default value: @code{3}@*
+Default value: @code{4}@*
 Saved in: @code{General.OptionsFileName}
 
 @item General.VisibilityPositionX

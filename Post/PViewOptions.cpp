@@ -1,46 +1,46 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
-//
-// Contributor(s):
-// 
 
 #include <string.h>
+#include "GmshConfig.h"
+#include "GmshMessage.h"
+#include "GmshDefines.h"
 #include "PViewOptions.h"
-#include "Message.h"
-
-#if defined(HAVE_MATH_EVAL)
-#include "matheval.h"
-#endif
+#include "mathEvaluator.h"
 
 PViewOptions PViewOptions::reference;
 
-PViewOptions::PViewOptions()
+PViewOptions::PViewOptions() : genRaiseEvaluator(0)
 {
-  for(int i = 0; i < 3; i++) GenRaise_f[i] = 0;
-  ColorTable_InitParam(2, &CT);
-  ColorTable_Recompute(&CT);
+  ColorTable_InitParam(2, &colorTable);
+  ColorTable_Recompute(&colorTable);
 }
 
 PViewOptions::~PViewOptions()
 {
-  destroyGeneralRaise();
+  if(genRaiseEvaluator) delete genRaiseEvaluator;
 }
 
 double PViewOptions::getScaleValue(int iso, int numIso, double min, double max)
 {
   if(numIso == 1) return (min + max) / 2.;
   
-  if(ScaleType == Linear){
-    return min + iso * (max - min) / (numIso - 1.);
+  if(scaleType == Linear){
+    // treat min/max separately to avoid numerical errors (important
+    // not to miss first/last discrete iso on piece-wise constant
+    // datasets)
+    if(iso == 0) return min;
+    else if(iso == numIso - 1) return max;
+    else return min + iso * (max - min) / (numIso - 1.);
   }
-  else if(ScaleType == Logarithmic){
+  else if(scaleType == Logarithmic){
     // should translate scale instead, with smallest val an option!
     if(min <= 0.) return 0;
     return pow(10., log10(min) + iso * (log10(max) - log10(min)) / (numIso - 1.));
   }
-  else if(ScaleType == DoubleLogarithmic){
+  else if(scaleType == DoubleLogarithmic){
     if(min <= 0.) return 0;
     double iso2 = iso / 2.;
     double numIso2 = numIso / 2.;
@@ -54,14 +54,14 @@ int PViewOptions::getScaleIndex(double val, int numIso, double min, double max,
 {
   if(min == max) return numIso / 2;
 
-  if(forceLinear || ScaleType == Linear){
+  if(forceLinear || scaleType == Linear){
     return (int)((val - min) * (numIso - 1) / (max - min));
   }
-  else if(ScaleType == Logarithmic){
+  else if(scaleType == Logarithmic){
     if(min <= 0.) return 0;
     return (int)((log10(val) - log10(min)) * (numIso - 1) / (log10(max) - log10(min)));
   }
-  else if(ScaleType == DoubleLogarithmic){
+  else if(scaleType == DoubleLogarithmic){
     // FIXME
     if(min <= 0.) return 0;
     return (int)((log10(val) - log10(min)) * (numIso - 1) / (log10(max) - log10(min)));
@@ -69,78 +69,65 @@ int PViewOptions::getScaleIndex(double val, int numIso, double min, double max,
   return 0;
 }
 
-// val in [min, max]
 unsigned int PViewOptions::getColor(double val, double min, double max, 
-                                    bool forceLinear)
+                                    bool forceLinear, int numColors)
 {
-  if(CT.size == 1) return CT.table[0];
-  int index = getScaleIndex(val, CT.size, min, max, forceLinear);
-  return CT.table[index];
+  if(colorTable.size == 1) return colorTable.table[0];
+
+  if(numColors <= 0){ // use full colormap
+    int index = getScaleIndex(val, colorTable.size, min, max, forceLinear);
+    if(index < 0) index = 0;
+    else if(index > colorTable.size - 1) index = colorTable.size - 1;
+    return colorTable.table[index];
+  }
+  else{
+    // the maximum should belong to the last interval: so use
+    // numColors + 1 and correct afterwards
+    int index = getScaleIndex(val, numColors + 1, min, max, forceLinear);
+    if(index > numColors - 1) index = numColors - 1;
+    return getColor(index, numColors);
+  }
 }
 
-// i in [0, nb - 1]
 unsigned int PViewOptions::getColor(int i, int nb)
 {
-  int index = (nb == 1) ? CT.size / 2 : 
-    (int)(i / (double)(nb - 1) * (CT.size - 1) + 0.5);
-  return CT.table[index];
-}
-
-void PViewOptions::destroyGeneralRaise()
-{
-  for(int i = 0; i < 3; i++){
-#if defined(HAVE_MATH_EVAL)
-    if(GenRaise_f[i])
-      evaluator_destroy(GenRaise_f[i]);
-    GenRaise_f[i] = 0;
-#else
-    GenRaise_f[i] = (void*)-1;
-#endif
-  }
+  int index = (nb == 1) ? colorTable.size / 2 : 
+    (int)(i / (double)(nb - 1) * (colorTable.size - 1) + 0.5);
+  if(index < 0) index = 0;
+  else if(index > colorTable.size - 1) index = colorTable.size - 1;
+  return colorTable.table[index];
 }
 
 void PViewOptions::createGeneralRaise()
 {
-  destroyGeneralRaise();
+  const char *names[] = 
+    { "x", "y", "z", "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"};
+  unsigned int numVariables = sizeof(names) / sizeof(names[0]);
+  std::vector<std::string> expressions(3), variables(numVariables);
+  expressions[0] = genRaiseX;
+  expressions[1] = genRaiseY;
+  expressions[2] = genRaiseZ;
+  for(unsigned int i = 0; i < numVariables; i++) variables[i] = names[i];
 
-  char *expr[3] = {GenRaiseX, GenRaiseY, GenRaiseZ};
-#if defined(HAVE_MATH_EVAL)
-  for(int i = 0; i < 3; i++) {
-    if(strlen(expr[i])) {
-      if(!(GenRaise_f[i] = evaluator_create(expr[i])))
-        Msg::Error("Invalid expression '%s'", expr[i]);
-    }
+  if(genRaiseEvaluator) delete genRaiseEvaluator;
+  genRaiseEvaluator = new mathEvaluator(expressions, variables);
+  if(expressions.empty()){
+    delete genRaiseEvaluator;
+    genRaiseEvaluator = 0;
   }
-#else
-  for(int i = 0; i < 3; i++) {
-    if(!strcmp(expr[i], "v0")) GenRaise_f[i] = (void*)0;
-    else if(!strcmp(expr[i], "v1")) GenRaise_f[i] = (void*)1;
-    else if(!strcmp(expr[i], "v2")) GenRaise_f[i] = (void*)2;
-    else if(!strcmp(expr[i], "v3")) GenRaise_f[i] = (void*)3;
-    else if(!strcmp(expr[i], "v4")) GenRaise_f[i] = (void*)4;
-    else if(!strcmp(expr[i], "v5")) GenRaise_f[i] = (void*)5;
-    else if(!strcmp(expr[i], "v6")) GenRaise_f[i] = (void*)6;
-    else if(!strcmp(expr[i], "v7")) GenRaise_f[i] = (void*)7;
-    else if(!strcmp(expr[i], "v8")) GenRaise_f[i] = (void*)8;
-    else if(strlen(expr[i])) {
-      Msg::Error("Invalid expression '%s'", expr[i]);
-      return;
-    }
-  }
-#endif
 }
 
-bool PViewOptions::skipElement(int numEdges)
+bool PViewOptions::skipElement(int type)
 {
-  switch(numEdges){
-  case 0: return !DrawPoints;
-  case 1: return !DrawLines;
-  case 3: return !DrawTriangles;
-  case 4: return !DrawQuadrangles;
-  case 6: return !DrawTetrahedra;
-  case 12: return !DrawHexahedra;
-  case 9: return !DrawPrisms;
-  case 8: return !DrawPyramids;
+  switch(type){
+  case TYPE_PNT: return !drawPoints;
+  case TYPE_LIN: return !drawLines;
+  case TYPE_TRI: return !drawTriangles;
+  case TYPE_QUA: return !drawQuadrangles;
+  case TYPE_TET: return !drawTetrahedra;
+  case TYPE_HEX: return !drawHexahedra;
+  case TYPE_PRI: return !drawPrisms;
+  case TYPE_PYR: return !drawPyramids;
   default: return true;
   }
 }

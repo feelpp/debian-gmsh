@@ -1,17 +1,15 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
+#include "GmshConfig.h"
 #include "CutPlane.h"
 #include "Context.h"
 
-#if defined(HAVE_FLTK)
-#include "GmshUI.h"
-#include "Draw.h"
+#if defined(HAVE_OPENGL)
+#include "drawContext.h"
 #endif
-
-extern Context_T CTX;
 
 int GMSH_CutPlanePlugin::iview = 0;
 
@@ -34,21 +32,22 @@ extern "C"
   }
 }
 
-void GMSH_CutPlanePlugin::draw()
+void GMSH_CutPlanePlugin::draw(void *context)
 {
-#if defined(HAVE_FLTK)
+#if defined(HAVE_OPENGL)
   int num = (int)CutPlaneOptions_Number[7].def;
+  drawContext *ctx = (drawContext*)context;
   if(num < 0) num = iview;
   if(num >= 0 && num < (int)PView::list.size()){
-    glColor4ubv((GLubyte *) & CTX.color.fg);
-    glLineWidth(CTX.line_width);
+    glColor4ubv((GLubyte *) & CTX::instance()->color.fg);
+    glLineWidth((float)CTX::instance()->lineWidth);
     SBoundingBox3d bb = PView::list[num]->getData()->getBoundingBox();
-    Draw_PlaneInBoundingBox(bb.min().x(), bb.min().y(), bb.min().z(), 
-                            bb.max().x(), bb.max().y(), bb.max().z(), 
-                            CutPlaneOptions_Number[0].def,
-                            CutPlaneOptions_Number[1].def,
-                            CutPlaneOptions_Number[2].def,
-                            CutPlaneOptions_Number[3].def);
+    ctx->drawPlaneInBoundingBox(bb.min().x(), bb.min().y(), bb.min().z(), 
+                                bb.max().x(), bb.max().y(), bb.max().z(), 
+                                CutPlaneOptions_Number[0].def,
+                                CutPlaneOptions_Number[1].def,
+                                CutPlaneOptions_Number[2].def,
+                                CutPlaneOptions_Number[3].def);
   }
 #endif
 }
@@ -64,9 +63,7 @@ double GMSH_CutPlanePlugin::callback(int num, int action, double value, double *
   default: break;
   }
   *opt = value;
-#if defined(HAVE_FLTK)
-  DrawPlugin(draw);
-#endif
+  GMSH_Plugin::setDrawFunction(draw);
   return 0.;
 }
 
@@ -91,7 +88,8 @@ double GMSH_CutPlanePlugin::callbackC(int num, int action, double value)
 double GMSH_CutPlanePlugin::callbackD(int num, int action, double value)
 {
   return callback(num, action, value, &CutPlaneOptions_Number[3].def,
-                  CTX.lc/200., -CTX.lc, CTX.lc);
+                  CTX::instance()->lc / 200., -CTX::instance()->lc, 
+                  CTX::instance()->lc);
 }
 
 double GMSH_CutPlanePlugin::callbackVol(int num, int action, double value)
@@ -112,25 +110,16 @@ double GMSH_CutPlanePlugin::callbackTarget(int num, int action, double value)
                   0.01, 0., 1.);
 }
 
-void GMSH_CutPlanePlugin::getName(char *name) const
+std::string GMSH_CutPlanePlugin::getHelp() const
 {
-  strcpy(name, "Cut Plane");
-}
-
-void GMSH_CutPlanePlugin::getInfos(char *author, char *copyright,
-                                   char *help_text) const
-{
-  strcpy(author, "J.-F. Remacle");
-  strcpy(copyright, "DGR (www.multiphysics.com)");
-  strcpy(help_text,
-         "Plugin(CutPlane) cuts the view `iView' with\n"
+  return "Plugin(CutPlane) cuts the view `iView' with\n"
          "the plane `A'*X + `B'*Y + `C'*Z + `D' = 0. If\n"
          "`ExtractVolume' is nonzero, the plugin extracts\n"
          "the elements on one side of the plane (depending\n"
          "on the sign of `ExtractVolume'). If `iView' < 0,\n"
          "the plugin is run on the current view.\n"
          "\n"
-         "Plugin(CutPlane) creates one new view.\n");
+         "Plugin(CutPlane) creates one new view.\n";
 }
 
 int GMSH_CutPlanePlugin::getNbOptions() const
@@ -143,19 +132,13 @@ StringXNumber *GMSH_CutPlanePlugin::getOption(int iopt)
   return &CutPlaneOptions_Number[iopt];
 }
 
-void GMSH_CutPlanePlugin::catchErrorMessage(char *errorMessage) const
-{
-  strcpy(errorMessage, "CutPlane failed...");
-}
-
 double GMSH_CutPlanePlugin::levelset(double x, double y, double z, double val) const
 {
-  return CutPlaneOptions_Number[0].def * x +
-    CutPlaneOptions_Number[1].def * y +
+  return CutPlaneOptions_Number[0].def * x + CutPlaneOptions_Number[1].def * y +
     CutPlaneOptions_Number[2].def * z + CutPlaneOptions_Number[3].def;
 }
 
-bool GMSH_CutPlanePlugin::geometricalFilter(Double_Matrix *node_positions) const
+bool GMSH_CutPlanePlugin::geometricalFilter(fullMatrix<double> *node_positions) const
 {
   const double l0 = levelset((*node_positions)(0, 0),
                              (*node_positions)(0, 1),

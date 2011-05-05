@@ -1,18 +1,16 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
+#include "GmshConfig.h"
 #include "Probe.h"
 #include "Context.h"
 #include "OctreePost.h"
 
-#if defined(HAVE_FLTK)
-#include "GmshUI.h"
-#include "Draw.h"
+#if defined(HAVE_OPENGL)
+#include "drawContext.h"
 #endif
-
-extern Context_T CTX;
 
 int GMSH_ProbePlugin::iview = 0;
 
@@ -31,17 +29,18 @@ extern "C"
   }
 }
 
-void GMSH_ProbePlugin::draw()
+void GMSH_ProbePlugin::draw(void *context)
 {
-#if defined(HAVE_FLTK)
+#if defined(HAVE_OPENGL)
   int num = (int)ProbeOptions_Number[3].def;
   if(num < 0) num = iview;
   if(num >= 0 && num < (int)PView::list.size()){
     double x = ProbeOptions_Number[0].def;
     double y = ProbeOptions_Number[1].def;
     double z = ProbeOptions_Number[2].def;
-    glColor4ubv((GLubyte *) & CTX.color.fg);
-    glLineWidth(CTX.line_width);
+    drawContext *ctx = (drawContext*)context;
+    glColor4ubv((GLubyte *) & CTX::instance()->color.fg);
+    glLineWidth((float)CTX::instance()->lineWidth);
     SBoundingBox3d bb = PView::list[num]->getData()->getBoundingBox();
     if(x >= bb.min().x() && x <= bb.max().x() &&
        y >= bb.min().y() && y <= bb.max().y() &&
@@ -55,14 +54,14 @@ void GMSH_ProbePlugin::draw()
     }
     else{
       // draw 10-pixel marker
-      double d = 10 * CTX.pixel_equiv_x / CTX.s[0];
+      double d = 10 * ctx->pixel_equiv_x / ctx->s[0];
       glBegin(GL_LINES);
       glVertex3d(x - d, y, z); glVertex3d(x + d, y, z);
       glVertex3d(x, y - d, z); glVertex3d(x, y + d, z);
       glVertex3d(x, y, z - d); glVertex3d(x, y, z + d);
       glEnd();
     }
-    Draw_Sphere(CTX.point_size, x, y, z, 1);
+    ctx->drawSphere(CTX::instance()->pointSize, x, y, z, 1);
   }
 #endif
 }
@@ -71,15 +70,13 @@ double GMSH_ProbePlugin::callback(int num, int action, double value, double *opt
 {
   if(action > 0) iview = num;
   switch(action){ // configure the input field
-  case 1: return CTX.lc / 100.;
-  case 2: return -2 * CTX.lc;
-  case 3: return 2 * CTX.lc;
+  case 1: return CTX::instance()->lc / 100.;
+  case 2: return -2 * CTX::instance()->lc;
+  case 3: return 2 * CTX::instance()->lc;
   default: break;
   }
   *opt = value;
-#if defined(HAVE_FLTK)
-  DrawPlugin(draw);
-#endif
+  GMSH_Plugin::setDrawFunction(draw);
   return 0.;
 }
 
@@ -98,22 +95,13 @@ double GMSH_ProbePlugin::callbackZ(int num, int action, double value)
   return callback(num, action, value, &ProbeOptions_Number[2].def);
 }
 
-void GMSH_ProbePlugin::getName(char *name) const
+std::string GMSH_ProbePlugin::getHelp() const
 {
-  strcpy(name, "Probe");
-}
-
-void GMSH_ProbePlugin::getInfos(char *author, char *copyright,
-                                   char *help_text) const
-{
-  strcpy(author, "C. Geuzaine");
-  strcpy(copyright, "DGR (www.multiphysics.com)");
-  strcpy(help_text,
-         "Plugin(Probe) gets the value of the view `iView' at\n"
+  return "Plugin(Probe) gets the value of the view `iView' at\n"
          "the point (`X',`Y',`Z'). If `iView' < 0, the plugin is\n"
          "run on the current view.\n"
          "\n"
-         "Plugin(Probe) creates one new view.\n");
+         "Plugin(Probe) creates one new view.\n";
 }
 
 int GMSH_ProbePlugin::getNbOptions() const
@@ -126,11 +114,6 @@ StringXNumber *GMSH_ProbePlugin::getOption(int iopt)
   return &ProbeOptions_Number[iopt];
 }
 
-void GMSH_ProbePlugin::catchErrorMessage(char *errorMessage) const
-{
-  strcpy(errorMessage, "Probe failed...");
-}
-
 PView *GMSH_ProbePlugin::execute(PView *v)
 {
   double x = ProbeOptions_Number[0].def;
@@ -141,7 +124,7 @@ PView *GMSH_ProbePlugin::execute(PView *v)
   PView *v1 = getView(iView, v);
   if(!v1) return v;
 
-  PView *v2 = new PView(true);
+  PView *v2 = new PView();
   PViewDataList *data2 = getDataList(v2);
 
   int numSteps = v1->getData()->getNumTimeSteps();
@@ -150,32 +133,32 @@ PView *GMSH_ProbePlugin::execute(PView *v)
   OctreePost o(v1);
 
   if(o.searchScalar(x, y, z, val)){
-    List_Add(data2->SP, &x);
-    List_Add(data2->SP, &y);
-    List_Add(data2->SP, &z);
+    data2->SP.push_back(x);
+    data2->SP.push_back(y);
+    data2->SP.push_back(z);
     for(int i = 0; i < numSteps; i++)
-      List_Add(data2->SP, &val[i]);
+      data2->SP.push_back(val[i]);
     data2->NbSP++;
   }
 
   if(o.searchVector(x, y, z, val)){
-    List_Add(data2->VP, &x);
-    List_Add(data2->VP, &y);
-    List_Add(data2->VP, &z);
+    data2->VP.push_back(x);
+    data2->VP.push_back(y);
+    data2->VP.push_back(z);
     for(int i = 0; i < numSteps; i++){
       for(int j = 0; j < 3; j++)
-        List_Add(data2->VP, &val[3*i+j]);
+        data2->VP.push_back(val[3 * i + j]);
     }
     data2->NbVP++;
   }
 
   if(o.searchTensor(x, y, z, val)){
-    List_Add(data2->TP, &x);
-    List_Add(data2->TP, &y);
-    List_Add(data2->TP, &z);
+    data2->TP.push_back(x);
+    data2->TP.push_back(y);
+    data2->TP.push_back(z);
     for(int i = 0; i < numSteps; i++){
       for(int j = 0; j < 9; j++)
-        List_Add(data2->TP, &val[9*i+j]);
+        data2->TP.push_back(val[9 * i + j]);
     }
     data2->NbTP++;
   }
@@ -184,7 +167,7 @@ PView *GMSH_ProbePlugin::execute(PView *v)
   
   for(int i = 0; i < numSteps; i++){
     double time = v1->getData()->getTime(i);
-    List_Add(data2->Time, &time);
+    data2->Time.push_back(time);
   }
   data2->setName(v1->getData()->getName() + "_Probe");
   data2->setFileName(v1->getData()->getName() + "_Probe.pos");

@@ -1,14 +1,41 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
+#include "GmshConfig.h"
 #include "GModel.h"
+#include "MVertex.h"
+#include "MPoint.h"
 #include "OCCVertex.h"
 #include "OCCEdge.h"
 #include "OCCFace.h"
 
 #if defined(HAVE_OCC)
+
+OCCVertex::OCCVertex(GModel *m, int num, TopoDS_Vertex _v) 
+  : GVertex(m, num), v(_v)
+{
+  max_curvature = -1;
+  gp_Pnt pnt = BRep_Tool::Pnt(v);
+  _x = pnt.X();
+  _y = pnt.Y();
+  _z = pnt.Z();
+  mesh_vertices.push_back(new MVertex(x(), y(), z(), this));
+  points.push_back(new MPoint(mesh_vertices.back()));
+}
+
+void OCCVertex::setPosition(GPoint &p)
+{
+  _x = p.x();
+  _y = p.y();
+  _z = p.z();
+  if(mesh_vertices.size()){
+    mesh_vertices[0]->x() = p.x();
+    mesh_vertices[0]->y() = p.y();
+    mesh_vertices[0]->z() = p.z();
+  }
+}
 
 double max_surf_curvature(const GVertex *gv, double x, double y, double z, 
                           const GEdge *_myGEdge)
@@ -18,7 +45,7 @@ double max_surf_curvature(const GVertex *gv, double x, double y, double z,
   double curv = 1.e-22;
   while(it != faces.end()){
     SPoint2 par = gv->reparamOnFace((*it), 1);
-    double cc = (*it)->curvature(par);
+    double cc = (*it)->curvatureDiv(par);
     if(cc > 0) curv = std::max(curv, cc);
     ++it;
   }  
@@ -39,7 +66,7 @@ double OCCVertex::max_curvature_of_surfaces() const
   return max_curvature;
 }
 
-SPoint2 OCCVertex::reparamOnFace(GFace *gf, int dir) const
+SPoint2 OCCVertex::reparamOnFace(const GFace *gf, int dir) const
 {
   std::list<GEdge*>::const_iterator it = l_edges.begin();
   while(it != l_edges.end()){

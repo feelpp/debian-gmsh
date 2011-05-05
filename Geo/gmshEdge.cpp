@@ -1,17 +1,17 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
+#include <sstream>
 #include "GModel.h"
 #include "GFace.h"
+#include "GFaceCompound.h"
 #include "gmshEdge.h"
 #include "Geo.h"
 #include "GeoInterpolation.h"
-#include "Message.h"
+#include "GmshMessage.h"
 #include "Context.h"
-
-extern Context_T CTX;
 
 gmshEdge::gmshEdge(GModel *m, Curve *edge, GVertex *v1, GVertex *v2)
   : GEdge(m, edge->Num, v1, v2), c(edge)
@@ -30,7 +30,7 @@ void gmshEdge::resetMeshAttributes()
 
 Range<double> gmshEdge::parBounds(int i) const
 { 
-  return Range<double>(c->ubeg, c->uend);
+ return Range<double>(c->ubeg, c->uend);
 }
 
 GPoint gmshEdge::point(double par) const
@@ -39,41 +39,16 @@ GPoint gmshEdge::point(double par) const
   return GPoint(a.Pos.X, a.Pos.Y, a.Pos.Z, this, par);
 }
 
-GPoint gmshEdge::closestPoint(const SPoint3 &qp) const
-{
-  Vertex v;
-  Vertex a;
-  Vertex der;
-  v.Pos.X = qp.x();
-  v.Pos.Y = qp.y();
-  v.Pos.Z = qp.z();
-  ProjectPointOnCurve(c, &v, &a, &der);
-  return GPoint(a.Pos.X, a.Pos.Y, a.Pos.Z, this, a.u);
-}
-
 SVector3 gmshEdge::firstDer(double par) const
 {
   Vertex a = InterpolateCurve(c, par, 1);
   return SVector3(a.Pos.X, a.Pos.Y, a.Pos.Z);
 }
 
-double gmshEdge::parFromPoint(const SPoint3 &pt) const
-{
-  Vertex v;
-  Vertex a;
-  Vertex der;
-  v.Pos.X = pt.x();
-  v.Pos.Y = pt.y();
-  v.Pos.Z = pt.z();
-  ProjectPointOnCurve(c, &v, &a, &der);
-  return a.u;
-}
-
 GEntity::GeomType gmshEdge::geomType() const
 {
   switch (c->Typ){
   case MSH_SEGM_LINE : return Line;
-  case MSH_SEGM_PARAMETRIC : return ParametricCurve;
   case MSH_SEGM_CIRC :  
   case MSH_SEGM_CIRC_INV : return Circle;
   case MSH_SEGM_ELLI:
@@ -88,6 +63,24 @@ GEntity::GeomType gmshEdge::geomType() const
   }
 }
 
+std::string gmshEdge::getAdditionalInfoString()
+{
+  if(List_Nbr(c->Control_Points) > 0){
+    std::ostringstream sstream;
+    sstream << "{";
+    for(int i = 0; i < List_Nbr(c->Control_Points); i++){
+      if(i) sstream << ",";
+      Vertex *v;
+      List_Read(c->Control_Points, i, &v);
+      sstream << v->Num;
+    }
+    sstream << "}";
+    return sstream.str();    
+  }
+  else
+    return GEdge::getAdditionalInfoString();
+}
+
 int gmshEdge::minimumMeshSegments () const
 {
   int np;
@@ -95,9 +88,9 @@ int gmshEdge::minimumMeshSegments () const
     np = GEdge::minimumMeshSegments();
   else if(geomType() == Circle || geomType() == Ellipse)
     np = (int)(fabs(c->Circle.t1 - c->Circle.t2) *
-                 (double)CTX.mesh.min_circ_points / M_PI) - 1;
+                 (double)CTX::instance()->mesh.minCircPoints / M_PI) - 1;
   else
-    np = CTX.mesh.min_curv_points - 1;
+    np = CTX::instance()->mesh.minCurvPoints - 1;
   return std::max(np, meshAttributes.minimumMeshSegments);
 }
 
@@ -108,13 +101,11 @@ int gmshEdge::minimumDrawSegments () const
 
   if(geomType() == Line && !c->geometry)
     return n;
-  else if(geomType() == Circle || geomType() == Ellipse)
-    return CTX.geom.circle_points;
   else
-    return 10 * n;
+    return CTX::instance()->geom.numSubEdges * n;
 }
 
-SPoint2 gmshEdge::reparamOnFace(GFace *face, double epar,int dir) const
+SPoint2 gmshEdge::reparamOnFace(const GFace *face, double epar,int dir) const
 {
   Surface *s = (Surface*) face->getNativePtr();
 
@@ -201,6 +192,7 @@ SPoint2 gmshEdge::reparamOnFace(GFace *face, double epar,int dir) const
     }
   }
   
+
   if(s->Typ ==  MSH_SURF_REGL){
     Curve *C[4];
     for(int i = 0; i < 4; i++)
@@ -283,4 +275,70 @@ SPoint2 gmshEdge::reparamOnFace(GFace *face, double epar,int dir) const
   }
   else
     return GEdge::reparamOnFace(face, epar, dir);
+}
+
+void gmshEdge::writeGEO(FILE *fp)
+{
+  if(!c || c->Num < 0 || c->Typ == MSH_SEGM_DISCRETE) return;
+  switch (c->Typ) {
+  case MSH_SEGM_LINE:
+    fprintf(fp, "Line(%d) = ", c->Num);
+    break;
+  case MSH_SEGM_CIRC:
+  case MSH_SEGM_CIRC_INV:
+    fprintf(fp, "Circle(%d) = ", c->Num);
+    break;
+  case MSH_SEGM_ELLI:
+  case MSH_SEGM_ELLI_INV:
+    fprintf(fp, "Ellipse(%d) = ", c->Num);
+    break;
+  case MSH_SEGM_NURBS:
+    fprintf(fp, "Nurbs(%d) = {", c->Num);
+    for(int i = 0; i < List_Nbr(c->Control_Points); i++) {
+      Vertex *v;
+      List_Read(c->Control_Points, i, &v);
+      if(!i)
+        fprintf(fp, "%d", v->Num);
+      else
+        fprintf(fp, ", %d", v->Num);
+      if(i % 8 == 7 && i != List_Nbr(c->Control_Points) - 1)
+        fprintf(fp, "\n");
+    }
+    fprintf(fp, "}\n");
+    fprintf(fp, "  Knots {");
+    for(int j = 0; j < List_Nbr(c->Control_Points) + c->degre + 1; j++) {
+      if(!j)
+        fprintf(fp, "%.16g", c->k[j]);
+      else
+        fprintf(fp, ", %.16g", c->k[j]);
+      if(j % 5 == 4 && j != List_Nbr(c->Control_Points) + c->degre)
+        fprintf(fp, "\n        ");
+    }
+    fprintf(fp, "}\n");
+    fprintf(fp, "  Order %d;\n", c->degre);
+    return;
+  case MSH_SEGM_SPLN:
+    fprintf(fp, "Spline(%d) = ", c->Num);
+    break;
+  case MSH_SEGM_BSPLN:
+    fprintf(fp, "BSpline(%d) = ", c->Num);
+    break;
+  case MSH_SEGM_BEZIER:
+    fprintf(fp, "Bezier(%d) = ", c->Num);
+    break;
+  default:
+    Msg::Error("Unknown curve type %d", c->Typ);
+    return;
+  }
+  for(int i = 0; i < List_Nbr(c->Control_Points); i++) {
+    Vertex *v;
+    List_Read(c->Control_Points, i, &v);
+    if(i)
+      fprintf(fp, ", %d", v->Num);
+    else
+      fprintf(fp, "{%d", v->Num);
+    if(i % 6 == 7)
+      fprintf(fp, "\n");
+  }
+  fprintf(fp, "};\n");
 }

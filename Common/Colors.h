@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -666,10 +666,10 @@ StringX4Int ColorString[] = {
   { "DarkMagenta"              ,  139,   0, 139, 255 } , 
   { "DarkRed"                  ,  139,   0,   0, 255 } , 
   { "LightGreen"               ,  144, 238, 144, 255 } , 
-  { NULL                       ,  0  ,   0,   0, 255 }
+  { 0                          ,  0  ,   0,   0, 255 }
 } ;
 
-int Get_ColorForString(StringX4Int SX4I[], int alpha, const char *string,
-                       int *FlagError);
+int GetColorForString(StringX4Int SX4I[], int alpha, const char *string,
+                      int *FlagError);
 
 #endif

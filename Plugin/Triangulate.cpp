@@ -1,18 +1,17 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
 #include <vector>
+#include <stdlib.h>
 #include "GModel.h"
 #include "discreteFace.h"
 #include "DivideAndConquer.h"
-#include "Message.h"
+#include "GmshMessage.h"
 #include "MVertex.h"
 #include "Triangulate.h"
 #include "Context.h"
-
-extern Context_T CTX;
 
 StringXNumber TriangulateOptions_Number[] = {
   {GMSH_FULLRC, "iView", NULL, -1.}
@@ -26,24 +25,15 @@ extern "C"
   }
 }
 
-void GMSH_TriangulatePlugin::getName(char *name) const
+std::string GMSH_TriangulatePlugin::getHelp() const
 {
-  strcpy(name, "Triangulate");
-}
-
-void GMSH_TriangulatePlugin::getInfos(char *author, char *copyright,
-                                      char *help_text) const
-{
-  strcpy(author, "C. Geuzaine");
-  strcpy(copyright, "DGR (www.multiphysics.com)");
-  strcpy(help_text,
-         "Plugin(Triangulate) triangulates the points in the\n"
+  return "Plugin(Triangulate) triangulates the points in the\n"
          "view `iView', assuming that all the points belong\n"
          "to a surface that can be projected one-to-one\n"
          "onto a plane. If `iView' < 0, the plugin is run on\n"
          "the current view.\n"
          "\n"
-         "Plugin(Triangulate) creates one new view.\n");
+         "Plugin(Triangulate) creates one new view.\n";
 }
 
 int GMSH_TriangulatePlugin::getNbOptions() const
@@ -56,12 +46,20 @@ StringXNumber *GMSH_TriangulatePlugin::getOption(int iopt)
   return &TriangulateOptions_Number[iopt];
 }
 
-void GMSH_TriangulatePlugin::catchErrorMessage(char *errorMessage) const
-{
-  strcpy(errorMessage, "Triangulate failed...");
-}
+class PointData : public MVertex {
+ public:
+  std::vector<double> v;
+  PointData(double x, double y, double z, int numVal)
+    : MVertex(x, y, z)
+  { 
+    v.resize(3 + numVal); 
+    v[0] = x;
+    v[1] = y;
+    v[2] = z;
+  }
+};
 
-static void Project(MVertex *v, double mat[3][3])
+static void project(MVertex *v, double mat[3][3])
 {
   double X = v->x() * mat[0][0] + v->y() * mat[0][1] + v->z() * mat[0][2];
   double Y = v->x() * mat[1][0] + v->y() * mat[1][1] + v->z() * mat[1][2];
@@ -71,23 +69,51 @@ static void Project(MVertex *v, double mat[3][3])
   v->z() = Z;
 }
 
-static void Triangulate(int nbIn, List_T *inList, int *nbOut, List_T *outList,
-                        int nbTimeStep, int nbComp)
+PView *GMSH_TriangulatePlugin::execute(PView *v)
 {
-  if(nbIn < 3) return;
+  int iView = (int)TriangulateOptions_Number[0].def;
+
+  PView *v1 = getView(iView, v);
+  if(!v1) return v;
+  PViewData *data1 = v1->getData();
+
+  if(data1->hasMultipleMeshes()){
+    Msg::Error("Triangulate plugin cannot be applied to multi-mesh views");
+    return v1;
+  }
+
+  // create list of points with associated data
+  std::vector<MVertex*> points;
+  int numSteps = data1->getNumTimeSteps();
+  for(int ent = 0; ent < data1->getNumEntities(0); ent++){
+    for(int ele = 0; ele < data1->getNumElements(0, ent); ele++){
+      if(data1->skipElement(0, ent, ele)) continue;
+      if(data1->getNumNodes(0, ent, ele) != 1) continue;
+      int numComp = data1->getNumComponents(0, ent, ele);
+      double x, y, z;
+      data1->getNode(0, ent, ele, 0, x, y, z);
+      PointData *p = new PointData(x, y, z, numComp * numSteps);
+      for(int step = 0; step < numSteps; step++)
+        for(int comp = 0; comp < numComp; comp++)
+          data1->getValue(step, ent, ele, 0, comp, p->v[3 + numComp * step + comp]);
+      points.push_back(p);
+    }
+  }
+
+  if(points.size() < 3){
+    Msg::Error("Need at least 3 points to triangulate");
+    for(unsigned int i = 0; i < points.size(); i++)
+      delete points[i];
+    return v1;
+  }
 
   // project points onto plane
-  std::vector<MVertex*> points;
-  int nb = List_Nbr(inList) / nbIn;
-  for(int i = 0; i < List_Nbr(inList); i += nb){
-    double *p = (double *)List_Pointer_Fast(inList, i);
-    points.push_back(new MVertex(p[0], p[1], p[2]));
-  }
-  discreteFace *s = new discreteFace(GModel::current(), GModel::current()->getNumFaces() + 1);
+  discreteFace *s = new discreteFace
+    (GModel::current(), GModel::current()->getNumFaces() + 1);
   s->computeMeanPlane(points);
   double plan[3][3];
   s->getMeanPlaneData(plan);
-  for(unsigned int i = 0; i < points.size(); i++) Project(points[i], plan);
+  for(unsigned int i = 0; i < points.size(); i++) project(points[i], plan);
   delete s;
 
   // get lc
@@ -98,59 +124,54 @@ static void Triangulate(int nbIn, List_T *inList, int *nbOut, List_T *outList,
   // build a point record structure for the divide and conquer algorithm
   DocRecord doc(points.size());
   for(unsigned int i = 0; i < points.size(); i++){
-    double XX = CTX.mesh.rand_factor * lc * (double)rand() / (double)RAND_MAX;
-    double YY = CTX.mesh.rand_factor * lc * (double)rand() / (double)RAND_MAX;
+    double XX = CTX::instance()->mesh.randFactor * lc * (double)rand() / (double)RAND_MAX;
+    double YY = CTX::instance()->mesh.randFactor * lc * (double)rand() / (double)RAND_MAX;
     doc.points[i].where.h = points[i]->x() + XX;
     doc.points[i].where.v = points[i]->y() + YY;
     doc.points[i].adjacent = NULL;
-    doc.points[i].data = List_Pointer_Fast(inList, i * nb); 
-    delete points[i];
+    doc.points[i].data = (void*)points[i]; 
   }
 
   // triangulate
   doc.MakeMeshWithPoints();
 
   // create output (using unperturbed data)
-  for(int i = 0; i < doc.numTriangles; i++){
-    double *pa = (double*)doc.points[doc.triangles[i].a].data;
-    double *pb = (double*)doc.points[doc.triangles[i].b].data;
-    double *pc = (double*)doc.points[doc.triangles[i].c].data;
-    for(int j = 0; j < 3; j++) {
-      List_Add(outList, pa + j);
-      List_Add(outList, pb + j);
-      List_Add(outList, pc + j);
-    }
-    for(int j = 0; j < nbTimeStep; j++) {
-      for(int k = 0; k < nbComp; k++) List_Add(outList, pa + 3 + j * nbComp + k);
-      for(int k = 0; k < nbComp; k++) List_Add(outList, pb + 3 + j * nbComp + k);
-      for(int k = 0; k < nbComp; k++) List_Add(outList, pc + 3 + j * nbComp + k);
-    }
-    (*nbOut)++;
-  }
-}
-
-PView *GMSH_TriangulatePlugin::execute(PView *v)
-{
-  int iView = (int)TriangulateOptions_Number[0].def;
-
-  PView *v1 = getView(iView, v);
-  if(!v1) return v;
-
-  PViewDataList *data1 = getDataList(v1);
-  if(!data1) return v;
-
-  PView *v2 = new PView(true);
-
+  PView *v2 = new PView();
   PViewDataList *data2 = getDataList(v2);
-  if(!data2) return v;
+  for(int i = 0; i < doc.numTriangles; i++){
+    PointData *p[3];
+    p[0] = (PointData*)doc.points[doc.triangles[i].a].data;
+    p[1] = (PointData*)doc.points[doc.triangles[i].b].data;
+    p[2] = (PointData*)doc.points[doc.triangles[i].c].data;
+    int numComp = 0;
+    std::vector<double> *vec = 0;
+    if((int)p[0]->v.size() == 3 + 9 * numSteps && 
+       (int)p[1]->v.size() == 3 + 9 * numSteps &&
+       (int)p[2]->v.size() == 3 + 9 * numSteps){
+      numComp = 9; data2->NbTT++; vec = &data2->TT;
+    }
+    else if((int)p[0]->v.size() == 3 + 3 * numSteps && 
+            (int)p[1]->v.size() == 3 + 3 * numSteps &&
+            (int)p[2]->v.size() == 3 + 3 * numSteps){
+      numComp = 3; data2->NbVT++; vec = &data2->VT;
+    }
+    else{
+      numComp = 1; data2->NbST++; vec = &data2->ST;
+    }
+    for(int nod = 0; nod < 3; nod++) vec->push_back(p[nod]->v[0]);
+    for(int nod = 0; nod < 3; nod++) vec->push_back(p[nod]->v[1]);
+    for(int nod = 0; nod < 3; nod++) vec->push_back(p[nod]->v[2]);
+    for(int step = 0; step < numSteps; step++)
+      for(int nod = 0; nod < 3; nod++)
+        for(int comp = 0; comp < numComp; comp++) 
+          vec->push_back(p[nod]->v[3 + numComp * step + comp]);
+  }
 
-  int nts = data1->getNumTimeSteps();
-  Triangulate(data1->NbSP, data1->SP, &data2->NbST, data2->ST, nts, 1);
-  Triangulate(data1->NbVP, data1->VP, &data2->NbVT, data2->VT, nts, 3);
-  Triangulate(data1->NbTP, data1->TP, &data2->NbTT, data2->TT, nts, 9);
+  for(unsigned int i = 0; i < points.size(); i++)
+    delete points[i];
 
-  for(int i = 0; i < List_Nbr(data1->Time); i++)
-    List_Add(data2->Time, List_Pointer(data1->Time, i));
+  for(int i = 0; i < data1->getNumTimeSteps(); i++)
+    data2->Time.push_back(data1->getTime(i));
   data2->setName(data1->getName() + "_Triangulate");
   data2->setFileName(data1->getName() + "_Triangulate.pos");
   data2->finalize();

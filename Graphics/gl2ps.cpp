@@ -1,11 +1,6 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
-//
-// See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
-/* $Id: gl2ps.cpp,v 1.115 2008-07-11 16:56:01 geuzaine Exp $ */
 /*
  * GL2PS, an OpenGL to PostScript Printing Library
- * Copyright (C) 1999-2007 Christophe Geuzaine <geuz@geuz.org>
+ * Copyright (C) 1999-2009 C. Geuzaine
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of either:
@@ -1186,14 +1181,17 @@ static void gl2psCutEdge(GL2PSvertex *a, GL2PSvertex *b, GL2PSplane plane,
                          GL2PSvertex *c)
 {
   GL2PSxyz v;
-  GLfloat sect;
+  GLfloat sect, psca;
 
   v[0] = b->xyz[0] - a->xyz[0];
   v[1] = b->xyz[1] - a->xyz[1];
   v[2] = b->xyz[2] - a->xyz[2];
 
-  sect = - gl2psComparePointPlane(a->xyz, plane) / gl2psPsca(plane, v);
-
+  if(!GL2PS_ZERO(psca = gl2psPsca(plane, v)))
+    sect = -gl2psComparePointPlane(a->xyz, plane) / psca;
+  else
+    sect = 0.0F;
+  
   c->xyz[0] = a->xyz[0] + v[0] * sect;
   c->xyz[1] = a->xyz[1] + v[1] * sect;
   c->xyz[2] = a->xyz[2] + v[2] * sect;
@@ -1467,7 +1465,8 @@ static GLint gl2psFindRoot(GL2PSlist *primitives, GL2PSprimitive **root)
   }
 }
 
-static void gl2psFreeImagemap(GL2PSimagemap *list){
+static void gl2psFreeImagemap(GL2PSimagemap *list)
+{
   GL2PSimagemap *next;
   while(list != NULL){
     next = list->next;
@@ -1691,17 +1690,22 @@ static void gl2psRescaleAndOffset()
         (prim->verts[2].xyz[1] - prim->verts[1].xyz[1]) - 
         (prim->verts[2].xyz[0] - prim->verts[1].xyz[0]) * 
         (prim->verts[1].xyz[1] - prim->verts[0].xyz[1]);
-      dZdX = 
-        ((prim->verts[2].xyz[1] - prim->verts[1].xyz[1]) *
-         (prim->verts[1].xyz[2] - prim->verts[0].xyz[2]) -
-         (prim->verts[1].xyz[1] - prim->verts[0].xyz[1]) *
-         (prim->verts[2].xyz[2] - prim->verts[1].xyz[2])) / area;
-      dZdY = 
-        ((prim->verts[1].xyz[0] - prim->verts[0].xyz[0]) *
-         (prim->verts[2].xyz[2] - prim->verts[1].xyz[2]) -
-         (prim->verts[2].xyz[0] - prim->verts[1].xyz[0]) *
-         (prim->verts[1].xyz[2] - prim->verts[0].xyz[2])) / area;
-      maxdZ = (GLfloat)sqrt(dZdX * dZdX + dZdY * dZdY);
+      if(!GL2PS_ZERO(area)){
+        dZdX = 
+          ((prim->verts[2].xyz[1] - prim->verts[1].xyz[1]) *
+           (prim->verts[1].xyz[2] - prim->verts[0].xyz[2]) -
+           (prim->verts[1].xyz[1] - prim->verts[0].xyz[1]) *
+           (prim->verts[2].xyz[2] - prim->verts[1].xyz[2])) / area;
+        dZdY = 
+          ((prim->verts[1].xyz[0] - prim->verts[0].xyz[0]) *
+           (prim->verts[2].xyz[2] - prim->verts[1].xyz[2]) -
+           (prim->verts[2].xyz[0] - prim->verts[1].xyz[0]) *
+           (prim->verts[1].xyz[2] - prim->verts[0].xyz[2])) / area;
+        maxdZ = (GLfloat)sqrt(dZdX * dZdX + dZdY * dZdY);
+      }
+      else{
+        maxdZ = 0.0F;
+      }
       dZ = factor * maxdZ + units;
       prim->verts[0].xyz[2] += dZ;
       prim->verts[1].xyz[2] += dZ;
@@ -1767,6 +1771,10 @@ static void gl2psAddPlanesInBspTreeImage(GL2PSprimitive *prim,
   GL2PSbsptree2d *head = NULL, *cur = NULL;
 
   if((*tree == NULL) && (prim->numverts > 2)){
+    /* don't cull if transparent
+    for(i = 0; i < prim->numverts - 1; i++)
+      if(prim->verts[i].rgba[3] < 1.0F) return;
+    */
     head = (GL2PSbsptree2d*)gl2psMalloc(sizeof(GL2PSbsptree2d));
     for(i = 0; i < prim->numverts-1; i++){
       if(!gl2psGetPlaneFromPoints(prim->verts[i].xyz,
@@ -1930,7 +1938,7 @@ static void gl2psSplitPrimitive2D(GL2PSprimitive *prim,
     if(v1 == prim->numverts){
       if(prim->numverts < 3) break;
       v1 = 0;
-      v2 = prim->numverts-1;
+      v2 = prim->numverts - 1;
       cur = prev0;
     }
     else if(flag){
@@ -1973,10 +1981,8 @@ static void gl2psSplitPrimitive2D(GL2PSprimitive *prim,
       front_count++;
       front_list = (GL2PSvertex*)gl2psRealloc(front_list,
                                               sizeof(GL2PSvertex)*front_count);
-      gl2psCutEdge(&prim->verts[v2],
-                   &prim->verts[v1],
-                   plane,
-                   &front_list[front_count-1]);
+      gl2psCutEdge(&prim->verts[v2], &prim->verts[v1],
+                   plane, &front_list[front_count-1]);
       back_count++;
       back_list = (GL2PSvertex*)gl2psRealloc(back_list,
                                              sizeof(GL2PSvertex)*back_count);
@@ -2354,8 +2360,8 @@ static void gl2psParseFeedbackBuffer(GLint used)
         node->image->width = (GLint)current[2];
         current += 2; used -= 2;
         node->image->height = (GLint)current[2];
-        prim->verts[0].xyz[0] = prim->verts[0].xyz[0] - (int)(node->image->width / 2) + 0.5;
-        prim->verts[0].xyz[1] = prim->verts[0].xyz[1] - (int)(node->image->height / 2) + 0.5;
+        prim->verts[0].xyz[0] = prim->verts[0].xyz[0] - (int)(node->image->width / 2) + 0.5F;
+        prim->verts[0].xyz[1] = prim->verts[0].xyz[1] - (int)(node->image->height / 2) + 0.5F;
         for(i = 1; i < 4; i++){
           for(v = 0; v < 3; v++){
             prim->verts[i].xyz[v] = prim->verts[0].xyz[v];
@@ -2371,7 +2377,7 @@ static void gl2psParseFeedbackBuffer(GLint used)
         sizeoffloat = sizeof(GLfloat);
         v = 2 * sizeoffloat;
         vtot = node->image->height + node->image->height * 
-          ((node->image->width-1)/8);
+          ((node->image->width - 1) / 8);
         node->image->pixels = (GLfloat*)gl2psMalloc(v + vtot);
         node->image->pixels[0] = prim->verts[0].xyz[0];
         node->image->pixels[1] = prim->verts[0].xyz[1];
@@ -2451,7 +2457,7 @@ static void gl2psPrintPostScriptPixmap(GLfloat x, GLfloat y, GL2PSimage *im)
     for(row = 0; row < height; row++){
       for(col = 0; col < width; col++){ 
         gl2psGetRGB(im, col, row, &dr, &dg, &db);
-        fgrey = (0.30 * dr + 0.59 * dg + 0.11 * db);
+        fgrey = (0.30F * dr + 0.59F * dg + 0.11F * db);
         grey = (unsigned char)(255. * fgrey);
         gl2psWriteByte(grey);
       }
@@ -2463,7 +2469,7 @@ static void gl2psPrintPostScriptPixmap(GLfloat x, GLfloat y, GL2PSimage *im)
   else if(nbit == 2){ /* color, 2 bits for r and g and b; rgbs following each other */
     nrgb = width  * 3;
     nbits = nrgb * nbit;
-    nbyte = nbits/8;
+    nbyte = nbits / 8;
     if((nbyte * 8) != nbits) nbyte++;
     gl2psPrintf("/rgbstr %d string def\n", nbyte);
     gl2psPrintf("%d %d %d\n", width, height, nbit);
@@ -2550,7 +2556,7 @@ static void gl2psPrintPostScriptPixmap(GLfloat x, GLfloat y, GL2PSimage *im)
   else if(nbit == 4){ /* color, 4 bits for r and g and b; rgbs following each other */
     nrgb = width  * 3;
     nbits = nrgb * nbit;
-    nbyte = nbits/8;
+    nbyte = nbits / 8;
     if((nbyte * 8) != nbits) nbyte++; 
     gl2psPrintf("/rgbstr %d string def\n", nbyte);
     gl2psPrintf("%d %d %d\n", width, height, nbit);
@@ -2630,7 +2636,7 @@ static void gl2psPrintPostScriptImagemap(GLfloat x, GLfloat y,
   
   if((width <= 0) || (height <= 0)) return;
   
-  size = height + height * (width-1)/8;
+  size = height + height * (width - 1) / 8;
   
   gl2psPrintf("gsave\n");
   gl2psPrintf("%.2f %.2f translate\n", x, y);
@@ -4183,7 +4189,7 @@ static int gl2psPrintPDFShaderStreamDataCoord(GL2PSvertex *vertex,
   /* The Shader stream in PDF requires to be in a 'big-endian'
      order */
     
-  if(GL2PS_ZERO(dx*dy)){
+  if(GL2PS_ZERO(dx * dy)){
     offs += (*action)(0, 4);
     offs += (*action)(0, 4);
   }
@@ -4923,46 +4929,46 @@ static void gl2psPrintSVGSmoothTriangle(GL2PSxyz xyz[3], GL2PSrgba rgba[3])
     /* subdivide into 4 subtriangles */
     for(i = 0; i < 3; i++){
       xyz2[0][i] = xyz[0][i]; 
-      xyz2[1][i] = 0.5 * (xyz[0][i] + xyz[1][i]);
-      xyz2[2][i] = 0.5 * (xyz[0][i] + xyz[2][i]);
+      xyz2[1][i] = 0.5F * (xyz[0][i] + xyz[1][i]);
+      xyz2[2][i] = 0.5F * (xyz[0][i] + xyz[2][i]);
     }
     for(i = 0; i < 4; i++){
       rgba2[0][i] = rgba[0][i]; 
-      rgba2[1][i] = 0.5 * (rgba[0][i] + rgba[1][i]);
-      rgba2[2][i] = 0.5 * (rgba[0][i] + rgba[2][i]);
+      rgba2[1][i] = 0.5F * (rgba[0][i] + rgba[1][i]);
+      rgba2[2][i] = 0.5F * (rgba[0][i] + rgba[2][i]);
     }
     gl2psPrintSVGSmoothTriangle(xyz2, rgba2);
     for(i = 0; i < 3; i++){
-      xyz2[0][i] = 0.5 * (xyz[0][i] + xyz[1][i]);
+      xyz2[0][i] = 0.5F * (xyz[0][i] + xyz[1][i]);
       xyz2[1][i] = xyz[1][i]; 
-      xyz2[2][i] = 0.5 * (xyz[1][i] + xyz[2][i]);
+      xyz2[2][i] = 0.5F * (xyz[1][i] + xyz[2][i]);
     }
     for(i = 0; i < 4; i++){
-      rgba2[0][i] = 0.5 * (rgba[0][i] + rgba[1][i]);
+      rgba2[0][i] = 0.5F * (rgba[0][i] + rgba[1][i]);
       rgba2[1][i] = rgba[1][i]; 
-      rgba2[2][i] = 0.5 * (rgba[1][i] + rgba[2][i]);
+      rgba2[2][i] = 0.5F * (rgba[1][i] + rgba[2][i]);
     }
     gl2psPrintSVGSmoothTriangle(xyz2, rgba2);
     for(i = 0; i < 3; i++){
-      xyz2[0][i] = 0.5 * (xyz[0][i] + xyz[2][i]);
+      xyz2[0][i] = 0.5F * (xyz[0][i] + xyz[2][i]);
       xyz2[1][i] = xyz[2][i]; 
-      xyz2[2][i] = 0.5 * (xyz[1][i] + xyz[2][i]);
+      xyz2[2][i] = 0.5F * (xyz[1][i] + xyz[2][i]);
     }
     for(i = 0; i < 4; i++){
-      rgba2[0][i] = 0.5 * (rgba[0][i] + rgba[2][i]);
+      rgba2[0][i] = 0.5F * (rgba[0][i] + rgba[2][i]);
       rgba2[1][i] = rgba[2][i]; 
-      rgba2[2][i] = 0.5 * (rgba[1][i] + rgba[2][i]);
+      rgba2[2][i] = 0.5F * (rgba[1][i] + rgba[2][i]);
     }
     gl2psPrintSVGSmoothTriangle(xyz2, rgba2);
     for(i = 0; i < 3; i++){
-      xyz2[0][i] = 0.5 * (xyz[0][i] + xyz[1][i]);
-      xyz2[1][i] = 0.5 * (xyz[1][i] + xyz[2][i]); 
-      xyz2[2][i] = 0.5 * (xyz[0][i] + xyz[2][i]);
+      xyz2[0][i] = 0.5F * (xyz[0][i] + xyz[1][i]);
+      xyz2[1][i] = 0.5F * (xyz[1][i] + xyz[2][i]); 
+      xyz2[2][i] = 0.5F * (xyz[0][i] + xyz[2][i]);
     }
     for(i = 0; i < 4; i++){
-      rgba2[0][i] = 0.5 * (rgba[0][i] + rgba[1][i]);
-      rgba2[1][i] = 0.5 * (rgba[1][i] + rgba[2][i]); 
-      rgba2[2][i] = 0.5 * (rgba[0][i] + rgba[2][i]);
+      rgba2[0][i] = 0.5F * (rgba[0][i] + rgba[1][i]);
+      rgba2[1][i] = 0.5F * (rgba[1][i] + rgba[2][i]); 
+      rgba2[2][i] = 0.5F * (rgba[0][i] + rgba[2][i]);
     }
     gl2psPrintSVGSmoothTriangle(xyz2, rgba2);
   }
@@ -5023,7 +5029,7 @@ static void gl2psPrintSVGPixmap(GLfloat x, GLfloat y, GL2PSimage *pixmap)
   gl2psPrintf("\"/>\n");
   gl2psListDelete(png);
 #else
-  gl2psMsg(GL2PS_WARNING, "GL2PS has to be compiled with PNG support in "
+  gl2psMsg(GL2PS_WARNING, "GL2PS must be compiled with PNG support in "
            "order to embed images in SVG streams");
 #endif
 }
@@ -5099,12 +5105,34 @@ static void gl2psPrintSVGPrimitive(void *data)
     break;
   case GL2PS_TEXT :
     gl2psSVGGetColorString(prim->verts[0].rgba, col);
-    gl2psPrintf("<text fill=\"%s\" x=\"%g\" y=\"%g\" "
-                "font-size=\"%d\" font-family=\"%s\">%s</text>\n",
-                col, xyz[0][0], xyz[0][1],
-                prim->data.text->fontsize,
-                prim->data.text->fontname,
-                prim->data.text->str);
+    gl2psPrintf("<text fill=\"%s\" x=\"%g\" y=\"%g\" font-size=\"%d\" ",
+                col, xyz[0][0], xyz[0][1], prim->data.text->fontsize);
+    if(prim->data.text->angle)
+      gl2psPrintf("transform=\"rotate(%g, %g, %g)\" ",
+                  -prim->data.text->angle, xyz[0][0], xyz[0][1]);
+    if(!strcmp(prim->data.text->fontname, "Times-Roman"))
+      gl2psPrintf("font-family=\"Times\">");
+    else if(!strcmp(prim->data.text->fontname, "Times-Bold"))
+      gl2psPrintf("font-family=\"Times\" font-weight=\"bold\">");
+    else if(!strcmp(prim->data.text->fontname, "Times-Italic"))
+      gl2psPrintf("font-family=\"Times\" font-style=\"italic\">");
+    else if(!strcmp(prim->data.text->fontname, "Times-BoldItalic"))
+      gl2psPrintf("font-family=\"Times\" font-style=\"italic\" font-weight=\"bold\">");
+    else if(!strcmp(prim->data.text->fontname, "Helvetica-Bold"))
+      gl2psPrintf("font-family=\"Helvetica\" font-weight=\"bold\">");
+    else if(!strcmp(prim->data.text->fontname, "Helvetica-Oblique"))
+      gl2psPrintf("font-family=\"Helvetica\" font-style=\"oblique\">");
+    else if(!strcmp(prim->data.text->fontname, "Helvetica-BoldOblique"))
+      gl2psPrintf("font-family=\"Helvetica\" font-style=\"oblique\" font-weight=\"bold\">");
+    else if(!strcmp(prim->data.text->fontname, "Courier-Bold"))
+      gl2psPrintf("font-family=\"Courier\" font-weight=\"bold\">");
+    else if(!strcmp(prim->data.text->fontname, "Courier-Oblique"))
+      gl2psPrintf("font-family=\"Courier\" font-style=\"oblique\">");
+    else if(!strcmp(prim->data.text->fontname, "Courier-BoldOblique"))
+      gl2psPrintf("font-family=\"Courier\" font-style=\"oblique\" font-weight=\"bold\">");
+    else
+      gl2psPrintf("font-family=\"%s\">", prim->data.text->fontname);
+    gl2psPrintf("%s</text>\n", prim->data.text->str);
     break;
   case GL2PS_SPECIAL :
     /* alignment contains the format for which the special output text
@@ -5554,7 +5582,7 @@ GL2PSDLL_API GLint gl2psBeginPage(const char *title, const char *producer,
 
   gl2ps = (GL2PScontext*)gl2psMalloc(sizeof(GL2PScontext));
 
-  if(format >= 0 && format < (GLint)(sizeof(gl2psbackends)/sizeof(gl2psbackends[0]))){
+  if(format >= 0 && format < (GLint)(sizeof(gl2psbackends) / sizeof(gl2psbackends[0]))){
     gl2ps->format = format;
   }
   else {
@@ -5612,9 +5640,9 @@ GL2PSDLL_API GLint gl2psBeginPage(const char *title, const char *producer,
     return GL2PS_ERROR;
   }
 
-  gl2ps->threshold[0] = nr ? 1.0F/(GLfloat)nr : 0.064F;
-  gl2ps->threshold[1] = ng ? 1.0F/(GLfloat)ng : 0.034F;
-  gl2ps->threshold[2] = nb ? 1.0F/(GLfloat)nb : 0.100F;
+  gl2ps->threshold[0] = nr ? 1.0F / (GLfloat)nr : 0.064F;
+  gl2ps->threshold[1] = ng ? 1.0F / (GLfloat)ng : 0.034F;
+  gl2ps->threshold[2] = nb ? 1.0F / (GLfloat)nb : 0.100F;
   gl2ps->colormode = colormode;
   gl2ps->buffersize = buffersize > 0 ? buffersize : 2048 * 2048;
   for(i = 0; i < 3; i++){
@@ -5861,7 +5889,7 @@ GL2PSDLL_API GLint gl2psDrawImageMap(GLsizei width, GLsizei height,
 
   if((width <= 0) || (height <= 0)) return GL2PS_ERROR;
   
-  size = height + height * ((width-1)/8);
+  size = height + height * ((width - 1) / 8);
   glPassThrough(GL2PS_IMAGEMAP_TOKEN);
   glBegin(GL_POINTS);
   glVertex3f(position[0], position[1],position[2]);
@@ -5992,7 +6020,7 @@ GL2PSDLL_API GLint gl2psGetOptions(GLint *options)
 
 GL2PSDLL_API const char *gl2psGetFileExtension(GLint format)
 {
-  if(format >= 0 && format < (GLint)(sizeof(gl2psbackends)/sizeof(gl2psbackends[0])))
+  if(format >= 0 && format < (GLint)(sizeof(gl2psbackends) / sizeof(gl2psbackends[0])))
     return gl2psbackends[format]->file_extension;
   else
     return "Unknown format";
@@ -6000,7 +6028,7 @@ GL2PSDLL_API const char *gl2psGetFileExtension(GLint format)
 
 GL2PSDLL_API const char *gl2psGetFormatDescription(GLint format)
 {
-  if(format >= 0 && format < (GLint)(sizeof(gl2psbackends)/sizeof(gl2psbackends[0])))
+  if(format >= 0 && format < (GLint)(sizeof(gl2psbackends) / sizeof(gl2psbackends[0])))
     return gl2psbackends[format]->description;
   else
     return "Unknown format";

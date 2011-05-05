@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -6,6 +6,7 @@
 #ifndef _FOURIER_FACE_H_
 #define _FOURIER_FACE_H_
 
+#include "GmshConfig.h"
 #include "GFace.h"
 #include "GModel.h"
 #include "Range.h"
@@ -28,8 +29,9 @@ class fourierFace : public GFace {
   virtual SVector3 normal(const SPoint2 &param) const; 
   virtual GEntity::GeomType geomType() const;
   virtual Pair<SVector3,SVector3> firstDer(const SPoint2 &param) const;
+  virtual void secondDer(const SPoint2 &, SVector3 *, SVector3 *, SVector3 *) const; 
   ModelType getNativeType() const { return FourierModel; }
-  void * getNativePtr() const { return face; } 
+  void *getNativePtr() const { return face; } 
 };
 
 #endif

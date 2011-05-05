@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -6,6 +6,7 @@
 #include "Eigenvectors.h"
 #include "Numeric.h"
 #include "EigSolve.h"
+#include "GmshDefines.h"
 
 StringXNumber EigenvectorsOptions_Number[] = {
   {GMSH_FULLRC, "ScaleByEigenvalues", NULL, 1.},
@@ -20,17 +21,9 @@ extern "C"
   }
 }
 
-void GMSH_EigenvectorsPlugin::getName(char *name) const
+std::string GMSH_EigenvectorsPlugin::getHelp() const
 {
-  strcpy(name, "Eigenvectors");
-}
-
-void GMSH_EigenvectorsPlugin::getInfos(char *author, char *copyright, char *help_text) const
-{
-  strcpy(author, "C. Geuzaine");
-  strcpy(copyright, "DGR (www.multiphysics.com)");
-  strcpy(help_text,
-         "Plugin(Eigenvectors) computes the three (right)\n"
+  return "Plugin(Eigenvectors) computes the three (right)\n"
          "eigenvectors of each tensor in the view `iView'\n"
          "and sorts them according to the value of the\n"
          "associated eigenvalues. If `ScaleByEigenvalues'\n"
@@ -40,7 +33,7 @@ void GMSH_EigenvectorsPlugin::getInfos(char *author, char *copyright, char *help
          "the plugin is run on the current view.\n"
          "\n"
          "Plugin(Eigenvectors) creates three new\n"
-         "vector views.\n");
+         "vector views.\n";
 }
 
 int GMSH_EigenvectorsPlugin::getNbOptions() const
@@ -53,22 +46,17 @@ StringXNumber *GMSH_EigenvectorsPlugin::getOption(int iopt)
   return &EigenvectorsOptions_Number[iopt];
 }
 
-void GMSH_EigenvectorsPlugin::catchErrorMessage(char *errorMessage) const
+static std::vector<double> *incrementList(PViewDataList *data2, int type)
 {
-  strcpy(errorMessage, "Eigenvectors failed...");
-}
-
-static List_T *incrementList(PViewDataList *data2, int numEdges)
-{
-  switch(numEdges){
-  case 0: data2->NbVP++; return data2->VP;
-  case 1: data2->NbVL++; return data2->VL;
-  case 3: data2->NbVT++; return data2->VT;
-  case 4: data2->NbVQ++; return data2->VQ;
-  case 6: data2->NbVS++; return data2->VS;
-  case 12: data2->NbVH++; return data2->VH;
-  case 9: data2->NbVI++; return data2->VI;
-  case 8: data2->NbVY++; return data2->VY;
+  switch(type){
+  case TYPE_PNT: data2->NbVP++; return &data2->VP;
+  case TYPE_LIN: data2->NbVL++; return &data2->VL;
+  case TYPE_TRI: data2->NbVT++; return &data2->VT;
+  case TYPE_QUA: data2->NbVQ++; return &data2->VQ;
+  case TYPE_TET: data2->NbVS++; return &data2->VS;
+  case TYPE_HEX: data2->NbVH++; return &data2->VH;
+  case TYPE_PRI: data2->NbVI++; return &data2->VI;
+  case TYPE_PYR: data2->NbVY++; return &data2->VY;
   default: return 0;
   }
 }
@@ -94,9 +82,9 @@ PView *GMSH_EigenvectorsPlugin::execute(PView *v)
     return v;
   }
 
-  PView *min = new PView(true);
-  PView *mid = new PView(true);
-  PView *max = new PView(true);
+  PView *min = new PView();
+  PView *mid = new PView();
+  PView *max = new PView();
 
   PViewDataList *dmin = getDataList(min);
   PViewDataList *dmid = getDataList(mid);
@@ -109,54 +97,54 @@ PView *GMSH_EigenvectorsPlugin::execute(PView *v)
       if(data1->skipElement(0, ent, ele)) continue;
       int numComp = data1->getNumComponents(0, ent, ele);
       if(numComp != 9) continue;
-      int numEdges = data1->getNumEdges(0, ent, ele);
-      List_T *outmin = incrementList(dmin, numEdges);
-      List_T *outmid = incrementList(dmid, numEdges);
-      List_T *outmax = incrementList(dmax, numEdges);
+      int type = data1->getType(0, ent, ele);
+      std::vector<double> *outmin = incrementList(dmin, type);
+      std::vector<double> *outmid = incrementList(dmid, type);
+      std::vector<double> *outmax = incrementList(dmax, type);
       if(!outmin || !outmid || !outmax) continue;
       int numNodes = data1->getNumNodes(0, ent, ele);
       double xyz[3][8];
       for(int nod = 0; nod < numNodes; nod++)
-	data1->getNode(0, ent, ele, nod, xyz[0][nod], xyz[1][nod], xyz[2][nod]);
+        data1->getNode(0, ent, ele, nod, xyz[0][nod], xyz[1][nod], xyz[2][nod]);
       for(int i = 0; i < 3; i++){
-	for(int nod = 0; nod < numNodes; nod++){
-	  List_Add(outmin, &xyz[i][nod]);
-	  List_Add(outmid, &xyz[i][nod]);
-	  List_Add(outmax, &xyz[i][nod]);
-	}
+        for(int nod = 0; nod < numNodes; nod++){
+          outmin->push_back(xyz[i][nod]);
+          outmid->push_back(xyz[i][nod]);
+          outmax->push_back(xyz[i][nod]);
+        }
       }
       for(int step = 0; step < data1->getNumTimeSteps(); step++){
-	for(int nod = 0; nod < numNodes; nod++){
-	  double val[9];
-	  for(int comp = 0; comp < numComp; comp++)
-	    data1->getValue(step, ent, ele, nod, comp, val[comp]);
-	  double wr[3], wi[3], B[9];
-	  if(!EigSolve3x3(val, wr, wi, B))
-	    Msg::Error("Eigensolver failed to converge");
-	  nbcomplex += nonzero(wi); 
-	  if(!scale) wr[0] = wr[1] = wr[2] = 1.;
-	  for(int i = 0; i < 3; i++){
-	    double res;
-	    // wrong if there are complex eigenvals (B contains both
-	    // real and imag parts: cf. explanation in EigSolve.cpp)
-	    res = wr[0] * B[i]; List_Add(outmin, &res);
-	    res = wr[1] * B[3 + i]; List_Add(outmid, &res);
-	    res = wr[2] * B[6 + i]; List_Add(outmax, &res);
-	  }
-	}
+        for(int nod = 0; nod < numNodes; nod++){
+          double val[9];
+          for(int comp = 0; comp < numComp; comp++)
+            data1->getValue(step, ent, ele, nod, comp, val[comp]);
+          double wr[3], wi[3], B[9];
+          if(!EigSolve3x3(val, wr, wi, B))
+            Msg::Error("Eigensolver failed to converge");
+          nbcomplex += nonzero(wi); 
+          if(!scale) wr[0] = wr[1] = wr[2] = 1.;
+          for(int i = 0; i < 3; i++){
+            double res;
+            // wrong if there are complex eigenvals (B contains both
+            // real and imag parts: cf. explanation in EigSolve.cpp)
+            res = wr[0] * B[i]; outmin->push_back(res);
+            res = wr[1] * B[3 + i]; outmid->push_back(res);
+            res = wr[2] * B[6 + i]; outmax->push_back(res);
+          }
+        }
       }
     }
   }
 
   if(nbcomplex)
     Msg::Error("%d tensors have complex eigenvalues/eigenvectors", 
-	nbcomplex);
+               nbcomplex);
   
   for(int i = 0; i < data1->getNumTimeSteps(); i++){
     double time = data1->getTime(i);
-    List_Add(dmin->Time, &time);
-    List_Add(dmid->Time, &time);
-    List_Add(dmax->Time, &time);
+    dmin->Time.push_back(time);
+    dmid->Time.push_back(time);
+    dmax->Time.push_back(time);
   }
   dmin->setName(data1->getName() + "_MinEigenvectors");
   dmin->setFileName(data1->getName() + "_MinEigenvectors.pos");

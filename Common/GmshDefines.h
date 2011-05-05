@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -36,6 +36,22 @@
 #define FORMAT_BDF           31
 #define FORMAT_CGNS          32
 #define FORMAT_MED           33
+#define FORMAT_DIFF          34
+#define FORMAT_BREP          35
+#define FORMAT_STEP          36
+#define FORMAT_IGES          37
+
+// Element types
+#define TYPE_PNT 1
+#define TYPE_LIN 2
+#define TYPE_TRI 3
+#define TYPE_QUA 4
+#define TYPE_TET 5
+#define TYPE_PYR 6
+#define TYPE_PRI 7
+#define TYPE_HEX 8
+#define TYPE_POLYG 9
+#define TYPE_POLYH 10
 
 // Element types in .msh file format
 #define MSH_LIN_2  1
@@ -71,6 +87,10 @@
 #define MSH_TET_56 31
 #define MSH_TET_34 32
 #define MSH_TET_52 33
+#define MSH_POLYG_ 34
+#define MSH_POLYH_ 35
+
+#define MSH_NUM_TYPE 35
 
 // Geometric entities
 #define ENT_NONE     0
@@ -80,18 +100,15 @@
 #define ENT_VOLUME   (1<<3)
 #define ENT_ALL      (ENT_POINT | ENT_LINE | ENT_SURFACE | ENT_VOLUME)
 
-// 2D mesh algorithms
-#define ALGO_2D_MESHADAPT_DELAUNAY  1
-#define ALGO_2D_ANISOTROPIC         2 // unused
-#define ALGO_2D_TRIANGLE            3 // unused
-#define ALGO_2D_MESHADAPT           4
+// 2D mesh algorithms (numbers should not be changed)
+#define ALGO_2D_MESHADAPT           1
+#define ALGO_2D_MESHADAPT_OLD       4
 #define ALGO_2D_DELAUNAY            5
 #define ALGO_2D_FRONTAL             6
 
-// 3D mesh algorithms
-#define ALGO_3D_TETGEN_DELAUNAY    1
-#define ALGO_3D_NETGEN             4
-#define ALGO_3D_TETGEN             5 // unused
+// 3D mesh algorithms (numbers should not be changed)
+#define ALGO_3D_DELAUNAY    1
+#define ALGO_3D_FRONTAL     4
 
 // Meshing methods
 #define MESH_NONE         0

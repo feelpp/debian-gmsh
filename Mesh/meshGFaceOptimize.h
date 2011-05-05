@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -11,42 +11,53 @@
 #include "MElement.h"
 #include "MEdge.h"
 #include "meshGFaceDelaunayInsertion.h"
+#include "STensor3.h"
 
 class GFace;
 class MVertex;
-typedef std::map<MVertex*, std::vector<MTriangle*> > v2t_cont;
-typedef std::map<MEdge, std::pair<MTriangle*,MTriangle*>, Less_Edge> e2t_cont;
+
+typedef std::map<MVertex*, std::vector<MElement*> > v2t_cont;
+typedef std::map<MEdge, std::pair<MElement*, MElement*>, Less_Edge> e2t_cont;
+
 void buildVertexToTriangle(std::vector<MTriangle*> &, v2t_cont &adj);
 void buildEdgeToTriangle(std::vector<MTriangle*> &, e2t_cont &adj);
 void laplaceSmoothing(GFace *gf);
 void edgeSwappingLawson(GFace *gf);
-enum gmshSwapCriterion {SWCR_DEL, SWCR_QUAL,SWCR_NORM, SWCR_CLOSE};
-enum gmshSplitCriterion {SPCR_CLOSE, SPCR_QUAL, SPCR_ALLWAYS};
-int edgeSwapPass(GFace *gf, std::set<MTri3*, compareTri3Ptr> &allTris, 
-                 const gmshSwapCriterion &cr,
-                 const std::vector<double> &Us,
+
+enum swapCriterion {SWCR_DEL, SWCR_QUAL, SWCR_NORM, SWCR_CLOSE};
+enum splitCriterion {SPCR_CLOSE, SPCR_QUAL, SPCR_ALLWAYS};
+
+int edgeSwapPass(GFace *gf, 
+                 std::set<MTri3*, compareTri3Ptr> &allTris, 
+                 const swapCriterion &cr,
+                 const std::vector<double> &Us, 
                  const std::vector<double> &Vs,
-                 const std::vector<double> &vSizes,
+                 const std::vector<double> &vSizes, 
                  const std::vector<double> &vSizesBGM);
-int edgeSplitPass(double maxLC,
-                  GFace *gf, std::set<MTri3*, compareTri3Ptr> &allTris,
-                  const gmshSplitCriterion &cr,   
-                  std::vector<double> &Us ,
+int edgeSplitPass(double maxLC, GFace *gf, 
+                  std::set<MTri3*, compareTri3Ptr> &allTris,
+                  const splitCriterion &cr,   
+                  std::vector<double> &Us,
                   std::vector<double> &Vs,
                   std::vector<double> &vSizes ,
                   std::vector<double> &vSizesBGM);
-int edgeCollapsePass(double minLC,
-                     GFace *gf, std::set<MTri3*, compareTri3Ptr> &allTris,
+void removeFourTrianglesNodes(GFace *gf, bool replace_by_quads);
+int edgeCollapsePass(double minLC, GFace *gf, 
+                     std::set<MTri3*, compareTri3Ptr> &allTris,
                      std::vector<double> &Us,
                      std::vector<double> &Vs,
                      std::vector<double> &vSizes ,
                      std::vector<double> &vSizesBGM);
-void buidMeshGenerationDataStructures(GFace *gf, std::set<MTri3*, compareTri3Ptr> &AllTris,
-                                      std::vector<double> &vSizes,
-                                      std::vector<double> &vSizesBGM,
-                                      std::vector<double> &Us,
-                                      std::vector<double> &Vs);
-void transferDataStructure (GFace *gf, std::set<MTri3*, compareTri3Ptr> &AllTris);
+void buildMeshGenerationDataStructures(GFace *gf, 
+                                       std::set<MTri3*, compareTri3Ptr> &AllTris,
+                                       std::vector<double> &vSizes,
+                                       std::vector<double> &vSizesBGM,
+                                       std::vector<SMetric3> &vMetricsBGM,
+                                       std::vector<double> &Us,
+                                       std::vector<double> &Vs);
+void transferDataStructure(GFace *gf, std::set<MTri3*, compareTri3Ptr> &AllTris,
+                           std::vector<double> &Us, std::vector<double> &Vs);
+void recombineIntoQuads(GFace *gf);
 
 struct swapquad{
   int v[4];

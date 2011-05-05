@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -13,13 +13,12 @@
 //  Some Plugins are default gmsh plugins and are insterted directly
 //  in the executable. I think that it's a good way to start.
 
-#include <string.h>
-#include <stdio.h>
+#include <string>
 #include "Options.h"
-#include "Message.h"
+#include "GmshMessage.h"
 #include "PView.h"
 #include "PViewDataList.h"
-#include "GmshMatrix.h"
+#include "fullMatrix.h"
 
 class PluginDialogBox;
 class Vertex;
@@ -32,7 +31,7 @@ class GMSH_Plugin
     GMSH_CAD_PLUGIN, 
     GMSH_MESH_PLUGIN, 
     GMSH_POST_PLUGIN, 
-    GMSH_SOLVE_PLUGIN 
+    GMSH_SOLVER_PLUGIN 
   } GMSH_PLUGIN_TYPE;
 
   // a dialog box for the user interface
@@ -46,12 +45,14 @@ class GMSH_Plugin
 
   // return plugin type, name and info
   virtual GMSH_PLUGIN_TYPE getType() const = 0;
-  virtual void getName(char *name) const = 0;
-  virtual void getInfos(char *author, char *copyright, char *helpText) const = 0;
+  virtual std::string getName() const = 0;
+  virtual std::string getHelp() const = 0;
+  virtual std::string getAuthor() const { return "C. Geuzaine, J.-F. Remacle"; }
+  virtual std::string getCopyright() const { return "C. Geuzaine, J.-F. Remacle"; }
 
   // when an error is thrown by the plugin, the plugin manager will
   // show the message and hopefully continue
-  virtual void catchErrorMessage(char *errorMessage) const = 0;
+  virtual void catchErrorMessage(char *errorMessage) const;
 
   // gmsh-style numeric options
   virtual int getNbOptions() const = 0;
@@ -63,11 +64,15 @@ class GMSH_Plugin
 
   // run the plugin
   virtual void run() = 0;
+
+  // dynamic pointer to a drawing function
+  static void setDrawFunction(void (*fct)(void *));
+  static void (*draw)(void*);
 };
 
 // The base class for post-processing plugins. The user can either
 // modify or duplicate a post-processing view
-class GMSH_Post_Plugin : public GMSH_Plugin
+class GMSH_PostPlugin : public GMSH_Plugin
 {
  public:
   inline GMSH_PLUGIN_TYPE getType() const { return GMSH_Plugin::GMSH_POST_PLUGIN; }
@@ -81,23 +86,23 @@ class GMSH_Post_Plugin : public GMSH_Plugin
   // get the view given an index and a default value
   virtual PView *getView(int index, PView *view);
   // get the data in list format
-  virtual PViewDataList *getDataList(PView *view);
+  virtual PViewDataList *getDataList(PView *view, bool showError=true);
   virtual void assignSpecificVisibility() const {}
-  virtual bool geometricalFilter(Double_Matrix *) const { return true; }
+  virtual bool geometricalFilter(fullMatrix<double> *) const { return true; }
 };
 
 // The base class for solver plugins. The idea is to be able to
 // associate some properties to physical entities, so that we can
 // interface gmsh with a solver (ABAQUS...), i.e., create the input
 // file for the solver
-class GMSH_Solve_Plugin : public GMSH_Plugin
+class GMSH_SolverPlugin : public GMSH_Plugin
 {
  public:
   virtual int getNbOptionsStr() const { return 0; }
   virtual StringXString *getOptionStr(int iopt) { return 0; }
   virtual int getNbOptions() const { return 0; }
   virtual StringXNumber *getOption(int iopt) { return 0; };
-  inline GMSH_PLUGIN_TYPE getType() const { return GMSH_Plugin::GMSH_SOLVE_PLUGIN; }
+  inline GMSH_PLUGIN_TYPE getType() const { return GMSH_Plugin::GMSH_SOLVER_PLUGIN; }
   virtual void run() {} // do nothing
   // popup dialog box
   virtual void popupPropertiesForPhysicalEntity(int dim) = 0;

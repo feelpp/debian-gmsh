@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -6,14 +6,12 @@
 #include <string.h>
 #include <math.h>
 #include "MVertex.h"
+#include "GVertex.h"
 #include "GEdge.h"
 #include "GFace.h"
-
-#if defined(HAVE_GMSH_EMBEDDED)
-#  include "GmshEmbedded.h"
-#else
-#  include "Message.h"
-#endif
+#include "GFaceCompound.h"
+#include "GmshMessage.h"
+#include "StringUtils.h"
 
 int MVertex::_globalNum = 0;
 double MVertexLessThanLexicographic::tolerance = 1.e-6;
@@ -28,39 +26,86 @@ bool MVertexLessThanLexicographic::operator()(const MVertex *v1, const MVertex *
   return false;
 }
 
-void MVertex::writeMSH(FILE *fp, bool binary, double scalingFactor)
+MVertex::MVertex(double x, double y, double z, GEntity *ge, int num)
+  : _visible(1), _order(1), _x(x), _y(y), _z(z), _ge(ge)
+{
+#pragma omp critical
+  {
+    if(num){
+      _num = num;
+      _globalNum = std::max(_globalNum, _num);
+    }
+    else{
+      _num = ++_globalNum;
+    }
+    _index = num;
+  }
+}
+
+void MVertex::forceNum(int num)
+{ 
+#pragma omp critical
+  {
+    _num = num; 
+    _globalNum = std::max(_globalNum, _num);
+  }
+}
+
+void MVertex::writeMSH(FILE *fp, bool binary, bool saveParametric, double scalingFactor)
 {
   if(_index < 0) return; // negative index vertices are never saved
 
+  int myDim = 0, myTag = 0;
+  if(saveParametric){
+    if(onWhat()){
+      myDim = onWhat()->dim(); 
+      myTag = onWhat()->tag();
+    }
+    else
+      saveParametric = false;
+  }
+
   if(!binary){
-    fprintf(fp, "%d %.16g %.16g %.16g\n", _index, 
-            x() * scalingFactor, 
-            y() * scalingFactor,
-            z() * scalingFactor);
+    if(!saveParametric)
+      fprintf(fp, "%d %.16g %.16g %.16g\n", _index, x() * scalingFactor, 
+              y() * scalingFactor, z() * scalingFactor);      
+    else
+      fprintf(fp, "%d %.16g %.16g %.16g %d %d", _index, x() * scalingFactor, 
+              y() * scalingFactor, z() * scalingFactor, myDim, myTag);
   }
   else{
     fwrite(&_index, sizeof(int), 1, fp);
     double data[3] = {x() * scalingFactor, y() * scalingFactor, z() * scalingFactor};
     fwrite(data, sizeof(double), 3, fp);
+    if(saveParametric){
+      fwrite(&myDim, sizeof(int), 1, fp);
+      fwrite(&myTag, sizeof(int), 1, fp);
+    }
   }
-}
 
-void MVertex::writeMSH(FILE *fp, double version, bool binary, int num, 
-                       int elementary, int physical)
-{
-  if(!binary){
-    fprintf(fp, "%d 15", num);
-    if(version < 2.0)
-      fprintf(fp, " %d %d 1", physical, elementary);
+  if(saveParametric){
+    if(myDim == 1){
+      double _u;
+      getParameter(0, _u);
+      if(!binary)
+        fprintf(fp, " %.16g\n", _u);        
+      else
+        fwrite(&_u, sizeof(double), 1, fp);
+    }
+    else if (myDim == 2){
+      double _u, _v;
+      getParameter(0, _u);
+      getParameter(1, _v);
+      if(!binary)
+        fprintf(fp, " %.16g %.16g\n", _u, _v);
+      else{
+        fwrite(&_u, sizeof(double), 1, fp);
+        fwrite(&_v, sizeof(double), 1, fp);
+      }
+    }
     else
-      fprintf(fp, " 2 %d %d", physical, elementary);
-    fprintf(fp, " %d\n", _index);
-  }
-  else{
-    int tags[4] = {num, physical, elementary, 0};
-    fwrite(tags, sizeof(int), 4, fp);
-    int verts[1] = {_index};
-    fwrite(verts, sizeof(int), 1, fp);
+      if(!binary)
+        fprintf(fp, "\n");          
   }
 }
 
@@ -85,20 +130,22 @@ void MVertex::writeUNV(FILE *fp, double scalingFactor)
   sprintf(tmp, "%25.16E%25.16E%25.16E\n", x() * scalingFactor, 
           y() * scalingFactor, z() * scalingFactor);
   for(unsigned int i = 0; i < strlen(tmp); i++) if(tmp[i] == 'E') tmp[i] = 'D';
-  fprintf(fp, tmp);
+  fprintf(fp, "%s", tmp);
 }
 
-void MVertex::writeVTK(FILE *fp, bool binary, double scalingFactor)
+void MVertex::writeVTK(FILE *fp, bool binary, double scalingFactor, bool bigEndian)
 {
   if(_index < 0) return; // negative index vertices are never saved
 
   if(binary){
     double data[3] = {x() * scalingFactor, y() * scalingFactor, z() * scalingFactor};
+    // VTK always expects big endian binary data
+    if(!bigEndian) SwapBytes((char*)data, sizeof(double), 3);
     fwrite(data, sizeof(double), 3, fp);
   }
   else{
     fprintf(fp, "%.16g %.16g %.16g\n",
-	    x() * scalingFactor, y() * scalingFactor, z() * scalingFactor);
+            x() * scalingFactor, y() * scalingFactor, z() * scalingFactor);
   }
 }
 
@@ -162,6 +209,14 @@ void MVertex::writeBDF(FILE *fp, int format, double scalingFactor)
   }
 }
 
+void MVertex::writeDIFF(FILE *fp, bool binary, double scalingFactor)
+{
+  if(_index < 0) return; // negative index vertices are never saved
+
+  fprintf(fp, " %d ( %25.16E , %25.16E , %25.16E )",
+          getIndex(), x() * scalingFactor, y() * scalingFactor, z() * scalingFactor);
+}
+
 std::set<MVertex*, MVertexLessThanLexicographic>::iterator 
 MVertex::linearSearch(std::set<MVertex*, MVertexLessThanLexicographic> &pos)
 {
@@ -173,25 +228,168 @@ MVertex::linearSearch(std::set<MVertex*, MVertexLessThanLexicographic> &pos)
   return pos.end();
 }
 
-void parametricCoordinates(const MVertex *ver, const GFace *gf, double &u, double &v)
+static void getAllParameters(MVertex *v, GFace *gf, std::vector<SPoint2> &params)
 {
-  GEntity *ge = ver->onWhat();
-  if(ge->dim() == 2){
-    ver->getParameter(0, u);
-    ver->getParameter(1, v);      
+  params.clear();
+
+  if (gf->geomType() == GEntity::CompoundSurface &&
+      v->onWhat()->dim() < 2){
+    GFaceCompound *gfc = (GFaceCompound*) gf;
+    params.push_back(gfc->getCoordinates(v));
+    return;
   }
-  else if(ge->dim() == 1){
-    double t;
-    ver->getParameter(0, t);
-    GEdge *ged = dynamic_cast<GEdge*>(ge);
-    SPoint2 p = ged->reparamOnFace((GFace*)gf, t, 1);
-    u = p.x();
-    v = p.y();
+
+  if(v->onWhat()->dim() == 0){
+    GVertex *gv = (GVertex*)v->onWhat();
+    std::list<GEdge*> ed = gv->edges();
+    bool seam = false;
+    for(std::list<GEdge*>::iterator it = ed.begin(); it != ed.end(); it++){
+      if((*it)->isSeam(gf)) {
+        Range<double> range = (*it)->parBounds(0);
+        if (gv == (*it)->getBeginVertex()){
+          params.push_back((*it)->reparamOnFace(gf, range.low(),-1));
+          params.push_back((*it)->reparamOnFace(gf, range.low(), 1));
+        }
+        else if (gv == (*it)->getEndVertex()){
+          params.push_back((*it)->reparamOnFace(gf, range.high(),-1));
+          params.push_back((*it)->reparamOnFace(gf, range.high(), 1));
+        }
+        else{
+          Msg::Warning("Strange!");
+        }
+        seam = true;
+      }
+    }
+    if (!seam)
+      params.push_back(gv->reparamOnFace(gf, 1));
+  }
+  else if(v->onWhat()->dim() == 1){
+    GEdge *ge = (GEdge*)v->onWhat();
+    double UU;
+    v->getParameter(0, UU);
+    params.push_back(ge->reparamOnFace(gf, UU, 1));
+    if(ge->isSeam(gf))
+      params.push_back(ge->reparamOnFace(gf, UU, -1));
   }
   else{
-    GVertex *gver = dynamic_cast<GVertex*>(ge);
-    SPoint2 p = gver->reparamOnFace((GFace*)gf, 1);
-    u = p.x();
-    v = p.y();
-  }      
+    double UU, VV;
+    if(v->onWhat() == gf && v->getParameter(0, UU) && v->getParameter(1, VV))
+      params.push_back(SPoint2(UU, VV));
+  }
+}
+
+bool reparamMeshEdgeOnFace(MVertex *v1, MVertex *v2, GFace *gf, 
+                           SPoint2 &param1, SPoint2 &param2)
+{
+  std::vector<SPoint2> p1, p2;
+  getAllParameters(v1, gf, p1);
+  getAllParameters(v2, gf, p2);
+  if (p1.size() == 1 && p2.size() == 1){
+    param1 = p1[0];
+    param2 = p2[0];
+    return true;
+  }
+  else if (p1.size() == 1 && p2.size() == 2){
+    double d1 = 
+      (p1[0].x() - p2[0].x()) * (p1[0].x() - p2[0].x()) +
+      (p1[0].x() - p2[0].y()) * (p1[0].y() - p2[0].y());
+    double d2 = 
+      (p1[0].x() - p2[1].x()) * (p1[0].x() - p2[1].x()) +
+      (p1[0].x() - p2[1].y()) * (p1[0].y() - p2[1].y());
+    param1 = p1[0];
+    param2 = d2 < d1 ? p2[1] : p2[0];
+    return true;
+  }  
+  else if (p2.size() == 1 && p1.size() == 2){
+    double d1 = 
+      (p2[0].x() - p1[0].x()) * (p2[0].x() - p1[0].x()) +
+      (p2[0].x() - p1[0].y()) * (p2[0].y() - p1[0].y());
+    double d2 = 
+      (p2[0].x() - p1[1].x()) * (p2[0].x() - p1[1].x()) +
+      (p2[0].x() - p1[1].y()) * (p2[0].y() - p1[1].y());
+    param1 = d2 < d1 ? p1[1] : p1[0];
+    param2 = p2[0];
+    return true;
+  }  
+  else if(p1.size() > 1 && p2.size() > 1){
+    param1 = p1[0];
+    param2 = p2[0];
+    // shout, both vertices are on seams
+    return false;
+  }
+  else{
+    // brute force!
+    param1 = gf->parFromPoint(SPoint3(v1->x(), v1->y(), v1->z()));
+    param2 = gf->parFromPoint(SPoint3(v2->x(), v2->y(), v2->z()));
+    return true;
+  }
+}
+
+bool reparamMeshVertexOnFace(const MVertex *v, const GFace *gf, SPoint2 &param)
+{
+  if (gf->geomType() == GEntity::CompoundSurface &&
+      v->onWhat()->dim() < 2){
+    GFaceCompound *gfc = (GFaceCompound*) gf;
+    param = gfc->getCoordinates(const_cast<MVertex*>(v));
+    return true;
+  }
+
+  if(v->onWhat()->geomType() == GEntity::DiscreteCurve ||        
+     v->onWhat()->geomType() == GEntity::BoundaryLayerCurve){    
+    param = gf->parFromPoint(SPoint3(v->x(), v->y(), v->z()));
+    return true;
+  }
+
+  if(v->onWhat()->dim() == 0){
+    GVertex *gv = (GVertex*)v->onWhat();
+    // hack for bug in periodic curves
+    if (gv->getNativeType() == GEntity::GmshModel && gf->geomType() == GEntity::Plane)
+      param = gf->parFromPoint(SPoint3(v->x(), v->y(), v->z()));
+    else
+      param = gv->reparamOnFace(gf, 1);
+    // shout, we could be on a seam
+    std::list<GEdge*> ed = gv->edges();
+    for(std::list<GEdge*>::iterator it = ed.begin(); it != ed.end(); it++)
+      if((*it)->isSeam(gf)) return false;
+  }
+  else if(v->onWhat()->dim() == 1){
+    GEdge *ge = (GEdge*)v->onWhat();
+    double t;
+    v->getParameter(0, t);
+    param = ge->reparamOnFace(gf, t, 1);
+
+    // shout, we are on a seam
+    if(ge->isSeam(gf))
+      return false;
+  }
+  else{
+    double uu, vv;
+    if(v->onWhat() == gf && v->getParameter(0, uu) && v->getParameter(1, vv)){
+      param = SPoint2(uu, vv);
+    }
+    else {
+      // brute force!
+      param = gf->parFromPoint(SPoint3(v->x(), v->y(), v->z()));
+    }
+  }
+  return true;
+}
+
+bool reparamMeshVertexOnEdge(const MVertex *v, const GEdge *ge, double &param)
+{
+  param = 1.e6;
+  Range<double> bounds = ge->parBounds(0);
+  bool ok = true;
+  if(ge->getBeginVertex() && ge->getBeginVertex()->mesh_vertices[0] == v)
+    param = bounds.low();
+  else if(ge->getEndVertex() && ge->getEndVertex()->mesh_vertices[0] == v)
+    param = bounds.high();
+  else
+    ok = v->getParameter(0, param);
+
+  if(!ok || param == 1.e6)
+    param = ge->parFromPoint(SPoint3(v->x(), v->y(), v->z()));
+  
+  if(param < 1.e6) return true;
+  return false;
 }

@@ -1,8 +1,9 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
+#include "GmshConfig.h"
 #include "gl2png.h"
 
 #if !defined(HAVE_LIBPNG)
@@ -22,8 +23,8 @@ void create_png(FILE *file, PixelBuffer *buffer, int quality)
 
 void create_png(FILE *file, PixelBuffer *buffer, int quality)
 {
-  if((buffer->GetFormat() != GL_RGB && buffer->GetFormat() != GL_RGBA) ||
-     buffer->GetType() != GL_UNSIGNED_BYTE){
+  if((buffer->getFormat() != GL_RGB && buffer->getFormat() != GL_RGBA) ||
+     buffer->getType() != GL_UNSIGNED_BYTE){
     Msg::Error("PNG only implemented for GL_RGB/GL_RGBA and GL_UNSIGNED_BYTE");
     return;
   }
@@ -51,9 +52,9 @@ void create_png(FILE *file, PixelBuffer *buffer, int quality)
   
   png_init_io(png_ptr, file);
   
-  int height = buffer->GetHeight();
-  int width = buffer->GetWidth();
-  int numcomp = buffer->GetNumComp();
+  int height = buffer->getHeight();
+  int width = buffer->getWidth();
+  int numcomp = buffer->getNumComp();
 
   // Z_DEFAULT_COMPRESSION, Z_BEST_SPEED, Z_BEST_COMPRESSION, Z_NO_COMPRESSION
   png_set_compression_level(png_ptr, Z_DEFAULT_COMPRESSION);
@@ -63,16 +64,16 @@ void create_png(FILE *file, PixelBuffer *buffer, int quality)
   time_t now;
   time(&now);
   png_text text_ptr[10];  
-  text_ptr[0].key = "Creator";
-  text_ptr[0].text = "Gmsh";
+  text_ptr[0].key = (char*)"Creator";
+  text_ptr[0].text = (char*)"Gmsh";
   text_ptr[0].compression = PNG_TEXT_COMPRESSION_NONE;
-  text_ptr[1].key = "Date";
+  text_ptr[1].key = (char*)"Date";
   text_ptr[1].text = ctime(&now);
   text_ptr[1].compression = PNG_TEXT_COMPRESSION_NONE;
   png_set_text(png_ptr, info_ptr, text_ptr, 2);
   png_write_info(png_ptr, info_ptr);
 
-  unsigned char *pixels = (unsigned char *)buffer->GetPixels();
+  unsigned char *pixels = (unsigned char *)buffer->getPixels();
   for(int row = height - 1; row >= 0; row--) {
     unsigned char *row_pointer = &pixels[row * width * numcomp];
     png_write_row(png_ptr, (png_bytep)row_pointer);

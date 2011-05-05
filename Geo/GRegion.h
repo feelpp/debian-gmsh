@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -6,6 +6,10 @@
 #ifndef _GREGION_H_
 #define _GREGION_H_
 
+#include <list>
+#include <string>
+#include <vector>
+#include <stdio.h>
 #include "GEntity.h"
 
 class MElement;
@@ -13,6 +17,7 @@ class MTetrahedron;
 class MHexahedron;
 class MPrism;
 class MPyramid;
+class MPolyhedron;
 class ExtrudeParams;
 
 // A model region.
@@ -25,6 +30,9 @@ class GRegion : public GEntity {
   GRegion(GModel *model, int tag);
   virtual ~GRegion();
 
+  // delete mesh data
+  virtual void deleteMesh();
+
   // get the dimension of the region (3)
   virtual int dim() const { return 3; }
 
@@ -33,7 +41,8 @@ class GRegion : public GEntity {
 
   // get/set faces that bound the region
   virtual std::list<GFace*> faces() const{ return l_faces; }
-  void set(std::list<GFace*> &f) { l_faces= f; }
+  virtual std::list<int> faceOrientations() const{ return l_dirs; }
+  void set(std::list<GFace*> &f) { l_faces = f; }
 
   // edges that bound the region
   virtual std::list<GEdge*> edges() const;
@@ -41,26 +50,36 @@ class GRegion : public GEntity {
   // get the bounding box
   virtual SBoundingBox3d bounds() const;
 
+  // get the oriented bounding box
+  virtual SOrientedBoundingBox getOBB();
+
   // check if the region is connected to another region by an edge
   bool edgeConnected(GRegion *r) const;
-
-  // recompute the mesh partitions defined on this region
-  void recomputeMeshPartitions();
-
-  // delete the mesh partitions defined on this region
-  void deleteMeshPartitions();
 
   // return a type-specific additional information string
   virtual std::string getAdditionalInfoString();
 
-  // get number of elements in the mesh and get element by index
+  // export in GEO format
+  virtual void writeGEO(FILE *fp);
+
+  // number of types of elements
+  int getNumElementTypes() const { return 5; }
+
+  // get total/by-type number of elements in the mesh
   unsigned int getNumMeshElements();
+  void getNumMeshElements(unsigned *const c) const;
+
+  // get the start of the array of a type of element
+  MElement *const *getStartElementType(int type) const;
+
+  // get the element at the given index
   MElement *getMeshElement(unsigned int index);
 
   // reset the mesh attributes to default values
   virtual void resetMeshAttributes();
 
   struct {
+    // is this surface meshed using a transfinite interpolation
     char Method;
     // the extrusion parameters (if any)
     ExtrudeParams *extrude;
@@ -76,6 +95,7 @@ class GRegion : public GEntity {
   std::vector<MHexahedron*> hexahedra;
   std::vector<MPrism*> prisms;
   std::vector<MPyramid*> pyramids;
+  std::vector<MPolyhedron*> polyhedra;
 };
 
 #endif

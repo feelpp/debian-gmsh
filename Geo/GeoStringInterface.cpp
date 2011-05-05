@@ -1,13 +1,13 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
 #include <string.h>
 #include <sstream>
-#include "Message.h"
+#include "GmshConfig.h"
+#include "GmshMessage.h"
 #include "Numeric.h"
-#include "MallocUtils.h"
 #include "StringUtils.h"
 #include "Geo.h"
 #include "GeoStringInterface.h"
@@ -19,79 +19,27 @@
 #include "Parser.h"
 #endif
 
-extern Context_T CTX;
-
-#define BUFFSIZE 128000
-
-// Some old systems don't have snprintf... Just call sprintf instead.
-
-#if defined(HAVE_NO_SNPRINTF)
-static int snprintf(char *str, size_t size, const char* fmt, ...)
-{
-  va_list args;
-  va_start(args, fmt);
-  int ret = vsprintf(str, fmt, args);
-  va_end(args);
-  return ret;
-}
-#endif
-
-double evaluate_scalarfunction(const char *var, double val, const char *funct)
-{
-#if defined(HAVE_NO_PARSER)
-  Msg::Error("Scalar function evaluation not available without Gmsh parser");
-  return 0.;
-#else
-  FILE *tempf;
-  tempf = gmsh_yyin;
-
-  if(!(gmsh_yyin = fopen(CTX.tmp_filename_fullpath, "w"))) {
-    Msg::Error("Unable to open temporary file '%s'", CTX.tmp_filename_fullpath);
-    return 0.;
-  }
-
-  // pose "variable = function" and evaluate function
-  fprintf(gmsh_yyin, "%s = %.16g ;\n", var, val);
-  fprintf(gmsh_yyin, "ValeurTemporaire__ = %s ;\n", funct);
-  fclose(gmsh_yyin);
-  gmsh_yyin = fopen(CTX.tmp_filename_fullpath, "r");
-  while(!feof(gmsh_yyin)) {
-    gmsh_yyparse();
-  }
-  fclose(gmsh_yyin);
-  gmsh_yyin = tempf;
-
-  // retreive value
-  Symbol TheSymbol, *TheSymbol_P;
-  TheSymbol.Name = (char *)Malloc(100*sizeof(char));
-  strcpy(TheSymbol.Name, "ValeurTemporaire__");
-  if(!(TheSymbol_P = (Symbol*)Tree_PQuery(Symbol_T, &TheSymbol))) {
-    Free(TheSymbol.Name);
-    return 0.0;
-  }
-  Free(TheSymbol.Name);
-  return *(double *)List_Pointer(TheSymbol_P->val, 0);
-#endif
-}
-
-void add_infile(const char *text, const char *fich, bool deleted_something)
+void add_infile(std::string text, std::string fileName, bool deleted_something)
 {
 #if defined(HAVE_NO_PARSER)
   Msg::Error("GEO file creation not available without Gmsh parser");
 #else
-  if(!(gmsh_yyin = fopen(CTX.tmp_filename_fullpath, "w"))) {
-    Msg::Error("Unable to open temporary file '%s'", CTX.tmp_filename_fullpath);
+  std::string tmpFileName = CTX::instance()->homeDir + CTX::instance()->tmpFileName;
+  FILE *gmsh_yyin_old = gmsh_yyin;
+  if(!(gmsh_yyin = fopen(tmpFileName.c_str(), "w"))) {
+    Msg::Error("Unable to open temporary file '%s'", tmpFileName.c_str());
+    gmsh_yyin = gmsh_yyin_old;
     return;
   }
-
-  fprintf(gmsh_yyin, "%s\n", text);
-  Msg::StatusBar(2, true, "%s", text);
+  fprintf(gmsh_yyin, "%s\n", text.c_str());
+  Msg::StatusBar(2, true, "%s", text.c_str());
   fclose(gmsh_yyin);
-  gmsh_yyin = fopen(CTX.tmp_filename_fullpath, "r");
+  gmsh_yyin = fopen(tmpFileName.c_str(), "r");
   while(!feof(gmsh_yyin)) {
     gmsh_yyparse();
   }
   fclose(gmsh_yyin);
+  gmsh_yyin = gmsh_yyin_old;
 
   if(deleted_something){
     // we need to start from scratch since the command just parsed
@@ -99,18 +47,17 @@ void add_infile(const char *text, const char *fich, bool deleted_something)
     GModel::current()->destroy();
   }
   GModel::current()->importGEOInternals();
-  CTX.mesh.changed = ENT_ALL;
+  CTX::instance()->mesh.changed = ENT_ALL;
 
-  FILE *file;
-  if(!(file = fopen(fich, "a"))) {
-    Msg::Error("Unable to open file '%s'", fich);
+  FILE *fp = fopen(fileName.c_str(), "a");
+  if(!fp) {
+    Msg::Error("Unable to open file '%s'", fileName.c_str());
     return;
   }
   
-  if(!CTX.expert_mode) {
-    char no_ext[256], ext[256], base[256];
-    SplitFileName(fich, no_ext, ext, base);
-    if(strlen(ext) && strcmp(ext, ".geo") && strcmp(ext, ".GEO")){
+  if(!CTX::instance()->expertMode) {
+    std::string ext = SplitFileName(fileName)[2];
+    if(ext.size() && ext != ".geo" && ext != ".GEO"){
       char question[1024];
       sprintf(question, 
               "A scripting command is going to be appended to a non-`.geo' file.\n\n"
@@ -118,466 +65,291 @@ void add_infile(const char *text, const char *fich, bool deleted_something)
               "(You might want to create a new `.geo' file containing the command\n\n"
               "Merge \"%s\";\n\n"
               "and use that file instead. To disable this warning in the future, select\n"
-              "`Enable expert mode' in the option dialog.)", fich);
+              "`Enable expert mode' in the option dialog.)", fileName.c_str());
       if(!Msg::GetBinaryAnswer(question, "Proceed", "Cancel", false)){
-        fclose(file);
+        fclose(fp);
         return;
       }
     }
   }
 
-  fprintf(file, "%s\n", text);
-  fclose(file);
+  fprintf(fp, "%s\n", text.c_str());
+  fclose(fp);
 #endif
 }
 
-void coherence(const char *fich)
+void coherence(std::string fileName)
 {
-  add_infile("Coherence;", fich, true);
+  add_infile("Coherence;", fileName, true);
 }
 
-static void strncat_list(char *text, List_T *list)
+static std::string list2string(List_T *list)
 {
-  char text2[BUFFSIZE];
+  std::ostringstream sstream;
   for(int i = 0; i < List_Nbr(list); i++){
     int num;
     List_Read(list, i, &num);
-    if(!i)
-      snprintf(text2, BUFFSIZE, "%d", num);
-    else
-      snprintf(text2, BUFFSIZE, ",%d", num);
-    strncat(text, text2, BUFFSIZE-strlen(text));
+    if(i) sstream << ", ";
+    sstream << num;
   }
+  return sstream.str();
 }
 
-void delet(List_T *list, const char *fich, const char *what)
-{
-  char text[BUFFSIZE];
-
-  snprintf(text, BUFFSIZE, "Delete {\n  %s{", what);
-  strncat_list(text, list);
-  strncat(text, "};\n}", BUFFSIZE-strlen(text));
-  add_infile(text, fich, true);
-}
-
-void add_trsfsurf(int N, int *l, const char *fich, const char *dir)
-{
-  char text[BUFFSIZE], text2[BUFFSIZE];
-
-  snprintf(text, BUFFSIZE, "Transfinite Surface {%d} = {", l[0]);
-  for(int i = 1; i < N; i++) {
-    if(i == 1)
-      snprintf(text2, BUFFSIZE, "%d", l[i]);
-    else
-      snprintf(text2, BUFFSIZE, ",%d", l[i]);
-    strncat(text, text2, BUFFSIZE-strlen(text));
-  }
-  if (!strcmp(dir,"Left"))
-    snprintf(text2, BUFFSIZE, "};");
-  else
-    snprintf(text2, BUFFSIZE, "} %s;",dir);
-
-  strncat(text, text2, BUFFSIZE-strlen(text));
-  add_infile(text, fich);
-}
-
-void add_charlength(List_T *list, const char *fich, const char *lc)
-{
-  char text[BUFFSIZE];
-
-  snprintf(text, BUFFSIZE, "Characteristic Length {");
-  strncat_list(text, list);
-  strncat(text, "} = ", BUFFSIZE-strlen(text));
-  strncat(text, lc, BUFFSIZE-strlen(text));
-  strncat(text, ";", BUFFSIZE-strlen(text));
-  add_infile(text, fich);
-}
-
-void add_recosurf(List_T *list, const char *fich)
-{
-  char text[BUFFSIZE];
-
-  snprintf(text, BUFFSIZE, "Recombine Surface {");
-  strncat_list(text, list);
-  strncat(text, "};", BUFFSIZE-strlen(text));
-  add_infile(text, fich);
-}
-
-void add_trsfline(int N, int *l, const char *fich, const char *type, 
-                  const char *typearg, const char *pts)
-{
-  char text[BUFFSIZE], text2[BUFFSIZE];
-
-  snprintf(text, BUFFSIZE, "Transfinite Line {");
-  for(int i = 0; i < N; i++) {
-    if(!i)
-      snprintf(text2, BUFFSIZE, "%d", l[i]);
-    else
-      snprintf(text2, BUFFSIZE, ",%d", l[i]);
-    strncat(text, text2, BUFFSIZE-strlen(text));
-  }
-  if(strlen(typearg))
-    snprintf(text2, BUFFSIZE, "} = %s Using %s %s;", pts, type, typearg);
-  else
-    snprintf(text2, BUFFSIZE, "} = %s;", pts);
-  strncat(text, text2, BUFFSIZE-strlen(text));
-  add_infile(text, fich);
-}
-
-void add_param(const char *par, const char *value, const char *fich)
-{
-  char text[BUFFSIZE];
-  snprintf(text, BUFFSIZE, "%s = %s;", par, value);
-  add_infile(text, fich);
-}
-
-void add_point(const char *fich, const char *x, const char *y, const char *z, 
-               const char *lc)
-{
-  char text[BUFFSIZE];
-  int ip = NEWPOINT();
-  snprintf(text, BUFFSIZE, "Point(%d) = {%s,%s,%s,%s};", ip, x, y, z, lc);
-  add_infile(text, fich);
-}
-
-void add_field_option(int field_id, const char *option_name, const char *option_value, 
-		      const char *fich)
+void delet(List_T *list, std::string fileName, std::string what)
 {
   std::ostringstream sstream;
-  sstream<<"Field["<<field_id<<"]."<<std::string(option_name)<<" = "
-	 <<std::string(option_value)<<";";
-  add_infile(sstream.str().c_str(),fich);
+  sstream << "Delete {\n  " << what << "{" << list2string(list) << "};\n}";
+  add_infile(sstream.str(), fileName, true);
 }
 
-void add_field(int field_id, const char *type_name, const char *fich)
+void add_charlength(List_T *list, std::string fileName, std::string lc)
 {
   std::ostringstream sstream;
-  sstream<<"Field["<<field_id<<"] = "<<std::string(type_name)<<";";
-  add_infile(sstream.str().c_str(),fich);
+  sstream << "Characteristic Length {" << list2string(list) << "} = " << lc << ";";
+  add_infile(sstream.str(), fileName);
 }
 
-void delete_field(int field_id, const char *fich)
+void add_recosurf(List_T *list, std::string fileName)
 {
   std::ostringstream sstream;
-  sstream<<"Delete Field ["<<field_id<<"];";
-  add_infile(sstream.str().c_str(),fich);
+  sstream << "Recombine Surface {" << list2string(list) << "};";
+  add_infile(sstream.str(), fileName);
 }
 
-void set_background_field(int field_id,const char *fich)
+void add_trsfline(std::vector<int> &l, std::string fileName, std::string type, 
+                  std::string typearg, std::string pts)
 {
   std::ostringstream sstream;
-  sstream<<"Background Field = "<<field_id<<";";
-  add_infile(sstream.str().c_str(),fich);
-}
-
-void add_line(int p1, int p2, const char *fich)
-{
-  char text[BUFFSIZE];
-  int iseg;
-  List_T *list = List_Create(2, 2, sizeof(int));
-  List_Add(list, &p1);
-  List_Add(list, &p2);
-  if((recognize_seg(MSH_SEGM_LINE, list, &iseg))) {
-    List_Delete(list);
-    return;
+  sstream << "Transfinite Line {";
+  for(unsigned int i = 0; i < l.size(); i++){
+    if(i) sstream << ", ";
+    sstream << l[i];
   }
-  List_Delete(list);
-
-  snprintf(text, BUFFSIZE, "Line(%d) = {%d,%d};", NEWLINE(), p1, p2);
-  add_infile(text, fich);
+  sstream << "} = " << pts;
+  if(typearg.size()) sstream << " Using " << type << " " << typearg;
+  sstream << ";";
+  add_infile(sstream.str(), fileName);
 }
 
-void add_circ(int p1, int p2, int p3, const char *fich)
+void add_trsfsurf(std::vector<int> &l, std::string fileName, std::string dir)
 {
-  char text[BUFFSIZE];
-
-  snprintf(text, BUFFSIZE, "Circle(%d) = {%d,%d,%d};", NEWLINE(), p1, p2, p3);
-  add_infile(text, fich);
-}
-
-void add_ell(int p1, int p2, int p3, int p4, const char *fich)
-{
-  char text[BUFFSIZE];
-
-  snprintf(text, BUFFSIZE, "Ellipse(%d) = {%d,%d,%d,%d};", NEWLINE(), p1, p2,
-           p3, p4);
-  add_infile(text, fich);
-}
-
-void add_spline(int N, int *p, const char *fich)
-{
-  char text[BUFFSIZE], text2[BUFFSIZE];
-
-  snprintf(text, BUFFSIZE, "Spline(%d) = {", NEWLINE());
-  for(int i = 0; i < N; i++) {
-    if(i != N - 1)
-      snprintf(text2, BUFFSIZE, "%d,", p[i]);
-    else
-      snprintf(text2, BUFFSIZE, "%d};", p[i]);
-    strncat(text, text2, BUFFSIZE-strlen(text));
+  std::ostringstream sstream;
+  sstream << "Transfinite Surface {" << l[0] << "}";
+  if(l.size() > 1){
+    sstream << " = {";
+    for(unsigned int i = 1; i < l.size(); i++) {
+      if(i > 1) sstream << ", ";
+      sstream << l[i];
+    }
+    sstream << "}";
   }
-  add_infile(text, fich);
+  if(dir != "Left")
+    sstream << " " << dir;
+  sstream << ";";
+  add_infile(sstream.str(), fileName);
 }
 
-void add_bezier(int N, int *p, const char *fich)
+void add_trsfvol(std::vector<int> &l, std::string fileName)
 {
-  char text[BUFFSIZE], text2[BUFFSIZE];
-
-  snprintf(text, BUFFSIZE, "Bezier(%d) = {", NEWLINE());
-  for(int i = 0; i < N; i++) {
-    if(i != N - 1)
-      snprintf(text2, BUFFSIZE, "%d,", p[i]);
-    else
-      snprintf(text2, BUFFSIZE, "%d};", p[i]);
-    strncat(text, text2, BUFFSIZE-strlen(text));
+  std::ostringstream sstream;
+  sstream << "Transfinite Volume{" << l[0] << "} = {";
+  for(unsigned int i = 1; i < l.size(); i++) {
+    if(i > 1) sstream << ", ";
+    sstream << l[i];
   }
-  add_infile(text, fich);
+  sstream << "};";
+  add_infile(sstream.str(), fileName);
 }
 
-void add_bspline(int N, int *p, const char *fich)
+void add_param(std::string par, std::string value, std::string fileName)
 {
-  char text[BUFFSIZE], text2[BUFFSIZE];
-
-  snprintf(text, BUFFSIZE, "BSpline(%d) = {", NEWLINE());
-  for(int i = 0; i < N; i++) {
-    if(i != N - 1)
-      snprintf(text2, BUFFSIZE, "%d,", p[i]);
-    else
-      snprintf(text2, BUFFSIZE, "%d};", p[i]);
-    strncat(text, text2, BUFFSIZE-strlen(text));
-  }
-  add_infile(text, fich);
+  std::ostringstream sstream;
+  sstream << par << " = " << value << ";";
+  add_infile(sstream.str(), fileName);
 }
 
-void add_multline(int N, int *p, const char *fich)
+void add_point(std::string fileName, std::string x, std::string y,
+               std::string z, std::string lc)
 {
-  char text[BUFFSIZE], text2[BUFFSIZE];
-  int iseg;
-
-  List_T *list = List_Create(N, 2, sizeof(int));
-  for(int i = 0; i < N; i++)
-    List_Add(list, &p[i]);
-  if((recognize_seg(MSH_SEGM_LINE, list, &iseg))) {
-    List_Delete(list);
-    return;
-  }
-  List_Delete(list);
-
-  snprintf(text, BUFFSIZE, "Line(%d) = {", NEWLINE());
-  for(int i = 0; i < N; i++) {
-    if(i != N - 1)
-      snprintf(text2, BUFFSIZE, "%d,", p[i]);
-    else
-      snprintf(text2, BUFFSIZE, "%d};", p[i]);
-    strncat(text, text2, BUFFSIZE-strlen(text));
-  }
-  add_infile(text, fich);
+  std::ostringstream sstream;
+  sstream << "Point(" << NEWPOINT() << ") = {" << x << ", " << y << ", " 
+          << z ;
+  if(lc.size()) sstream << ", " << lc;
+  sstream << "};";
+  add_infile(sstream.str(), fileName);
 }
 
-void add_lineloop(List_T *list, const char *fich, int *numloop)
+void add_field_option(int field_id, std::string option_name, 
+                      std::string option_value, std::string fileName)
 {
-  char text[BUFFSIZE];
+  std::ostringstream sstream;
+  sstream << "Field[" << field_id << "]." << option_name << " = " 
+          << option_value << ";";
+  add_infile(sstream.str(), fileName);
+}
 
-  if((recognize_loop(list, numloop)))
-    return;
+void add_field(int field_id, std::string type_name, std::string fileName)
+{
+  std::ostringstream sstream;
+  sstream << "Field[" << field_id << "] = " << type_name << ";";
+  add_infile(sstream.str(), fileName);
+}
 
+void delete_field(int field_id, std::string fileName)
+{
+  std::ostringstream sstream;
+  sstream << "Delete Field [" << field_id << "];";
+  add_infile(sstream.str(), fileName);
+}
+
+void set_background_field(int field_id, std::string fileName)
+{
+  std::ostringstream sstream;
+  sstream << "Background Field = " << field_id << ";";
+  add_infile(sstream.str(), fileName);
+}
+
+void add_multline(std::string type, std::vector<int> &p, std::string fileName)
+{
+  std::ostringstream sstream;
+  sstream << type << "(" << NEWLINE() << ") = {";
+  for(unsigned int i = 0; i < p.size(); i++) {
+    if(i) sstream << ", ";
+    sstream << p[i];
+  }
+  sstream << "};";
+  add_infile(sstream.str(), fileName);
+}
+
+void add_circ(int p1, int p2, int p3, std::string fileName)
+{
+  std::ostringstream sstream;
+  sstream << "Circle(" << NEWLINE() << ") = {" << p1 << ", " << p2 << ", "
+          << p3 << "};";
+  add_infile(sstream.str(), fileName);
+}
+
+void add_ell(int p1, int p2, int p3, int p4, std::string fileName)
+{
+  std::ostringstream sstream;
+  sstream << "Ellipse(" << NEWLINE() << ") = {" << p1 << ", " << p2 << ", "
+          << p3 << ", " << p4 << "};";
+  add_infile(sstream.str(), fileName);
+}
+
+void add_lineloop(List_T *list, std::string fileName, int *numloop)
+{
+  if(recognize_loop(list, numloop)) return;
   *numloop = NEWLINELOOP();
-  snprintf(text, BUFFSIZE, "Line Loop(%d) = {", *numloop);
-  strncat_list(text, list);
-  strncat(text, "};", BUFFSIZE-strlen(text));
-  add_infile(text, fich);
+  std::ostringstream sstream;
+  sstream << "Line Loop(" << *numloop << ") = {" << list2string(list) << "};";
+  add_infile(sstream.str(), fileName);
 }
 
-void add_surf(List_T *list, const char *fich, int support, int typ)
+void add_surf(std::string type, List_T *list, std::string fileName)
 {
-  char text[BUFFSIZE];
-
-  if(typ == 1) {
-    snprintf(text, BUFFSIZE, "Ruled Surface(%d) = {", NEWSURFACE());
-  }
-  else {
-    snprintf(text, BUFFSIZE, "Plane Surface(%d) = {", NEWSURFACE());
-  }
-  strncat_list(text, list);
-  strncat(text, "};", BUFFSIZE-strlen(text));
-  add_infile(text, fich);
+  std::ostringstream sstream;  
+  sstream << type << "(" << NEWSURFACE() << ") = {" << list2string(list) << "};";
+  add_infile(sstream.str(), fileName);
 }
 
-void add_surfloop(List_T *list, const char *fich, int *numvol)
+void add_surfloop(List_T *list, std::string fileName, int *numloop)
 {
-  char text[BUFFSIZE];
-
-  if((recognize_surfloop(list, numvol)))
-    return;
-
-  *numvol = NEWSURFACELOOP();
-  snprintf(text, BUFFSIZE, "Surface Loop(%d) = {", *numvol);
-  strncat_list(text, list);
-  strncat(text, "};", BUFFSIZE-strlen(text));
-  add_infile(text, fich);
+  if(recognize_surfloop(list, numloop)) return;
+  *numloop = NEWSURFACELOOP();
+  std::ostringstream sstream;
+  sstream << "Surface Loop(" << *numloop << ") = {" << list2string(list) << "};";
+  add_infile(sstream.str(), fileName);
 }
 
-void add_vol(List_T *list, const char *fich)
+void add_vol(List_T *list, std::string fileName)
 {
-  char text[BUFFSIZE];
-
-  snprintf(text, BUFFSIZE, "Volume(%d) = {", NEWVOLUME());
-  strncat_list(text, list);
-  strncat(text, "};", BUFFSIZE-strlen(text));
-  add_infile(text, fich);
+  std::ostringstream sstream;
+  sstream << "Volume(" << NEWVOLUME() << ") = {" << list2string(list) << "};";
+  add_infile(sstream.str(), fileName);
 }
 
-void add_trsfvol(int N, int *l, const char *fich)
+void add_physical(std::string type, List_T *list, std::string fileName)
 {
-  char text[BUFFSIZE], text2[BUFFSIZE];
-
-  snprintf(text, BUFFSIZE, "Transfinite Volume{%d} = {", l[0]);
-  for(int i = 1; i < N; i++) {
-    if(i == 1)
-      snprintf(text2, BUFFSIZE, "%d", l[i]);
-    else
-      snprintf(text2, BUFFSIZE, ",%d", l[i]);
-    strncat(text, text2, BUFFSIZE-strlen(text));
-  }
-  snprintf(text2, BUFFSIZE, "};");
-  strncat(text, text2, BUFFSIZE-strlen(text));
-  add_infile(text, fich);
+  std::ostringstream sstream;
+  sstream << "Physical " << type << "(" << NEWPHYSICAL() << ") = {" 
+          << list2string(list) << "};";
+  add_infile(sstream.str(), fileName);
 }
 
-int add_physical(List_T *list, const char *fich, int type)
+void translate(int add, List_T *list, std::string fileName, std::string what,
+               std::string tx, std::string ty, std::string tz)
 {
-  char text[BUFFSIZE];
-  int num = NEWPHYSICAL();
-  
-  switch (type) {
-  case ENT_POINT:
-    snprintf(text, BUFFSIZE, "Physical Point(%d) = {", num);
-    break;
-  case ENT_LINE:
-    snprintf(text, BUFFSIZE, "Physical Line(%d) = {", num);
-    break;
-  case ENT_SURFACE:
-    snprintf(text, BUFFSIZE, "Physical Surface(%d) = {", num);
-    break;
-  case ENT_VOLUME:
-    snprintf(text, BUFFSIZE, "Physical Volume(%d) = {", num);
-    break;
-  }
-
-  strncat_list(text, list);
-  strncat(text, "};", BUFFSIZE-strlen(text));
-  add_infile(text, fich);
-  
-  return num;
+  std::ostringstream sstream;
+  sstream << "Translate {" << tx << ", " << ty << ", " << tz << "} {\n  ";
+  if(add) sstream << "Duplicata { ";
+  sstream << what << "{" << list2string(list) << "};";
+  if(add) sstream << " }";
+  sstream << "\n}";
+  add_infile(sstream.str(), fileName);
 }
 
-void translate(int add, List_T *list, const char *fich, const char *what,
-               const char *tx, const char *ty, const char *tz)
+void rotate(int add, List_T *list, std::string fileName, std::string what, 
+            std::string ax, std::string ay, std::string az,
+            std::string px, std::string py, std::string pz, std::string angle)
 {
-  char text[BUFFSIZE];
-
-  if(add)
-    snprintf(text, BUFFSIZE, "Translate {%s,%s,%s} {\n  Duplicata { %s{", tx, ty, tz, what);
-  else
-    snprintf(text, BUFFSIZE, "Translate {%s,%s,%s} {\n  %s{", tx, ty, tz, what);
-
-  strncat_list(text, list);
-  
-  if(add)
-    strncat(text, "}; }\n}", BUFFSIZE-strlen(text));
-  else
-    strncat(text, "};\n}", BUFFSIZE-strlen(text));
-
-  add_infile(text, fich);
+  std::ostringstream sstream;
+  sstream << "Rotate {{" << ax << ", " << ay << ", " << az << "}, {" 
+          << px << ", " << py << ", " << pz << "}, " << angle << "} {\n  ";
+  if(add) sstream << "Duplicata { ";
+  sstream << what << "{" << list2string(list) << "};";
+  if(add) sstream << " }";
+  sstream << "\n}";
+  add_infile(sstream.str(), fileName);
 }
 
-void rotate(int add, List_T *list, const char *fich, const char *what, 
-            const char *ax, const char *ay, const char *az,
-            const char *px, const char *py, const char *pz, const char *angle)
+void dilate(int add, List_T *list, std::string fileName, std::string what,
+            std::string dx, std::string dy, std::string dz, std::string df)
 {
-  char text[BUFFSIZE];
-
-  if(add)
-    snprintf(text, BUFFSIZE, "Rotate {{%s,%s,%s}, {%s,%s,%s}, %s} {\n  Duplicata { %s{",
-             ax, ay, az, px, py, pz, angle, what);
-  else
-    snprintf(text, BUFFSIZE, "Rotate {{%s,%s,%s}, {%s,%s,%s}, %s} {\n  %s{",
-             ax, ay, az, px, py, pz, angle, what);
-
-  strncat_list(text, list);
-
-  if(add)
-    strncat(text, "}; }\n}", BUFFSIZE-strlen(text));
-  else
-    strncat(text, "};\n}", BUFFSIZE-strlen(text));
-
-  add_infile(text, fich);
+  std::ostringstream sstream;
+  sstream << "Dilate {{" << dx << ", " << dy << ", " << dz << "}, " << df << "} {\n  ";
+  if(add) sstream << "Duplicata { ";
+  sstream << what << "{" << list2string(list) << "};";
+  if(add) sstream << " }";
+  sstream << "\n}";
+  add_infile(sstream.str(), fileName);
 }
 
-void dilate(int add, List_T *list, const char *fich, const char *what,
-            const char *dx, const char *dy, const char *dz, const char *df)
+void symmetry(int add, List_T *list, std::string fileName, std::string what,
+              std::string sa, std::string sb, std::string sc, std::string sd)
 {
-  char text[BUFFSIZE];
-
-  if(add)
-    snprintf(text, BUFFSIZE, "Dilate {{%s,%s,%s}, %s} {\n  Duplicata { %s{",
-             dx, dy, dz, df, what);
-  else
-    snprintf(text, BUFFSIZE, "Dilate {{%s,%s,%s}, %s} {\n  %s{",
-             dx, dy, dz, df, what);
-
-  strncat_list(text, list);
-
-  if(add)
-    strncat(text, "}; }\n}", BUFFSIZE-strlen(text));
-  else
-    strncat(text, "};\n}", BUFFSIZE-strlen(text));
-
-  add_infile(text, fich);
+  std::ostringstream sstream;
+  sstream << "Symmetry {" << sa << ", " << sb << ", " << sc << ", " << sd << "} {\n  ";
+  if(add) sstream << "Duplicata { ";
+  sstream << what << "{" << list2string(list) << "};";
+  if(add) sstream << " }";
+  sstream << "\n}";
+  add_infile(sstream.str(), fileName);
 }
 
-void symmetry(int add, List_T *list, const char *fich, const char *what,
-              const char *sa, const char *sb, const char *sc, const char *sd)
+void extrude(List_T *list, std::string fileName, std::string what, 
+             std::string tx, std::string ty, std::string tz)
 {
-  char text[BUFFSIZE];
-
-  if(add)
-    snprintf(text, BUFFSIZE, "Symmetry {%s,%s,%s,%s} {\n  Duplicata { %s{",
-             sa, sb, sc, sd, what);
-  else
-    snprintf(text, BUFFSIZE, "Symmetry {%s,%s,%s,%s} {\n  %s{",
-             sa, sb, sc, sd, what);
-
-  strncat_list(text, list);
-
-  if(add)
-    strncat(text, "}; }\n}", BUFFSIZE-strlen(text));
-  else
-    strncat(text, "};\n}", BUFFSIZE-strlen(text));
-
-  add_infile(text, fich);
+  std::ostringstream sstream;
+  sstream << "Extrude {" << tx << ", " << ty << ", " << tz << "} {\n  " << what 
+          << "{" << list2string(list) << "};\n}";
+  add_infile(sstream.str(), fileName);
 }
 
-void extrude(List_T *list, const char *fich, const char *what, 
-             const char *tx, const char *ty, const char *tz)
+void protude(List_T *list, std::string fileName, std::string what, 
+             std::string ax, std::string ay, std::string az,
+             std::string px, std::string py, std::string pz, std::string angle)
 {
-  char text[BUFFSIZE];
-
-  snprintf(text, BUFFSIZE, "Extrude {%s,%s,%s} {\n  %s{", tx, ty, tz, what);
-  strncat_list(text, list);
-  strncat(text, "};\n}", BUFFSIZE-strlen(text));
-  add_infile(text, fich);
+  std::ostringstream sstream;
+  sstream << "Extrude {{" << ax << ", " << ay << ", " << az << "}, {" 
+          << px << ", " << py << ", " << pz << "}, " << angle << "} {\n  "
+          << what << "{" << list2string(list) << "};\n}";
+  add_infile(sstream.str(), fileName);
 }
 
-void protude(List_T *list, const char *fich, const char *what, 
-             const char *ax, const char *ay, const char *az,
-             const char *px, const char *py, const char *pz, const char *angle)
+void split_edge(int edge_id, List_T *vertices,std::string fileName)
 {
-  char text[BUFFSIZE];
-
-  snprintf(text, BUFFSIZE, "Extrude {{%s,%s,%s}, {%s,%s,%s}, %s} {\n  %s{",
-           ax, ay, az, px, py, pz, angle, what);
-  strncat_list(text, list);
-  strncat(text, "};\n}", BUFFSIZE-strlen(text));
-  add_infile(text, fich);
+  std::ostringstream sstream;
+  sstream << "Split Line(" << edge_id << ") {" << list2string(vertices) << "};";
+  add_infile(sstream.str(), fileName, true);
 }

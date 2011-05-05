@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -21,18 +21,9 @@ extern "C"
   }
 }
 
-void GMSH_FieldViewPlugin::getName(char *name) const
+std::string GMSH_FieldViewPlugin::getHelp() const
 {
-  strcpy(name, "FieldView");
-}
-
-void GMSH_FieldViewPlugin::getInfos(char *author, char *copyright,
-                                    char *help_text) const
-{
-  strcpy(author, "J. Lambrechts (jonathanlambrechts@gmail.org)");
-  strcpy(copyright, "GPL");
-  strcpy(help_text,
-         "Plugin(FieldView) evaluate a field on the choosen view.\n");
+  return "Plugin(FieldView) evaluates a field on the choosen view.\n";
 }
 
 int GMSH_FieldViewPlugin::getNbOptions() const
@@ -45,14 +36,9 @@ StringXNumber *GMSH_FieldViewPlugin::getOption(int iopt)
   return &FieldViewOptions_Number[iopt];
 }
 
-void GMSH_FieldViewPlugin::catchErrorMessage(char *errorMessage) const
-{
-  strcpy(errorMessage, "FieldView failed...");
-}
-
 PView *GMSH_FieldViewPlugin::execute(PView *v)
 {
-  int comp = (int)FieldViewOptions_Number[0].def;
+  //int comp = (int)FieldViewOptions_Number[0].def;
   int iView = (int)FieldViewOptions_Number[1].def;
   int iField = (int)FieldViewOptions_Number[2].def;
   Field *field = GModel::current()->getFields()->get(iField);
@@ -62,6 +48,6 @@ PView *GMSH_FieldViewPlugin::execute(PView *v)
   }
   PView *v1 = getView(iView, v);
   if(!v1) return v;
-        field->put_on_view(v1);
+  field->putOnView(v1);
   return v1;
 }

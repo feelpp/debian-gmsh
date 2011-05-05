@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -34,7 +34,7 @@
 
 void create_yuv(FILE * outfile, PixelBuffer *buffer)
 {
-  if(buffer->GetFormat() != GL_RGB || buffer->GetType() != GL_UNSIGNED_BYTE){
+  if(buffer->getFormat() != GL_RGB || buffer->getType() != GL_UNSIGNED_BYTE){
     Msg::Error("YUV only implemented for GL_RGB and GL_UNSIGNED_BYTE");
     return;
   }
@@ -59,22 +59,22 @@ void create_yuv(FILE * outfile, PixelBuffer *buffer)
     maxValue = 255;
 
     for(index = 0; index <= maxValue; index++) {
-      mult299[index] = index * 0.29900;
-      mult587[index] = index * 0.58700;
-      mult114[index] = index * 0.11400;
-      mult16874[index] = -0.16874 * index;
-      mult33126[index] = -0.33126 * index;
-      mult5[index] = index * 0.50000;
-      mult41869[index] = -0.41869 * index;
-      mult08131[index] = -0.08131 * index;
+      mult299[index] = index * 0.29900F;
+      mult587[index] = index * 0.58700F;
+      mult114[index] = index * 0.11400F;
+      mult16874[index] = -0.16874F * index;
+      mult33126[index] = -0.33126F * index;
+      mult5[index] = index * 0.50000F;
+      mult41869[index] = -0.41869F * index;
+      mult08131[index] = -0.08131F * index;
     }
 
     first = 0;
   }
 
-  int width = buffer->GetWidth();
-  int height = buffer->GetHeight();
-  unsigned char *pixels = (unsigned char *)buffer->GetPixels();
+  int width = buffer->getWidth();
+  int height = buffer->getHeight();
+  unsigned char *pixels = (unsigned char *)buffer->getPixels();
   
   // yuv format assumes even number of rows and columns
   height -= height % 2;

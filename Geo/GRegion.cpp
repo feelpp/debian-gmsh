@@ -1,18 +1,19 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
+#include <sstream>
 #include "GModel.h"
 #include "GRegion.h"
 #include "GFace.h"
-#include "MElement.h"
-
-#if defined(HAVE_GMSH_EMBEDDED)
-#  include "GmshEmbedded.h"
-#else
-#  include "Message.h"
-#endif
+#include "MTetrahedron.h"
+#include "MHexahedron.h"
+#include "MPrism.h"
+#include "MPyramid.h"
+#include "MElementCut.h"
+#include "GmshMessage.h"
+#include "VertexArray.h"
 
 GRegion::GRegion(GModel *model, int tag) : GEntity (model, tag)
 {
@@ -27,25 +28,60 @@ GRegion::~GRegion()
     ++it;
   }
 
-  for(unsigned int i = 0; i < mesh_vertices.size(); i++)
-    delete mesh_vertices[i];
+  deleteMesh();
+}
 
-  for(unsigned int i = 0; i < tetrahedra.size(); i++)
-    delete tetrahedra[i];
-
-  for(unsigned int i = 0; i < hexahedra.size(); i++)
-    delete hexahedra[i];
-
-  for(unsigned int i = 0; i < prisms.size(); i++)
-    delete prisms[i];
-
-  for(unsigned int i = 0; i < pyramids.size(); i++)
-    delete pyramids[i];
+void GRegion::deleteMesh()
+{
+  for(unsigned int i = 0; i < mesh_vertices.size(); i++) delete mesh_vertices[i];
+  mesh_vertices.clear();
+  transfinite_vertices.clear();
+  for(unsigned int i = 0; i < tetrahedra.size(); i++) delete tetrahedra[i];
+  tetrahedra.clear();
+  for(unsigned int i = 0; i < hexahedra.size(); i++) delete hexahedra[i];
+  hexahedra.clear();
+  for(unsigned int i = 0; i < prisms.size(); i++) delete prisms[i];
+  prisms.clear();
+  for(unsigned int i = 0; i < pyramids.size(); i++) delete pyramids[i];
+  pyramids.clear();
+  for(unsigned int i = 0; i < polyhedra.size(); i++) delete polyhedra[i];
+  polyhedra.clear();
 }
 
 unsigned int GRegion::getNumMeshElements()
 { 
-  return tetrahedra.size() + hexahedra.size() + prisms.size() + pyramids.size();
+  return tetrahedra.size() + hexahedra.size() + prisms.size() + pyramids.size() + polyhedra.size();
+}
+
+void GRegion::getNumMeshElements(unsigned *const c) const
+{
+  c[0] += tetrahedra.size();
+  c[1] += hexahedra.size();
+  c[2] += prisms.size();
+  c[3] += pyramids.size();
+  c[4] += polyhedra.size();
+}
+
+MElement *const *GRegion::getStartElementType(int type) const
+{
+  switch(type) {
+  case 0:
+    if(tetrahedra.empty()) return 0; // msvc would throw an exception
+    return reinterpret_cast<MElement *const *>(&tetrahedra[0]);
+  case 1:
+    if(hexahedra.empty()) return 0; // msvc would throw an exception
+    return reinterpret_cast<MElement *const *>(&hexahedra[0]);
+  case 2:
+    if(prisms.empty()) return 0; // msvc would throw an exception
+    return reinterpret_cast<MElement *const *>(&prisms[0]);
+  case 3:
+    if(pyramids.empty()) return 0; // msvc would throw an exception
+    return reinterpret_cast<MElement *const *>(&pyramids[0]);
+  case 4:
+    if(polyhedra.empty()) return 0;
+    return reinterpret_cast<MElement *const *>(&polyhedra[0]);
+  }
+  return 0;
 }
 
 MElement *GRegion::getMeshElement(unsigned int index)
@@ -58,6 +94,8 @@ MElement *GRegion::getMeshElement(unsigned int index)
     return prisms[index - tetrahedra.size() - hexahedra.size()];
   else if(index < tetrahedra.size() + hexahedra.size() + prisms.size() + pyramids.size())
     return pyramids[index - tetrahedra.size() - hexahedra.size() - prisms.size()];
+  else if(index < tetrahedra.size() + hexahedra.size() + prisms.size() + pyramids.size() + polyhedra.size())
+    return polyhedra[index - tetrahedra.size() - hexahedra.size() - prisms.size() - pyramids.size()];
   return 0;
 }
 
@@ -82,6 +120,66 @@ SBoundingBox3d GRegion::bounds() const
   return res;
 }
 
+SOrientedBoundingBox GRegion::getOBB()
+{
+  if (!_obb) {
+    std::vector<SPoint3> vertices;
+    std::list<GFace*> b_faces = faces();
+    for (std::list<GFace*>::iterator b_face = b_faces.begin(); 
+         b_face != b_faces.end(); b_face++) {
+      if((*b_face)->getNumMeshVertices() > 0) {
+        int N = (*b_face)->getNumMeshVertices();
+        for (int i = 0; i < N; i++) {
+          MVertex* mv = (*b_face)->getMeshVertex(i);
+          vertices.push_back(mv->point());
+        }
+        std::list<GEdge*> eds = (*b_face)->edges();
+        for(std::list<GEdge*>::iterator ed = eds.begin(); ed != eds.end(); ed++) {
+          int N2 = (*ed)->getNumMeshVertices();
+          for (int i = 0; i < N2; i++) {
+            MVertex* mv = (*ed)->getMeshVertex(i);
+            vertices.push_back(mv->point());
+          }
+          // Don't forget to add the first and last vertices...
+          SPoint3 pt1((*ed)->getBeginVertex()->x(),
+                      (*ed)->getBeginVertex()->y(),
+                      (*ed)->getBeginVertex()->z());
+          SPoint3 pt2((*ed)->getEndVertex()->x(),
+                      (*ed)->getEndVertex()->y(),
+                      (*ed)->getEndVertex()->z());
+          vertices.push_back(pt1);
+          vertices.push_back(pt2);
+        }
+      } 
+      else if ((*b_face)->buildSTLTriangulation()) {
+        int N = (*b_face)->va_geom_triangles->getNumVertices();
+        for(int i = 0; i < N; i++) {
+          SPoint3 p(((*b_face)->va_geom_triangles->getVertexArray(3*i))[0],
+                    ((*b_face)->va_geom_triangles->getVertexArray(3*i))[1],
+                    ((*b_face)->va_geom_triangles->getVertexArray(3*i))[2]);
+          vertices.push_back(p);          
+        }
+      } 
+      else {
+        int N = 10;
+        std::list<GEdge*> b_edges = (*b_face)->edges();
+        for (std::list<GEdge*>::iterator b_edge = b_edges.begin(); 
+             b_edge != b_edges.end(); b_edge++) {
+          Range<double> tr = (*b_edge)->parBounds(0);
+          for (int j = 0; j < N; j++) {
+            double t = tr.low() + (double)j / (double)(N - 1) * (tr.high() - tr.low());
+            GPoint p = (*b_edge)->point(t);
+            SPoint3 pt(p.x(), p.y(), p.z());
+            vertices.push_back(pt);
+          }
+        }       
+      }
+    }
+    _obb = SOrientedBoundingBox::buildOBB(vertices);
+  }
+  return SOrientedBoundingBox(_obb);
+}
+
 void GRegion::setVisibility(char val, bool recursive)
 {
   GEntity::setVisibility(val);
@@ -94,59 +192,38 @@ void GRegion::setVisibility(char val, bool recursive)
   }
 }
 
-void GRegion::recomputeMeshPartitions()
-{
-  for(unsigned int i = 0; i < tetrahedra.size(); i++) {
-    int part = tetrahedra[i]->getPartition();
-    if(part) model()->getMeshPartitions().insert(part);
-  }
-  for(unsigned int i = 0; i < hexahedra.size(); i++) {
-    int part = hexahedra[i]->getPartition();
-    if(part) model()->getMeshPartitions().insert(part);
-  }
-  for(unsigned int i = 0; i < prisms.size(); i++) {
-    int part = prisms[i]->getPartition();
-    if(part) model()->getMeshPartitions().insert(part);
-  }
-  for(unsigned int i = 0; i < pyramids.size(); i++) {
-    int part = pyramids[i]->getPartition();
-    if(part) model()->getMeshPartitions().insert(part);
-  }
-}
-
-void GRegion::deleteMeshPartitions()
-{
-  for(unsigned int i = 0; i < tetrahedra.size(); i++)
-    tetrahedra[i]->setPartition(0);
-  for(unsigned int i = 0; i < hexahedra.size(); i++)
-    hexahedra[i]->setPartition(0);
-  for(unsigned int i = 0; i < prisms.size(); i++)
-    prisms[i]->setPartition(0);
-  for(unsigned int i = 0; i < pyramids.size(); i++)
-    pyramids[i]->setPartition(0);
-}
-
 std::string GRegion::getAdditionalInfoString()
 {
-  if(l_faces.empty()) return std::string("");
-
-  std::string str("{");
-  if(l_faces.size() > 10){
-    char tmp[256];
-    sprintf(tmp, "%d, ..., %d", l_faces.front()->tag(), l_faces.back()->tag());
-    str += tmp;
+  std::ostringstream sstream;
+  if(l_faces.size() > 20){
+    sstream << "{" << l_faces.front()->tag() << ",...," << l_faces.back()->tag() << "}";
   }
-  else{
-    std::list<GFace*>::const_iterator it = l_faces.begin();
-    for(; it != l_faces.end(); it++){
-      if(it != l_faces.begin()) str += ",";
-      char tmp[256];
-      sprintf(tmp, "%d", (*it)->tag());
-      str += tmp;
+  else if(l_faces.size()){
+    sstream << "{";
+    for(std::list<GFace*>::iterator it = l_faces.begin(); it != l_faces.end(); ++it){
+      if(it != l_faces.begin()) sstream << ",";
+      sstream << (*it)->tag();
     }
+    sstream << "}";
   }
-  str += "}";
-  return str;
+  return sstream.str();
+}
+
+void GRegion::writeGEO(FILE *fp)
+{
+  if(geomType() == DiscreteVolume) return;
+
+  if(l_faces.size()){
+    fprintf(fp, "Surface Loop(%d) = ", tag());
+    for(std::list<GFace*>::iterator it = l_faces.begin(); it != l_faces.end(); it++) {
+      if(it != l_faces.begin())
+        fprintf(fp, ", %d", (*it)->tag());
+      else
+        fprintf(fp, "{%d", (*it)->tag());
+    }
+    fprintf(fp, "};\n");
+    fprintf(fp, "Volume(%d) = {%d};\n", tag(), tag());
+  }
 }
 
 std::list<GEdge*> GRegion::edges() const
@@ -158,7 +235,7 @@ std::list<GEdge*> GRegion::edges() const
     e2 = (*it)->edges();
     std::list<GEdge*>::const_iterator it2 = e2.begin();
     while (it2 != e2.end()){
-      if (std::find(e.begin(), e.end(), *it2) == e.end())
+      if(std::find(e.begin(), e.end(), *it2) == e.end())
         e.push_back(*it2);
       ++it2;
     }

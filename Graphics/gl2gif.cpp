@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -88,8 +88,8 @@ static void ppm_freecolorhash(colorhash_table cht)
 }
 
 static colorhash_table ppm_computecolorhash(pixel ** const pixels,
-					    const int cols, const int rows,
-					    const int maxcolors, int *const colorsP)
+                                            const int cols, const int rows,
+                                            const int maxcolors, int *const colorsP)
 {
   colorhash_table cht;
   const pixel *pP;
@@ -125,7 +125,7 @@ static colorhash_table ppm_computecolorhash(pixel ** const pixels,
 }
 
 static int ppm_addtocolorhash(colorhash_table cht, const pixel * const colorP,
-			      const int value)
+                              const int value)
 {
   register int hash;
   register colorhist_list chl;
@@ -140,7 +140,7 @@ static int ppm_addtocolorhash(colorhash_table cht, const pixel * const colorP,
 }
 
 static colorhist_vector ppm_colorhashtocolorhist(const colorhash_table cht,
-						 const int maxcolors)
+                                                 const int maxcolors)
 {
   colorhist_vector chv;
   colorhist_list chl;
@@ -162,7 +162,7 @@ static colorhist_vector ppm_colorhashtocolorhist(const colorhash_table cht,
 }
 
 static colorhash_table ppm_colorhisttocolorhash(const colorhist_vector chv,
-						const int colors)
+                                                const int colors)
 {
   colorhash_table cht;
   int i, hash;
@@ -189,8 +189,8 @@ static colorhash_table ppm_colorhisttocolorhash(const colorhist_vector chv,
 }
 
 static colorhist_vector ppm_computecolorhist(pixel ** const pixels,
-					     const int cols, const int rows,
-					     const int maxcolors, int *const colorsP)
+                                             const int cols, const int rows,
+                                             const int maxcolors, int *const colorsP)
 {
   colorhash_table cht;
   colorhist_vector chv;
@@ -433,11 +433,11 @@ static colorhist_vector mediancut(colorhist_vector chv, int colors,
     float rl, gl, bl;
 
     PPM_ASSIGN(p, maxr - minr, 0, 0);
-    rl = PPM_LUMIN(p);
+    rl = (float)PPM_LUMIN(p);
     PPM_ASSIGN(p, 0, maxg - ming, 0);
-    gl = PPM_LUMIN(p);
+    gl = (float)PPM_LUMIN(p);
     PPM_ASSIGN(p, 0, 0, maxb - minb);
-    bl = PPM_LUMIN(p);
+    bl = (float)PPM_LUMIN(p);
 
     if(rl >= gl && rl >= bl)
       qsort((char *)&(chv[indx]), clrs, sizeof(struct colorhist_item),
@@ -1164,9 +1164,9 @@ void create_gif(FILE * outfile, PixelBuffer *buffer,
   register long sr = 0, sg = 0, sb = 0, err = 0;
   int fs_direction = 0;
 
-  int width = buffer->GetWidth();
-  int height = buffer->GetHeight();
-  int numcomp = buffer->GetNumComp();
+  int width = buffer->getWidth();
+  int height = buffer->getHeight();
+  int numcomp = buffer->getNumComp();
 
   if(numcomp != 3){
     Msg::Error("GIF only implemented for GL_RGB");
@@ -1177,7 +1177,7 @@ void create_gif(FILE * outfile, PixelBuffer *buffer,
   for(i = 0; i < height; i++)
     static_pixels[i] = (pixel *) Malloc(3 * width * sizeof(pixel));
 
-  unsigned char *pixels = (unsigned char*)buffer->GetPixels();
+  unsigned char *pixels = (unsigned char*)buffer->getPixels();
   for(i = 0; i < height; i++)
     for(j = 0; j < width; j++)
       PPM_ASSIGN(static_pixels[height - 1 - i][j],
@@ -1309,7 +1309,7 @@ void create_gif(FILE * outfile, PixelBuffer *buffer,
           }
           if(usehash) {
             if(ppm_addtocolorhash(cht, pP, ind) < 0) {
-	      Msg::Warning("GIF: Out of memory adding to hash table");
+              Msg::Warning("GIF: Out of memory adding to hash table");
               usehash = 0;
             }
           }

@@ -1,14 +1,15 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
+#include <limits>
+#include "GmshConfig.h"
+#include "GmshMessage.h"
 #include "GModel.h"
-#include "Message.h"
 #include "OCCEdge.h"
 #include "OCCFace.h"
 #include "Context.h"
-extern Context_T CTX;
 
 #if defined(HAVE_OCC)
 #include "Geom2dLProp_CLProps2d.hxx"
@@ -36,7 +37,7 @@ Range<double> OCCEdge::parBounds(int i) const
   return Range<double>(s0, s1);
 }
 
-void OCCEdge::setTrimmed (OCCFace *f)
+void OCCEdge::setTrimmed(OCCFace *f)
 {
   if (!trimmed){
     trimmed = f;
@@ -46,7 +47,7 @@ void OCCEdge::setTrimmed (OCCFace *f)
   }
 }
 
-SPoint2 OCCEdge::reparamOnFace(GFace *face, double epar, int dir) const
+SPoint2 OCCEdge::reparamOnFace(const GFace *face, double epar, int dir) const
 {
   const TopoDS_Face *s = (TopoDS_Face*) face->getNativePtr();
   double t0, t1;
@@ -61,7 +62,7 @@ SPoint2 OCCEdge::reparamOnFace(GFace *face, double epar, int dir) const
   
   if(c2d.IsNull()){
     Msg::Fatal("Reparam on face failed: curve %d is not on surface %d",
-	       tag(), face->tag());
+               tag(), face->tag());
   }
 
   double u, v;
@@ -74,14 +75,14 @@ SPoint2 OCCEdge::reparamOnFace(GFace *face, double epar, int dir) const
   const double dx = p1.x()-p2.x();
   const double dy = p1.y()-p2.y();
   const double dz = p1.z()-p2.z();
-  if(sqrt(dx * dx + dy * dy + dz * dz) > 1.e-4 * CTX.lc){
+  if(sqrt(dx * dx + dy * dy + dz * dz) > 1.e-4 * CTX::instance()->lc){
     // return reparamOnFace(face, epar,-1);      
     Msg::Warning("Reparam on face partially failed for curve %d surface %d at point %g",
-		 tag(), face->tag(), epar);
+                 tag(), face->tag(), epar);
     Msg::Warning("On the face %d local (%g %g) global (%g %g %g)",
-		 face->tag(), u, v, p2.x(), p2.y(), p2.z());
+                 face->tag(), u, v, p2.x(), p2.y(), p2.z());
     Msg::Warning("On the edge %d local (%g) global (%g %g %g)",
-		 tag(), epar, p1.x(), p1.y(), p1.z());
+                 tag(), epar, p1.x(), p1.y(), p1.z());
     // GPoint ppp = face->closestPoint(SPoint3(p1.x(), p1.y(), p1.z()));
     // return SPoint2(ppp.u(), ppp.v());
   }
@@ -89,8 +90,9 @@ SPoint2 OCCEdge::reparamOnFace(GFace *face, double epar, int dir) const
 }
 
 // True if the edge is a seam for the given face
-bool OCCEdge::isSeam(GFace *face) const
+bool OCCEdge::isSeam(const GFace *face) const
 {
+  if (face->geomType() == GEntity::CompoundSurface)return false; 
   const TopoDS_Face *s = (TopoDS_Face*) face->getNativePtr();
   BRepAdaptor_Surface surface(*s);
   //  printf("asking if edge %d is a seam of face %d\n",tag(),face->tag());
@@ -109,7 +111,7 @@ GPoint OCCEdge::point(double par) const
     return trimmed->point(u, v);
   }
   else if(!curve.IsNull()){
-    gp_Pnt pnt = curve->Value (par);
+    gp_Pnt pnt = curve->Value(par);
     return GPoint(pnt.X(), pnt.Y(), pnt.Z());
   }
   else{
@@ -122,15 +124,9 @@ SVector3 OCCEdge::firstDer(double par) const
 {  
   BRepAdaptor_Curve brepc(c);
   BRepLProp_CLProps prop(brepc, 1, 1e-5);
-  prop.SetParameter (par);
+  prop.SetParameter(par);
   gp_Vec d1 = prop.D1();
   return SVector3(d1.X(), d1.Y(), d1.Z());
-}
-
-double OCCEdge::parFromPoint(const SPoint3 &pt) const
-{
-  Msg::Error("parFromPoint not implemented for OCCEdge");
-  return 0.;
 }
 
 GEntity::GeomType OCCEdge::geomType() const
@@ -189,7 +185,7 @@ int OCCEdge::minimumMeshSegments() const
   if(geomType() == Line)
     np = GEdge::minimumMeshSegments();
   else 
-    np = CTX.mesh.min_curv_points - 1;
+    np = CTX::instance()->mesh.minCurvPoints - 1;
   
   // if the edge is closed, ensure that at least 3 points are
   // generated in the 1D mesh (4 segments, one of which is
@@ -203,10 +199,8 @@ int OCCEdge::minimumDrawSegments() const
 {
   if(geomType() == Line)
     return GEdge::minimumDrawSegments();
-  else if(geomType() == Circle || geomType() == Ellipse)
-    return CTX.geom.circle_points;
   else
-    return 20 * GEdge::minimumDrawSegments();
+    return CTX::instance()->geom.numSubEdges * GEdge::minimumDrawSegments();
 }
 
 double OCCEdge::curvature(double par) const 
@@ -232,19 +226,32 @@ double OCCEdge::curvature(double par) const
       Crv = prop.Curvature();
   }
   if(Crv <= eps) Crv = eps;
-  
-  // std::list<GFace*> ff = faces();
-  // std::list<GFace *>::iterator it =  ff.begin();
-  // while (it != ff.end()){
-  //   SPoint2 par2 = reparamOnFace((*it),par,1);
-  //   const double cc = (*it)->curvature ( par2 );
-  //   if (cc > 0)
-  //     Crv = std::max( Crv, cc);  
-  //   ++it;
-  // }  
-  // printf("curvature = %12.5E\n",Crv); 
-
   return Crv;
+}
+
+void OCCEdge::writeGEO(FILE *fp)
+{
+  if(geomType() == Circle){
+    gp_Pnt center;
+    if(curve.IsNull()){
+      center = Handle(Geom_Circle)::DownCast(curve2d)->Location();
+    }
+    else{
+      center = Handle(Geom_Circle)::DownCast(curve)->Location();
+    }
+    // GEO supports only circle arcs < Pi
+    if(s1 - s0 < M_PI){
+      fprintf(fp, "p%d = newp;\n", tag());
+      fprintf(fp, "Point(p%d + 1) = {%.16g, %.16g, %.16g};\n", 
+              tag(), center.X(), center.Y(), center.Z());
+      fprintf(fp, "Circle(%d) = {%d, p%d + 1, %d};\n", 
+              tag(), getBeginVertex()->tag(), tag(), getEndVertex()->tag());
+    }
+    else
+      GEdge::writeGEO(fp);
+  }
+  else
+    GEdge::writeGEO(fp);
 }
 
 #endif

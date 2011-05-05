@@ -1,59 +1,57 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
 #include <string>
+#include <time.h>
+#include "GmshConfig.h"
 #include "GmshDefines.h"
 #include "GModel.h"
-#include "Message.h"
+#include "GmshMessage.h"
 #include "OpenFile.h"
 #include "CreateFile.h"
 #include "Options.h"
 #include "CommandLine.h"
 #include "OS.h"
-#include "Numeric.h"
 #include "Generator.h"
 #include "Field.h"
 #include "Context.h"
-
-#if !defined(HAVE_NO_PARSER)
-#include "Parser.h"
-#endif
+#include "robustPredicates.h"
+#include "meshPartition.h"
+#include "GmshDaemon.h"
 
 #if !defined(HAVE_NO_POST)
 #include "PluginManager.h"
 #endif
 
-extern Context_T CTX;
-
 int GmshInitialize(int argc, char **argv)
 {
+  // we need at least one model during option parsing
+  GModel *dummy = 0;
+  if(GModel::list.empty()) dummy = new GModel();
+
   // Initialize messages (parallel stuff, etc.)
   Msg::Init(argc, argv);
 
-#if !defined(HAVE_NO_POST)
-  // Initialize the symbol tree that will hold variable names in the
-  // parser
-  InitSymbols();
-#endif
-  
   // Load default options
-  Init_Options(0);
+  InitOptions(0);
 
   // Read configuration files and command line options
-  Get_Options(argc, argv);
+  GetOptions(argc, argv);
 
   // Make sure we have enough resources (stack)
   CheckResources();
   
 #if !defined(HAVE_NO_POST)
   // Initialize the default plugins
-  GMSH_PluginManager::instance()->registerDefaultPlugins();
+  PluginManager::instance()->registerDefaultPlugins();
 #endif
 
-  // Check for buggy obsolete GSL versions
-  check_gsl();
+  // Initialize robust predicates
+  robustPredicates::exactinit();
+
+  if(dummy) delete dummy;
   return 1;
 }
 
@@ -63,18 +61,53 @@ int GmshSetMessageHandler(GmshMessage *callback)
   return 1;
 }
 
+int GmshSetBoundingBox(double xmin, double xmax,
+                       double ymin, double ymax, 
+                       double zmin, double zmax)
+{
+  SetBoundingBox(xmin, xmax, ymin, ymax, zmin, zmax);
+  return 1;
+}
+
 int GmshSetOption(std::string category, std::string name, std::string value, int index)
 {
-  if(StringOption(GMSH_SET, category.c_str(), index, name.c_str(), value.c_str()))
-    return 1;
-  return 0;
+  return StringOption(GMSH_SET, category.c_str(), index, name.c_str(), value);
 }
 
 int GmshSetOption(std::string category, std::string name, double value, int index)
 {
-  if(NumberOption(GMSH_SET, category.c_str(), index, name.c_str(), value))
-    return 1;
-  return 0;
+  return NumberOption(GMSH_SET, category.c_str(), index, name.c_str(), value);
+}
+
+int GmshSetOption(std::string category, std::string name, unsigned int value, int index)
+{
+  return ColorOption(GMSH_SET, category.c_str(), index, name.c_str(), value);
+}
+
+int GmshGetOption(std::string category, std::string name, std::string &value, int index)
+{
+  return StringOption(GMSH_GET, category.c_str(), index, name.c_str(), value);
+}
+
+int GmshGetOption(std::string category, std::string name, double &value, int index)
+{
+  return NumberOption(GMSH_GET, category.c_str(), index, name.c_str(), value);
+}
+
+int GmshGetOption(std::string category, std::string name, unsigned int &value, int index)
+{
+  return ColorOption(GMSH_GET, category.c_str(), index, name.c_str(), value);
+}
+
+int GmshMergeFile(std::string fileName)
+{
+  return MergeFile(fileName, true);
+}
+
+int GmshWriteFile(std::string fileName)
+{
+  CreateOutputFile(fileName, FORMAT_AUTO);
+  return 1;
 }
 
 int GmshFinalize()
@@ -84,32 +117,55 @@ int GmshFinalize()
 
 int GmshBatch()
 {
-  if(!GModel::current()) return 0;
+  Msg::Info("Running '%s'", Msg::GetCommandLineArgs().c_str());
+  Msg::Info("Started on %s", Msg::GetLaunchDate().c_str());
 
-  OpenProject(CTX.filename);
-  for(unsigned int i = 1; i < CTX.files.size(); i++)
-    MergeFile(CTX.files[i].c_str());
+  OpenProject(GModel::current()->getFileName());
+  for(unsigned int i = 1; i < CTX::instance()->files.size(); i++){
+    if(CTX::instance()->files[i] == "-new")
+      new GModel();
+    else
+      MergeFile(CTX::instance()->files[i]);
+  }
+
 #if !defined(HAVE_NO_POST)
-  if(CTX.bgm_filename) {
-    MergeFile(CTX.bgm_filename);
+  if(!CTX::instance()->bgmFileName.empty()) {
+    MergeFile(CTX::instance()->bgmFileName);
     if(PView::list.size())
-      GModel::current()->getFields()->set_background_mesh(PView::list.size() - 1);
+      GModel::current()->getFields()->setBackgroundMesh(PView::list.size() - 1);
     else
       Msg::Error("Invalid background mesh (no view)");
   }
 #endif
-  if(CTX.batch == 4) {
-    AdaptMesh(GModel::current());
-    CreateOutputFile(CTX.output_filename, CTX.mesh.format);
+
+  if(CTX::instance()->batch == -3){
+    GmshDaemon(CTX::instance()->solver.socketName);
   }
-  else if(CTX.batch > 0) {
-    GModel::current()->mesh(CTX.batch);
-    CreateOutputFile(CTX.output_filename, CTX.mesh.format);
+  else if(CTX::instance()->batch == -2){
+    GModel::current()->checkMeshCoherence(CTX::instance()->geom.tolerance);
   }
-  else if(CTX.batch == -1)
-    CreateOutputFile(CTX.output_filename, FORMAT_GEO);
-  else if(CTX.batch == -2)
-    GModel::current()->checkMeshCoherence();
+  else if(CTX::instance()->batch == -1){
+    CreateOutputFile(CTX::instance()->outputFileName, FORMAT_GEO);
+  }
+  else if(CTX::instance()->batch > 0){
+    if(CTX::instance()->batch < 4)
+      GModel::current()->mesh(CTX::instance()->batch);
+    else if(CTX::instance()->batch == 4)
+      AdaptMesh(GModel::current());
+    else if(CTX::instance()->batch == 5)
+      RefineMesh(GModel::current(), CTX::instance()->mesh.secondOrderLinear);
+#if defined(HAVE_CHACO) || defined(HAVE_METIS)
+    if(CTX::instance()->batchAfterMesh == 1)
+      PartitionMesh(GModel::current(), CTX::instance()->partitionOptions);
+#endif
+    CreateOutputFile(CTX::instance()->outputFileName, CTX::instance()->mesh.format);
+  }
+
+  time_t now;
+  time(&now);
+  std::string currtime = ctime(&now);
+  currtime.resize(currtime.size() - 1);
+  Msg::Info("Stopped on %s", currtime.c_str());
 
   return 1;
 }

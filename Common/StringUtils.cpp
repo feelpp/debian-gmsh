@@ -1,13 +1,15 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
+#include <stdio.h>
 #if defined(__CYGWIN__)
 #include <sys/cygwin.h>
 #endif
 
 #include "StringUtils.h"
+#include "GmshMessage.h"
 
 void SwapBytes(char *array, int size, int n)
 {
@@ -60,31 +62,70 @@ std::string SanitizeTeXString(const char *in, int equation)
   return out;
 }
 
-void FixWindowsPath(const char *in, char *out)
+std::string FixWindowsPath(std::string in)
 {
 #if defined(__CYGWIN__)
-  cygwin_conv_to_win32_path(in, out);
+  char tmp[1024];
+  cygwin_conv_to_win32_path(in.c_str(), tmp);
+  return std::string(tmp);
 #else
-  strcpy(out, in);
+  return in;
 #endif
 }
 
-void SplitFileName(const char *name, char *no_ext, char *ext, char *base)
+std::string FixRelativePath(std::string reference, std::string in)
 {
-  strcpy(no_ext, name);
-  strcpy(ext, "");
-  for(int i = strlen(name) - 1; i >= 0; i--){
-    if(name[i] == '.'){
-      strcpy(ext, &name[i]);
-      no_ext[i] = '\0';
-      break;
+  if(in.empty()) return "";
+
+  if(in[0] == '/' || in[0] == '\\' || (in.size() > 2 && in[1] == ':')){
+    // do nothing: 'in' is an absolute path
+    return in;
+  }
+  else{
+    // append 'in' to the path of the reference file
+    std::vector<std::string> split = SplitFileName(reference);
+    return split[0] + in;
+  }
+}
+
+std::vector<std::string> SplitFileName(std::string fileName)
+{
+  // returns [path, baseName, extension]
+  int idot = fileName.find_last_of('.');
+  int islash = fileName.find_last_of("/\\");
+  if(idot == (int)std::string::npos) idot = -1;
+  if(islash == (int)std::string::npos) islash = -1;
+  std::vector<std::string> s(3);
+  if(idot > 0)
+    s[2] = fileName.substr(idot);
+  if(islash > 0)
+    s[0] = fileName.substr(0, islash + 1);
+  s[1] = fileName.substr(s[0].size(), fileName.size() - s[0].size() - s[2].size());
+  return s;
+}
+
+std::vector<std::string> SplitWhiteSpace(std::string in, unsigned int len)
+{
+  std::vector<std::string> out(1);
+  for(unsigned int i = 0; i < in.size(); i++){
+    out.back() += in[i];
+    if(out.back().size() > len && in[i] == ' ')
+      out.resize(out.size() + 1);
+  }
+  return out;
+}
+
+std::string ReplacePercentS(std::string in, std::string val)
+{
+  std::string out;
+  for(unsigned int i = 0; i < in.size(); i++){
+    if(in[i] == '%' && i + 1 < in.size() && in[i + 1] == 's'){
+      out += val;
+      i++;
+    }
+    else{
+      out += in[i];
     }
   }
-  strcpy(base, no_ext);
-  for(int i = strlen(no_ext) - 1; i >= 0; i--){
-    if(no_ext[i] == '/' || no_ext[i] == '\\'){
-      strcpy(base, &no_ext[i + 1]);
-      break;
-    }
-  }
+  return out;
 }

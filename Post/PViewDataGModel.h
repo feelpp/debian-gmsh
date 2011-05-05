@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -40,11 +40,11 @@ class stepData{
   std::vector<std::vector<double> > _gaussPoints;
  public:
   stepData(GModel *model, int numComp, std::string fileName="", int fileIndex=-1, 
-	   double time=0., double min=VAL_INF, double max=-VAL_INF)
+           double time=0., double min=VAL_INF, double max=-VAL_INF)
     : _model(model), _fileName(fileName), _fileIndex(fileIndex), _time(time), 
       _min(min), _max(max), _numComp(numComp), _data(0)
   {
-    _entities = _model->getEntities();
+    _model->getEntities(_entities);
     _bbox = _model->bounds();
   }
   ~stepData(){ destroyData(); }
@@ -78,8 +78,8 @@ class stepData{
     if(allocIfNeeded){
       if(index >= getNumData()) resizeData(index + 100); // optimize this
       if(!(*_data)[index]){
-	(*_data)[index] = new real[_numComp * mult];
-	for(int i = 0; i < _numComp * mult; i++) (*_data)[index][i] = 0.;
+        (*_data)[index] = new real[_numComp * mult];
+        for(int i = 0; i < _numComp * mult; i++) (*_data)[index][i] = 0.;
       }
     }
     else{
@@ -123,6 +123,8 @@ class PViewDataGModel : public PViewData {
   DataType _type;
   // cache last element to speed up loops
   MElement *_getElement(int step, int ent, int ele);
+  // helper function to populate the interpolation matrix list
+  void _addInterpolationMatricesForElement(MElement *e);
  public:
   PViewDataGModel(DataType type=NodeData);
   ~PViewDataGModel();
@@ -135,7 +137,7 @@ class PViewDataGModel : public PViewData {
   int getNumScalars(int step=-1);
   int getNumVectors(int step=-1);
   int getNumTensors(int step=-1);
-  int getNumPoints(int step=-1){ return 0; }
+  int getNumPoints(int step=-1);
   int getNumLines(int step=-1);
   int getNumTriangles(int step=-1);
   int getNumQuadrangles(int step=-1);
@@ -156,6 +158,7 @@ class PViewDataGModel : public PViewData {
   void getValue(int step, int ent, int ele, int node, int comp, double &val);
   void setValue(int step, int ent, int ele, int node, int comp, double val);
   int getNumEdges(int step, int ent, int ele);
+  int getType(int step, int ent, int ele);
   void revertElement(int step, int ent, int ele);
   void smooth();
   bool skipEntity(int step, int ent);
@@ -175,12 +178,11 @@ class PViewDataGModel : public PViewData {
   // get underlying model
   GModel* getModel(int step){ return _steps[step]->getModel(); }
 
-  // Add some data "on the fly" (data is stored by vertex: if a field
-  // has e.g. 3 components, nodalData contains 3 * N entries with N
-  // being the number of mesh vertices in the model ; nodalData [ iVer
-  // * N + jComp] is the jComp-th component at vertex iVer)
-  bool addNodalData(int step, double time, int partition, 
-		    int numComp, const std::vector<double> &nodalData);
+  // Add some data "on the fly" (data is stored in a map, indexed by
+  // node or element number depending on the type of dataset; all the
+  // vectors are supposed to have the same length)
+  bool addData(GModel *model, std::map<int, std::vector<double> > &data,
+               int step, double time, int partition);
 
   // I/O routines
   bool readMSH(std::string fileName, int fileIndex, FILE *fp, bool binary, 

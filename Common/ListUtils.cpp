@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -12,11 +12,10 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/types.h>
-
 #include "MallocUtils.h"
 #include "ListUtils.h"
 #include "TreeUtils.h"
-#include "Message.h"
+#include "GmshMessage.h"
 
 List_T *List_Create(int n, int incr, int size)
 {
@@ -97,22 +96,6 @@ void List_Write(List_T * liste, int index, void *data)
   }
 }
 
-void List_Put(List_T * liste, int index, void *data)
-{
-  if(index < 0)
-    Msg::Error("Wrong list index (put)");
-  else {
-    if(index >= liste->n) {
-      liste->n = index + 1;
-      List_Realloc(liste, liste->n);
-      List_Write(liste, index, data);
-    }
-    else {
-      List_Write(liste, index, data);
-    }
-  }
-}
-
 void List_Pop(List_T * liste)
 {
   if(liste->n > 0)
@@ -141,18 +124,26 @@ void *List_Pointer_Fast(List_T * liste, int index)
   return (&liste->array[index * liste->size]);
 }
 
-void *List_Pointer_Test(List_T * liste, int index)
-{
-  if(!liste || (index < 0) || (index >= liste->n))
-    return NULL;
-
-  liste->isorder = 0;
-  return (&liste->array[index * liste->size]);
-}
-
 void List_Sort(List_T * liste, int (*fcmp) (const void *a, const void *b))
 {
   qsort(liste->array, liste->n, liste->size, fcmp);
+}
+
+void List_Unique(List_T * liste, int (*fcmp) (const void *a, const void *b))
+{
+  if(liste->isorder != 1) {
+    List_Sort(liste, fcmp);
+    liste->isorder = 1;
+  }
+  if(!List_Nbr(liste))
+    return;
+  int write_index=0;
+  for( int i=1; i < List_Nbr(liste); i++){
+     void *data=List_Pointer(liste,i);
+    if((fcmp(data,(void*)List_Pointer(liste,write_index))))
+      List_Write(liste,++write_index,data);
+  }
+  liste->n=write_index+1;
 }
 
 int List_Search(List_T * liste, void *data,
@@ -168,20 +159,6 @@ int List_Search(List_T * liste, void *data,
   if(ptr == NULL)
     return (0);
   return (1);
-}
-
-int List_ISearch(List_T * liste, void *data,
-                 int (*fcmp) (const void *a, const void *b))
-{
-  void *ptr;
-
-  if(liste->isorder != 1)
-    List_Sort(liste, fcmp);
-  liste->isorder = 1;
-  ptr = (void *)bsearch(data, liste->array, liste->n, liste->size, fcmp);
-  if(ptr == NULL)
-    return (-1);
-  return (((long)ptr - (long)liste->array) / liste->size);
 }
 
 int List_ISearchSeq(List_T * liste, void *data,
@@ -260,239 +237,37 @@ void List_Copy(List_T * a, List_T * b)
   }
 }
 
-void List_Merge(List_T * a, List_T * b)
+void List_Remove(List_T *a, int i)
 {
-  int i;
-
-  if(!a || !b) return;
-  for(i = 0; i < List_Nbr(a); i++) {
-    List_Add(b, List_Pointer_Fast(a, i));
-  }
+  memcpy(&a->array[i * a->size], &a->array[(i + 1) * a->size], 
+         a->size * (a->n - i - 1));
+  a->n--;
 }
 
-void swap_bytes(char *array, int size, int n)
+//insert a in b before i
+void List_Insert_In_List(List_T *a, int i, List_T *b)
 {
-  int i, c;
-  char *x, *a;
-
-  x = (char *)Malloc(size);
-
-  for(i = 0; i < n; i++) {
-    a = &array[i * size];
-    memcpy(x, a, size);
-    for(c = 0; c < size; c++)
-      a[size - 1 - c] = x[c];
-  }
-
-  Free(x);
+  int oldn = b->n;
+  b->n += a->n;
+  List_Realloc(b, b->n);
+  for(int j = 0; j < oldn - i; j++)
+    memcpy(List_Pointer_Fast(b, b->n - j - 1), List_Pointer_Fast(b, oldn - j - 1),
+           b->size);
+  for(int j = 0;j < a->n; j++)
+    memcpy(List_Pointer_Fast(b, i + j), List_Pointer_Fast(a, j), b->size);
 }
 
-List_T *List_CreateFromFile(int n, int incr, int size, FILE * file, int format,
-                            int swap)
+List_T *ListOfDouble2ListOfInt(List_T *dList)
 {
-  int i, error = 0;
-  List_T *liste;
-
-  if(!n){
-    liste = List_Create(1, incr, size);
-    return liste;
+  int n = List_Nbr(dList); 
+  List_T *iList = List_Create(n, n, sizeof(int));
+  for(int i = 0; i < n; i++){
+    double d;
+    List_Read(dList, i, &d);
+    int j = (int)d;
+    List_Add(iList, &j);
   }
-
-  liste = List_Create(n, incr, size);
-  liste->n = n;
-  switch (format) {
-  case LIST_FORMAT_ASCII:
-    if(size == sizeof(double)){
-      for(i = 0; i < n; i++){
-        if(!fscanf(file, "%lf", (double *)&liste->array[i * size])){
-          error = 1;
-          break;
-        }
-      }
-    }
-    else if(size == sizeof(float)){
-      for(i = 0; i < n; i++){
-        if(!fscanf(file, "%f", (float *)&liste->array[i * size])){
-          error = 1;
-          break;
-        }
-      }
-    }
-    else if(size == sizeof(int)){
-      for(i = 0; i < n; i++){
-        if(!fscanf(file, "%d", (int *)&liste->array[i * size])){
-          error = 1;
-          break;
-        }
-      }
-    }
-    else if(size == sizeof(char)){
-      for(i = 0; i < n; i++){
-        char c = (char)fgetc(file);
-        if(c == EOF){
-          error = 1;
-          break;
-        }
-        else{
-          liste->array[i * size] = c;
-        }
-      }
-    }
-    else{
-      Msg::Error("Bad type of data to create list from (size = %d)", size);
-      error = 1;
-    }
-    break;
-  case LIST_FORMAT_BINARY:
-    if(!fread(liste->array, size, n, file)){
-      error = 1;
-      break;
-    }
-    if(swap)
-      swap_bytes(liste->array, size, n);
-    break;
-  default:
-    Msg::Error("Unknown list format");
-    error = 1;
-    break;
-  }
-
-  if(error){
-    Msg::Error("Read error");
-    liste->n = 0;
-  }
-
-  return liste;
-}
-
-static int safe_fwrite(const void *ptr, size_t size, size_t nmemb, FILE * stream)
-{
-  size_t result = fwrite(ptr, size, nmemb, stream);
-
-  if(result < nmemb) {
-    if(result >= 0)     /* Partial write */
-      Msg::Error("Disk full");
-    else
-      Msg::Error(strerror(errno));
-    if(fflush(stream) < 0)
-      Msg::Error("EOF reached");
-    if(fclose(stream) < 0)
-      Msg::Error(strerror(errno));
-    return 1;
-  }
-  return 0;
-}
-
-void List_WriteToFile(List_T * liste, FILE * file, int format)
-{
-  int i, n;
-
-  if(!(n = List_Nbr(liste)))
-    return;
-
-  switch (format) {
-  case LIST_FORMAT_ASCII:
-    if(liste->size == sizeof(double))
-      for(i = 0; i < n; i++)
-        fprintf(file, " %.16g", *((double *)&liste->array[i * liste->size]));
-    else if(liste->size == sizeof(float))
-      for(i = 0; i < n; i++)
-        fprintf(file, " %.16g", *((float *)&liste->array[i * liste->size]));
-    else if(liste->size == sizeof(int))
-      for(i = 0; i < n; i++)
-        fprintf(file, " %d", *((int *)&liste->array[i * liste->size]));
-    else if(liste->size == sizeof(char))
-      for(i = 0; i < n; i++)
-        fputc(*((char *)&liste->array[i * liste->size]), file);
-    else
-      Msg::Error("Bad type of data to write list to file (size = %d)",
-          liste->size);
-    break;
-  case LIST_FORMAT_BINARY:
-    safe_fwrite(liste->array, liste->size, n, file);
-    break;
-  default:
-    Msg::Error("Unknown list format");
-    break;
-  }
-}
-
-// For backward compatibility
-
-List_T *List_CreateFromFileOld(int n, int incr, int size, FILE * file, int format,
-                               int swap)
-{
-  int i, error = 0;
-  List_T *liste;
-
-  if(!n){
-    liste = List_Create(1, incr, size);
-    return liste;
-  }
-
-  liste = List_Create(n, incr, size);
-  liste->n = n;
-  switch (format) {
-  case LIST_FORMAT_ASCII:
-    if(size == sizeof(double)){
-      for(i = 0; i < n; i++){
-        if(!fscanf(file, "%lf", (double *)&liste->array[i * size])){
-          error = 1;
-          break;
-        }
-      }
-    }
-    else if(size == sizeof(float)){
-      for(i = 0; i < n; i++){
-        if(!fscanf(file, "%f", (float *)&liste->array[i * size])){
-          error = 1;
-          break;
-        }
-      }
-    }
-    else if(size == sizeof(int)){
-      for(i = 0; i < n; i++){
-        if(!fscanf(file, "%d", (int *)&liste->array[i * size])){
-          error = 1;
-          break;
-        }
-      }
-    }
-    else if(size == sizeof(char)){
-      for(i = 0; i < n; i++){
-        if(!fscanf(file, "%c", (char *)&liste->array[i * size])){
-          error = 1;
-          break;
-        }
-        if(liste->array[i * size] == '^')
-          liste->array[i * size] = '\0';
-      }
-    }
-    else {
-      Msg::Error("Bad type of data to create list from (size = %d)", size);
-      error = 1;
-    }
-    return liste;
-  case LIST_FORMAT_BINARY:
-    if(!fread(liste->array, size, n, file)){
-      error = 1;
-      break;
-    }
-    if(swap)
-      swap_bytes(liste->array, size, n);
-    return liste;
-  default:
-    Msg::Error("Unknown list format");
-    error = 1;
-    break;
-  }
-
-  if(error){
-    Msg::Error("Read error");
-    liste->n = 0;
-  }
-
-  return liste;
+  return iList;
 }
 
 // Comparison functions
@@ -518,18 +293,5 @@ int fcmp_double(const void *a, const void *b)
     return -1;
   else
     return 0;
-}
-
-List_T *ListOfDouble2ListOfInt(List_T *dList)
-{
-  int n = List_Nbr(dList); 
-  List_T *iList = List_Create(n, n, sizeof(int));
-  for(int i = 0; i < n; i++){
-    double d;
-    List_Read(dList, i, &d);
-    int j = (int)d;
-    List_Add(iList, &j);
-  }
-  return iList;
 }
 

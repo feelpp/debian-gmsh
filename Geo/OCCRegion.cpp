@@ -1,14 +1,15 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
+#include "GmshConfig.h"
+#include "GmshMessage.h"
 #include "GModel.h"
 #include "OCCVertex.h"
 #include "OCCEdge.h"
 #include "OCCFace.h"
 #include "OCCRegion.h"
-#include "Message.h"
 
 #if defined(HAVE_OCC)
 
@@ -24,14 +25,14 @@ OCCRegion::OCCRegion(GModel *m, TopoDS_Solid _s, int num, TopTools_IndexedMapOfS
       int index = fmap.FindIndex(face);
       GFace *f = m->getFaceByTag(index);
       if(f){
-	l_faces.push_back(f);
-	f->addRegion(this);
+        l_faces.push_back(f);
+        f->addRegion(this);
       }
       else
-	Msg::Error("Unknown face %d in region %d", index, num);
+        Msg::Error("Unknown face %d in region %d", index, num);
     }      
   }
-  Msg::Info("OCC Region %d with %d edges", num, l_faces.size());
+  Msg::Info("OCC Region %d with %d faces", num, l_faces.size());
 }
 
 GEntity::GeomType OCCRegion::geomType() const

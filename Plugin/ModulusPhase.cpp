@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -19,25 +19,16 @@ extern "C"
   }
 }
 
-void GMSH_ModulusPhasePlugin::getName(char *name) const
+std::string GMSH_ModulusPhasePlugin::getHelp() const
 {
-  strcpy(name, "Modulus Phase");
-}
-
-void GMSH_ModulusPhasePlugin::getInfos(char *author, char *copyright,
-                                        char *help_text) const
-{
-  strcpy(author, "C. Geuzaine");
-  strcpy(copyright, "DGR (www.multiphysics.com)");
-  strcpy(help_text,
-         "Plugin(ModulusPhase) interprets the time steps\n"
+  return "Plugin(ModulusPhase) interprets the time steps\n"
          "`realPart' and `imaginaryPart' in the view `iView'\n"
          "as the real and imaginary parts of a complex field\n"
          "and replaces them with their corresponding\n"
          "modulus and phase. If `iView' < 0, the plugin is\n"
          "run on the current view.\n"
          "\n"
-         "Plugin(ModulusPhase) is executed in-place.\n");
+         "Plugin(ModulusPhase) is executed in-place.\n";
 }
 
 int GMSH_ModulusPhasePlugin::getNbOptions() const
@@ -48,11 +39,6 @@ int GMSH_ModulusPhasePlugin::getNbOptions() const
 StringXNumber *GMSH_ModulusPhasePlugin::getOption(int iopt)
 {
   return &ModulusPhaseOptions_Number[iopt];
-}
-
-void GMSH_ModulusPhasePlugin::catchErrorMessage(char *errorMessage) const
-{
-  strcpy(errorMessage, "ModulusPhase failed...");
 }
 
 PView *GMSH_ModulusPhasePlugin::execute(PView *v)
@@ -66,7 +52,7 @@ PView *GMSH_ModulusPhasePlugin::execute(PView *v)
 
   PViewData *data1 = v1->getData();
   if(data1->hasMultipleMeshes()){
-    Msg::Error("Gradient plugin cannot be run on multi-mesh views");
+    Msg::Error("ModulusPhase plugin cannot be run on multi-mesh views");
     return v;
   }
 
@@ -80,9 +66,9 @@ PView *GMSH_ModulusPhasePlugin::execute(PView *v)
   for(int step = 0; step < data1->getNumTimeSteps(); step++){
     for(int ent = 0; ent < data1->getNumEntities(step); ent++){
       for(int ele = 0; ele < data1->getNumElements(step, ent); ele++){
-	if(data1->skipElement(step, ent, ele)) continue;
-	for(int nod = 0; nod < data1->getNumNodes(step, ent, ele); nod++)
-	  data1->tagNode(step, ent, ele, nod, 0);
+        if(data1->skipElement(step, ent, ele)) continue;
+        for(int nod = 0; nod < data1->getNumNodes(step, ent, ele); nod++)
+          data1->tagNode(step, ent, ele, nod, 0);
       }
     }
   }
@@ -92,20 +78,20 @@ PView *GMSH_ModulusPhasePlugin::execute(PView *v)
     for(int ele = 0; ele < data1->getNumElements(rIndex, ent); ele++){
       if(data1->skipElement(rIndex, ent, ele)) continue;
       for(int nod = 0; nod < data1->getNumNodes(rIndex, ent, ele); nod++){
-	double x, y, z;
-	int tag = data1->getNode(rIndex, ent, ele, nod, x, y, z);
-	if(tag) continue;
-	for(int comp = 0; comp < data1->getNumComponents(rIndex, ent, ele); comp++){
-	  double vr, vi;
-	  data1->getValue(rIndex, ent, ele, nod, comp, vr);
-	  data1->getValue(iIndex, ent, ele, nod, comp, vi);
-	  double modulus = sqrt(vr * vr + vi * vi);
-	  double phase = atan2(vi, vr);
-	  data1->setValue(rIndex, ent, ele, nod, comp, modulus);
-	  data1->setValue(iIndex, ent, ele, nod, comp, phase);
-	  data1->tagNode(rIndex, ent, ele, nod, 1);
-	  data1->tagNode(iIndex, ent, ele, nod, 1);
-	}
+        double x, y, z;
+        int tag = data1->getNode(rIndex, ent, ele, nod, x, y, z);
+        if(tag) continue;
+        for(int comp = 0; comp < data1->getNumComponents(rIndex, ent, ele); comp++){
+          double vr, vi;
+          data1->getValue(rIndex, ent, ele, nod, comp, vr);
+          data1->getValue(iIndex, ent, ele, nod, comp, vi);
+          double modulus = sqrt(vr * vr + vi * vi);
+          double phase = atan2(vi, vr);
+          data1->setValue(rIndex, ent, ele, nod, comp, modulus);
+          data1->setValue(iIndex, ent, ele, nod, comp, phase);
+          data1->tagNode(rIndex, ent, ele, nod, 1);
+          data1->tagNode(iIndex, ent, ele, nod, 1);
+        }
       }
     }
   }

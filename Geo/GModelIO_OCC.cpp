@@ -1,24 +1,20 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
+#include "GmshConfig.h"
+#include "GmshMessage.h"
 #include "GModelIO_OCC.h"
-#include "Message.h"
 #include "Context.h"
 #include "OCCVertex.h"
 #include "OCCEdge.h"
 #include "OCCFace.h"
 #include "OCCRegion.h"
 #include "MElement.h"
+#include "MLine.h"
 #include "OpenFile.h"
-
-#if defined(HAVE_OCC_MESH_CONSTRAINTS)
-#include "MeshGmsh_Constrain.hxx"
-#include "MeshGmsh_EdgeConstrain.hxx"
-#endif
-
-extern Context_T CTX;
+#include "OCC_Connect.h"
 
 #if defined(HAVE_OCC)
 
@@ -182,9 +178,10 @@ void OCC_Internals::buildLists()
 
 void OCC_Internals::healGeometry(double tolerance, bool fixsmalledges, 
                                  bool fixspotstripfaces, bool sewfaces, 
-                                 bool makesolids)
+                                 bool makesolids, bool connect)
 {
   int nrc = 0, nrcs = 0;
+
   TopExp_Explorer e;
   for(e.Init(shape, TopAbs_COMPOUND); e.More(); e.Next()) nrc++;
   for(e.Init(shape, TopAbs_COMPSOLID); e.More(); e.Next()) nrcs++;
@@ -339,6 +336,14 @@ void OCC_Internals::healGeometry(double tolerance, bool fixsmalledges,
         Msg::Info(" not possible");
     }
   }
+
+  if(connect) {
+    OCC_Connect connect; 
+    for(TopExp_Explorer p(shape,TopAbs_SOLID); p.More(); p.Next())
+        connect.Add(p.Current()); 
+    connect.Connect();
+    shape=connect;
+  }
 }
 
 void OCC_Internals::loadBREP(const char *fn)
@@ -346,12 +351,19 @@ void OCC_Internals::loadBREP(const char *fn)
   BRep_Builder aBuilder;
   BRepTools::Read(shape, (char*)fn, aBuilder);
   BRepTools::Clean(shape);
-  healGeometry(CTX.geom.tolerance, 
-               CTX.geom.occ_fix_small_edges,
-               CTX.geom.occ_fix_small_faces,
-               CTX.geom.occ_sew_faces);
+  healGeometry(CTX::instance()->geom.tolerance, 
+               CTX::instance()->geom.occFixSmallEdges,
+               CTX::instance()->geom.occFixSmallFaces,
+               CTX::instance()->geom.occSewFaces,
+               false,
+               CTX::instance()->geom.occConnectFaces);
   BRepTools::Clean(shape);
   buildLists();
+}
+
+void OCC_Internals::writeBREP(const char *fn)
+{
+  BRepTools::Write(shape, (char*)fn);
 }
 
 void OCC_Internals::loadSTEP(const char *fn)
@@ -362,12 +374,22 @@ void OCC_Internals::loadSTEP(const char *fn)
   reader.TransferRoots(); 
   shape = reader.OneShape();  
   BRepTools::Clean(shape);
-  healGeometry(CTX.geom.tolerance, 
-               CTX.geom.occ_fix_small_edges,
-               CTX.geom.occ_fix_small_faces,
-               CTX.geom.occ_sew_faces);
+  healGeometry(CTX::instance()->geom.tolerance, 
+               CTX::instance()->geom.occFixSmallEdges,
+               CTX::instance()->geom.occFixSmallFaces,
+               CTX::instance()->geom.occSewFaces,
+               false,
+               CTX::instance()->geom.occConnectFaces);
   BRepTools::Clean(shape);
   buildLists();
+}
+
+void OCC_Internals::writeSTEP(const char *fn)
+{
+  STEPControl_Writer writer;
+  IFSelect_ReturnStatus status = writer.Transfer( shape, STEPControl_ManifoldSolidBrep ) ;
+  if ( status == IFSelect_RetDone ) 
+    status = writer.Write( (char*) fn) ;
 }
 
 void OCC_Internals::loadIGES(const char *fn)
@@ -378,10 +400,12 @@ void OCC_Internals::loadIGES(const char *fn)
   reader.TransferRoots(); 
   shape = reader.OneShape();  
   BRepTools::Clean(shape);
-  healGeometry(CTX.geom.tolerance, 
-               CTX.geom.occ_fix_small_edges,
-               CTX.geom.occ_fix_small_faces,
-               CTX.geom.occ_sew_faces);
+  healGeometry(CTX::instance()->geom.tolerance, 
+               CTX::instance()->geom.occFixSmallEdges,
+               CTX::instance()->geom.occFixSmallFaces,
+               CTX::instance()->geom.occSewFaces,
+               false,
+               CTX::instance()->geom.occConnectFaces);
   BRepTools::Clean(shape);
   buildLists();
 }
@@ -457,13 +481,145 @@ static void addSimpleShapes(TopoDS_Shape theShape, TopTools_ListOfShape &theList
   }
 }
 
+void GModel::addShape(std::string name, std::vector<double> &p, 
+                      std::string op)
+{
+  if (!_occ_internals)
+    _occ_internals = new OCC_Internals;
+  
+  OCC_Internals::BooleanOperator o = OCC_Internals::Intersection;
+  if(op == "Cut") o = OCC_Internals::Cut;
+  else if(op == "Section") o = OCC_Internals::Section;
+  else if(op == "Fuse" || op == "Union") o = OCC_Internals::Fuse;
+  else if(op == "Intersection") o = OCC_Internals::Intersection;
+  
+  try{
+    if (name == "Sphere"){
+      if (p.size() != 4){
+        Msg::Error("4 parameters have to be defined for a sphere");
+        return;
+      }
+      _occ_internals->Sphere(SPoint3(p[0],p[1],p[2]),p[3],o);
+    }
+    else if (name == "Cylinder"){
+      if (p.size() != 8){
+        Msg::Error("8 parameters have to be defined for a Cylinder");
+        return;
+      }
+      _occ_internals->Cylinder(SPoint3(p[0],p[1],p[2]),
+                               SVector3(p[3],p[4],p[5]),p[6],p[7],o);
+    }
+    else if (name == "Torus"){
+      if (p.size() == 8){
+        _occ_internals->Torus(SPoint3(p[0],p[1],p[2]),
+                              SVector3(p[3],p[4],p[5]),p[6],p[7],o);
+      }
+      else if (p.size() == 9){
+        _occ_internals->Torus(SPoint3(p[0],p[1],p[2]),
+                              SVector3(p[3],p[4],p[5]),p[6],p[7],p[8],o);
+      }
+      else{
+        Msg::Error("Wrong number of parameters for a Torus (8 or 9 is OK)");
+        return;
+      }
+    }
+    else if (name == "Cone"){
+      if (p.size() != 9){
+        Msg::Error("9 parameters have to be defined for a Cone");
+        return;
+      }
+      _occ_internals->Cone(SPoint3(p[0],p[1],p[2]),
+                           SVector3(p[3],p[4],p[5]),p[6],p[7],p[8],o);
+    }
+    else if (name == "Box"){
+      if (p.size() != 6){
+        Msg::Error("6 parameters have to be defined for a Box");
+        return;
+      }
+      _occ_internals->Box(SPoint3(p[0],p[1],p[2]),
+                          SPoint3(p[3],p[4],p[5]),o);
+    }
+    else if (name == "Fillet"){
+      if (p.size() < 2){
+        Msg::Error("At least 2 parameters have to be defined for a Fillet");
+        return;
+      }
+      std::vector<TopoDS_Edge> edges;
+      for (unsigned int i = 0; i < p.size() - 1; i++){
+        GEdge *ge = getEdgeByTag((int)p[i]);
+        if (ge && ge->getNativeType() == GEntity::OpenCascadeModel){
+          edges.push_back(*(TopoDS_Edge*)ge->getNativePtr());
+        }
+      }
+      _occ_internals->Fillet(edges, p[p.size() - 1]);
+    }
+    else{
+      return;
+    }
+    destroy();
+    _occ_internals->buildLists();
+    _occ_internals->buildGModel(this);
+  }
+  catch(Standard_Failure &err){
+    Msg::Error("%s", err.GetMessageString());
+  }
+}
+
+TopoDS_Shape GlueFaces(const TopoDS_Shape &theShape,
+                       const Standard_Real theTolerance)
+{
+  Msg::Error("glue !");
+  return theShape;
+
+//   Standard_Integer iErr, iWrn;
+//   TopoDS_Shape aRes;
+//   GEOMAlgo_Gluer aGluer;
+
+//   aGluer.SetShape(theShape);
+//   aGluer.SetTolerance(theTolerance);
+//   aGluer.SetCheckGeometry(Standard_True);
+
+//   aGluer.Perform();
+
+//   iErr = aGluer.ErrorStatus();
+//   if (iErr) {
+//     switch (iErr) {
+//     case 2:
+//       Msg::Error("No vertices found in source shape");
+//       break;
+//     case 5:
+//       Msg::Error("Source shape is Null");
+//       break;
+//     case 6:
+//       Msg::Error("Result shape is Null");
+//       break;
+//     case 200:
+//       Msg::Error("Error occured during check of geometric coincidence");
+//       break;
+//     default:
+//       {
+//         // description of all errors see in GEOMAlgo_Gluer.cxx
+//         TCollection_AsciiString aMsg ("Error in GEOMAlgo_Gluer with code ");
+//         aMsg += TCollection_AsciiString(iErr);
+//         Msg::Error(aMsg.ToCString());
+//         break;
+//       }
+//     }
+//     return aRes;
+//   }
+
+//   aRes = aGluer.Result();
+
+//   return aRes;
+}
+
 void OCC_Internals::applyBooleanOperator(TopoDS_Shape tool, const BooleanOperator &op)
 {
   if (tool.IsNull()) return;
   if (shape.IsNull()) shape = tool;
   else{
     switch(op){
-    case OCC_Internals::Add :
+    case OCC_Internals::Intersection :
       {
         TopoDS_Shape theNewShape;       
         BRep_Builder B;
@@ -483,7 +639,7 @@ void OCC_Internals::applyBooleanOperator(TopoDS_Shape tool, const BooleanOperato
             TopoDS_Shape aValue2 = itSub2.Value();
             BRepAlgoAPI_Common BO (aValue1, aValue2);
             if (!BO.IsDone()) {
-              Msg::Error("Boolean Add Operator can not be performed");
+              Msg::Error("Boolean Intersection Operator can not be performed");
             }
             if (isCompound) {
               TopoDS_Shape aStepResult = BO.Shape();
@@ -511,14 +667,127 @@ void OCC_Internals::applyBooleanOperator(TopoDS_Shape tool, const BooleanOperato
             if (aValueC.ShapeType() != TopAbs_SOLID) isOnlySolids = false;
           }
           if (isOnlySolids)
-	    Msg::Error("Face gluing not implemented");
-	  //  theNewShape = GEOMImpl_GlueDriver::GlueFaces(C, Precision::Confusion());
-          //else
-	      theNewShape = C;
-        }       
+            theNewShape = GlueFaces(C, Precision::Confusion());
+          else
+            theNewShape = C;
+        }
+        shape = theNewShape;
       }
       break;
     case OCC_Internals::Cut :
+      {
+        TopoDS_Shape theNewShape;       
+        BRep_Builder B;
+        TopoDS_Compound C;
+        B.MakeCompound(C);
+        
+        TopTools_ListOfShape listShapes, listTools;
+        addSimpleShapes(shape, listShapes);
+        addSimpleShapes(tool, listTools);
+        
+        Standard_Boolean isCompound = (listShapes.Extent() > 1);
+        
+        TopTools_ListIteratorOfListOfShape itSub1 (listShapes);
+        for (; itSub1.More(); itSub1.Next()) {
+          TopoDS_Shape aCut = itSub1.Value();
+          // tools
+          TopTools_ListIteratorOfListOfShape itSub2 (listTools);
+          for (; itSub2.More(); itSub2.Next()) {
+            TopoDS_Shape aTool = itSub2.Value();
+            BRepAlgoAPI_Cut BO (aCut, aTool);
+            if (!BO.IsDone()) {
+              Msg::Error("Cut operation can not be performed on the given shapes");
+              return;
+            }
+            aCut = BO.Shape();
+          }
+          if (isCompound) {
+            if (aCut.ShapeType() == TopAbs_COMPOUND) {
+              TopoDS_Iterator aCompIter (aCut);
+              for (; aCompIter.More(); aCompIter.Next()) {
+                B.Add(C, aCompIter.Value());
+              }
+            }
+            else {
+              B.Add(C, aCut);
+            }
+          }
+          else
+            theNewShape = aCut;
+        }
+        
+        if (isCompound) {
+          TopTools_ListOfShape listShapeC;
+          addSimpleShapes(C, listShapeC);
+          TopTools_ListIteratorOfListOfShape itSubC (listShapeC);
+          bool isOnlySolids = true;
+          for (; itSubC.More(); itSubC.Next()) {
+            TopoDS_Shape aValueC = itSubC.Value();
+            if (aValueC.ShapeType() != TopAbs_SOLID) isOnlySolids = false;
+          }
+          if (isOnlySolids)
+            theNewShape = GlueFaces(C, Precision::Confusion());
+          else
+            theNewShape = C;
+        }
+        shape = theNewShape;
+      }      
+      break;
+    case OCC_Internals::Fuse :
+      {
+        BRepAlgoAPI_Fuse BO (tool, shape);
+        if (!BO.IsDone()) {
+          Msg::Error("Fuse operation can not be performed on the given shapes");
+        }
+        shape = BO.Shape();
+      }
+      break;
+    case OCC_Internals::Section :
+      {
+        TopoDS_Shape theNewShape;
+        BRep_Builder B;
+        TopoDS_Compound C;
+        B.MakeCompound(C);
+
+        TopTools_ListOfShape listShapes, listTools;
+        addSimpleShapes(shape, listShapes);
+        addSimpleShapes(tool, listTools);
+        
+        Standard_Boolean isCompound = (listShapes.Extent() > 1);
+        TopTools_ListIteratorOfListOfShape itSub1 (listShapes);
+        for (; itSub1.More(); itSub1.Next()) {
+          TopoDS_Shape aValue1 = itSub1.Value();
+          TopTools_ListIteratorOfListOfShape itSub2 (listTools);
+          for (; itSub2.More(); itSub2.Next()) {
+            TopoDS_Shape aValue2 = itSub2.Value();
+            BRepAlgoAPI_Section BO (aValue1, aValue2, Standard_False);
+            BO.Approximation(Standard_True);
+            BO.Build();
+            if (!BO.IsDone()) {
+              Msg::Error("Section operation can not be performed on the given shapes");
+              return;
+            }
+          if (isCompound) {
+            TopoDS_Shape aStepResult = BO.Shape();
+            if (aStepResult.ShapeType() == TopAbs_COMPOUND) {
+              TopoDS_Iterator aCompIter (aStepResult);
+              for (; aCompIter.More(); aCompIter.Next()) {
+                B.Add(C, aCompIter.Value());
+              }
+            }
+            else {
+              B.Add(C, aStepResult);
+            }
+          }
+          else
+            theNewShape = BO.Shape();
+          }
+        }       
+        if (isCompound)
+          theNewShape = C;
+        shape = theNewShape;
+      }
+      break;
     default :
       Msg::Error("Requested boolean operation not implemented");
       break;
@@ -529,12 +798,121 @@ void OCC_Internals::applyBooleanOperator(TopoDS_Shape tool, const BooleanOperato
 void OCC_Internals::Sphere(const SPoint3 &center, const double &radius,
                            const BooleanOperator &op)
 {
-  // build a sphere
   gp_Pnt aP(center.x(), center.y(), center.z());  
   TopoDS_Shape aShape = BRepPrimAPI_MakeSphere(aP, radius).Shape(); 
   // either add it to the current shape, or use it as a tool and remove the
   // sphere from the current shape
   applyBooleanOperator(aShape, op);
+}
+
+void OCC_Internals::Cylinder(const SPoint3 &p, const SVector3 &d, double R, double H,
+                             const BooleanOperator &op)
+{
+  gp_Pnt aP(p.x(), p.y(), p.z());
+  gp_Vec aV(d.x(), d.y(), d.z());
+  gp_Ax2 anAxes(aP, aV);
+  BRepPrimAPI_MakeCylinder MC (anAxes, R, H);
+  MC.Build();
+  if (!MC.IsDone()) {
+    Msg::Error("Cylinder can't be computed from the given parameters");
+    return;
+  }
+  TopoDS_Shape aShape = MC.Shape();
+  if (aShape.IsNull()) return;
+  applyBooleanOperator(aShape, op);
+}
+
+void OCC_Internals::Torus(const SPoint3 &p, const SVector3 &d, double R1, double R2,
+                          const BooleanOperator &op)
+{
+  gp_Pnt aP(p.x(),p.y(),p.z());
+  gp_Vec aV(d.x(),d.y(),d.z());
+  gp_Ax2 anAxes (aP, aV);
+  BRepPrimAPI_MakeTorus MC (anAxes, R1, R2);
+  MC.Build();
+  if (!MC.IsDone()) {
+    Msg::Error("Torus can't be computed from the given parameters");
+    return;
+  }
+  TopoDS_Shape aShape = MC.Shape();
+  if (aShape.IsNull()) return;
+  applyBooleanOperator(aShape, op);
+}
+
+void OCC_Internals::Torus(const SPoint3 &p, const SVector3 &d, double R1, double R2, 
+                          double angle, const BooleanOperator &op)
+{
+  gp_Pnt aP(p.x(), p.y(), p.z());
+  gp_Vec aV(d.x(), d.y(), d.z());
+  gp_Ax2 anAxes(aP, aV);
+  BRepPrimAPI_MakeTorus MC(anAxes, R1, R2, angle);
+  MC.Build();
+  if (!MC.IsDone()) {
+    Msg::Error("Torus can't be computed from the given parameters");
+    return;
+  }
+  TopoDS_Shape aShape = MC.Shape();
+  if (aShape.IsNull()) return;
+  applyBooleanOperator(aShape, op);
+}
+
+void OCC_Internals::Cone(const SPoint3 &p, const SVector3 &d, double R1, 
+                         double R2, double H, const BooleanOperator &op)
+{
+  gp_Pnt aP(p.x(), p.y(), p.z());
+  gp_Vec aV(d.x(), d.y(), d.z());
+  gp_Ax2 anAxes(aP, aV);
+  BRepPrimAPI_MakeCone MC(anAxes, R1, R2, H);
+  MC.Build();
+  if (!MC.IsDone()) {
+    Msg::Error("Cone can't be computed from the given parameters");
+    return;
+  }
+  TopoDS_Shape aShape = MC.Shape();
+  if (aShape.IsNull()) return;
+  applyBooleanOperator(aShape, op);
+}
+
+void OCC_Internals::Box(const SPoint3 &p1, const SPoint3 &p2,
+                        const BooleanOperator &op)
+{
+  gp_Pnt P1(p1.x(), p1.y(), p1.z());
+  gp_Pnt P2(p2.x(), p2.y(), p2.z());
+  BRepPrimAPI_MakeBox MB(P1, P2);
+  MB.Build();
+  if (!MB.IsDone()) {
+    Msg::Error("Box can not be computed from the given point");
+    return;
+  }
+  TopoDS_Shape  aShape = MB.Shape();
+  applyBooleanOperator(aShape, op);
+}
+
+void OCC_Internals::Fillet(std::vector<TopoDS_Edge> &edgesToFillet,
+                           double Radius){
+
+  // create a tool for fillet
+  BRepFilletAPI_MakeFillet fill(shape);
+  for (unsigned int i = 0; i < edgesToFillet.size(); ++i){
+    fill.Add(edgesToFillet[i]);
+  }
+  for (int i = 1; i <= fill.NbContours(); i++){
+    fill.SetRadius(Radius, i, 1);
+  }
+  fill.Build();
+  if (!fill.IsDone()) {
+    Msg::Error("Fillet can't be computed on the given shape with the given radius");
+    return;
+  }
+  shape = fill.Shape();
+
+  if (shape.IsNull()) return;
+
+  // Check shape validity
+  BRepCheck_Analyzer ana (shape, false);
+  if (!ana.IsValid()) {
+    Msg::Error("Fillet algorithm have produced an invalid shape result");
+  }
 }
 
 void GModel::_deleteOCCInternals()
@@ -552,14 +930,6 @@ int GModel::readOCCBREP(const std::string &fn)
   return 1;
 }
 
-int GModel::readOCCIGES(const std::string &fn)
-{
-  _occ_internals = new OCC_Internals;
-  _occ_internals->loadIGES(fn.c_str());
-  _occ_internals->buildGModel(this);
-  return 1;
-}
-
 int GModel::readOCCSTEP(const std::string &fn)
 {
   _occ_internals = new OCC_Internals;
@@ -568,70 +938,43 @@ int GModel::readOCCSTEP(const std::string &fn)
   return 1;
 }
 
-static void applyOCCMeshConstraints(GModel *m, const void *constraints)
+int GModel::readOCCIGES(const std::string &fn)
 {
-#if defined(HAVE_OCC_MESH_CONSTRAINTS)
-  MeshGmsh_Constrain *meshConstraints = (MeshGmsh_Constrain*)constraints;
-
-  // treat mesh constraints (if any) on model edges
-  MeshGmsh_DataMapOfShapeOfEdgeConstrain edgeConstraints;
-  meshConstraints->GetEdgeConstrain(edgeConstraints);
-  for(GModel::eiter it = m->firstEdge(); it != m->lastEdge(); ++it){
-    GEdge *ge = *it;
-    TopoDS_Shape *shape = (TopoDS_Shape*)ge->getNativePtr();
-    if(edgeConstraints.IsBound(*shape)) {
-      Msg::Debug("Applying mesh contraints on edge %d", ge->tag());
-      const MeshGmsh_EdgeConstrain &c(edgeConstraints.Find(*shape));
-      if(c.IsMeshImposed() == Standard_True){
-	TColStd_SequenceOfInteger nodeNum;
-	c.GetNodesNumber(nodeNum);
-	TColStd_SequenceOfReal nodePar;
-	c.GetParameters(nodePar);
-	int n = nodeNum.Length();
-	if(n < 2){
-	  Msg::Error("We need at least two points in the edge constraint");
-	}
-	else if(nodePar.Length() != n){
-	  Msg::Error("Wrong number of parameters in edge constraint: %d != %d",
-		     nodeNum.Length(), nodePar.Length());
-	}
-	else{
-	  // set the mesh as immutable
-	  ge->meshAttributes.Method == MESH_NONE;
-	  // set the correct tags on the boundary vertices
-	  ge->getBeginVertex()->mesh_vertices[0]->setNum(nodeNum(0));
-	  ge->getEndVertex()->mesh_vertices[0]->setNum(nodeNum(n - 1));
-	  // set the mesh on the edge
-	  for(int i = 1; i < n - 1; i++){
-	    double u = nodePar(i);
-	    GPoint p = ge->point(u);
-	    MEdgeVertex *v = new MEdgeVertex(p.x(), p.y(), p.z(), ge, u);
-	    v->setNum(nodeNum(i));
-	    ge->mesh_vertices.push_back(v);
-	  }
-	  for(unsigned int i = 0; i < ge->mesh_vertices.size() + 1; i++){
-	    MVertex *v0 = (i == 0) ? 
-	      ge->getBeginVertex()->mesh_vertices[0] : ge->mesh_vertices[i - 1];
-	    MVertex *v1 = (i == ge->mesh_vertices.size()) ? 
-	      ge->getEndVertex()->mesh_vertices[0] : ge->mesh_vertices[i];
-	    ge->lines.push_back(new MLine(v0, v1));
-	  }
-	}
-      }
-    }
-  }
-#endif
-  
+  _occ_internals = new OCC_Internals;
+  _occ_internals->loadIGES(fn.c_str());
+  _occ_internals->buildGModel(this);
+  return 1;
 }
 
-int GModel::importOCCShape(const void *shape, const void *meshConstraints)
+int GModel::writeOCCBREP(const std::string &fn)
+{
+  if (!_occ_internals){
+    Msg::Error("No OCC Model Found");
+    return 0;
+  }
+  else
+    _occ_internals->writeBREP(fn.c_str());
+  return 1;
+}
+
+int GModel::writeOCCSTEP(const std::string &fn)
+{
+  if (!_occ_internals){
+    Msg::Error("No OCC Model Found");
+    return 0;
+  }
+  else
+    _occ_internals->writeSTEP(fn.c_str());
+  return 1;
+}
+
+int GModel::importOCCShape(const void *shape)
 {
   _occ_internals = new OCC_Internals;
   _occ_internals->loadShape((TopoDS_Shape*)shape);
   _occ_internals->buildGModel(this);
   snapVertices();
   SetBoundingBox();
-  if(meshConstraints) applyOCCMeshConstraints(this, meshConstraints);
   return 1;
 }
 
@@ -641,32 +984,53 @@ void GModel::_deleteOCCInternals()
 {
 }
 
+int GModel::readOCCBREP(const std::string &fn)
+{
+  Msg::Error("Gmsh must be compiled with OpenCascade support to load '%s'",
+             fn.c_str());
+  return 0;
+}
+
 int GModel::readOCCSTEP(const std::string &fn)
 {
-  Msg::Error("Gmsh has to be compiled with OpenCascade support to load '%s'",
-	     fn.c_str());
+  Msg::Error("Gmsh must be compiled with OpenCascade support to load '%s'",
+             fn.c_str());
   return 0;
 }
 
 int GModel::readOCCIGES(const std::string &fn)
 {
-  Msg::Error("Gmsh has to be compiled with OpenCascade support to load '%s'",
-	     fn.c_str());
+  Msg::Error("Gmsh must be compiled with OpenCascade support to load '%s'",
+             fn.c_str());
   return 0;
 }
 
-int GModel::readOCCBREP(const std::string &fn)
+int GModel::writeOCCBREP(const std::string &fn)
 {
-  Msg::Error("Gmsh has to be compiled with OpenCascade support to load '%s'",
-	     fn.c_str());
+  Msg::Error("Gmsh must be compiled with OpenCascade support to write '%s'",
+             fn.c_str());
   return 0;
 }
 
-int GModel::importOCCShape(const void *shape, const void *options)
+int GModel::writeOCCSTEP(const std::string &fn)
 {
-  Msg::Error("Gmsh has to be compiled with OpenCascade support to import "
-	     "a TopoDS_Shape");
+  Msg::Error("Gmsh must be compiled with OpenCascade support to write '%s'",
+             fn.c_str());
   return 0;
+}
+
+int GModel::importOCCShape(const void *shape)
+{
+  Msg::Error("Gmsh must be compiled with OpenCascade support to import "
+             "a TopoDS_Shape");
+  return 0;
+}
+
+void GModel::addShape(std::string name, std::vector<double> &p, 
+                      std::string op)
+{
+  Msg::Error("Gmsh must be compiled with OpenCascade support to apply "
+             "Boolean Operators On Solids");
 }
 
 #endif

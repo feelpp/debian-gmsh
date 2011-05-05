@@ -1,16 +1,18 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
+#include "GmshConfig.h"
+#include "GmshMessage.h"
 #include "GModel.h"
 #include "GEdgeLoop.h"
 #include "OCCVertex.h"
 #include "OCCEdge.h"
 #include "OCCFace.h"
-#include "Message.h"
 #include "Numeric.h"
 #include "VertexArray.h"
+#include "Context.h"
 
 #if defined(HAVE_OCC)
 #include "Geom_CylindricalSurface.hxx"
@@ -27,31 +29,30 @@
 OCCFace::OCCFace(GModel *m, TopoDS_Face _s, int num, TopTools_IndexedMapOfShape &emap)
   : GFace(m, num), s(_s)
 {
-  TopExp_Explorer exp0, exp01, exp1, exp2, exp3;
+  TopExp_Explorer exp2, exp3;
   for(exp2.Init(s, TopAbs_WIRE); exp2.More(); exp2.Next()){
-    TopoDS_Shape wire = exp2.Current();
+    TopoDS_Wire wire = TopoDS::Wire(exp2.Current());
     Msg::Debug("OCC Face %d - New Wire", num);
     std::list<GEdge*> l_wire;
     for(exp3.Init(wire, TopAbs_EDGE); exp3.More(); exp3.Next()){          
       TopoDS_Edge edge = TopoDS::Edge(exp3.Current());
       int index = emap.FindIndex(edge);
       GEdge *e = m->getEdgeByTag(index);
-      if(e){
-	l_wire.push_back(e);
-	Msg::Debug("Edge %d ori %d", e->tag(), edge.Orientation());
-	e->addFace(this);
-	if(!e->is3D()){
-	  OCCEdge *occe = (OCCEdge*)e;
-	  occe->setTrimmed(this);
-	}
+      if(!e){
+        Msg::Error("Unknown edge %d in face %d", index, num);
       }
       else{
-	Msg::Error("Unknown edge %d in face %d", index, num);
+        l_wire.push_back(e);
+        Msg::Debug("Edge %d ori %d", e->tag(), edge.Orientation());
+        e->addFace(this);
+        if(!e->is3D()){
+          OCCEdge *occe = (OCCEdge*)e;
+          occe->setTrimmed(this);
+        }
       }
-    }      
+    }
     
     GEdgeLoop el(l_wire);
-
     for(GEdgeLoop::citer it = el.begin(); it != el.end(); ++it){
       l_edges.push_back(it->ge);
       l_dirs.push_back(it->_sign);
@@ -64,16 +65,16 @@ OCCFace::OCCFace(GModel *m, TopoDS_Face _s, int num, TopTools_IndexedMapOfShape 
           std::max(it->ge->meshAttributes.minimumMeshSegments,3);
       }
     }
-    
     edgeLoops.push_back(el);
   }
-  BRepAdaptor_Surface surface( s );
+
+  BRepAdaptor_Surface surface(s);
   _periodic[0] = surface.IsUPeriodic();
   _periodic[1] = surface.IsVPeriodic();
 
   ShapeAnalysis::GetFaceUVBounds(_s, umin, umax, vmin, vmax);
   Msg::Debug("OCC Face %d with %d edges bounds (%g,%g)(%g,%g)", 
-      num, l_edges.size(), umin, umax, vmin, vmax);
+             num, l_edges.size(), umin, umax, vmin, vmax);
   // we do that for the projections to converge on the borders of the
   // surface
   const double du = umax - umin;
@@ -83,7 +84,7 @@ OCCFace::OCCFace(GModel *m, TopoDS_Face _s, int num, TopTools_IndexedMapOfShape 
   umax += fabs(du) / 100.0;
   vmax += fabs(dv) / 100.0;
   occface = BRep_Tool::Surface(s);
-  if(!CTX.batch) buildSTLTriangulation();
+  if(!CTX::instance()->batch) buildSTLTriangulation();
 }
 
 Range<double> OCCFace::parBounds(int i) const
@@ -121,6 +122,18 @@ Pair<SVector3,SVector3> OCCFace::firstDer(const SPoint2 &param) const
                                  SVector3(dv.X(), dv.Y(), dv.Z()));
 }
 
+void OCCFace::secondDer(const SPoint2 &param,
+                        SVector3 *dudu, SVector3 *dvdv, SVector3 *dudv) const
+{
+  gp_Pnt pnt;
+  gp_Vec du, dv, duu, dvv, duv;
+  occface->D2(param.x(), param.y(), pnt, du, dv, duu, dvv, duv);
+
+  *dudu = SVector3(duu.X(), duu.Y(), duu.Z());
+  *dvdv = SVector3(dvv.X(), dvv.Y(), dvv.Z());
+  *dudv = SVector3(duv.X(), duv.Y(), duv.Z());
+}
+
 GPoint OCCFace::point(double par1, double par2) const
 {
   double pp[2] = {par1, par2};
@@ -128,7 +141,7 @@ GPoint OCCFace::point(double par1, double par2) const
   return GPoint(val.X(), val.Y(), val.Z(), this, pp);
 }
 
-GPoint OCCFace::closestPoint(const SPoint3 & qp, const double initialGuess[2]) const
+GPoint OCCFace::closestPoint(const SPoint3 &qp, const double initialGuess[2]) const
 {
   gp_Pnt pnt(qp.x(), qp.y(), qp.z());
   GeomAPI_ProjectPointOnSurf proj(pnt, occface, umin, umax, vmin, vmax);
@@ -186,7 +199,7 @@ GEntity::GeomType OCCFace::geomType() const
   return Unknown;
 }
 
-double OCCFace::curvature (const SPoint2 &param) const
+double OCCFace::curvatureMax(const SPoint2 &param) const
 {
   const double eps = 1.e-12;
   BRepAdaptor_Surface sf(s, Standard_True);
@@ -197,6 +210,37 @@ double OCCFace::curvature (const SPoint2 &param) const
     return eps;
   }
   return std::max(fabs(prop.MinCurvature()), fabs(prop.MaxCurvature()));
+}
+
+double OCCFace::curvatures(const SPoint2 &param,
+                           SVector3 *dirMax,
+                           SVector3 *dirMin,
+                           double *curvMax,
+                           double *curvMin) const
+{
+  const double eps = 1.e-12;
+  BRepAdaptor_Surface sf(s, Standard_True);
+  BRepLProp_SLProps prop(sf, 2, eps);
+  prop.SetParameters (param.x(),param.y());
+
+  if (!prop.IsCurvatureDefined()){
+    return -1.;
+  }
+
+  *curvMax = std::max(fabs(prop.MinCurvature()), fabs(prop.MaxCurvature()));
+  *curvMin = std::min(fabs(prop.MinCurvature()), fabs(prop.MaxCurvature()));
+
+  gp_Dir dMax = gp_Dir();
+  gp_Dir dMin = gp_Dir();
+  prop.CurvatureDirections(dMax,dMin);
+  (*dirMax)[0] = dMax.X();
+  (*dirMax)[1] = dMax.Y();
+  (*dirMax)[2] = dMax.Z();
+  (*dirMin)[0] = dMin.X();
+  (*dirMin)[1] = dMin.Y();
+  (*dirMin)[2] = dMin.Z();
+
+  return *curvMax;
 }
 
 bool OCCFace::containsPoint(const SPoint3 &pt) const
@@ -250,6 +294,9 @@ surface_params OCCFace::getSurfaceParams() const
   case GEntity::Cylinder:
     p.radius = Handle(Geom_CylindricalSurface)::DownCast(occface)->Radius();
     break;
+  case GEntity::Sphere:
+    p.radius = Handle(Geom_SphericalSurface)::DownCast(occface)->Radius();
+    break;
   default:
     break;
   }
@@ -299,7 +346,7 @@ bool OCCFace::buildSTLTriangulation()
 
   va_geom_triangles = new VertexArray(3, ntriangles);
   
-  unsigned int c = CTX.color.geom.surface;
+  unsigned int c = CTX::instance()->color.geom.surface;
   unsigned int col[4] = {c, c, c, c};
   for (int j = 1; j <= ntriangles; j++){
     Poly_Triangle triangle = (triangulation->Triangles())(j);

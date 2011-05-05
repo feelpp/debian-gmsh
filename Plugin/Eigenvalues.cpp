@@ -1,10 +1,11 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
 #include "Eigenvalues.h"
 #include "Numeric.h"
+#include "GmshDefines.h"
 
 StringXNumber EigenvaluesOptions_Number[] = {
   {GMSH_FULLRC, "iView", NULL, -1.}
@@ -18,21 +19,13 @@ extern "C"
   }
 }
 
-void GMSH_EigenvaluesPlugin::getName(char *name) const
+std::string GMSH_EigenvaluesPlugin::getHelp() const
 {
-  strcpy(name, "Eigenvalues");
-}
-
-void GMSH_EigenvaluesPlugin::getInfos(char *author, char *copyright, char *help_text) const
-{
-  strcpy(author, "C. Geuzaine");
-  strcpy(copyright, "DGR (www.multiphysics.com)");
-  strcpy(help_text,
-         "Plugin(Eigenvalues) computes the three real\n"
+  return "Plugin(Eigenvalues) computes the three real\n"
          "eigenvalues of each tensor in the view `iView'.\n"
          "If `iView' < 0, the plugin is run on the current view.\n"
          "\n"
-         "Plugin(Eigenvalues) creates three new scalar views.\n");
+         "Plugin(Eigenvalues) creates three new scalar views.\n";
 }
 
 int GMSH_EigenvaluesPlugin::getNbOptions() const
@@ -45,22 +38,17 @@ StringXNumber *GMSH_EigenvaluesPlugin::getOption(int iopt)
   return &EigenvaluesOptions_Number[iopt];
 }
 
-void GMSH_EigenvaluesPlugin::catchErrorMessage(char *errorMessage) const
+static std::vector<double> *incrementList(PViewDataList *data2, int type)
 {
-  strcpy(errorMessage, "Eigenvalues failed...");
-}
-
-static List_T *incrementList(PViewDataList *data2, int numEdges)
-{
-  switch(numEdges){
-  case 0: data2->NbSP++; return data2->SP;
-  case 1: data2->NbSL++; return data2->SL;
-  case 3: data2->NbST++; return data2->ST;
-  case 4: data2->NbSQ++; return data2->SQ;
-  case 6: data2->NbSS++; return data2->SS;
-  case 12: data2->NbSH++; return data2->SH;
-  case 9: data2->NbSI++; return data2->SI;
-  case 8: data2->NbSY++; return data2->SY;
+  switch(type){
+  case TYPE_PNT: data2->NbSP++; return &data2->SP;
+  case TYPE_LIN: data2->NbSL++; return &data2->SL;
+  case TYPE_TRI: data2->NbST++; return &data2->ST;
+  case TYPE_QUA: data2->NbSQ++; return &data2->SQ;
+  case TYPE_TET: data2->NbSS++; return &data2->SS;
+  case TYPE_HEX: data2->NbSH++; return &data2->SH;
+  case TYPE_PRI: data2->NbSI++; return &data2->SI;
+  case TYPE_PYR: data2->NbSY++; return &data2->SY;
   default: return 0;
   }
 }
@@ -78,9 +66,9 @@ PView *GMSH_EigenvaluesPlugin::execute(PView *v)
     return v;
   }
 
-  PView *min = new PView(true);
-  PView *mid = new PView(true);
-  PView *max = new PView(true);
+  PView *min = new PView();
+  PView *mid = new PView();
+  PView *max = new PView();
 
   PViewDataList *dmin = getDataList(min);
   PViewDataList *dmid = getDataList(mid);
@@ -91,44 +79,44 @@ PView *GMSH_EigenvaluesPlugin::execute(PView *v)
       if(data1->skipElement(0, ent, ele)) continue;
       int numComp = data1->getNumComponents(0, ent, ele);
       if(numComp != 9) continue;
-      int numEdges = data1->getNumEdges(0, ent, ele);
-      List_T *outmin = incrementList(dmin, numEdges);
-      List_T *outmid = incrementList(dmid, numEdges);
-      List_T *outmax = incrementList(dmax, numEdges);
+      int type = data1->getType(0, ent, ele);
+      std::vector<double> *outmin = incrementList(dmin, type);
+      std::vector<double> *outmid = incrementList(dmid, type);
+      std::vector<double> *outmax = incrementList(dmax, type);
       if(!outmin || !outmid || !outmax) continue;
       int numNodes = data1->getNumNodes(0, ent, ele);
       double xyz[3][8];
       for(int nod = 0; nod < numNodes; nod++)
-	data1->getNode(0, ent, ele, nod, xyz[0][nod], xyz[1][nod], xyz[2][nod]);
+        data1->getNode(0, ent, ele, nod, xyz[0][nod], xyz[1][nod], xyz[2][nod]);
       for(int i = 0; i < 3; i++){
-	for(int nod = 0; nod < numNodes; nod++){
-	  List_Add(outmin, &xyz[i][nod]);
-	  List_Add(outmid, &xyz[i][nod]);
-	  List_Add(outmax, &xyz[i][nod]);
-	}
+        for(int nod = 0; nod < numNodes; nod++){
+          outmin->push_back(xyz[i][nod]);
+          outmid->push_back(xyz[i][nod]);
+          outmax->push_back(xyz[i][nod]);
+        }
       }
       for(int step = 0; step < data1->getNumTimeSteps(); step++){
-	for(int nod = 0; nod < numNodes; nod++){
-	  double val[9], w[3];
-	  for(int comp = 0; comp < numComp; comp++)
-	    data1->getValue(step, ent, ele, nod, comp, val[comp]);
-	  double A[3][3] = {{val[0], val[1], val[2]},
-			    {val[3], val[4], val[5]},
-			    {val[6], val[7], val[8]}};
-	  eigenvalue(A, w);
-	  List_Add(outmin, &w[2]);
-	  List_Add(outmid, &w[1]);
-	  List_Add(outmax, &w[0]);
-	}
+        for(int nod = 0; nod < numNodes; nod++){
+          double val[9], w[3];
+          for(int comp = 0; comp < numComp; comp++)
+            data1->getValue(step, ent, ele, nod, comp, val[comp]);
+          double A[3][3] = {{val[0], val[1], val[2]},
+                            {val[3], val[4], val[5]},
+                            {val[6], val[7], val[8]}};
+          eigenvalue(A, w);
+          outmin->push_back(w[2]);
+          outmid->push_back(w[1]);
+          outmax->push_back(w[0]);
+        }
       }
     }
   }
   
   for(int i = 0; i < data1->getNumTimeSteps(); i++){
     double time = data1->getTime(i);
-    List_Add(dmin->Time, &time);
-    List_Add(dmid->Time, &time);
-    List_Add(dmax->Time, &time);
+    dmin->Time.push_back(time);
+    dmid->Time.push_back(time);
+    dmax->Time.push_back(time);
   }
   dmin->setName(data1->getName() + "_MinEigenvalues");
   dmin->setFileName(data1->getName() + "_MinEigenvalues.pos");

@@ -1,25 +1,20 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
-#include <stdio.h>
+#include <sstream>
+#include "GModel.h"
 #include "GEntity.h"
-
-#if defined(HAVE_GMSH_EMBEDDED)
-#  include "GmshEmbedded.h"
-#else
-#  include "VertexArray.h"
-#  include "Context.h"
-#endif
-
-extern Context_T CTX;
+#include "MElement.h"
+#include "VertexArray.h"
+#include "Context.h"
 
 GEntity::GEntity(GModel *m, int t)
-  : _model(m), _tag(t), _visible(true), _selection(0),
-    _allElementsVisible(1), va_lines(0), va_triangles(0)
+  : _model(m), _tag(t), _visible(1), _selection(0),
+    _allElementsVisible(1), _obb(0), va_lines(0), va_triangles(0)
 {
-  _color = CTX.PACK_COLOR(0, 0, 255, 0);
+  _color = CTX::instance()->packColor(0, 0, 255, 0);
 }
 
 GEntity::~GEntity()
@@ -35,18 +30,18 @@ void GEntity::deleteVertexArrays()
 
 char GEntity::getVisibility()
 {
-  if(CTX.hide_unselected && !CTX.pick_elements && !getSelection() &&
-     geomType() != ProjectionFace)
+  if(CTX::instance()->hideUnselected && !CTX::instance()->pickElements &&
+     !getSelection() && geomType() != ProjectionFace)
     return false;
   return _visible;
 }
 
 bool GEntity::useColor()
 {
-  int r = CTX.UNPACK_RED(_color);
-  int g = CTX.UNPACK_GREEN(_color);
-  int b = CTX.UNPACK_BLUE(_color);
-  int a = CTX.UNPACK_ALPHA(_color);
+  int r = CTX::instance()->unpackRed(_color);
+  int g = CTX::instance()->unpackGreen(_color);
+  int b = CTX::instance()->unpackBlue(_color);
+  int a = CTX::instance()->unpackAlpha(_color);
   if(r == 0 && g == 0 && b == 255 && a == 0)
     return false;
   return true;
@@ -54,24 +49,18 @@ bool GEntity::useColor()
 
 std::string GEntity::getInfoString()
 {
-  char tmp[256];
-  sprintf(tmp, " %d", tag());
-
-  std::string out = getTypeString() + tmp;
+  std::ostringstream sstream;
+  sstream << getTypeString() << " " << tag();
 
   std::string info = getAdditionalInfoString();
-  if(info.size())
-    out += " " + info;
+  if(info.size()) sstream << " " << info;
 
   if(physicals.size()){
-    out += " (Physical: ";
-    for(unsigned int i = 0; i < physicals.size(); i++){
-      if(i) out += " ";
-      sprintf(tmp, "%d", physicals[i]);
-      out += tmp;
-    }
-    out += ")";
+    sstream << " (Physical:";
+    for(unsigned int i = 0; i < physicals.size(); i++)
+      sstream << " " << physicals[i];
+    sstream << ")";
   }
 
-  return out;
+  return sstream.str();
 }

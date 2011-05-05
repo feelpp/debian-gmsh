@@ -1,13 +1,12 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
+#include "GmshConfig.h"
+#include "GmshMessage.h"
 #include "gmshSurface.h"
-#include "Message.h"
-#if defined(HAVE_MATH_EVAL)
-#include "matheval.h"
-#endif
+#include "mathEvaluator.h"
 
 std::map<int,gmshSurface*> gmshSurface::allGmshSurfaces;
 
@@ -79,14 +78,15 @@ gmshSurface *gmshPolarSphere::NewPolarSphere(int iSphere, double x, double y, do
   return sph;
 }
 
-SPoint3 gmshPolarSphere::point(double parA, double parB) const
+gmshPolarSphere::gmshPolarSphere(double x, double y, double z, double _r) : r(_r), o(x,y,z) {
+}
+SPoint3 gmshPolarSphere::point(double u, double v) const
 {
   //stereographic projection from the south pole, origin of the axis
   //at the center of the sphere 
-  //parA=2rx/(r+z) parB=2ry/(r+z)
-  double rp2 = parA * parA + parB * parB;
-  SPoint3 p(2*parA/(1+rp2),2*parB/(1+rp2),(rp2-1)/(rp2+1));
-  p *= -r;
+  //u=-x/(r+z) v=-y/(r+z)
+  double rp2 = u*u+v*v;
+  SPoint3 p(-2*r*u/(1+rp2),-2*r*v/(1+rp2),r*(1-rp2)/(1+rp2));
   p += o;
   return p;
 }
@@ -105,39 +105,33 @@ gmshSurface *gmshParametricSurface::NewParametricSurface(int iSurf, char *valX,
 
 gmshParametricSurface::gmshParametricSurface(char *valX, char *valY, char *valZ)
 {
-#if !defined(HAVE_MATH_EVAL)
-  Msg::Error("MathEval is not compiled in this version of Gmsh");
-#else
-  evalX = evaluator_create(valX);
-  evalY = evaluator_create(valY);
-  evalZ = evaluator_create(valZ);
-#endif
+  std::vector<std::string> expressions(3), variables(2);
+  expressions[0] = valX;
+  expressions[1] = valY;
+  expressions[2] = valZ;
+  variables[0] = "u";
+  variables[1] = "v";
+  _f = new mathEvaluator(expressions, variables);
+  if(expressions.empty()){
+    delete _f;
+    _f = 0;
+  }
 }
 
 gmshParametricSurface::~gmshParametricSurface()
 {
-#if !defined(HAVE_MATH_EVAL)
-  Msg::Error("MathEval is not compiled in this version of Gmsh");
-#else
-  evaluator_destroy(evalX);
-  evaluator_destroy(evalY);
-  evaluator_destroy(evalZ);
-#endif
+  if(_f) delete _f;
 }
 
 SPoint3 gmshParametricSurface::point(double par1, double par2) const
 {
-#if !defined(HAVE_MATH_EVAL)
-  Msg::Error("MathEval is not compiled in this version of Gmsh");
-  return SPoint3(0.,0.,0.);
-#else
-  char *names[2] = {"u", "v"};
-  double values [2] = {par1, par2};
-  const double x = evaluator_evaluate(evalX, 2, names, values);
-  const double y = evaluator_evaluate(evalY, 2, names, values);
-  const double z = evaluator_evaluate(evalZ, 2, names, values);
-  return SPoint3(x, y, z);
-#endif
+  if(_f){
+    std::vector<double> values(2), res(3);
+    values[0] = par1;
+    values[1] = par2;
+    if(_f->eval(values, res)) return SPoint3(res[0], res[1], res[2]);
+  }
+  return SPoint3(0., 0., 0.); 
 }
 
 Range<double> gmshParametricSurface::parBounds(int i) const

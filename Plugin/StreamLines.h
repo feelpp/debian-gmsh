@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -13,15 +13,14 @@ extern "C"
   GMSH_Plugin *GMSH_RegisterStreamLinesPlugin ();
 }
 
-class GMSH_StreamLinesPlugin : public GMSH_Post_Plugin
+class GMSH_StreamLinesPlugin : public GMSH_PostPlugin
 {
   static double callback(int num, int action, double value, double *opt,
                          double step, double min, double max);
-public:
+ public:
   GMSH_StreamLinesPlugin(){}
-  void getName(char *name) const;
-  void getInfos(char *author, char *copyright, char *help_text) const;
-  void catchErrorMessage(char *errorMessage) const;
+  std::string getName() const { return "StreamLines"; }
+  std::string getHelp() const;
   int getNbOptions() const;
   StringXNumber *getOption(int iopt);  
   PView *execute(PView *);
@@ -41,7 +40,7 @@ public:
   static double callbackZ2(int, int, double);
   static double callbackU(int, int, double);
   static double callbackV(int, int, double);
-  static void draw();
+  static void draw(void *context);
 };
 
 #endif

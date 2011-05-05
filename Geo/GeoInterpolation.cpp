@@ -1,20 +1,19 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
-#include "Message.h"
+#include "GmshMessage.h"
 #include "Geo.h"
 #include "GeoInterpolation.h"
 #include "GeoStringInterface.h"
 #include "Numeric.h"
+#include "Context.h"
 
 #define SQU(a)      ((a)*(a))
 
-// Curves
-
 static Vertex InterpolateCubicSpline(Vertex *v[4], double t, double mat[4][4],
-				     int derivee, double t1, double t2)
+                                     int derivee, double t1, double t2)
 {
   Vertex V;
   int i, j;
@@ -87,7 +86,7 @@ static Vertex InterpolateCubicSpline(Vertex *v[4], double t, double mat[4][4],
 
 // interpolation in the parametric space !
 SPoint2 InterpolateCubicSpline(Vertex *v[4], double t, double mat[4][4],
-			       double t1, double t2, gmshSurface *s)
+                               double t1, double t2, gmshSurface *s)
 {
   Vertex V;
   int i, j;
@@ -189,7 +188,7 @@ static void basisFuns(double u, int i, int deg, float *U, double *N)
 
 static Vertex InterpolateNurbs(Curve *Curve, double u, int derivee)
 {
-  static double Nb[1000];
+  double Nb[1000];
   int span = findSpan(u, Curve->degre, List_Nbr(Curve->Control_Points), Curve->k);
   basisFuns(u, span, Curve->degre, Curve->k, Nb);
   Vertex p;
@@ -218,7 +217,6 @@ Vertex InterpolateCurve(Curve *c, double u, int derivee)
   }
   
   Vertex V;
-  V.u = u;
 
   if(derivee) {
     double eps1 = (u == 0) ? 0 : 1.e-5;
@@ -229,6 +227,7 @@ Vertex InterpolateCurve(Curve *c, double u, int derivee)
     V.Pos.X = (D[1].Pos.X - D[0].Pos.X) / (eps1 + eps2);
     V.Pos.Y = (D[1].Pos.Y - D[0].Pos.Y) / (eps1 + eps2);
     V.Pos.Z = (D[1].Pos.Z - D[0].Pos.Z) / (eps1 + eps2);
+    V.u = u;
     return V;
   }
 
@@ -265,15 +264,7 @@ Vertex InterpolateCurve(Curve *c, double u, int derivee)
       V.Pos.Y = pp.y();
       V.Pos.Z = pp.z();
     }
-    return V;
-
-  case MSH_SEGM_PARAMETRIC:
-    V.Pos.X = evaluate_scalarfunction("t", u, c->functu);
-    V.Pos.Y = evaluate_scalarfunction("t", u, c->functv);
-    V.Pos.Z = evaluate_scalarfunction("t", u, c->functw);
-    V.w = (1. - u) * c->beg->w + u * c->end->w;
-    V.lc = (1. - u) * c->beg->lc + u * c->end->lc;
-    return V;
+    break;
 
   case MSH_SEGM_CIRC:
   case MSH_SEGM_CIRC_INV:
@@ -298,14 +289,16 @@ Vertex InterpolateCurve(Curve *c, double u, int derivee)
     V.Pos.Z += c->Circle.v[1]->Pos.Z;
     V.w = (1. - u) * c->beg->w + u * c->end->w;
     V.lc = (1. - u) * c->beg->lc + u * c->end->lc;
-    return V;
+    break;
 
   case MSH_SEGM_BSPLN:
   case MSH_SEGM_BEZIER:
-    return InterpolateUBS(c, u, 0);
+    V = InterpolateUBS(c, u, 0);
+    break;
 
   case MSH_SEGM_NURBS:
-    return InterpolateNurbs(c, u, 0);
+    V = InterpolateNurbs(c, u, 0);
+    break;
 
   case MSH_SEGM_SPLN:
     N = List_Nbr(c->Control_Points);
@@ -355,27 +348,26 @@ Vertex InterpolateCurve(Curve *c, double u, int derivee)
       V.Pos.X = pt.x();
       V.Pos.Y = pt.y();
       V.Pos.Z = pt.z();
-      return V;
     }
     else
-      return InterpolateCubicSpline(v, t, c->mat, 0, t1, t2);
+      V = InterpolateCubicSpline(v, t, c->mat, 0, t1, t2);
+    break;
 
   case MSH_SEGM_BND_LAYER:
     Msg::Error("Cannot interpolate boundary layer curve");
-    return V;
+    break;
 
   case MSH_SEGM_DISCRETE:
     Msg::Error("Cannot interpolate discrete curve");
-    return V;
+    break;
 
   default:
     Msg::Error("Unknown curve type in interpolation");
-    return V;
+    break;
   }
-
+  V.u = u;
+  return V;
 }
-
-// Surfaces
 
 // Interpolation transfinie sur un quadrangle :
 // f(u,v) = (1-u)c4(v) + u c2(v) + (1-v)c1(u) + v c3(u)
@@ -385,8 +377,8 @@ Vertex InterpolateCurve(Curve *c, double u, int derivee)
    (1.-u)*c4+u*c2+(1.-v)*c1+v*c3-((1.-u)*(1.-v)*s1+u*(1.-v)*s2+u*v*s3+(1.-u)*v*s4)
 
 static Vertex TransfiniteQua(Vertex c1, Vertex c2, Vertex c3, Vertex c4,
-			     Vertex s1, Vertex s2, Vertex s3, Vertex s4,
-			     double u, double v)
+                             Vertex s1, Vertex s2, Vertex s3, Vertex s4,
+                             double u, double v)
 {
   Vertex V;
 
@@ -408,7 +400,7 @@ static Vertex TransfiniteQua(Vertex c1, Vertex c2, Vertex c3, Vertex c4,
 #define TRAN_TRI(c1,c2,c3,s1,s2,s3,u,v) u*c2+(1.-v)*c1+v*c3-(u*(1.-v)*s2+u*v*s3);
 
 static Vertex TransfiniteTri(Vertex c1, Vertex c2, Vertex c3,
-			     Vertex s1, Vertex s2, Vertex s3, double u, double v)
+                             Vertex s1, Vertex s2, Vertex s3, double u, double v)
 {
   Vertex V;
   V.lc = TRAN_TRI(c1.lc, c2.lc, c3.lc, s1.lc, s2.lc, s3.lc, u, v);
@@ -441,48 +433,45 @@ static void TransfiniteSph(Vertex S, Vertex center, Vertex *T)
 
 bool iSRuledSurfaceASphere(Surface *s, SPoint3 &center, double &radius)
 {
-  if(s->Typ != MSH_SURF_REGL && s->Typ != MSH_SURF_TRIC)return false;
+  if(s->Typ != MSH_SURF_REGL && s->Typ != MSH_SURF_TRIC) return false;
 
   bool isSphere = true;
-  Vertex *O = 0, OO;
+  Vertex *O = 0;
   Curve *C[4] = {0, 0, 0, 0};
   for(int i = 0; i < std::min(List_Nbr(s->Generatrices), 4); i++)
     List_Read(s->Generatrices, i, &C[i]);
 
-  if(List_Nbr(s->RuledSurfaceOptions) == 3) {
+  if(List_Nbr(s->InSphereCenter)) {
     // it's on a sphere: get the center
-    List_Read(s->RuledSurfaceOptions, 0, & ((double *)center)[0]);
-    List_Read(s->RuledSurfaceOptions, 1, & ((double *)center)[1]);
-    List_Read(s->RuledSurfaceOptions, 2, & ((double *)center)[2]);
-    O = &OO;
+    List_Read(s->InSphereCenter, 0, &O);
   }
   else{
     // try to be intelligent (hum)
     for(int i = 0; i < std::min(List_Nbr(s->Generatrices), 4); i++) {
       if(C[i]->Typ != MSH_SEGM_CIRC && C[i]->Typ != MSH_SEGM_CIRC_INV){
-	isSphere = false;
+        isSphere = false;
       }
       else if(isSphere){
-	if(!i){
-	  List_Read(C[i]->Control_Points, 1, &O);
-	  ((double *)center)[0]= O->Pos.X;
-	  ((double *)center)[1]= O->Pos.Y;
-	  ((double *)center)[2]= O->Pos.Z;
-	}
-	else{
-	  Vertex *tmp;
-	  List_Read(C[i]->Control_Points, 1, &tmp);
-	  if(compareVertex(&O, &tmp))
-	    isSphere = false;
-	}
+        if(!i){
+          List_Read(C[i]->Control_Points, 1, &O);
+          ((double *)center)[0]= O->Pos.X;
+          ((double *)center)[1]= O->Pos.Y;
+          ((double *)center)[2]= O->Pos.Z;
+        }
+        else{
+          Vertex *tmp;
+          List_Read(C[i]->Control_Points, 1, &tmp);
+          if(compareVertex(&O, &tmp))
+            isSphere = false;
+        }
       }
     }
   }
   if (isSphere){
     Vertex *p = C[0]->beg;
     radius = sqrt ((p->Pos.X - center.x())+
-		   (p->Pos.Y - center.y())+
-		   (p->Pos.Z - center.z()));
+                   (p->Pos.Y - center.y())+
+                   (p->Pos.Z - center.z()));
   }
 
   return isSphere;
@@ -495,47 +484,44 @@ static Vertex InterpolateRuledSurface(Surface *s, double u, double v)
   for(int i = 0; i < std::min(List_Nbr(s->Generatrices), 4); i++)
     List_Read(s->Generatrices, i, &C[i]);
   
-  Vertex *O = 0, OO;
+  Vertex *O = 0;
   bool isSphere = true;
 
   // Ugly hack: "fix" transfinite interpolation if we have a sphere
   // patch
-  if(List_Nbr(s->RuledSurfaceOptions) == 3) {
+  if(List_Nbr(s->InSphereCenter)) {
     // it's on a sphere: get the center
-    List_Read(s->RuledSurfaceOptions, 0, &OO.Pos.X);
-    List_Read(s->RuledSurfaceOptions, 1, &OO.Pos.Y);
-    List_Read(s->RuledSurfaceOptions, 2, &OO.Pos.Z);
-    O = &OO;
+    List_Read(s->InSphereCenter, 0, &O);
   }
   else{
     // try to be intelligent (hum)
     for(int i = 0; i < std::min(List_Nbr(s->Generatrices), 4); i++) {
       if(C[i]->Typ != MSH_SEGM_CIRC && C[i]->Typ != MSH_SEGM_CIRC_INV){
-	isSphere = false;
+        isSphere = false;
       }
       else if(isSphere){
-	if(!i){
-	  List_Read(C[i]->Control_Points, 1, &O);
-	}
-	else{
-	  Vertex *tmp;
-	  List_Read(C[i]->Control_Points, 1, &tmp);
-	  if(compareVertex(&O, &tmp))
-	    isSphere = false;
-	}
+        if(!i){
+          List_Read(C[i]->Control_Points, 1, &O);
+        }
+        else{
+          Vertex *tmp;
+          List_Read(C[i]->Control_Points, 1, &tmp);
+          if(compareVertex(&O, &tmp))
+            isSphere = false;
+        }
       }
     }
     if(isSphere){
       double n[3] = {C[0]->Circle.invmat[0][2],
-		     C[0]->Circle.invmat[1][2],
-		     C[0]->Circle.invmat[2][2]};
+                     C[0]->Circle.invmat[1][2],
+                     C[0]->Circle.invmat[2][2]};
       bool isPlane = true;
       for(int i = 1; i < std::min(List_Nbr(s->Generatrices), 4); i++)
-	isPlane &= (n[0] == C[i]->Circle.invmat[0][2] &&
-		    n[1] == C[i]->Circle.invmat[1][2] &&
-		    n[2] == C[i]->Circle.invmat[2][2]);
+        isPlane &= (n[0] == C[i]->Circle.invmat[0][2] &&
+                    n[1] == C[i]->Circle.invmat[1][2] &&
+                    n[2] == C[i]->Circle.invmat[2][2]);
       if(isPlane)
-	isSphere = false;
+        isSphere = false;
     }
   }
   
@@ -606,9 +592,9 @@ static Vertex InterpolateExtrudedSurface(Surface *s, double u, double v)
 
 Vertex InterpolateSurface(Surface *s, double u, double v, int derivee, int u_v)
 {
-  if(derivee) {
+  if(derivee == 1) {
     double eps = 1.e-6;
-    Vertex D[4], T;
+    Vertex D[4];
     if(u_v == 1) {
       if(u - eps < 0.0) {
         D[0] = InterpolateSurface(s, u, v, 0, 0);
@@ -629,27 +615,59 @@ Vertex InterpolateSurface(Surface *s, double u, double v, int derivee, int u_v)
         D[1] = InterpolateSurface(s, u, v, 0, 0);
       }
     }
-    T.Pos.X = (D[1].Pos.X - D[0].Pos.X) / eps;
-    T.Pos.Y = (D[1].Pos.Y - D[0].Pos.Y) / eps;
-    T.Pos.Z = (D[1].Pos.Z - D[0].Pos.Z) / eps;
-    return T;
+    return Vertex((D[1].Pos.X - D[0].Pos.X) / eps,
+                  (D[1].Pos.Y - D[0].Pos.Y) / eps,
+                  (D[1].Pos.Z - D[0].Pos.Z) / eps);
+  }
+  else if (derivee == 2) {
+    double eps = 1.e-6;
+    Vertex D[2];
+    if(u_v == 1) { // dudu
+      if(u - eps < 0.0) {
+        D[0] = InterpolateSurface(s, u, v, 1, 1);
+        D[1] = InterpolateSurface(s, u + eps, v, 1, 1);
+      }
+      else {
+        D[0] = InterpolateSurface(s, u - eps, v, 1, 1);
+        D[1] = InterpolateSurface(s, u, v, 1, 1);
+      }
+    }
+    else if(u_v == 2) { // dvdv
+      if(v - eps < 0.0) {
+        D[0] = InterpolateSurface(s, u, v, 1, 2);
+        D[1] = InterpolateSurface(s, u, v + eps, 1, 2);
+      }
+      else {
+        D[0] = InterpolateSurface(s, u, v - eps, 1, 2);
+        D[1] = InterpolateSurface(s, u, v, 1, 2);
+      }
+    }
+    else { // dudv
+      if(v - eps < 0.0) {
+        D[0] = InterpolateSurface(s, u, v, 1, 1);
+        D[1] = InterpolateSurface(s, u, v + eps, 1, 1);
+      }
+      else {
+        D[0] = InterpolateSurface(s, u, v - eps, 1, 1);
+        D[1] = InterpolateSurface(s, u, v, 1, 1);
+      }
+    }
+    return Vertex((D[1].Pos.X - D[0].Pos.X) / eps,
+                  (D[1].Pos.Y - D[0].Pos.Y) / eps,
+                  (D[1].Pos.Z - D[0].Pos.Z) / eps);
   }
 
   if(s->geometry){
-    Vertex T;
     SPoint3 p = s->geometry->point(u, v);
-    T.Pos.X = p.x();
-    T.Pos.Y = p.y();
-    T.Pos.Z = p.z();
-    return T;
+    return Vertex(p.x(), p.y(), p.z());
   }
 
-  // FIXME: WARNING -- this is a major hack: we use the exact
-  // extrusion formula if the surface is extruded, so that we create
-  // exact surfaces of revolution. But this WILL fail if the extruded
-  // surface is transformed after the extrusion!
-  if(s->Extrude && s->Extrude->geo.Mode == EXTRUDED_ENTITY && 
-     s->Typ != MSH_SURF_PLAN)
+  // Warning: we use the exact extrusion formula so we can create
+  // exact surfaces of revolution. This WILL fail if the surface is
+  // transformed after the extrusion: in that case set the
+  // exactExtrusion option to 0 to use the normal code path
+  if(CTX::instance()->geom.exactExtrusion && s->Extrude && 
+     s->Extrude->geo.Mode == EXTRUDED_ENTITY && s->Typ != MSH_SURF_PLAN)
     return InterpolateExtrudedSurface(s, u, v);
 
   switch (s->Typ) {
@@ -657,34 +675,16 @@ Vertex InterpolateSurface(Surface *s, double u, double v, int derivee, int u_v)
   case MSH_SURF_TRIC: 
     return InterpolateRuledSurface(s, u, v);
   case MSH_SURF_PLAN:
-    {
-      Vertex T(u, v, .0);
-      Vertex V(s->a, s->b, s->c);
-      Projette(&V, s->plan);
-      if(V.Pos.Z != 0.)
-        T.Pos.Z = (s->d - V.Pos.X * T.Pos.X - V.Pos.Y * T.Pos.Y) / V.Pos.Z;
-      else
-        T.Pos.Z = 0.;
-      return T;
-    }
+    Msg::Error("Should never interpolate plane surface in InterpolateSurface()");
+    return Vertex(0., 0., 0.);
   case MSH_SURF_BND_LAYER:
-    {
-      Msg::Error("Cannot interpolate boundary layer surface");
-      Vertex T(0., 0., 0.);
-      return T;
-    }    
+    Msg::Error("Cannot interpolate boundary layer surface");
+    return Vertex(0., 0., 0.);
   case MSH_SURF_DISCRETE:
-    {
-      Msg::Error("Cannot interpolate discrete surface");
-      Vertex T(0., 0., 0.);
-      return T;
-    }    
+    Msg::Error("Cannot interpolate discrete surface");
+    return Vertex(0., 0., 0.);
   default:
-    {
-      Msg::Error("Unknown surface type in interpolation");
-      Vertex T(0., 0., 0.);
-      return T;
-    }
+    Msg::Error("Unknown surface type in interpolation");
+    return Vertex(0., 0., 0.);
   }
 }
-

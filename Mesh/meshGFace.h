@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -14,7 +14,9 @@ class MVertex;
 
 // Create the mesh of the face
 class meshGFace {
+  const bool repairSelfIntersecting1dMesh;
  public :
+  meshGFace (bool r = true) : repairSelfIntersecting1dMesh(r) {}
   void operator () (GFace *);
 };
 
@@ -35,16 +37,10 @@ class orientMeshGFace {
   void operator () (GFace *);
 };
 
-void fourthPoint (double *p1, double *p2, double *p3, double *p4);
-
-// Compute edge loops of the face, all_mvertices are the vertices of
-// the
-void computeEdgeLoops(const GFace *gf,
-                      std::vector<MVertex*> &all_mvertices,
-                      std::vector<int> &indices);
-
+void fourthPoint(double *p1, double *p2, double *p3, double *p4);
+void findTransfiniteCorners(GFace *gf, std::vector<MVertex*> &corners);
 int MeshTransfiniteSurface(GFace *gf);
-int MeshExtrudedSurface(GFace *gf, 
-                        std::set<std::pair<MVertex*, MVertex*> > *constrainedEdges=0);
+int MeshExtrudedSurface(GFace *gf, std::set<std::pair<MVertex*, MVertex*> > 
+                        *constrainedEdges=0);
 
 #endif

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -6,6 +6,9 @@
 #ifndef _GFACE_H_
 #define _GFACE_H_
 
+#include <list>
+#include <string>
+#include <vector>
 #include "GEntity.h"
 #include "GPoint.h"
 #include "GEdgeLoop.h"
@@ -16,7 +19,9 @@
 class MElement;
 class MTriangle;
 class MQuadrangle;
+class MPolygon;
 class ExtrudeParams;
+class GFaceCompound;
 
 struct mean_plane
 {
@@ -36,37 +41,53 @@ class GRegion;
 class GFace : public GEntity
 {
  protected:
-  // edge loops will replace what follows (list of al the edges of the
-  // face + directions)
+  // edge loops might replace what follows (list of all the edges of
+  // the face + directions)
   std::list<GEdge *> l_edges;
   std::list<int> l_dirs;
   GRegion *r1, *r2;
   mean_plane meanPlane;
   std::list<GEdge *> embedded_edges;
   std::list<GVertex *> embedded_vertices;
-  // given a list of GEdges, the function builds a list of wires,
-  // i.e. closed edge loops.  the first wire is the one that is the
-  // outer contour of the face.
-  void resolveWires();
+  GFaceCompound *compound; // this model edge belongs to a compound 
+
+ public: // this will become protected or private
+  std::list<GEdgeLoop> edgeLoops;
 
  public:
   GFace(GModel *model, int tag);
   virtual ~GFace();
 
-  std::list<GEdgeLoop> edgeLoops;
+  // delete mesh data
+  virtual void deleteMesh();
 
   // add/delete regions that are bounded by the face
   void addRegion(GRegion *r){ r1 ? r2 = r : r1 = r; }
   void delRegion(GRegion *r){ if(r1 == r) r1 = r2; r2 = 0; }
+
+  // get number of regions
+  int numRegions() const { int num=0; if(r1) num++; if(r2) num++; return num; }
+
+  // add embedded vertices/edges
+  void addEmbeddedVertex(GVertex *v){ embedded_vertices.push_back(v); }
+  void addEmbeddedEdge(GEdge *e){ embedded_edges.push_back(e); }
+  
+  // delete the edge from the face (the edge is supposed to be a free
+  // edge in the face, not part of any edge loops--use with caution!)
+  void delFreeEdge(GEdge *e);
 
   // edge orientations
   virtual std::list<int> orientations() const { return l_dirs; }
 
   // edges that bound the face
   virtual std::list<GEdge*> edges() const { return l_edges; }
+  virtual std::list<int> edgeOrientations() const { return l_dirs; }
 
   // edges that are embedded in the face
   virtual std::list<GEdge*> embeddedEdges() const { return embedded_edges; }
+
+  // edges that are embedded in the face
+  virtual std::list<GVertex*> embeddedVertices() const { return embedded_vertices; }
 
   // vertices that bound the face
   virtual std::list<GVertex*> vertices() const;
@@ -85,8 +106,24 @@ class GFace : public GEntity
   // get the bounding box
   virtual SBoundingBox3d bounds() const;
 
+  // get the oriented bounding box
+  virtual SOrientedBoundingBox getOBB();
+  
   // retrieve surface params
   virtual surface_params getSurfaceParams() const;
+
+  // compute the genus G of the surface
+  // we have the poincare constant CHI = #V-#E+#F
+  // where #V #E and #F are the number of vertices, edges
+  // and faces of the surface
+  // Then, CHI = 2 G + 2 - B
+  // where B is the number of boundaries (edge loops) of the
+  // surface. This topological constant can be computed using both the
+  // geometry and the mesh. Both approaches should give the same result ;-)
+  // by default, genus is ZERO
+  int poincareMesh ();
+  int genusMesh () { return (poincareMesh() + edgeLoops.size() - 2) / 2; }
+  virtual int genusGeom ();
 
   // return the point on the face corresponding to the given parameter
   virtual GPoint point(double par1, double par2) const = 0;
@@ -106,6 +143,11 @@ class GFace : public GEntity
   // stereographic mappings of the sphere that is used in 2D mesh
   // generation !
   virtual double getMetricEigenvalue(const SPoint2 &);
+  
+  // eigen values are absolute values and sorted from min to max of absolute values
+  // eigen vectors are the COLUMNS of eigVec
+  virtual void getMetricEigenVectors(const SPoint2 &param, 
+                                     double eigVal[2], double eigVec[4]) const;
 
   // return the parmater location on the face given a point in space
   // that is on the face
@@ -118,25 +160,38 @@ class GFace : public GEntity
   virtual GPoint closestPoint(const SPoint3 & queryPoint, const double initialGuess[2]) const;
 
   // return the normal to the face at the given parameter location
-  virtual SVector3 normal(const SPoint2 &param) const = 0;
+  virtual SVector3 normal(const SPoint2 &param) const;
 
   // return the first derivate of the face at the parameter location
-  virtual Pair<SVector3,SVector3> firstDer(const SPoint2 &param) const = 0;
+  virtual Pair<SVector3, SVector3> firstDer(const SPoint2 &param) const = 0;
 
-  // return the curvature i.e. the divergence of the normal
-  virtual double curvature(const SPoint2 &param) const;
+  // compute the second derivates of the face at the parameter location
+  // the derivates have to be allocated before calling this function
+  virtual void secondDer(const SPoint2 &param, 
+                         SVector3 *dudu, SVector3 *dvdv, SVector3 *dudv) const = 0;
 
-  // recompute the mesh partitions defined on this face
-  void recomputeMeshPartitions();
+  // return the curvature computed as the divergence of the normal
+  inline double curvature(const SPoint2 &param) const 
+  {return curvatureMax(param);}
+  virtual double curvatureDiv(const SPoint2 &param) const;
 
-  // delete the mesh partitions defined on this face
-  void deleteMeshPartitions();
+  // return the maximum curvature at a point
+  virtual double curvatureMax(const SPoint2 &param) const;
+
+  // compute the min and max curvatures and the corresponding directions
+  // return the max curvature
+  // outputs have to be allocated before calling this function
+  virtual double curvatures(const SPoint2 &param, SVector3 *dirMax, SVector3 *dirMin,
+                            double *curvMax, double *curvMin) const;
 
   // return a type-specific additional information string
   virtual std::string getAdditionalInfoString();
 
+  // export in GEO format
+  virtual void writeGEO(FILE *fp);
+
   // fill the crude representation cross
-  bool buildRepresentationCross();
+  virtual bool buildRepresentationCross();
 
   // build a STL triangulation and fills the vertex array
   // va_geom_triangles
@@ -154,12 +209,25 @@ class GFace : public GEntity
                         double &x, double &y, double &z) const;
   void getMeanPlaneData(double plan[3][3]) const;
 
-  // get number of elements in the mesh and get element by index
+  // number of types of elements
+  int getNumElementTypes() const { return 3; }
+
+  // get total/by-type number of elements in the mesh
   unsigned int getNumMeshElements();
+  void getNumMeshElements(unsigned *const c) const;
+
+  // get the start of the array of a type of element
+  MElement *const *getStartElementType(int type) const;
+
+  // get the element at the given index
   MElement *getMeshElement(unsigned int index);
 
   // reset the mesh attributes to default values
   virtual void resetMeshAttributes();
+
+  // compound
+  void setCompound(GFaceCompound *gfc) { compound = gfc; }
+  GFaceCompound *getCompound() const { return compound; }
 
   struct {
     // do we recombine the triangles of the mesh?
@@ -202,6 +270,7 @@ class GFace : public GEntity
 
   std::vector<MTriangle*> triangles;
   std::vector<MQuadrangle*> quadrangles;
+  std::vector<MPolygon*> polygons;
 };
 
 #endif

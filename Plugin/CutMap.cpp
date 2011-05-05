@@ -1,12 +1,10 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
 #include "CutMap.h"
 #include "Context.h"
-
-extern Context_T CTX;
 
 StringXNumber CutMapOptions_Number[] = {
   {GMSH_FULLRC, "A", GMSH_CutMapPlugin::callbackA, 0.},
@@ -79,18 +77,9 @@ double GMSH_CutMapPlugin::callbackTarget(int num, int action, double value)
   return 0.;
 }
 
-void GMSH_CutMapPlugin::getName(char *name) const
+std::string GMSH_CutMapPlugin::getHelp() const
 {
-  strcpy(name, "Cut Map");
-}
-
-void GMSH_CutMapPlugin::getInfos(char *author, char *copyright,
-                                 char *help_text) const
-{
-  strcpy(author, "J.-F. Remacle");
-  strcpy(copyright, "DGR (www.multiphysics.com)");
-  strcpy(help_text,
-         "Plugin(CutMap) extracts the isosurface of value\n"
+  return "Plugin(CutMap) extracts the isosurface of value\n"
          "`A' from the view `iView' and draws the\n"
          "`dTimeStep'-th value of the view `dView' on the\n"
          "isosurface. If `iView' < 0, the plugin is run\n"
@@ -104,7 +93,7 @@ void GMSH_CutMapPlugin::getInfos(char *author, char *copyright,
          "< 0) than the isosurface `A'.\n"
          "\n"
          "Plugin(CutMap) creates as many views as there\n"
-         "are time steps in `iView'.\n");
+         "are time steps in `iView'.\n";
 }
 
 int GMSH_CutMapPlugin::getNbOptions() const
@@ -115,11 +104,6 @@ int GMSH_CutMapPlugin::getNbOptions() const
 StringXNumber *GMSH_CutMapPlugin::getOption(int iopt)
 {
   return &CutMapOptions_Number[iopt];
-}
-
-void GMSH_CutMapPlugin::catchErrorMessage(char *errorMessage) const
-{
-  strcpy(errorMessage, "CutMap failed...");
 }
 
 double GMSH_CutMapPlugin::levelset(double x, double y, double z, double val) const

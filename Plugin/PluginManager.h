@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -7,57 +7,53 @@
 #define _PLUGIN_MANAGER_H_
 
 #include <map>
-#include "Plugin.h"
+#include <string>
 
-struct ltstrpg
-{
-  bool operator()(const char* s1, const char* s2) const
-  {
-    return strcmp(s1, s2) < 0;
-  }
-};
+class GMSH_Plugin;
+class GMSH_SolverPlugin;
 
-class GMSH_PluginManager
+class PluginManager
 {
  private:
-  GMSH_PluginManager();
-  static GMSH_PluginManager *_instance;
-  std::map<const char*, GMSH_Plugin*, ltstrpg> allPlugins;
+  PluginManager(){}
+  static PluginManager *_instance;
+  std::map<std::string, GMSH_Plugin*> allPlugins;
 
  public :
-  virtual ~GMSH_PluginManager();
-  typedef std::map<const char*, GMSH_Plugin*, ltstrpg>::iterator iter;
+  virtual ~PluginManager();
   
   // register all the plugins that are in $(GMSHPLUGINSHOME). (Note
   // that loading a .so is not what is usually called a 'plugin': we
   // should call the plugins 'modules'... A plugin is an executable,
   // but that can only be executed from inside another program.)
   void registerDefaultPlugins();
-  static GMSH_PluginManager *instance();
+  static PluginManager *instance();
 
   // Dynamically add a plugin pluginName.so in dirName
-  void addPlugin(char *dirName, char *pluginName);
+  void addPlugin(std::string fileName);
 
   // Uninstall a given plugin
-  void uninstallPlugin(char *pluginName);
+  void uninstallPlugin(std::string pluginName);
 
   // Set an option to a value in plugin named pluginName
-  void setPluginOption(char *pluginName, char *option, double value);
-  void setPluginOption(char *pluginName, char *option, char *value);
+  void setPluginOption(std::string pluginName, std::string option, 
+                       double value);
+  void setPluginOption(std::string pluginName, std::string option, 
+                       std::string value);
 
   // Iterator on plugins
-  inline iter begin(){ return allPlugins.begin(); }
-  inline iter end(){ return allPlugins.end(); }
+  std::map<std::string, GMSH_Plugin*>::iterator begin(){ return allPlugins.begin(); }
+  std::map<std::string, GMSH_Plugin*>::iterator end(){ return allPlugins.end(); }
 
   // Find a plugin named pluginName
-  GMSH_Plugin *find(char *pluginName);
+  GMSH_Plugin *find(std::string pluginName);
 
   // Get The ONLY Solver Plugin
-  GMSH_Solve_Plugin *findSolverPlugin();
+  GMSH_SolverPlugin *findSolverPlugin();
 
   // Perform an action on the plugin. Default action are Run and
   // Save. Other plugins may perform other actions.
-  void action(char *pluginMane, char *action, void *data);
+  void action(std::string pluginName, std::string action, void *data);
 };
 
 #endif

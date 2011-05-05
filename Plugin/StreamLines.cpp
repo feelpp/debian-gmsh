@@ -1,20 +1,18 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
 #include <math.h>
+#include "GmshConfig.h"
 #include "StreamLines.h"
 #include "OctreePost.h"
 #include "Context.h"
 #include "PViewOptions.h"
 
-#if defined(HAVE_FLTK)
-#include "GmshUI.h"
-#include "Draw.h"
+#if defined(HAVE_OPENGL)
+#include "drawContext.h"
 #endif
-
-extern Context_T CTX;
 
 StringXNumber StreamLinesOptions_Number[] = {
   {GMSH_FULLRC, "X0", GMSH_StreamLinesPlugin::callbackX0, 0.},
@@ -43,15 +41,16 @@ extern "C"
   }
 }
 
-void GMSH_StreamLinesPlugin::draw()
+void GMSH_StreamLinesPlugin::draw(void *context)
 {
-#if defined(HAVE_FLTK)
-  glColor4ubv((GLubyte *) & CTX.color.fg);
+#if defined(HAVE_OPENGL)
+  glColor4ubv((GLubyte *) & CTX::instance()->color.fg);
+  drawContext *ctx = (drawContext*)context;
   double p[3];
   for(int i = 0; i < getNbU(); ++i){
     for(int j = 0; j < getNbV(); ++j){
       getPoint(i, j, p);
-      Draw_Sphere(CTX.point_size, p[0], p[1], p[2], 1);
+      ctx->drawSphere(CTX::instance()->pointSize, p[0], p[1], p[2], 1);
     }
   }
 #endif
@@ -67,64 +66,62 @@ double GMSH_StreamLinesPlugin::callback(int num, int action, double value, doubl
   default: break;
   }
   *opt = value;
-#if defined(HAVE_FLTK)
-  DrawPlugin(draw);
-#endif
+  GMSH_Plugin::setDrawFunction(draw);
   return 0.;
 }
 
 double GMSH_StreamLinesPlugin::callbackX0(int num, int action, double value)
 {
   return callback(num, action, value, &StreamLinesOptions_Number[0].def,
-                  CTX.lc/100., -2*CTX.lc, 2*CTX.lc);
+                  CTX::instance()->lc/100., -2*CTX::instance()->lc, 2*CTX::instance()->lc);
 }
 
 double GMSH_StreamLinesPlugin::callbackY0(int num, int action, double value)
 {
   return callback(num, action, value, &StreamLinesOptions_Number[1].def,
-                  CTX.lc/100., -2*CTX.lc, 2*CTX.lc);
+                  CTX::instance()->lc/100., -2*CTX::instance()->lc, 2*CTX::instance()->lc);
 }
 
 double GMSH_StreamLinesPlugin::callbackZ0(int num, int action, double value)
 {
   return callback(num, action, value, &StreamLinesOptions_Number[2].def,
-                  CTX.lc/100., -2*CTX.lc, 2*CTX.lc);
+                  CTX::instance()->lc/100., -2*CTX::instance()->lc, 2*CTX::instance()->lc);
 }
 
 double GMSH_StreamLinesPlugin::callbackX1(int num, int action, double value)
 {
   return callback(num, action, value, &StreamLinesOptions_Number[3].def,
-                  CTX.lc/100., -2*CTX.lc, 2*CTX.lc);
+                  CTX::instance()->lc/100., -2*CTX::instance()->lc, 2*CTX::instance()->lc);
 }
 
 double GMSH_StreamLinesPlugin::callbackY1(int num, int action, double value)
 {
   return callback(num, action, value, &StreamLinesOptions_Number[4].def,
-                  CTX.lc/100., -2*CTX.lc, 2*CTX.lc);
+                  CTX::instance()->lc/100., -2*CTX::instance()->lc, 2*CTX::instance()->lc);
 }
 
 double GMSH_StreamLinesPlugin::callbackZ1(int num, int action, double value)
 {
   return callback(num, action, value, &StreamLinesOptions_Number[5].def,
-                  CTX.lc/100., -2*CTX.lc, 2*CTX.lc);
+                  CTX::instance()->lc/100., -2*CTX::instance()->lc, 2*CTX::instance()->lc);
 }
 
 double GMSH_StreamLinesPlugin::callbackX2(int num, int action, double value)
 {
   return callback(num, action, value, &StreamLinesOptions_Number[6].def,
-                  CTX.lc/100., -2*CTX.lc, 2*CTX.lc);
+                  CTX::instance()->lc/100., -2*CTX::instance()->lc, 2*CTX::instance()->lc);
 }
 
 double GMSH_StreamLinesPlugin::callbackY2(int num, int action, double value)
 {
   return callback(num, action, value, &StreamLinesOptions_Number[7].def,
-                  CTX.lc/100., -2*CTX.lc, 2*CTX.lc);
+                  CTX::instance()->lc/100., -2*CTX::instance()->lc, 2*CTX::instance()->lc);
 }
 
 double GMSH_StreamLinesPlugin::callbackZ2(int num, int action, double value)
 {
   return callback(num, action, value, &StreamLinesOptions_Number[8].def,
-                  CTX.lc/100., -2*CTX.lc, 2*CTX.lc);
+                  CTX::instance()->lc/100., -2*CTX::instance()->lc, 2*CTX::instance()->lc);
 }
 
 double GMSH_StreamLinesPlugin::callbackU(int num, int action, double value)
@@ -139,18 +136,9 @@ double GMSH_StreamLinesPlugin::callbackV(int num, int action, double value)
                   1, 1, 100);
 }
 
-void GMSH_StreamLinesPlugin::getName(char *name) const
+std::string GMSH_StreamLinesPlugin::getHelp() const
 {
-  strcpy(name, "Stream Lines");
-}
-
-void GMSH_StreamLinesPlugin::getInfos(char *author, char *copyright,
-                                      char *help_text) const
-{
-  strcpy(author, "J.-F. Remacle");
-  strcpy(copyright, "DGR (www.multiphysics.com)");
-  strcpy(help_text,
-         "Plugin(StreamLines) computes stream lines\n"
+  return "Plugin(StreamLines) computes stream lines\n"
          "from the `TimeStep'-th time step of a vector\n"
          "view `iView' and optionally interpolates the\n"
          "scalar view `dView' on the resulting stream\n"
@@ -171,7 +159,7 @@ void GMSH_StreamLinesPlugin::getInfos(char *author, char *copyright,
          "\n"
          "Plugin(StreamLines) creates one new view. This\n"
          "view contains multi-step vector points if `dView'\n"
-         "< 0, or single-step scalar lines if `dView' >= 0.\n");
+         "< 0, or single-step scalar lines if `dView' >= 0.\n";
 }
 
 int GMSH_StreamLinesPlugin::getNbOptions() const
@@ -182,11 +170,6 @@ int GMSH_StreamLinesPlugin::getNbOptions() const
 StringXNumber *GMSH_StreamLinesPlugin::getOption(int iopt)
 {
   return &StreamLinesOptions_Number[iopt];
-}
-
-void GMSH_StreamLinesPlugin::catchErrorMessage(char *errorMessage) const
-{
-  strcpy(errorMessage, "StreamLines failed...");
 }
 
 int GMSH_StreamLinesPlugin::getNbU()
@@ -243,7 +226,7 @@ PView *GMSH_StreamLinesPlugin::execute(PView *v)
     o2 = new OctreePost(v2);
   }
 
-  PView *v3 = new PView(true);
+  PView *v3 = new PView();
   PViewDataList *data3 = getDataList(v3);
 
   const double b1 = 1. / 3., b2 = 2. / 3., b3 = 1. / 3., b4 = 1. / 6.;
@@ -260,9 +243,9 @@ PView *GMSH_StreamLinesPlugin::execute(PView *v)
       }
       else{
         data3->NbVP++;
-        List_Add(data3->VP, &X[0]);
-        List_Add(data3->VP, &X[1]);
-        List_Add(data3->VP, &X[2]);            
+        data3->VP.push_back(X[0]);
+        data3->VP.push_back(X[1]);
+        data3->VP.push_back(X[2]);            
       }
 
       int currentTimeStep = 0;
@@ -274,11 +257,11 @@ PView *GMSH_StreamLinesPlugin::execute(PView *v)
         if(timeStep < 0){
           double T0 = data1->getTime(0);
           double currentT = T0 + DT * iter;
-          List_Add(data3->Time, &currentT);
+          data3->Time.push_back(currentT);
           for(; currentTimeStep < data1->getNumTimeSteps() - 1 && 
                 currentT > 0.5 * (data1->getTime(currentTimeStep) + 
                                   data1->getTime(currentTimeStep + 1));
-              currentTimeStep++);
+          currentTimeStep++);
         }
         else{
           currentTimeStep = timeStep;
@@ -290,7 +273,7 @@ PView *GMSH_StreamLinesPlugin::execute(PView *v)
         // X3 = X + a3 * DT * V(X2)
         // X4 = X + a4 * DT * V(X3)
         // X = X + b1 X1 + b2 X2 + b3 X3 + b4 x4
-	double val[3];
+        double val[3];
         o1.searchVector(X[0], X[1], X[2], val, currentTimeStep);
         for(int k = 0; k < 3; k++) X1[k] = X[k] + DT * val[k] * a1;
         o1.searchVector(X1[0], X1[1], X1[2], val, currentTimeStep);
@@ -307,22 +290,19 @@ PView *GMSH_StreamLinesPlugin::execute(PView *v)
 
         if(data2){
           data3->NbSL++;
-          List_Add(data3->SL, &XPREV[0]);
-          List_Add(data3->SL, &X[0]);
-          List_Add(data3->SL, &XPREV[1]);
-          List_Add(data3->SL, &X[1]);
-          List_Add(data3->SL, &XPREV[2]);
-          List_Add(data3->SL, &X[2]);
+          data3->SL.push_back(XPREV[0]); data3->SL.push_back(X[0]);
+          data3->SL.push_back(XPREV[1]); data3->SL.push_back(X[1]);
+          data3->SL.push_back(XPREV[2]); data3->SL.push_back(X[2]);
           for(int k = 0; k < data2->getNumTimeSteps(); k++)
-            List_Add(data3->SL, &val2[k]);
+            data3->SL.push_back(val2[k]);
           o2->searchScalar(X[0], X[1], X[2], val2, -1);
           for(int k = 0; k < data2->getNumTimeSteps(); k++)
-            List_Add(data3->SL, &val2[k]);
+            data3->SL.push_back(val2[k]);
         }
         else{
-          List_Add(data3->VP, &DX[0]);
-          List_Add(data3->VP, &DX[1]);
-          List_Add(data3->VP, &DX[2]);         
+          data3->VP.push_back(DX[0]);
+          data3->VP.push_back(DX[1]);
+          data3->VP.push_back(DX[2]);         
         }
       }
     }
@@ -333,7 +313,7 @@ PView *GMSH_StreamLinesPlugin::execute(PView *v)
     delete o2;
   }
   else{
-    v3->getOptions()->VectorType = PViewOptions::Displacement;
+    v3->getOptions()->vectorType = PViewOptions::Displacement;
   }
 
   data3->setName(data1->getName() + "_StreamLines");

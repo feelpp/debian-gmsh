@@ -15,7 +15,8 @@ the position (`X',`Y'). The string is aligned
 according to `Align'. If `iView' < 0, the plugin
 is run on the current view.
 
-Plugin(Annotate) is executed in-place.
+Plugin(Annotate) is executed in-place for list-based
+datasets or creates a new view for other datasets.
 
 String options:
 @table @code
@@ -414,7 +415,7 @@ Default value: @code{-1}
 @end table
 
 @item Plugin(FieldView)
-Plugin(FieldView) evaluate a field on the choosen view.
+Plugin(FieldView) evaluates a field on the choosen view.
 
 Numeric options:
 @table @code
@@ -426,8 +427,74 @@ Default value: @code{-1}
 Default value: @code{-1}
 @end table
 
+@item Plugin(FiniteElement)
+Plugin(FiniteElement) solves simple PDEs
+using the finite element method. This is only
+intended as a demonstration tool: it is NOT
+intended for general use.
+Plugin(FiniteElement) creates a new view.
+
+String options:
+@table @code
+@item Equation
+Default value: @code{"Projection"}
+@item Parameter
+Default value: @code{"Sin(x*y)"}
+@item Gamma1BC
+Default value: @code{""}
+@item Gamma2BC
+Default value: @code{""}
+@end table
+Numeric options:
+@table @code
+@item Omega
+Default value: @code{1}
+@item Gamma1
+Default value: @code{0}
+@item Gamma1Value
+Default value: @code{0}
+@item Gamma2
+Default value: @code{0}
+@item Gamma2Value
+Default value: @code{0}
+@end table
+
 @item Plugin(GSHHS)
-Plugin(GSHHS) import GSHHS data.
+Plugin(GSHHS) read different kind of contour lines data
+and write a .geo file on the surface of a sphere (the Earth).
+The principal application is to load GSHHS data
+ (see
+http://www.soest.hawaii.edu/wessel/gshhs/gshhs.html).
+Valid values for "Format" are ):
+ -"gshhs" : open GSHHS file
+ -"loops2" : import 2D contour lines in simple text format :
+   NB_POINTS_IN_FIRST_LOOP FIRST_LOOP_IS_CLOSED
+   COORD1 COORD2
+   COORD1 COORD2
+   ...    ...
+   NB_POINTS_IN_SECOND_LOOP SECOND_LOOP_IS_CLOSED
+   ...
+   (LOOP_IS_CLOSED specify if this coast line describe a closed curve
+   (0=no, 1=yes).
+In the case of "loops2" format, you can specify the the coordinate
+system used in the input file with the "Coordinate" option, valid
+values are
+ -"lonlat" for longitude-latidute radian,
+ -"lonlat_degrees" for longitude-latitude degrees,
+ -"UTM" for universal transverse mercartor ("UTMZone" option should
+  be specified)
+ -"cartesian" for full 3D coordinates
+ -"radius" specify the earth radius.
+If the "iField" option is set, consecutive points closer than the
+value of the field iField (in meters) will not be added.
+If "MinStraitsFactor" >0 and if a field iField is provided, coastlines
+closer than MinStraitsFactor*field(IField) are merged and inner corners
+ which form an angle < pi/3 are removed.
+The output is always in stereographic coordinates, if the "WritePolarSphere"
+option is not 0, a sphere is added to the geo file.
+WARNING : this plugin is still experimental and need polishing and
+error-handling. In particular, it will probably crash if an inexistant
+field id is given or if the input/output cannot be open.
 
 String options:
 @table @code
@@ -450,13 +517,11 @@ Default value: @code{0}
 Default value: @code{6.37814e+06}
 @item UTMPolarRadius
 Default value: @code{6.35675e+06}
-@item UTMScale
-Default value: @code{1}
-@item UTMShiftX
-Default value: @code{0}
-@item UTMShiftY
-Default value: @code{0}
+@item radius
+Default value: @code{6.37101e+06}
 @item WritePolarSphere
+Default value: @code{1}
+@item MinStraitsFactor
 Default value: @code{1}
 @end table
 
@@ -497,6 +562,35 @@ Default value: @code{20}
 Default value: @code{-1}
 @end table
 
+@item Plugin(HomologyComputation)
+Plugin(HomologyComputation) computes generators 
+for (relative) homology groups and their thick cuts. 
+
+Plugin(HomologyComputation) creates new views.
+
+String options:
+@table @code
+@item Filename
+Default value: @code{"homology.msh"}
+@end table
+Numeric options:
+@table @code
+@item PhysicalGroupForDomain1
+Default value: @code{0}
+@item PhysicalGroupForDomain2
+Default value: @code{0}
+@item PhysicalGroupForSubdomain1
+Default value: @code{0}
+@item PhysicalGroupForSubdomain2
+Default value: @code{0}
+@item ComputeGenerators
+Default value: @code{1}
+@item ComputeDualGenerators
+Default value: @code{0}
+@item ComputeBettiNumbers
+Default value: @code{0}
+@end table
+
 @item Plugin(Integrate)
 Plugin(Integrate) integrates scalar fields over
 all the elements in the view `iView', as well
@@ -534,6 +628,19 @@ Numeric options:
 @table @code
 @item Eigenvalue
 Default value: @code{2}
+@item iView
+Default value: @code{-1}
+@end table
+
+@item Plugin(LongitudeLatitude)
+Plugin(LongituteLatitude) Project the view `iView'
+in Longitude-Latitude. If `iView' < 0, the plugin
+is run on the current view.
+
+Plugin(LongituteLatitude) is executed in place.
+
+Numeric options:
+@table @code
 @item iView
 Default value: @code{-1}
 @end table
@@ -796,27 +903,6 @@ Default value: @code{0}
 Default value: @code{0}
 @item iView
 Default value: @code{-1}
-@end table
-
-@item Plugin(TransformLatLon)
-Plugin(TransformLatLon) transforms the homogeneous
-node coordinates (x,y,z,1) of the elements in
-the view `iView' by the matrix
-[`A11' `A12' `A13' `Tx']
-[`A21' `A22' `A23' `Ty']
-[`A31' `A32' `A33' `Tz'].
-If `SwapOrientation' is set, the orientation of the
-elements is reversed. If `iView' < 0, the plugin
-is run on the current view.
-
-Plugin(TransformLatLon) is executed in-place.
-
-Numeric options:
-@table @code
-@item iView
-Default value: @code{-1}
-@item Longitude0
-Default value: @code{0}
 @end table
 
 @item Plugin(Triangulate)

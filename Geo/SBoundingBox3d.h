@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -22,6 +22,9 @@ class SBoundingBox3d {
     : MinPt(DBL_MAX,DBL_MAX,DBL_MAX), MaxPt(-DBL_MAX,-DBL_MAX,-DBL_MAX) {}
   SBoundingBox3d(const SPoint3 &pt)
     : MinPt(pt), MaxPt(pt) {}
+  SBoundingBox3d(double xmin, double ymin, double zmin,
+                 double xmax, double ymax, double zmax)
+    : MinPt(xmin, ymin, zmin), MaxPt(xmax, ymax, zmax) {}
   bool empty()
   {
     if(MinPt.x() == DBL_MAX || MinPt.y() == DBL_MAX || MinPt.z() == DBL_MAX ||

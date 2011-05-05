@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -19,15 +19,14 @@ class GMSH_CutPlanePlugin : public GMSH_LevelsetPlugin
   static double callback(int num, int action, double value, double *opt,
                          double step, double min, double max);
   static int iview;
-public:
+ public:
   GMSH_CutPlanePlugin(){}
-  void getName(char *name) const;
-  void getInfos(char *author, char *copyright, char *helpText) const;
-  void catchErrorMessage(char *errorMessage) const;
+  std::string getName() const { return "CutPlane"; }
+  std::string getHelp() const;
   int getNbOptions() const;
   StringXNumber *getOption(int iopt);  
   PView *execute(PView *);
-  virtual bool geometricalFilter(Double_Matrix *) const;
+  virtual bool geometricalFilter(fullMatrix<double> *) const;
 
   static double callbackA(int, int, double);
   static double callbackB(int, int, double);
@@ -36,7 +35,7 @@ public:
   static double callbackVol(int, int, double);
   static double callbackRecur(int, int, double);
   static double callbackTarget(int, int, double);
-  static void draw();
+  static void draw(void *context);
 };
 
 #endif

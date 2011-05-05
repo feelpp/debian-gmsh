@@ -1,9 +1,10 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
 #include "HarmonicToTime.h"
+#include "GmshDefines.h"
 
 StringXNumber HarmonicToTimeOptions_Number[] = {
   {GMSH_FULLRC, "RealPart", NULL, 0.},
@@ -20,24 +21,9 @@ extern "C"
   }
 }
 
-
-GMSH_HarmonicToTimePlugin::GMSH_HarmonicToTimePlugin()
+std::string GMSH_HarmonicToTimePlugin::getHelp() const
 {
-  ;
-}
-
-void GMSH_HarmonicToTimePlugin::getName(char *name) const
-{
-  strcpy(name, "Harmonic to Time");
-}
-
-void GMSH_HarmonicToTimePlugin::getInfos(char *author, char *copyright,
-                                        char *help_text) const
-{
-  strcpy(author, "C. Geuzaine");
-  strcpy(copyright, "DGR (www.multiphysics.com)");
-  strcpy(help_text,
-         "Plugin(HarmonicToTime) takes the values in the\n"
+  return "Plugin(HarmonicToTime) takes the values in the\n"
          "time steps `RealPart' and `ImaginaryPart' of\n"
          "the view `iView', and creates a new view\n"
          "containing (`iView'[`RealPart'] * cos(p) -\n"
@@ -46,7 +32,7 @@ void GMSH_HarmonicToTimePlugin::getInfos(char *author, char *copyright,
          "If `iView' < 0, the plugin is run on the\n"
          "current view.\n"
          "\n"
-         "Plugin(HarmonicToTime) creates one new view.\n");
+         "Plugin(HarmonicToTime) creates one new view.\n";
 }
 
 int GMSH_HarmonicToTimePlugin::getNbOptions() const
@@ -59,36 +45,52 @@ StringXNumber *GMSH_HarmonicToTimePlugin::getOption(int iopt)
   return &HarmonicToTimeOptions_Number[iopt];
 }
 
-void GMSH_HarmonicToTimePlugin::catchErrorMessage(char *errorMessage) const
+static std::vector<double> *incrementList(PViewDataList *data, int numComp, 
+                                          int type)
 {
-  strcpy(errorMessage, "HarmonicToTime failed...");
-}
-
-
-static void h2t(int nb1, List_T *list1, int *nb2, List_T *list2,
-                int nbNod, int nbComp, int rIndex, int iIndex, int nSteps)
-{
-  if(!nb1) return;
-
-  int nb = List_Nbr(list1) / nb1;
-  for(int i = 0; i < List_Nbr(list1); i += nb) {
-    for(int j = 0; j < 3 * nbNod; j++)
-      List_Add(list2, List_Pointer_Fast(list1, i + j));
-    double *valr = (double *)List_Pointer_Fast(list1, i + 3 * nbNod +
-                                               nbNod * nbComp * rIndex);
-    double *vali = (double *)List_Pointer_Fast(list1, i + 3 * nbNod +
-                                               nbNod * nbComp * iIndex);
-    for(int t = 0; t < nSteps; t++) {
-      double p = 2. * M_PI * t / nSteps;
-      for(int j = 0; j < nbNod; j++) {
-        for(int k = 0; k < nbComp; k++) {
-          double val = valr[nbComp * j + k] * cos(p) - vali[nbComp * j + k] * sin(p);
-          List_Add(list2, &val);          
-        }
-      }
-    }
+  switch(type){
+  case TYPE_PNT:
+    if     (numComp == 1){ data->NbSP++; return &data->SP; }
+    else if(numComp == 3){ data->NbVP++; return &data->VP; }
+    else if(numComp == 9){ data->NbTP++; return &data->TP; }
+    break;
+  case TYPE_LIN:
+    if     (numComp == 1){ data->NbSL++; return &data->SL; }
+    else if(numComp == 3){ data->NbVL++; return &data->VL; }
+    else if(numComp == 9){ data->NbTL++; return &data->TL; }
+    break;
+  case TYPE_TRI:
+    if     (numComp == 1){ data->NbST++; return &data->ST; }
+    else if(numComp == 3){ data->NbVT++; return &data->VT; }
+    else if(numComp == 9){ data->NbTT++; return &data->TT; }
+    break;
+  case TYPE_QUA:
+    if     (numComp == 1){ data->NbSQ++; return &data->SQ; }
+    else if(numComp == 3){ data->NbVQ++; return &data->VQ; }
+    else if(numComp == 9){ data->NbTQ++; return &data->TQ; }
+    break;
+  case TYPE_TET:
+    if     (numComp == 1){ data->NbSS++; return &data->SS; }
+    else if(numComp == 3){ data->NbVS++; return &data->VS; }
+    else if(numComp == 9){ data->NbTS++; return &data->TS; }
+    break;
+  case TYPE_HEX:
+    if     (numComp == 1){ data->NbSH++; return &data->SH; }
+    else if(numComp == 3){ data->NbVH++; return &data->VH; }
+    else if(numComp == 9){ data->NbTH++; return &data->TH; }
+    break;
+  case TYPE_PRI:
+    if     (numComp == 1){ data->NbSI++; return &data->SI; }
+    else if(numComp == 3){ data->NbVI++; return &data->VI; }
+    else if(numComp == 9){ data->NbTI++; return &data->TI; }
+    break;
+  case TYPE_PYR:
+    if     (numComp == 1){ data->NbSY++; return &data->SY; }
+    else if(numComp == 3){ data->NbVY++; return &data->VY; }
+    else if(numComp == 9){ data->NbTY++; return &data->TY; }
+    break;
   }
-  *nb2 = nb1;
+  return 0;
 }
 
 PView *GMSH_HarmonicToTimePlugin::execute(PView * v)
@@ -100,9 +102,12 @@ PView *GMSH_HarmonicToTimePlugin::execute(PView * v)
 
   PView *v1 = getView(iView, v);
   if(!v1) return v;
+  PViewData *data1 = v1->getData();
 
-  PViewDataList *data1 = getDataList(v1);
-  if(!data1) return v;
+  if(data1->hasMultipleMeshes()){
+    Msg::Error("HarmonicToTime plugin cannot be applied to multi-mesh views");
+    return v1;
+  }
 
   if(rIndex < 0 || rIndex >= data1->getNumTimeSteps() ||
      iIndex < 0 || iIndex >= data1->getNumTimeSteps()){
@@ -115,39 +120,44 @@ PView *GMSH_HarmonicToTimePlugin::execute(PView * v)
     return v1;
   }
 
-  PView *v2 = new PView(true);
-
+  PView *v2 = new PView();
   PViewDataList *data2 = getDataList(v2);
-  if(!data2) return v;
-
-  h2t(data1->NbSP, data1->SP, &data2->NbSP, data2->SP, 1, 1, rIndex, iIndex, nSteps);
-  h2t(data1->NbVP, data1->VP, &data2->NbVP, data2->VP, 1, 3, rIndex, iIndex, nSteps);
-  h2t(data1->NbTP, data1->TP, &data2->NbTP, data2->TP, 1, 9, rIndex, iIndex, nSteps);
-  h2t(data1->NbSL, data1->SL, &data2->NbSL, data2->SL, 2, 1, rIndex, iIndex, nSteps);
-  h2t(data1->NbVL, data1->VL, &data2->NbVL, data2->VL, 2, 3, rIndex, iIndex, nSteps);
-  h2t(data1->NbTL, data1->TL, &data2->NbTL, data2->TL, 2, 9, rIndex, iIndex, nSteps);
-  h2t(data1->NbST, data1->ST, &data2->NbST, data2->ST, 3, 1, rIndex, iIndex, nSteps);
-  h2t(data1->NbVT, data1->VT, &data2->NbVT, data2->VT, 3, 3, rIndex, iIndex, nSteps);
-  h2t(data1->NbTT, data1->TT, &data2->NbTT, data2->TT, 3, 9, rIndex, iIndex, nSteps);
-  h2t(data1->NbSQ, data1->SQ, &data2->NbSQ, data2->SQ, 4, 1, rIndex, iIndex, nSteps);
-  h2t(data1->NbVQ, data1->VQ, &data2->NbVQ, data2->VQ, 4, 3, rIndex, iIndex, nSteps);
-  h2t(data1->NbTQ, data1->TQ, &data2->NbTQ, data2->TQ, 4, 9, rIndex, iIndex, nSteps);
-  h2t(data1->NbSS, data1->SS, &data2->NbSS, data2->SS, 4, 1, rIndex, iIndex, nSteps);
-  h2t(data1->NbVS, data1->VS, &data2->NbVS, data2->VS, 4, 3, rIndex, iIndex, nSteps);
-  h2t(data1->NbTS, data1->TS, &data2->NbTS, data2->TS, 4, 9, rIndex, iIndex, nSteps);
-  h2t(data1->NbSH, data1->SH, &data2->NbSH, data2->SH, 8, 1, rIndex, iIndex, nSteps);
-  h2t(data1->NbVH, data1->VH, &data2->NbVH, data2->VH, 8, 3, rIndex, iIndex, nSteps);
-  h2t(data1->NbTH, data1->TH, &data2->NbTH, data2->TH, 8, 9, rIndex, iIndex, nSteps);
-  h2t(data1->NbSI, data1->SI, &data2->NbSI, data2->SI, 6, 1, rIndex, iIndex, nSteps);
-  h2t(data1->NbVI, data1->VI, &data2->NbVI, data2->VI, 6, 3, rIndex, iIndex, nSteps);
-  h2t(data1->NbTI, data1->TI, &data2->NbTI, data2->TI, 6, 9, rIndex, iIndex, nSteps);
-  h2t(data1->NbSY, data1->SY, &data2->NbSY, data2->SY, 5, 1, rIndex, iIndex, nSteps);
-  h2t(data1->NbVY, data1->VY, &data2->NbVY, data2->VY, 5, 3, rIndex, iIndex, nSteps);
-  h2t(data1->NbTY, data1->TY, &data2->NbTY, data2->TY, 5, 9, rIndex, iIndex, nSteps);
+  
+  for(int ent = 0; ent < data1->getNumEntities(0); ent++){
+    for(int ele = 0; ele < data1->getNumElements(0, ent); ele++){
+      if(data1->skipElement(0, ent, ele)) continue;
+      int numNodes = data1->getNumNodes(0, ent, ele);
+      int type = data1->getType(0, ent, ele);
+      int numComp = data1->getNumComponents(0, ent, ele);
+      std::vector<double> *out = incrementList(data2, numComp, type);
+      std::vector<double> x(numNodes), y(numNodes), z(numNodes);
+      std::vector<double> vr(numNodes * numComp), vi(numNodes * numComp);
+      for(int nod = 0; nod < numNodes; nod++){
+        data1->getNode(0, ent, ele, nod, x[nod], y[nod], z[nod]);
+        for(int comp = 0; comp < numComp; comp++){
+          data1->getValue(rIndex, ent, ele, nod, comp, vr[numComp * nod + comp]);
+          data1->getValue(iIndex, ent, ele, nod, comp, vi[numComp * nod + comp]);
+        }
+      }
+      for(int nod = 0; nod < numNodes; nod++) out->push_back(x[nod]); 
+      for(int nod = 0; nod < numNodes; nod++) out->push_back(y[nod]); 
+      for(int nod = 0; nod < numNodes; nod++) out->push_back(z[nod]); 
+      for(int t = 0; t < nSteps; t++) {
+        double p = 2. * M_PI * t / nSteps;
+        for(int nod = 0; nod < numNodes; nod++) {
+          for(int comp = 0; comp < numComp; comp++) {
+            double val = vr[numComp * nod + comp] * cos(p) - 
+              vi[numComp * nod + comp] * sin(p);
+            out->push_back(val);
+          }
+        }
+      }
+    }
+  }
 
   for(int i = 0; i < nSteps; i++){
     double p = 2. * M_PI * i / (double)nSteps;
-    List_Add(data2->Time, &p);
+    data2->Time.push_back(p);
   }
   data2->setName(data1->getName() + "_HarmonicToTime");
   data2->setFileName(data1->getName() + "_HarmonicToTime.pos");

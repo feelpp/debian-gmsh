@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -17,30 +17,16 @@ extern "C"
   }
 }
 
-GMSH_MakeSimplexPlugin::GMSH_MakeSimplexPlugin()
+std::string GMSH_MakeSimplexPlugin::getHelp() const
 {
-  ;
-}
-
-void GMSH_MakeSimplexPlugin::getName(char *name) const
-{
-  strcpy(name, "Make Simplex");
-}
-
-void GMSH_MakeSimplexPlugin::getInfos(char *author, char *copyright,
-                                      char *help_text) const
-{
-  strcpy(author, "C. Geuzaine");
-  strcpy(copyright, "DGR (www.multiphysics.com)");
-  strcpy(help_text,
-         "Plugin(MakeSimplex) decomposes all non-\n"
+  return "Plugin(MakeSimplex) decomposes all non-\n"
          "simplectic elements (quadrangles, prisms,\n"
          "hexahedra, pyramids) in the view `iView' into\n"
          "simplices (triangles, tetrahedra). If `iView' < 0,\n"
          "the plugin is run on the current view.\n"
          "\n"
          "Plugin(MakeSimplex) is executed\n"
-         "in-place.\n");
+         "in-place.\n";
 }
 
 int GMSH_MakeSimplexPlugin::getNbOptions() const
@@ -53,13 +39,9 @@ StringXNumber *GMSH_MakeSimplexPlugin::getOption(int iopt)
   return &MakeSimplexOptions_Number[iopt];
 }
 
-void GMSH_MakeSimplexPlugin::catchErrorMessage(char *errorMessage) const
-{
-  strcpy(errorMessage, "MakeSimplex failed...");
-}
-
 static void decomposeList(PViewDataList *data, int nbNod, int nbComp,
-                          List_T **listIn, int *nbIn, List_T *listOut, int *nbOut)
+                          std::vector<double> &listIn, int *nbIn, 
+                          std::vector<double> &listOut, int *nbOut)
 {
   double xNew[4], yNew[4], zNew[4];
   double *valNew = new double[data->getNumTimeSteps() * nbComp * nbNod];
@@ -68,29 +50,29 @@ static void decomposeList(PViewDataList *data, int nbNod, int nbComp,
   if(!(*nbIn))
     return;
 
-  int nb = List_Nbr(*listIn) / (*nbIn);
-  for(int i = 0; i < List_Nbr(*listIn); i += nb){
-    double *x = (double *)List_Pointer(*listIn, i);
-    double *y = (double *)List_Pointer(*listIn, i + nbNod);
-    double *z = (double *)List_Pointer(*listIn, i + 2 * nbNod);
-    double *val = (double *)List_Pointer(*listIn, i + 3 * nbNod); 
+  int nb = listIn.size() / (*nbIn);
+  for(unsigned int i = 0; i < listIn.size(); i += nb){
+    double *x = &listIn[i];
+    double *y = &listIn[i + nbNod];
+    double *z = &listIn[i + 2 * nbNod];
+    double *val = &listIn[i + 3 * nbNod]; 
     for(int j = 0; j < dec.numSimplices(); j++){
       dec.decompose(j, x, y, z, val, xNew, yNew, zNew, valNew);
       for(int k = 0; k < dec.numSimplexNodes(); k++)
-        List_Add(listOut, &xNew[k]);
+        listOut.push_back(xNew[k]);
       for(int k = 0; k < dec.numSimplexNodes(); k++)
-        List_Add(listOut, &yNew[k]);
+        listOut.push_back(yNew[k]);
       for(int k = 0; k < dec.numSimplexNodes(); k++)
-        List_Add(listOut, &zNew[k]);
+        listOut.push_back(zNew[k]);
       for(int k = 0; k < dec.numSimplexNodes() * data->getNumTimeSteps() * nbComp; k++)
-        List_Add(listOut, &valNew[k]);
+        listOut.push_back(valNew[k]);
       (*nbOut)++;
     }
   }
 
   delete [] valNew;
 
-  List_Reset(*listIn);
+  listIn.clear();
   *nbIn = 0;
 }
 
@@ -105,24 +87,24 @@ PView *GMSH_MakeSimplexPlugin::execute(PView *v)
   if(!data1) return v;
 
   // quads
-  decomposeList(data1, 4, 1, &data1->SQ, &data1->NbSQ, data1->ST, &data1->NbST);
-  decomposeList(data1, 4, 3, &data1->VQ, &data1->NbVQ, data1->VT, &data1->NbVT);
-  decomposeList(data1, 4, 9, &data1->TQ, &data1->NbTQ, data1->TT, &data1->NbTT);
+  decomposeList(data1, 4, 1, data1->SQ, &data1->NbSQ, data1->ST, &data1->NbST);
+  decomposeList(data1, 4, 3, data1->VQ, &data1->NbVQ, data1->VT, &data1->NbVT);
+  decomposeList(data1, 4, 9, data1->TQ, &data1->NbTQ, data1->TT, &data1->NbTT);
                           
   // hexas                
-  decomposeList(data1, 8, 1, &data1->SH, &data1->NbSH, data1->SS, &data1->NbSS);
-  decomposeList(data1, 8, 3, &data1->VH, &data1->NbVH, data1->VS, &data1->NbVS);
-  decomposeList(data1, 8, 9, &data1->TH, &data1->NbTH, data1->TS, &data1->NbTS);
+  decomposeList(data1, 8, 1, data1->SH, &data1->NbSH, data1->SS, &data1->NbSS);
+  decomposeList(data1, 8, 3, data1->VH, &data1->NbVH, data1->VS, &data1->NbVS);
+  decomposeList(data1, 8, 9, data1->TH, &data1->NbTH, data1->TS, &data1->NbTS);
                           
   // prisms               
-  decomposeList(data1, 6, 1, &data1->SI, &data1->NbSI, data1->SS, &data1->NbSS);
-  decomposeList(data1, 6, 3, &data1->VI, &data1->NbVI, data1->VS, &data1->NbVS);
-  decomposeList(data1, 6, 9, &data1->TI, &data1->NbTI, data1->TS, &data1->NbTS);
+  decomposeList(data1, 6, 1, data1->SI, &data1->NbSI, data1->SS, &data1->NbSS);
+  decomposeList(data1, 6, 3, data1->VI, &data1->NbVI, data1->VS, &data1->NbVS);
+  decomposeList(data1, 6, 9, data1->TI, &data1->NbTI, data1->TS, &data1->NbTS);
                           
   // pyramids             
-  decomposeList(data1, 5, 1, &data1->SY, &data1->NbSY, data1->SS, &data1->NbSS);
-  decomposeList(data1, 5, 3, &data1->VY, &data1->NbVY, data1->VS, &data1->NbVS);
-  decomposeList(data1, 5, 9, &data1->TY, &data1->NbTY, data1->TS, &data1->NbTS);
+  decomposeList(data1, 5, 1, data1->SY, &data1->NbSY, data1->SS, &data1->NbSS);
+  decomposeList(data1, 5, 3, data1->VY, &data1->NbVY, data1->VS, &data1->NbVS);
+  decomposeList(data1, 5, 9, data1->TY, &data1->NbTY, data1->TS, &data1->NbTS);
 
   data1->finalize();
   v1->setChanged(true);

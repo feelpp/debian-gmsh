@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -7,12 +7,12 @@
 #define _GENTITY_H_
 
 #include <list>
-#include <vector>
 #include <string>
-#include <map>
+#include <vector>
 #include "Range.h"
 #include "SPoint3.h"
 #include "SBoundingBox3d.h"
+#include "SOrientedBoundingBox.h"
 
 class GModel;
 class GVertex;
@@ -40,6 +40,9 @@ class GEntity {
 
   // the color of the entity (ignored if set to transparent blue)
   unsigned int _color;
+
+ protected:
+  SOrientedBoundingBox *_obb;
 
  public: // these will become protected at some point
   // the mesh vertices uniquely owned by the entity
@@ -77,6 +80,7 @@ class GEntity {
     Bezier,
     ParametricCurve,
     BoundaryLayerCurve,
+    CompoundCurve,
     DiscreteCurve,
     Plane,
     Nurb,
@@ -92,8 +96,13 @@ class GEntity {
     SurfaceOfRevolution,
     BoundaryLayerSurface,
     DiscreteSurface,
+    CompoundSurface,
     Volume,
-    DiscreteVolume
+    DiscreteVolume, 
+    CompoundVolume,
+    PartitionVertex,
+    PartitionCurve,
+    PartitionSurface
   };
 
   // return a string describing the entity type
@@ -115,6 +124,7 @@ class GEntity {
       "Bezier",
       "Parametric curve",
       "Boundary layer curve",
+      "Compound curve",
       "Discrete curve",
       "Plane",
       "Nurb",
@@ -130,8 +140,13 @@ class GEntity {
       "Surface of Revolution",
       "Boundary layer surface",
       "Discrete surface",
+      "Compound surface",
       "Volume",
-      "Discrete volume"
+      "Discrete volume", 
+      "Compound Volume",
+      "Partition vertex",
+      "Partition curve",
+      "Partition surface"
     };
     unsigned int type = (unsigned int)geomType();
     if(type >= sizeof(name) / sizeof(name[0]))
@@ -143,6 +158,9 @@ class GEntity {
   GEntity(GModel *m, int t);
 
   virtual ~GEntity();
+
+  // delete the mesh data
+  virtual void deleteMesh(){}
 
   // delete the vertex arrays, used to to draw the mesh efficiently
   void deleteVertexArrays();
@@ -199,6 +217,9 @@ class GEntity {
   // get the bounding box
   virtual SBoundingBox3d bounds() const { return SBoundingBox3d(); }
 
+  //  get the oriented bounding box
+  virtual SOrientedBoundingBox getOBB() {return SOrientedBoundingBox(); }
+  
   // get/set the visibility flag
   virtual char getVisibility();
   virtual void setVisibility(char val, bool recursive=false){ _visible = val; }
@@ -223,8 +244,15 @@ class GEntity {
   // reset the mesh attributes to default values
   virtual void resetMeshAttributes() { return; }
 
-  // get the number of mesh elements in the entity
+  // number of types of elements
+  virtual int getNumElementTypes() const { return 0; }
+
+  // get the number of mesh elements (total and by type) in the entity
   virtual unsigned int getNumMeshElements() { return 0; }
+  virtual void getNumMeshElements(unsigned *const c) const { };
+
+  // get the start of the array of a type of element
+  virtual MElement *const *getStartElementType(int type) const { return 0; }
 
   // get the element at the given index
   virtual MElement *getMeshElement(unsigned int index) { return 0; }

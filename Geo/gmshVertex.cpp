@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -8,9 +8,38 @@
 #include "gmshVertex.h"
 #include "Geo.h"
 #include "GeoInterpolation.h"
-#include "Message.h"
+#include "GmshMessage.h"
+#include "MVertex.h"
+#include "MPoint.h"
 
-SPoint2 gmshVertex::reparamOnFace(GFace *face, int dir) const
+gmshVertex::gmshVertex(GModel *m, Vertex *_v)
+  : GVertex(m, _v->Num, _v->lc), v(_v)
+{
+  mesh_vertices.push_back(new MVertex(x(), y(), z(), this));
+  points.push_back(new MPoint(mesh_vertices.back()));
+}
+
+void gmshVertex::setPosition(GPoint &p)
+{
+  v->Pos.X = p.x();
+  v->Pos.Y = p.y();
+  v->Pos.Z = p.z();
+  if(mesh_vertices.size()){
+    mesh_vertices[0]->x() = p.x();
+    mesh_vertices[0]->y() = p.y();
+    mesh_vertices[0]->z() = p.z();
+  }
+}
+
+GEntity::GeomType gmshVertex::geomType() const
+{
+  if(v->Typ == MSH_POINT_BND_LAYER)
+    return BoundaryLayerPoint;
+  else
+    return Point;
+}
+
+SPoint2 gmshVertex::reparamOnFace(const GFace *face, int dir) const
 {
   Surface *s = (Surface*)face->getNativePtr();
 
@@ -69,10 +98,8 @@ SPoint2 gmshVertex::reparamOnFace(GFace *face, int dir) const
   }
 }
 
-GEntity::GeomType gmshVertex::geomType() const
+void gmshVertex::writeGEO(FILE *fp)
 {
-  if(v->Typ == MSH_POINT_BND_LAYER)
-    return BoundaryLayerPoint;
-  else
-    return Point;
+  fprintf(fp, "Point(%d) = {%.16g, %.16g, %.16g, %.16g};\n",
+          v->Num, v->Pos.X, v->Pos.Y, v->Pos.Z, v->lc);
 }

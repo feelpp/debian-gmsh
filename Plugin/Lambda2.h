@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -13,13 +13,13 @@ extern "C"
   GMSH_Plugin *GMSH_RegisterLambda2Plugin();
 }
 
-class GMSH_Lambda2Plugin : public GMSH_Post_Plugin
+class GMSH_Lambda2Plugin : public GMSH_PostPlugin
 {
-public:
-  GMSH_Lambda2Plugin();
-  void getName(char *name) const;
-  void getInfos(char *author, char *copyright, char *helpText) const;
-  void catchErrorMessage(char *errorMessage) const;
+ public:
+  GMSH_Lambda2Plugin(){}
+  std::string getName() const { return "Lambda2"; }
+  std::string getHelp() const;
+  std::string getAuthor() const { return "E. Marchandise"; }
   int getNbOptions() const;
   StringXNumber* getOption(int iopt);  
   PView *execute(PView *);

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -13,12 +13,10 @@
 // and Andre Battaiola.
 
 #include <string.h>
-#include "Message.h"
+#include "GmshMessage.h"
 #include "ColorTable.h"
 #include "Context.h"
 #include "Numeric.h"
-
-extern Context_T CTX;
 
 void ColorTable_InitParam(int number, GmshColorTable *ct)
 {
@@ -336,7 +334,7 @@ void ColorTable_Recompute(GmshColorTable * ct)
     b = b < 0 ? 0 : (b > 255 ? 255 : b);
     a = a < 0 ? 0 : (a > 255 ? 255 : a);
     
-    ct->table[i] = CTX.PACK_COLOR(r, g, b, a);
+    ct->table[i] = CTX::instance()->packColor(r, g, b, a);
   }
 
 }
@@ -374,10 +372,10 @@ void ColorTable_Print(GmshColorTable * ct, FILE * fp)
 
   strcpy(tmp1, "");
   for(i = 0; i < ct->size; i++) {
-    r = CTX.UNPACK_RED(ct->table[i]);
-    g = CTX.UNPACK_GREEN(ct->table[i]);
-    b = CTX.UNPACK_BLUE(ct->table[i]);
-    a = CTX.UNPACK_ALPHA(ct->table[i]);
+    r = CTX::instance()->unpackRed(ct->table[i]);
+    g = CTX::instance()->unpackGreen(ct->table[i]);
+    b = CTX::instance()->unpackBlue(ct->table[i]);
+    a = CTX::instance()->unpackAlpha(ct->table[i]);
     if(i && !(i % 4)) {
       if(fp)
         fprintf(fp, "%s\n", tmp1);
@@ -400,7 +398,7 @@ int ColorTable_IsAlpha(GmshColorTable * ct)
 {
   int i, a;
   for(i = 0; i < ct->size; i++) {
-    a = CTX.UNPACK_ALPHA(ct->table[i]);
+    a = CTX::instance()->unpackAlpha(ct->table[i]);
     if(a < 255)
       return 1;
   }

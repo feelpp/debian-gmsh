@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -12,8 +12,8 @@
 
 class discreteVertex : public GVertex {
  public:
-  discreteVertex(GModel *m, int num) : GVertex(m, num) {}
-  virtual ~discreteVertex() {}
+  discreteVertex(GModel *m, int num) : GVertex(m, num){}
+  virtual ~discreteVertex(){}
   virtual GPoint point() const { return GPoint(x(), y(), z(), this); }
   virtual double x() const 
   { 

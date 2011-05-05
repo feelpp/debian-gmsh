@@ -1,14 +1,15 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
+#include <string>
 #include <string.h>
 #include <stdlib.h>
-#include "GmshUI.h"
+#include "GmshConfig.h"
 #include "GmshDefines.h"
 #include "GmshVersion.h"
-#include "Message.h"
+#include "GmshMessage.h"
 #include "OpenFile.h"
 #include "CommandLine.h"
 #include "Context.h"
@@ -17,60 +18,55 @@
 #include "CreateFile.h"
 #include "OS.h"
 
+#if defined(HAVE_FLTK)
+#include <FL/Fl.H>
+#if (FL_MAJOR_VERSION == 1) && (FL_MINOR_VERSION == 1) && (FL_PATCH_VERSION > 6)
+// OK
+#elif (FL_MAJOR_VERSION == 1) && (FL_MINOR_VERSION == 3)
+// also OK
+#else
+#error "Gmsh requires FLTK >= 1.1.7 or FLTK 1.3.x"
+#endif
+#endif
+
 #if !defined(HAVE_NO_POST)
 #include "PView.h"
 #endif
 
-#if !defined(GMSH_EXTRA_VERSION)
-#error
-#error Common/GmshVersion.h is not up-to-date.
-#error Please run 'make tag'.
-#error
-#endif
+int GetGmshMajorVersion(){ return GMSH_MAJOR_VERSION; }
+int GetGmshMinorVersion(){ return GMSH_MINOR_VERSION; }
+int GetGmshPatchVersion(){ return GMSH_PATCH_VERSION; }
+const char *GetGmshExtraVersion(){ return GMSH_EXTRA_VERSION; }
+const char *GetGmshVersion(){ return GMSH_VERSION; }
+const char *GetGmshBuildDate(){ return GMSH_DATE; }
+const char *GetGmshBuildHost(){ return GMSH_HOST; }
+const char *GetGmshPackager(){ return GMSH_PACKAGER; }
+const char *GetGmshBuildOS(){ return GMSH_OS; }
+const char *GetGmshShortLicense(){ return GMSH_SHORT_LICENSE; }
+const char *GetGmshBuildOptions(){ return GMSH_CONFIG_OPTIONS; }
 
-extern Context_T CTX;
-
-char gmsh_progname[]  = "Gmsh, a 3D mesh generator with pre- and post-processing facilities" ;
-char gmsh_copyright[] = "Copyright (C) 1997-2008 Christophe Geuzaine and Jean-Francois Remacle";
-char gmsh_version[]   = "Version        : " ;
-char gmsh_license[]   = "License        : " GMSH_SHORT_LICENSE;
-char gmsh_gui[]       = "GUI toolkit    : " ;
-char gmsh_os[]        = "Build OS       : " GMSH_OS ;
-char gmsh_options[]   = "Build options  : " ;
-char gmsh_date[]      = "Build date     : " GMSH_DATE ;
-char gmsh_host[]      = "Build host     : " GMSH_HOST ;
-char gmsh_packager[]  = "Packager       : " GMSH_PACKAGER ;
-char gmsh_url[]       = "Web site       : http://www.geuz.org/gmsh/" ;
-char gmsh_email[]     = "Mailing list   : gmsh@geuz.org" ;
-
-int Get_GmshMajorVersion(){ return GMSH_MAJOR_VERSION; }
-int Get_GmshMinorVersion(){ return GMSH_MINOR_VERSION; }
-int Get_GmshPatchVersion(){ return GMSH_PATCH_VERSION; }
-const char *Get_GmshExtraVersion(){ return GMSH_EXTRA_VERSION; }
-const char *Get_GmshVersion(){ return GMSH_VERSION; }
-const char *Get_GmshBuildDate(){ return GMSH_DATE; }
-const char *Get_GmshBuildHost(){ return GMSH_HOST; }
-const char *Get_GmshPackager(){ return GMSH_PACKAGER; }
-const char *Get_GmshBuildOS(){ return GMSH_OS; }
-const char *Get_GmshShortLicense(){ return GMSH_SHORT_LICENSE; }
-
-void Print_Usage(const char *name)
+void PrintUsage(const char *name)
 {
   // If you make changes in this routine, please also change the
-  // texinfo documentation (doc/texinfo/command_line.texi) as well as
-  // the man page (doc/gmsh.1)
+  // texinfo documentation (doc/texinfo/command_line.texi) and the man
+  // page (doc/gmsh.1)
   Msg::Direct("Usage: %s [options] [files]", name);
   Msg::Direct("Geometry options:");
   Msg::Direct("  -0                    Output unrolled geometry, then exit");
   Msg::Direct("  -tol float            Set geometrical tolerance");
+  Msg::Direct("  -match int            Match geometries and meshes if int != 0");
   Msg::Direct("Mesh options:");
   Msg::Direct("  -1, -2, -3            Perform 1D, 2D or 3D mesh generation, then exit");
+  Msg::Direct("  -refine               Perform uniform mesh refinement, then exit");
+  Msg::Direct("  -part int             Partition after batch mesh generation");
   Msg::Direct("  -saveall              Save all elements (discard physical group definitions)");
   Msg::Direct("  -o file               Specify mesh output file name");
   Msg::Direct("  -format string        Set output mesh format (msh, msh1, msh2, unv, vrml, stl, mesh,");
   Msg::Direct("                          bdf, p3d, cgns, med)");
   Msg::Direct("  -bin                  Use binary format when available");  
-  Msg::Direct("  -algo string          Select mesh algorithm (de, del2d, frontal, iso, netgen, tetgen)");
+  Msg::Direct("  -parametric           Save vertices with their parametric coordinates");  
+  Msg::Direct("  -numsubedges          Set the number of subdivisions when displaying high order elements");  
+  Msg::Direct("  -algo string          Select mesh algorithm (meshadapt, del2d, front2d, del3d, front3d)");
   Msg::Direct("  -smooth int           Set number of mesh smoothing steps");
   Msg::Direct("  -optimize[_netgen]    Optimize quality of tetrahedral elements");
   Msg::Direct("  -order int            Set mesh order (1, ..., 5)");
@@ -112,67 +108,16 @@ void Print_Usage(const char *name)
   Msg::Direct("  -help                 Show this message");
 }
 
-char *Get_BuildOptions(void)
-{
-  static int first = 1;
-  static char opt[256] = "";
-  
-  if(first){
-#if defined(HAVE_GSL)
-    strcat(opt, "GSL ");
-#endif
-#if defined(HAVE_NETGEN)
-    strcat(opt, "NETGEN ");
-#endif
-#if defined(HAVE_TETGEN)
-    strcat(opt, "TETGEN ");
-#endif
-#if defined(HAVE_LIBJPEG)
-    strcat(opt, "JPEG ");
-#endif
-#if defined(HAVE_LIBPNG)
-    strcat(opt, "PNG ");
-#endif
-#if defined(HAVE_LIBZ)
-    strcat(opt, "ZLIB ");
-#endif
-#if defined(HAVE_MATH_EVAL)
-    strcat(opt, "MATHEVAL ");
-#endif
-#if defined(HAVE_METIS)
-    strcat(opt, "METIS ");
-#endif
-#if defined(HAVE_ANN)
-    strcat(opt, "ANN ");
-#endif
-#if defined(HAVE_CGNS)
-    strcat(opt, "CGNS ");
-#endif
-#if defined(HAVE_OCC)
-    strcat(opt, "OCC ");
-#endif
-#if defined(HAVE_MED)
-    strcat(opt, "MED ");
-#endif
-    first = 0;
-  }
-  return opt;
-}
-
-void Get_Options(int argc, char *argv[])
+void GetOptions(int argc, char *argv[])
 {
   // print messages on terminal
-  int terminal = CTX.terminal;
-  CTX.terminal = 1;
-
-  // Create a dummy model during option processing so we cannot crash
-  // the parser, and so we can load files for -convert
-  GModel *dummy = new GModel();
+  int terminal = CTX::instance()->terminal;
+  CTX::instance()->terminal = 1;
 
 #if !defined(HAVE_NO_PARSER)
   // Parse session and option files
-  ParseFile(CTX.session_filename_fullpath, 1);
-  ParseFile(CTX.options_filename_fullpath, 1);
+  ParseFile(CTX::instance()->homeDir + CTX::instance()->sessionFileName, true);
+  ParseFile(CTX::instance()->homeDir + CTX::instance()->optionsFileName, true);
 #endif
 
   // Get command line options
@@ -181,28 +126,53 @@ void Get_Options(int argc, char *argv[])
 
     if(argv[i][0] == '-') {
 
-      if(!strcmp(argv[i] + 1, "")) {
-        CTX.batch = -2;
+      if(!strcmp(argv[i] + 1, "socket")) {
+        i++;        
+        if(argv[i])
+          CTX::instance()->solver.socketName = argv[i++];
+        else
+          Msg::Fatal("Missing string");
+        CTX::instance()->batch = -3;
+      }
+      else if(!strcmp(argv[i] + 1, "")) {
+        CTX::instance()->batch = -2;
         i++;
       }
       else if(!strcmp(argv[i] + 1, "0")) {
-        CTX.batch = -1;
+        CTX::instance()->batch = -1;
         i++;
       }
       else if(!strcmp(argv[i] + 1, "1")) {
-        CTX.batch = 1;
+        CTX::instance()->batch = 1;
         i++;
       }
       else if(!strcmp(argv[i] + 1, "2")) {
-        CTX.batch = 2;
+        CTX::instance()->batch = 2;
         i++;
       }
       else if(!strcmp(argv[i] + 1, "3")) {
-        CTX.batch = 3;
+        CTX::instance()->batch = 3;
         i++;
       }
       else if(!strcmp(argv[i] + 1, "4")) {
-        CTX.batch = 4;
+        CTX::instance()->batch = 4;
+        i++;
+      }
+      else if(!strcmp(argv[i] + 1, "refine")) {
+        CTX::instance()->batch = 5;
+        i++;
+      }
+      else if(!strcmp(argv[i] + 1, "part")) {
+        i++;
+        if(argv[i]){
+          CTX::instance()->batchAfterMesh = 1;
+          opt_mesh_partition_num(0, GMSH_SET, atoi(argv[i++]));
+        }
+        else
+          Msg::Fatal("Missing number");
+      }
+      else if(!strcmp(argv[i] + 1, "new")) {
+        CTX::instance()->files.push_back("-new");
         i++;
       }
       else if(!strcmp(argv[i] + 1, "pid")) {
@@ -211,75 +181,88 @@ void Get_Options(int argc, char *argv[])
         i++;
       }
       else if(!strcmp(argv[i] + 1, "a")) {
-        CTX.initial_context = 0;
+        CTX::instance()->initialContext = 0;
         i++;
       }
       else if(!strcmp(argv[i] + 1, "g")) {
-        CTX.initial_context = 1;
+        CTX::instance()->initialContext = 1;
         i++;
       }
       else if(!strcmp(argv[i] + 1, "m")) {
-        CTX.initial_context = 2;
+        CTX::instance()->initialContext = 2;
         i++;
       }
       else if(!strcmp(argv[i] + 1, "s")) {
-        CTX.initial_context = 3;
+        CTX::instance()->initialContext = 3;
         i++;
       }
       else if(!strcmp(argv[i] + 1, "p")) {
-        CTX.initial_context = 4;
+        CTX::instance()->initialContext = 4;
         i++;
       }
       else if(!strcmp(argv[i] + 1, "saveall")) {
-        CTX.mesh.save_all = 1;
+        CTX::instance()->mesh.saveAll = 1;
         i++;
       }
       else if(!strcmp(argv[i] + 1, "optimize")) {
-        CTX.mesh.optimize = 1;
+        CTX::instance()->mesh.optimize = 1;
         i++;
       }
       else if(!strcmp(argv[i] + 1, "optimize_netgen")) {
-        CTX.mesh.optimize_netgen = 1;
+        CTX::instance()->mesh.optimizeNetgen = 1;
         i++;
       }
       else if(!strcmp(argv[i] + 1, "nopopup")) {
-        CTX.nopopup = 1;
+        CTX::instance()->noPopup = 1;
         i++;
       }
       else if(!strcmp(argv[i] + 1, "string")) {
         i++;
-        if(argv[i] != NULL)
+        if(argv[i])
           ParseString(argv[i++]);
         else
-	  Msg::Fatal("Missing string");
+          Msg::Fatal("Missing string");
       }
       else if(!strcmp(argv[i] + 1, "option")) {
         i++;
-        if(argv[i] != NULL)
-          ParseFile(argv[i++], 1);
+        if(argv[i])
+          ParseFile(argv[i++], true);
         else
-	  Msg::Fatal("Missing file name");
+          Msg::Fatal("Missing file name");
       }
       else if(!strcmp(argv[i] + 1, "o")) {
         i++;
-        if(argv[i] != NULL)
-          CTX.output_filename = argv[i++];
+        if(argv[i])
+          CTX::instance()->outputFileName = argv[i++];
         else
-	  Msg::Fatal("Missing file name");
+          Msg::Fatal("Missing file name");
       }
       else if(!strcmp(argv[i] + 1, "bgm")) {
         i++;
-        if(argv[i] != NULL)
-	  CTX.bgm_filename = argv[i++];
-	else
-	  Msg::Fatal("Missing file name");
+        if(argv[i])
+          CTX::instance()->bgmFileName = argv[i++];
+        else
+          Msg::Fatal("Missing file name");
+      }
+      else if(!strcmp(argv[i] + 1, "nw")) {
+        i++;
+        if(argv[i])
+          CTX::instance()->numWindows = atoi(argv[i++]);
+        else
+          Msg::Fatal("Missing number");
+      }
+      else if(!strcmp(argv[i] + 1, "nt")) {
+        i++;
+        if(argv[i])
+          CTX::instance()->numTiles = atoi(argv[i++]);
+        else
+          Msg::Fatal("Missing number");
       }
       else if(!strcmp(argv[i] + 1, "convert")) {
         i++;
-        CTX.batch = 1;
+        CTX::instance()->batch = 1;
         while(i < argc) {
-          char filename[256];
-          sprintf(filename, "%s_new", argv[i]);
+          std::string fileName = std::string(argv[i]) + "_new";
 #if !defined(HAVE_NO_POST)
           unsigned int n = PView::list.size();
 #endif
@@ -287,133 +270,154 @@ void Get_Options(int argc, char *argv[])
 #if !defined(HAVE_NO_POST)
           // convert post-processing views to latest binary format
           for(unsigned int j = n; j < PView::list.size(); j++)
-            PView::list[j]->write(filename, 1, (j == n) ? false : true);
+            PView::list[j]->write(fileName, 1, (j == n) ? false : true);
 #endif
           // convert mesh to latest binary format
           if(GModel::current()->getMeshStatus() > 0){
-            CTX.mesh.msh_file_version = 2.0;
-            CTX.mesh.msh_binary = 1;
-            CreateOutputFile(filename, FORMAT_MSH);
+            CTX::instance()->mesh.mshFileVersion = 2.0;
+            CTX::instance()->mesh.binary = 1;
+            CreateOutputFile(fileName, FORMAT_MSH);
           }
           i++;
         }
-	Msg::Exit(0);
+        Msg::Exit(0);
       }
       else if(!strcmp(argv[i] + 1, "tol")) {
         i++;
-        if(argv[i] != NULL)
-          CTX.geom.tolerance = atof(argv[i++]);
+        if(argv[i])
+          CTX::instance()->geom.tolerance = atof(argv[i++]);
         else
-	  Msg::Fatal("Missing number");
+          Msg::Fatal("Missing number");
+      }
+      else if(!strcmp(argv[i] + 1, "match")) {
+        i++;
+        if(argv[1])
+          CTX::instance()->geom.matchGeomAndMesh = atoi(argv[i++]);
+        else
+          Msg::Fatal("Missing number");
       }
       else if(!strcmp(argv[i] + 1, "scale")) {
         i++;
-        if(argv[i] != NULL)
-          CTX.geom.scaling_factor = atof(argv[i++]);
+        if(argv[i])
+          CTX::instance()->geom.scalingFactor = atof(argv[i++]);
         else
-	  Msg::Fatal("Missing number");
+          Msg::Fatal("Missing number");
       }
       else if(!strcmp(argv[i] + 1, "meshscale")) {
         i++;
-        if(argv[i] != NULL)
-          CTX.mesh.scaling_factor = atof(argv[i++]);
+        if(argv[i])
+          CTX::instance()->mesh.scalingFactor = atof(argv[i++]);
         else
-	  Msg::Fatal("Missing number");
+          Msg::Fatal("Missing number");
       }
       else if(!strcmp(argv[i] + 1, "rand")) {
         i++;
-        if(argv[i] != NULL)
-          CTX.mesh.rand_factor = atof(argv[i++]);
+        if(argv[i])
+          CTX::instance()->mesh.randFactor = atof(argv[i++]);
         else
-	  Msg::Fatal("Missing number");
+          Msg::Fatal("Missing number");
       }
       else if(!strcmp(argv[i] + 1, "clscale")) {
         i++;
-        if(argv[i] != NULL) {
-          CTX.mesh.lc_factor = atof(argv[i++]);
-          if(CTX.mesh.lc_factor <= 0.0)
-	    Msg::Fatal("Characteristic length factor must be > 0");
+        if(argv[i]) {
+          CTX::instance()->mesh.lcFactor = atof(argv[i++]);
+          if(CTX::instance()->mesh.lcFactor <= 0.0)
+            Msg::Fatal("Characteristic length factor must be > 0");
         }
         else
-	  Msg::Fatal("Missing number");
+          Msg::Fatal("Missing number");
       }
       else if(!strcmp(argv[i] + 1, "clmin")) {
         i++;
-        if(argv[i] != NULL) {
-          CTX.mesh.lc_min = atof(argv[i++]);
-          if(CTX.mesh.lc_min <= 0.0)
-	    Msg::Fatal("Minimum length size must be > 0");
+        if(argv[i]) {
+          CTX::instance()->mesh.lcMin = atof(argv[i++]);
+          if(CTX::instance()->mesh.lcMin <= 0.0)
+            Msg::Fatal("Minimum length size must be > 0");
         }
         else
-	  Msg::Fatal("Missing number");
+          Msg::Fatal("Missing number");
       }
       else if(!strcmp(argv[i] + 1, "clmax")) {
         i++;
-        if(argv[i] != NULL) {
-          CTX.mesh.lc_max = atof(argv[i++]);
-          if(CTX.mesh.lc_max <= 0.0)
-	    Msg::Fatal("Maximum length size must be > 0");
+        if(argv[i]) {
+          CTX::instance()->mesh.lcMax = atof(argv[i++]);
+          if(CTX::instance()->mesh.lcMax <= 0.0)
+            Msg::Fatal("Maximum length size must be > 0");
+        }
+        else
+          Msg::Fatal("Missing number");
+      }
+      else if(!strcmp(argv[i] + 1, "edgelmin")) {
+        i++;
+        if(argv[i]) {
+          CTX::instance()->mesh.toleranceEdgeLength = atof(argv[i++]);
+          if(CTX::instance()->mesh.toleranceEdgeLength <= 0.0)
+            Msg::Fatal("Tolerance for model edge length must be > 0 (here %g)",
+                       CTX::instance()->mesh.toleranceEdgeLength);
         }
         else
           Msg::Fatal("Missing number");
       }
       else if(!strcmp(argv[i] + 1, "epslc1d")) {
         i++;
-        if(argv[i] != NULL) {
-          CTX.mesh.lc_integration_precision = atof(argv[i++]);
-          if(CTX.mesh.lc_integration_precision <= 0.0)
-	    Msg::Fatal("Integration accuracy must be > 0");
+        if(argv[i]) {
+          CTX::instance()->mesh.lcIntegrationPrecision = atof(argv[i++]);
+          if(CTX::instance()->mesh.lcIntegrationPrecision <= 0.0)
+            Msg::Fatal("Integration accuracy must be > 0");
         }
         else
-	  Msg::Fatal("Missing number");
+          Msg::Fatal("Missing number");
       }
       else if(!strcmp(argv[i] + 1, "swapangle")) {
         i++;
-        if(argv[i] != NULL) {
-          CTX.mesh.allow_swap_edge_angle = atof(argv[i++]);
-          if(CTX.mesh.allow_swap_edge_angle <= 0.0)
-	    Msg::Fatal("Treshold angle for edge swap must be > 0");
+        if(argv[i]) {
+          CTX::instance()->mesh.allowSwapEdgeAngle = atof(argv[i++]);
+          if(CTX::instance()->mesh.allowSwapEdgeAngle <= 0.0)
+            Msg::Fatal("Treshold angle for edge swap must be > 0");
         }
         else
-	  Msg::Fatal("Missing number");
+          Msg::Fatal("Missing number");
       }
       else if(!strcmp(argv[i] + 1, "clcurv")) {
-        CTX.mesh.lc_from_curvature = 1;
+        CTX::instance()->mesh.lcFromCurvature = 1;
         i++;
       }
       else if(!strcmp(argv[i] + 1, "smooth")) {
         i++;
-        if(argv[i] != NULL)
-          CTX.mesh.nb_smoothing = atoi(argv[i++]);
+        if(argv[i])
+          CTX::instance()->mesh.nbSmoothing = atoi(argv[i++]);
         else
-	  Msg::Fatal("Missing number");
+          Msg::Fatal("Missing number");
       }
       else if(!strcmp(argv[i] + 1, "order") || !strcmp(argv[i] + 1, "degree")) {
         i++;
-        if(argv[i] != NULL)
+        if(argv[i])
           opt_mesh_order(0, GMSH_SET, atof(argv[i++]));
         else
-	  Msg::Fatal("Missing number");
+          Msg::Fatal("Missing number");
       }
-      else if(!strcmp(argv[i] + 1, "c1")) {
+      else if(!strcmp(argv[i] + 1, "numsubedges")) {
         i++;
-        opt_mesh_c1(0, GMSH_SET, 1);
+        if(argv[i])
+          opt_mesh_num_sub_edges(0, GMSH_SET, atof(argv[i++]));
+        else
+          Msg::Fatal("Missing number");
       }
       else if(!strcmp(argv[i] + 1, "statreport")) {
         i++;
-        CTX.create_append_statreport = 1;
-        if(argv[i] != NULL)
-          strcpy(CTX.statreport, argv[i++]);
+        CTX::instance()->createAppendMeshStatReport = 1;
+        if(argv[i])
+          CTX::instance()->meshStatReportFileName = argv[i++];
         else
-	  Msg::Fatal("Missing argument");
+          Msg::Fatal("Missing argument");
       }
       else if(!strcmp(argv[i] + 1, "append_statreport")) {
         i++;
-        CTX.create_append_statreport = 2;
-        if(argv[i] != NULL)
-          strcpy(CTX.statreport, argv[i++]);
+        CTX::instance()->createAppendMeshStatReport = 2;
+        if(argv[i])
+          CTX::instance()->meshStatReportFileName = argv[i++];
         else
-	  Msg::Fatal("Missing argument");
+          Msg::Fatal("Missing argument");
       }
       else if(!strcmp(argv[i] + 1, "optimize_hom")) {
         i++;
@@ -421,104 +425,110 @@ void Get_Options(int argc, char *argv[])
       }
       else if(!strcmp(argv[i] + 1, "format") || !strcmp(argv[i] + 1, "f")) {
         i++;
-        if(argv[i] != NULL) {
+        if(argv[i]) {
           if(!strcmp(argv[i], "msh1")){
-            CTX.mesh.format = FORMAT_MSH;
-            CTX.mesh.msh_file_version = 1.0;
+            CTX::instance()->mesh.format = FORMAT_MSH;
+            CTX::instance()->mesh.mshFileVersion = 1.0;
           }
           else if(!strcmp(argv[i], "msh2")){
-            CTX.mesh.format = FORMAT_MSH;
-            CTX.mesh.msh_file_version = 2.0;
+            CTX::instance()->mesh.format = FORMAT_MSH;
+            CTX::instance()->mesh.mshFileVersion = 2.0;
           }
           else if(!strcmp(argv[i], "msh"))
-            CTX.mesh.format = FORMAT_MSH;
+            CTX::instance()->mesh.format = FORMAT_MSH;
           else if(!strcmp(argv[i], "unv"))
-            CTX.mesh.format = FORMAT_UNV;
+            CTX::instance()->mesh.format = FORMAT_UNV;
           else if(!strcmp(argv[i], "vrml"))
-            CTX.mesh.format = FORMAT_VRML;
+            CTX::instance()->mesh.format = FORMAT_VRML;
           else if(!strcmp(argv[i], "stl"))
-            CTX.mesh.format = FORMAT_STL;
+            CTX::instance()->mesh.format = FORMAT_STL;
           else if(!strcmp(argv[i], "mesh"))
-            CTX.mesh.format = FORMAT_MESH;
+            CTX::instance()->mesh.format = FORMAT_MESH;
           else if(!strcmp(argv[i], "bdf"))
-            CTX.mesh.format = FORMAT_BDF;
+            CTX::instance()->mesh.format = FORMAT_BDF;
           else if(!strcmp(argv[i], "p3d"))
-            CTX.mesh.format = FORMAT_P3D;
+            CTX::instance()->mesh.format = FORMAT_P3D;
           else if(!strcmp(argv[i], "cgns"))
-            CTX.mesh.format = FORMAT_CGNS;
+            CTX::instance()->mesh.format = FORMAT_CGNS;
+          else if(!strcmp(argv[i], "diff"))
+            CTX::instance()->mesh.format = FORMAT_DIFF;
           else if(!strcmp(argv[i], "med"))
-            CTX.mesh.format = FORMAT_MED;
+            CTX::instance()->mesh.format = FORMAT_MED;
           else
-	    Msg::Fatal("Unknown mesh format");
+            Msg::Fatal("Unknown mesh format");
           i++;
         }
         else
-	  Msg::Fatal("Missing format");
+          Msg::Fatal("Missing format");
       }
       else if(!strcmp(argv[i] + 1, "bin")) {
         i++;
-        CTX.mesh.stl_binary = CTX.mesh.msh_binary = 1;
+        CTX::instance()->mesh.binary = 1;
+      }
+      else if(!strcmp(argv[i] + 1, "parametric")) {
+        i++;
+        CTX::instance()->mesh.saveParametric = 1;
       }
       else if(!strcmp(argv[i] + 1, "algo")) {
         i++;
-        if(argv[i] != NULL) {
-          if(!strncmp(argv[i], "del3d", 5) || !strncmp(argv[i], "tetgen", 6))
-            CTX.mesh.algo2d = ALGO_3D_TETGEN_DELAUNAY;
-          else if(!strncmp(argv[i], "netgen", 6))
-            CTX.mesh.algo3d = ALGO_3D_NETGEN;
-          else if(!strncmp(argv[i], "frontal", 7))
-            CTX.mesh.algo2d = ALGO_2D_FRONTAL;
-          else if(!strncmp(argv[i], "del2d", 5) || !strncmp(argv[i], "tri", 3))
-            CTX.mesh.algo2d = ALGO_2D_DELAUNAY;
+        if(argv[i]) {
+          if(!strncmp(argv[i], "meshadapt", 9) || !strncmp(argv[i], "iso", 3))
+            CTX::instance()->mesh.algo2d = ALGO_2D_MESHADAPT;
           else if(!strncmp(argv[i], "bds", 3))
-            CTX.mesh.algo2d = ALGO_2D_MESHADAPT;
-          else if(!strncmp(argv[i], "del", 3) || !strncmp(argv[i], "iso", 3))
-            CTX.mesh.algo2d = ALGO_2D_MESHADAPT_DELAUNAY;
+            CTX::instance()->mesh.algo2d = ALGO_2D_MESHADAPT_OLD;
+          else if(!strncmp(argv[i], "del2d", 5) || !strncmp(argv[i], "tri", 3))
+            CTX::instance()->mesh.algo2d = ALGO_2D_DELAUNAY;
+          else if(!strncmp(argv[i], "front2d", 7) || !strncmp(argv[i], "frontal", 7))
+            CTX::instance()->mesh.algo2d = ALGO_2D_FRONTAL;
+          else if(!strncmp(argv[i], "del3d", 5) || !strncmp(argv[i], "tetgen", 6))
+            CTX::instance()->mesh.algo2d = ALGO_3D_DELAUNAY;
+          else if(!strncmp(argv[i], "front3d", 7) || !strncmp(argv[i], "netgen", 6))
+            CTX::instance()->mesh.algo3d = ALGO_3D_FRONTAL;
           else
-	    Msg::Fatal("Unknown mesh algorithm");
+            Msg::Fatal("Unknown mesh algorithm");
           i++;
         }
         else
-	  Msg::Fatal("Missing algorithm");
+          Msg::Fatal("Missing algorithm");
       }
       else if(!strcmp(argv[i] + 1, "listen")) {
-        CTX.solver.listen = 1;
+        CTX::instance()->solver.listen = 1;
         i++;
       }
       else if(!strcmp(argv[i] + 1, "version") || !strcmp(argv[i] + 1, "-version")) {
         fprintf(stderr, "%s\n", GMSH_VERSION);
-	Msg::Exit(0);
+        Msg::Exit(0);
       }
       else if(!strcmp(argv[i] + 1, "info") || !strcmp(argv[i] + 1, "-info")) {
-        fprintf(stderr, "%s%s\n", gmsh_version, GMSH_VERSION);
+        fprintf(stderr, "Version        : %s\n", GMSH_VERSION);
 #if defined(HAVE_FLTK)
-        fprintf(stderr, "%sFLTK %d.%d.%d\n", gmsh_gui, FL_MAJOR_VERSION,
+        fprintf(stderr, "GUI toolkit    : FLTK %d.%d.%d\n", FL_MAJOR_VERSION,
                 FL_MINOR_VERSION, FL_PATCH_VERSION);
 #else
-        fprintf(stderr, "%snone\n", gmsh_gui);
+        fprintf(stderr, "GUI toolkit    : none\n");
 #endif
-        fprintf(stderr, "%s\n", gmsh_license);
-        fprintf(stderr, "%s\n", gmsh_os);
-        fprintf(stderr, "%s%s\n", gmsh_options, Get_BuildOptions());
-        fprintf(stderr, "%s\n", gmsh_date);
-        fprintf(stderr, "%s\n", gmsh_host);
-        fprintf(stderr, "%s\n", gmsh_packager);
-        fprintf(stderr, "%s\n", gmsh_url);
-        fprintf(stderr, "%s\n", gmsh_email);
-	Msg::Exit(0);
+        fprintf(stderr, "License        : %s\n", GMSH_SHORT_LICENSE);
+        fprintf(stderr, "Build OS       : %s\n", GMSH_OS);
+        fprintf(stderr, "Build options  :%s\n", GMSH_CONFIG_OPTIONS);
+        fprintf(stderr, "Build date     : %s\n", GMSH_DATE);
+        fprintf(stderr, "Build host     : %s\n", GMSH_HOST);
+        fprintf(stderr, "Packager       : %s\n", GMSH_PACKAGER);
+        fprintf(stderr, "Web site       : http://www.geuz.org/gmsh/\n");
+        fprintf(stderr, "Mailing list   : gmsh@geuz.org\n");
+        Msg::Exit(0);
       }
       else if(!strcmp(argv[i] + 1, "help") || !strcmp(argv[i] + 1, "-help")) {
-        fprintf(stderr, "%s\n", gmsh_progname);
-        fprintf(stderr, "%s\n", gmsh_copyright);
-        Print_Usage(argv[0]);
-	Msg::Exit(0);
+        fprintf(stderr, "Gmsh, a 3D mesh generator with pre- and post-processing facilities\n");
+        fprintf(stderr, "Copyright (C) 1997-2009 Christophe Geuzaine and Jean-Francois Remacle\n");
+        PrintUsage(argv[0]);
+        Msg::Exit(0);
       }
       else if(!strcmp(argv[i] + 1, "v")) {
         i++;
-        if(argv[i] != NULL)
-	  Msg::SetVerbosity(atoi(argv[i++]));
+        if(argv[i])
+          Msg::SetVerbosity(atoi(argv[i++]));
         else
-	  Msg::Fatal("Missing number");
+          Msg::Fatal("Missing number");
       }
 #if defined(HAVE_FLTK)
       else if(!strcmp(argv[i] + 1, "term")) {
@@ -526,7 +536,11 @@ void Get_Options(int argc, char *argv[])
         i++;
       }
       else if(!strcmp(argv[i] + 1, "dual")) {
-        CTX.mesh.dual = 1;
+        CTX::instance()->mesh.dual = 1;
+        i++;
+      }
+      else if(!strcmp(argv[i] + 1, "voronoi")) {
+        CTX::instance()->mesh.voronoi = 1;
         i++;
       }
       else if(!strcmp(argv[i] + 1, "noview")) {
@@ -535,43 +549,50 @@ void Get_Options(int argc, char *argv[])
       }
       else if(!strcmp(argv[i] + 1, "link")) {
         i++;
-        if(argv[i] != NULL)
-          CTX.post.link = atoi(argv[i++]);
+        if(argv[i])
+          CTX::instance()->post.link = atoi(argv[i++]);
         else
-	  Msg::Fatal("Missing number");
+          Msg::Fatal("Missing number");
       }
       else if(!strcmp(argv[i] + 1, "smoothview")) {
-        CTX.post.smooth = 1;
+        CTX::instance()->post.smooth = 1;
         i++;
       }
       else if(!strcmp(argv[i] + 1, "combine")) {
-        CTX.post.combine_time = 1;
+        CTX::instance()->post.combineTime = 1;
         i++;
       }
       else if(!strcmp(argv[i] + 1, "nodb")) {
-        CTX.db = 0;
+        CTX::instance()->db = 0;
         i++;
       }
       else if(!strcmp(argv[i] + 1, "fontsize")) {
         i++;
-        if(argv[i] != NULL)
-          CTX.fontsize = atoi(argv[i++]);
+        if(argv[i])
+          CTX::instance()->fontSize = atoi(argv[i++]);
         else
-	  Msg::Fatal("Missing number");
+          Msg::Fatal("Missing number");
+      }
+      else if(!strcmp(argv[i] + 1, "deltafontsize")) {
+        i++;
+        if(argv[i])
+          CTX::instance()->deltaFontSize = atoi(argv[i++]);
+        else
+          Msg::Fatal("Missing number");
       }
       else if(!strcmp(argv[i] + 1, "theme") || !strcmp(argv[i] + 1, "scheme")) {
         i++;
-        if(argv[i] != NULL)
-          CTX.gui_theme = argv[i++];
+        if(argv[i])
+          CTX::instance()->guiTheme = argv[i++];
         else
-	  Msg::Fatal("Missing argument");
+          Msg::Fatal("Missing argument");
       }
       else if(!strcmp(argv[i] + 1, "display")) {
         i++;
-        if(argv[i] != NULL)
-          CTX.display = argv[i++];
+        if(argv[i])
+          CTX::instance()->display = argv[i++];
         else
-	  Msg::Fatal("Missing argument");
+          Msg::Fatal("Missing argument");
       }
 #endif
 #if defined(__APPLE__)
@@ -583,24 +604,24 @@ void Get_Options(int argc, char *argv[])
       }
 #endif
       else {
-	Msg::Error("Unknown option '%s'", argv[i]);
-        Print_Usage(argv[0]);
-	Msg::Exit(1);
+        Msg::Error("Unknown option '%s'", argv[i]);
+        PrintUsage(argv[0]);
+        Msg::Exit(1);
       }
 
     }
     else {
-      CTX.files.push_back(argv[i++]);
+      CTX::instance()->files.push_back(argv[i++]);
     }
 
   }
 
-  if(CTX.files.empty())
-    strncpy(CTX.filename, CTX.default_filename_fullpath, 255);
+  if(CTX::instance()->files.empty()){
+    std::string base = (getenv("PWD") ? "" : CTX::instance()->homeDir);
+    GModel::current()->setFileName(base + CTX::instance()->defaultFileName);
+  }
   else
-    strncpy(CTX.filename, CTX.files[0].c_str(), 255);
+    GModel::current()->setFileName(CTX::instance()->files[0]);
 
-  delete dummy;
-
-  CTX.terminal = terminal;
+  CTX::instance()->terminal = terminal;
 }

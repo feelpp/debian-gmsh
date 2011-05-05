@@ -1,24 +1,26 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
 #include "GModel.h"
-#include "MElement.h"
+#include "MTriangle.h"
+#include "MQuadrangle.h"
 #include "BoundaryLayers.h"
 #include "ExtrudeParams.h"
 #include "meshGEdge.h"
 #include "meshGFace.h"
-#include "Message.h"
+#include "GmshMessage.h"
 
 template<class T>
-static void addExtrudeNormals(std::vector<T*> &elements)
+static void addExtrudeNormals(std::vector<T*> &elements, int invert)
 {
   for(unsigned int i = 0; i < elements.size(); i++){
     MElement *ele = elements[i];
     for(int j = 0; j < ele->getNumFaces(); j++){
       MFace fac = ele->getFace(j);
       SVector3 n = fac.normal();
+      if(invert) n *= -1.;
       if(n[0] || n[1] || n[2]){
         double nn[3] = {n[0], n[1], n[2]};
         for(int k = 0; k < fac.getNumVertices(); k++){
@@ -35,6 +37,7 @@ int Mesh2DWithBoundaryLayers(GModel *m)
 {
   std::set<GFace*> sourceFaces, otherFaces;
   std::set<GEdge*> sourceEdges, otherEdges;
+  std::map<int, bool> sourceFaceInvert;
   for(GModel::fiter it = m->firstFace(); it != m->lastFace(); it++){
     GFace *gf = *it;
     if(gf->geomType() == GEntity::BoundaryLayerSurface){
@@ -45,6 +48,7 @@ int Mesh2DWithBoundaryLayers(GModel *m)
           Msg::Error("Unknown source face %d for boundary layer", ep->geo.Source);
           return 0;
         }
+        if(ep->geo.Source < 0) sourceFaceInvert[from->tag()] = true;
         sourceFaces.insert(from);
         std::list<GEdge*> e = from->edges();
         sourceEdges.insert(e.begin(), e.end());
@@ -74,8 +78,8 @@ int Mesh2DWithBoundaryLayers(GModel *m)
   for(std::set<GFace*>::iterator it = sourceFaces.begin(); 
       it != sourceFaces.end(); it++){
     GFace *gf = *it;
-    addExtrudeNormals(gf->triangles);
-    addExtrudeNormals(gf->quadrangles);
+    addExtrudeNormals(gf->triangles, sourceFaceInvert.count(gf->tag()));
+    addExtrudeNormals(gf->quadrangles, sourceFaceInvert.count(gf->tag()));
   }
   ExtrudeParams::normals->normalize();
 
@@ -128,7 +132,8 @@ int Mesh2DWithBoundaryLayers(GModel *m)
   for(GModel::fiter it = m->firstFace(); it != m->lastFace(); it++){
     GFace *gf = *it;
     if(gf->geomType() == GEntity::BoundaryLayerSurface){
-      Msg::StatusBar(2, true, "Meshing surface %d (%s)", gf->tag(), gf->getTypeString().c_str());
+      Msg::StatusBar(2, true, "Meshing surface %d (%s)", gf->tag(), 
+                     gf->getTypeString().c_str());
       deMeshGFace dem;
       dem(gf);
       MeshExtrudedSurface(gf);

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -6,7 +6,6 @@
 #ifndef _GEO_H_
 #define _GEO_H_
 
-#include <map>
 #include <math.h>
 #include "GmshDefines.h"
 #include "gmshSurface.h"
@@ -14,6 +13,7 @@
 #include "TreeUtils.h"
 #include "SPoint2.h"
 #include "ExtrudeParams.h"
+#include "gmshLevelset.h"
 
 #define MSH_POINT              100
 #define MSH_POINT_BND_LAYER    101
@@ -30,7 +30,6 @@
 #define MSH_SEGM_BSPLN         207
 #define MSH_SEGM_NURBS         208
 #define MSH_SEGM_BEZIER        209
-#define MSH_SEGM_PARAMETRIC    210
 #define MSH_SEGM_BND_LAYER     211
 #define MSH_SEGM_DISCRETE      212
 #define MSH_SEGM_FROM_GMODEL   213
@@ -99,16 +98,19 @@ class DrawingColor{
   unsigned int geom, mesh;
 };
 
-typedef struct{
+class CircParam{
+ public:
   double t1, t2, f1, f2, incl;
   Vertex *v[4];
   double invmat[3][3];
   double n[3];
-}CircParam;
+};
 
-typedef struct{
+class Curve{
+ public:
   int Num;
   int Typ;
+  bool degenerated;
   char Visible;
   int Method;
   int nbPointsTransfinite;
@@ -123,17 +125,18 @@ typedef struct{
   float *k;
   int degre;
   CircParam Circle;
-  char functu[256], functv[256], functw[256];
   DrawingColor Color;
   gmshSurface *geometry;
-}Curve;
+};
 
-typedef struct{
+class EdgeLoop{
+ public:
   int Num;
   List_T *Curves;
-}EdgeLoop;
+};
 
-typedef struct{
+class Surface{
+ public:
   int Num;
   int Typ;
   char Visible;
@@ -146,9 +149,7 @@ typedef struct{
   List_T *EmbeddedCurves;
   List_T *EmbeddedPoints;
   List_T *TrsfPoints;
-  List_T *RuledSurfaceOptions;
-  double plan[3][3];
-  double a, b, c, d;
+  List_T *InSphereCenter;
   ExtrudeParams *Extrude;
   DrawingColor Color;
   // A surface is defined topologically by its Generatrices
@@ -157,14 +158,16 @@ typedef struct{
   // should be the only one in gmsh, so parameter "Type" should
   // disappear from the class Surface.
   gmshSurface *geometry;
-}Surface;
+};
 
-typedef struct{
+class SurfaceLoop{
+ public:
   int Num;
   List_T *Surfaces;
-}SurfaceLoop;
+};
 
-typedef struct {
+class Volume {
+ public:
   int Num;
   int Typ;
   char Visible;
@@ -175,14 +178,16 @@ typedef struct {
   List_T *SurfacesOrientations;
   List_T *SurfacesByTag;
   DrawingColor Color;
-}Volume;
+};
 
-typedef struct{
+class PhysicalGroup{
+ public:
   int Num;
   int Typ;
   char Visible;
   List_T *Entities;
-}PhysicalGroup;
+  List_T *Boundaries[4];
+};
 
 class GEO_Internals{
  private:
@@ -195,6 +200,7 @@ class GEO_Internals{
   Tree_T *Volumes;
   Tree_T *SurfaceLoops;
   Tree_T *EdgeLoops;
+  Tree_T *LevelSets;
   List_T *PhysicalGroups;
   int MaxPointNum, MaxLineNum, MaxLineLoopNum, MaxSurfaceNum;
   int MaxSurfaceLoopNum, MaxVolumeNum, MaxPhysicalNum;
@@ -204,10 +210,19 @@ class GEO_Internals{
   void reset_physicals();
 };
 
-typedef struct {
+class Shape{
+ public:
   int Type;
   int Num;
-} Shape;
+};
+
+class gLevelset;
+
+class LevelSet {
+ public:
+  int Num;
+  gLevelset *ls;
+};
 
 int compareVertex(const void *a, const void *b);
 
@@ -222,7 +237,9 @@ Surface *Create_Surface(int Num, int Typ);
 Volume *Create_Volume(int Num, int Typ);
 EdgeLoop *Create_EdgeLoop(int Num, List_T * intlist);
 SurfaceLoop *Create_SurfaceLoop(int Num, List_T * intlist);
-PhysicalGroup *Create_PhysicalGroup(int Num, int typ, List_T * intlist);
+PhysicalGroup *Create_PhysicalGroup(int Num, int typ, List_T * intlist,
+                                    List_T *bndlist[4] = 0);
+LevelSet *Create_LevelSet(int Num, gLevelset *l);
 
 void End_Curve(Curve * c);
 void End_Surface(Surface * s);
@@ -243,6 +260,7 @@ EdgeLoop *FindEdgeLoop(int inum);
 Surface *FindSurface(int inum);
 SurfaceLoop *FindSurfaceLoop(int inum);
 Volume *FindVolume(int inum);
+LevelSet *FindLevelSet(int inum);
 PhysicalGroup *FindPhysicalGroup(int inum, int type);
 
 void TranslateShapes(double X,double Y,double Z, List_T *shapes);
@@ -273,10 +291,10 @@ void ProtudeXYZ(double &x, double &y, double &z, ExtrudeParams *e);
 
 void ReplaceAllDuplicates();
 
-bool ProjectPointOnCurve(Curve *c, Vertex *v, Vertex *RES, Vertex *DER);
-bool ProjectPointOnSurface(Surface *s, Vertex &p, double u[2]);
+bool ProjectPointOnSurface(Surface *s, Vertex &p, double uv[2]);
 
 bool IntersectCurvesWithSurface(List_T *curve_ids, int surface_id, List_T *shapes);
+bool SplitCurve(int line_id, List_T *vertices_id, List_T *shapes);
 
 int recognize_seg(int typ, List_T *liste, int *seg);
 int recognize_loop(List_T *liste, int *loop);

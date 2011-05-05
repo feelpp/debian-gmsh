@@ -1,10 +1,12 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
 #ifndef _OCC_INCLUDES_
 #define _OCC_INCLUDES_
+
+#include "GmshConfig.h"
 
 #if defined(HAVE_OCC)
 
@@ -102,11 +104,22 @@ using std::iostream;
 #include "TopoDS_Compound.hxx"
 #include "TopoDS_Iterator.hxx"
 #include "BRepPrimAPI_MakeSphere.hxx"
+#include "BRepPrimAPI_MakeBox.hxx"
+#include "BRepPrimAPI_MakeCylinder.hxx"
+#include "BRepPrimAPI_MakeCone.hxx"
+#include "BRepPrimAPI_MakeTorus.hxx"
 #include "TopTools_ListIteratorOfListOfShape.hxx"
 #include "Precision.hxx"
 #include "BRepAlgoAPI_Common.hxx"
 #include "BRepAlgoAPI_Cut.hxx"
+#include "BRepAlgoAPI_Section.hxx"
+#include "BRepAlgoAPI_Fuse.hxx"
+#include "BRepFilletAPI_MakeFillet.hxx"
+#endif
+
+#if defined(WIN32)
+#undef min
+#undef max
 #endif
 
 #endif
-

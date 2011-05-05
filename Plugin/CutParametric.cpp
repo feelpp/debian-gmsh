@@ -1,27 +1,22 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
 #include <math.h>
+#include "GmshConfig.h"
 #include "OctreePost.h"
 #include "CutParametric.h"
 #include "Context.h"
+#include "mathEvaluator.h"
 
-#if defined(HAVE_FLTK)
-#include "GmshUI.h"
-#include "Draw.h"
+#if defined(HAVE_OPENGL)
+#include "drawContext.h"
 #endif
-
-#if defined(HAVE_MATH_EVAL)
-#include "matheval.h"
-#endif
-
-extern Context_T CTX;
 
 StringXNumber CutParametricOptions_Number[] = {
   {GMSH_FULLRC, "MinU", GMSH_CutParametricPlugin::callbackMinU, 0.},
-  {GMSH_FULLRC, "MaxU", GMSH_CutParametricPlugin::callbackMaxU, 2*3.1416},
+  {GMSH_FULLRC, "MaxU", GMSH_CutParametricPlugin::callbackMaxU, 2 * 3.1416},
   {GMSH_FULLRC, "nPointsU", GMSH_CutParametricPlugin::callbackN, 360.},
   {GMSH_FULLRC, "ConnectPoints", GMSH_CutParametricPlugin::callbackConnect, 0.},
   {GMSH_FULLRC, "iView", NULL, -1.}
@@ -60,55 +55,37 @@ std::vector<double> GMSH_CutParametricPlugin::z;
 
 int GMSH_CutParametricPlugin::fillXYZ()
 {
-#if !defined(HAVE_MATH_EVAL)
-  Msg::Error("MathEval is not compiled in this version of Gmsh");
-  return 0;
-#else
-  const char *exprx = CutParametricOptions_String[0].def;
-  const char *expry = CutParametricOptions_String[1].def;
-  const char *exprz = CutParametricOptions_String[2].def;
-  int nbU = (int)CutParametricOptions_Number[2].def;
+  std::vector<std::string> expressions(3), variables(1);
+  for(int i = 0; i < 3; i++) 
+    expressions[i] = CutParametricOptions_String[i].def;
+  variables[0] = "u";
+  mathEvaluator f(expressions, variables);
+  if(expressions.empty()) return 0;
 
+  int nbU = (int)CutParametricOptions_Number[2].def;
   x.resize(nbU);
   y.resize(nbU);
   z.resize(nbU);
-  void *fx = evaluator_create((char*)exprx);
-  if(!fx){
-    Msg::Error("Invalid expression '%s'", exprx);
-    return 0;
-  }
-  void *fy = evaluator_create((char*)expry);
-  if(!fy){
-    evaluator_destroy(fx);
-    Msg::Error("Invalid expression '%s'", expry);
-    return 0;
-  }
-  void *fz = evaluator_create((char*)exprz);
-  if(!fz){
-    Msg::Error("Invalid expression '%s'", exprz);
-    evaluator_destroy(fx);
-    evaluator_destroy(fy);
-    return 0;
-  }
+  std::vector<double> val(1), res(3);
   for(int i = 0; i < nbU; ++i){
-    char *names[] = { "u" };
-    double values[] = { getU(i) };
-    x[i] = evaluator_evaluate(fx, sizeof(names)/sizeof(names[0]), names, values);
-    y[i] = evaluator_evaluate(fy, sizeof(names)/sizeof(names[0]), names, values);
-    z[i] = evaluator_evaluate(fz, sizeof(names)/sizeof(names[0]), names, values);
+    val[0] = getU(i);
+    if(f.eval(val, res)){
+      x[i] = res[0];
+      y[i] = res[1];
+      z[i] = res[2];
+    }
   }
   return 1;
-#endif
 }
 
-void GMSH_CutParametricPlugin::draw()
+void GMSH_CutParametricPlugin::draw(void *context)
 {
-#if defined(HAVE_FLTK)
+#if defined(HAVE_OPENGL)
   if(recompute){
     fillXYZ();
     recompute = 0;
   }
-  glColor4ubv((GLubyte *) & CTX.color.fg);
+  glColor4ubv((GLubyte *) & CTX::instance()->color.fg);
   if(CutParametricOptions_Number[3].def && x.size() > 1){
     glBegin(GL_LINES);
     for(unsigned int i = 1; i < x.size(); ++i){
@@ -118,8 +95,9 @@ void GMSH_CutParametricPlugin::draw()
     glEnd();
   }
   else{
+    drawContext *ctx = (drawContext*)context;
     for(unsigned int i = 0; i < x.size(); ++i)
-      Draw_Sphere(CTX.point_size, x[i], y[i], z[i], 1);
+      ctx->drawSphere(CTX::instance()->pointSize, x[i], y[i], z[i], 1);
   }
 #endif
 }
@@ -134,22 +112,18 @@ double GMSH_CutParametricPlugin::callback(int num, int action, double value, dou
   default: break;
   }
   *opt = value;
-#if defined(HAVE_FLTK)
   recompute = 1;
-  DrawPlugin(draw);
-#endif
+  GMSH_Plugin::setDrawFunction(draw);
   return 0.;
 }
 
-const char *GMSH_CutParametricPlugin::callbackStr(int num, int action, const char *value,
-                                                  const char **opt)
+std::string GMSH_CutParametricPlugin::callbackStr(int num, int action, std::string value,
+                                                  std::string &opt)
 {
-  *opt = value;
-#if defined(HAVE_FLTK)
+  opt = value;
   recompute = 1;
-  DrawPlugin(draw);
-#endif
-  return NULL;
+  GMSH_Plugin::setDrawFunction(draw);
+  return opt;
 }
 
 double GMSH_CutParametricPlugin::callbackMinU(int num, int action, double value)
@@ -176,33 +150,24 @@ double GMSH_CutParametricPlugin::callbackConnect(int num, int action, double val
                   1, 0, 1);
 }
 
-const char *GMSH_CutParametricPlugin::callbackX(int num, int action, const char *value)
+std::string GMSH_CutParametricPlugin::callbackX(int num, int action, std::string value)
 {
-  return callbackStr(num, action, value, &CutParametricOptions_String[0].def);
+  return callbackStr(num, action, value, CutParametricOptions_String[0].def);
 }
 
-const char *GMSH_CutParametricPlugin::callbackY(int num, int action, const char *value)
+std::string GMSH_CutParametricPlugin::callbackY(int num, int action, std::string value)
 {
-  return callbackStr(num, action, value, &CutParametricOptions_String[1].def);
+  return callbackStr(num, action, value, CutParametricOptions_String[1].def);
 }
 
-const char *GMSH_CutParametricPlugin::callbackZ(int num, int action, const char *value)
+std::string GMSH_CutParametricPlugin::callbackZ(int num, int action, std::string value)
 {
-  return callbackStr(num, action, value, &CutParametricOptions_String[2].def);
+  return callbackStr(num, action, value, CutParametricOptions_String[2].def);
 }
 
-void GMSH_CutParametricPlugin::getName(char *name) const
+std::string GMSH_CutParametricPlugin::getHelp() const
 {
-  strcpy(name, "Cut Parametric");
-}
-
-void GMSH_CutParametricPlugin::getInfos(char *author, char *copyright,
-                                   char *help_text) const
-{
-  strcpy(author, "C. Geuzaine");
-  strcpy(copyright, "DGR (www.multiphysics.com)");
-  strcpy(help_text,
-         "Plugin(CutParametric) cuts the view `iView' with\n"
+  return "Plugin(CutParametric) cuts the view `iView' with\n"
          "the parametric function (`X'(u), `Y'(u), `Z'(u)),\n"
          "using `nPointsU' values of the parameter u in\n"
          "[`MinU', `MaxU']. If `ConnectPoints' is set, the\n"
@@ -210,7 +175,7 @@ void GMSH_CutParametricPlugin::getInfos(char *author, char *copyright,
          "plugin generates points. If `iView' < 0, the plugin\n"
          "is run on the current view.\n"
          "\n"
-         "Plugin(CutParametric) creates one new view.\n");
+         "Plugin(CutParametric) creates one new view.\n";
 }
 
 int GMSH_CutParametricPlugin::getNbOptions() const
@@ -233,37 +198,33 @@ StringXString *GMSH_CutParametricPlugin::getOptionStr(int iopt)
   return &CutParametricOptions_String[iopt];
 }
 
-void GMSH_CutParametricPlugin::catchErrorMessage(char *errorMessage) const
-{
-  strcpy(errorMessage, "CutParametric failed...");
-}
-
 static void addInView(int connect, int i, int nbcomp, int nbtime,
                       double x0, double y0, double z0, double *res0,
                       double x, double y, double z, double *res,
-                      List_T *P, int *nP, List_T *L, int *nL)
+                      std::vector<double> &P, int *nP, 
+                      std::vector<double> &L, int *nL)
 {
   if(connect){
     if(i){
-      List_Add(L, &x0); List_Add(L, &x);
-      List_Add(L, &y0); List_Add(L, &y);
-      List_Add(L, &z0); List_Add(L, &z);
+      L.push_back(x0); L.push_back(x);
+      L.push_back(y0); L.push_back(y);
+      L.push_back(z0); L.push_back(z);
       for(int k = 0; k < nbtime; ++k){
         for(int l = 0; l < nbcomp; ++l)
-          List_Add(L, &res0[nbcomp*k+l]); 
+          L.push_back(res0[nbcomp * k + l]); 
         for(int l = 0; l < nbcomp; ++l)
-          List_Add(L, &res[nbcomp*k+l]);
+          L.push_back(res[nbcomp * k + l]);
       }
       (*nL)++;
     }
   }
   else{
-    List_Add(P, &x);
-    List_Add(P, &y);
-    List_Add(P, &z);
+    P.push_back(x);
+    P.push_back(y);
+    P.push_back(z);
     for(int k = 0; k < nbtime; ++k)
       for(int l = 0; l < nbcomp; ++l)
-        List_Add(P, &res[nbcomp*k+l]);
+        P.push_back(res[nbcomp * k + l]);
     (*nP)++;
   }
 }
@@ -286,7 +247,7 @@ PView *GMSH_CutParametricPlugin::execute(PView *v)
 
   OctreePost o(v1);
 
-  PView *v2 = new PView(true);
+  PView *v2 = new PView();
   PViewDataList *data2 = getDataList(v2);
 
   double *res0 = new double[9 * numSteps];

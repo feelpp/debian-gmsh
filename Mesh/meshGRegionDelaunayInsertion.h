@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -10,7 +10,7 @@
 #include <set>
 #include <map>
 #include <stack>
-#include "MElement.h"
+#include "MTetrahedron.h"
 #include "Numeric.h"
 #include "BackgroundMesh.h"
 #include "qualityMeasures.h"
@@ -66,7 +66,7 @@ class MTet4
   {
     neigh[0] = neigh[1] = neigh[2] = neigh[3] = 0;
   }
-  MTet4(MTetrahedron *t, const gmshQualityMeasure4Tet &qm) 
+  MTet4(MTetrahedron *t, const qualityMeasure4Tet &qm) 
     : deleted(false), base(t), gr(0)
   {
     neigh[0] = neigh[1] = neigh[2] = neigh[3] = 0;
@@ -114,14 +114,14 @@ class MTet4
     const double dy = base->getVertex(0)->y() - center[1];
     const double dz = base->getVertex(0)->z() - center[2];
     circum_radius = sqrt(dx * dx + dy * dy + dz * dz);
-    double lc1 = 0.25*(sizes[base->getVertex(0)->getNum()]+
-                      sizes[base->getVertex(1)->getNum()]+
-                       sizes[base->getVertex(2)->getNum()]+
-                       sizes[base->getVertex(3)->getNum()]);
-    double lcBGM = 0.25*(sizesBGM[base->getVertex(0)->getNum()]+
-                         sizesBGM[base->getVertex(1)->getNum()]+
-                         sizesBGM[base->getVertex(2)->getNum()]+
-                         sizesBGM[base->getVertex(3)->getNum()]);
+    double lc1 = 0.25*(sizes[base->getVertex(0)->getIndex()]+
+                      sizes[base->getVertex(1)->getIndex()]+
+                       sizes[base->getVertex(2)->getIndex()]+
+                       sizes[base->getVertex(3)->getIndex()]);
+    double lcBGM = 0.25*(sizesBGM[base->getVertex(0)->getIndex()]+
+                         sizesBGM[base->getVertex(1)->getIndex()]+
+                         sizesBGM[base->getVertex(2)->getIndex()]+
+                         sizesBGM[base->getVertex(3)->getIndex()]);
     double lc = Extend2dMeshIn3dVolumes() ? std::min(lc1, lcBGM) : lcBGM;
     circum_radius /= lc;
     deleted = false;
@@ -256,6 +256,6 @@ class MTet4Factory
   container &getAllTets(){ return allTets; }
 };
 
-void gmshOptimizeMesh(GRegion *gr, const gmshQualityMeasure4Tet &qm);
+void optimizeMesh(GRegion *gr, const qualityMeasure4Tet &qm);
 
 #endif

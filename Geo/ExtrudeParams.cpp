@@ -1,9 +1,9 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
-#include "Message.h"
+#include "GmshMessage.h"
 #include "Geo.h"
 #include "ExtrudeParams.h"
 
@@ -27,7 +27,6 @@ ExtrudeParams::ExtrudeParams(int ModeEx)
   geo.Source = -1;
   mesh.ExtrudeMesh = false;
   mesh.Recombine = false;
-  mesh.ViewIndex = -1;
 }
 
 void ExtrudeParams::fill(int type,

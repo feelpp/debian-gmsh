@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -98,7 +98,7 @@ class smooth_normals{
   float tol;
   std::set<xyzn, lessthanxyzn> c;  
  public:
-  smooth_normals(double angle) : tol(angle) {}
+  smooth_normals(double angle) : tol((float)angle) {}
   void add(double x, double y, double z, double nx, double ny, double nz);
   bool get(double x, double y, double z, double &nx, double &ny, double &nz);
 };

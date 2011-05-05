@@ -1,15 +1,17 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
 #include <string.h>
 #include "ReadImg.h"
-#include "Message.h"
-#include "GmshUI.h"
+#include "GmshMessage.h"
 #include "PView.h"
 #include "PViewDataList.h"
-  
+#include "GmshConfig.h"
+
+#if defined(HAVE_FLTK)
+
 #include <FL/Fl_JPEG_Image.H>
 #include <FL/Fl_PNM_Image.H>
 #include <FL/Fl_PNG_Image.H>
@@ -23,13 +25,13 @@ static PViewDataList *Img2Data(Fl_RGB_Image &img_init, int quads=1,
   img_init.desaturate(); // convert to grayscale
 
   // resize if necessary
-  Fl_RGB_Image * img;
+  Fl_RGB_Image *img;
   if(!resizex || !resizey)
-    img = (Fl_RGB_Image *) img_init.copy();
+    img = (Fl_RGB_Image*)img_init.copy();
   else
-    img = (Fl_RGB_Image *) img_init.copy(resizex, resizey);
+    img = (Fl_RGB_Image*)img_init.copy(resizex, resizey);
 
-  const uchar *data = img->array;
+  const unsigned char *data = img->array;
   int height = img->h();
   int width = img->w();
   int dim = img->d();
@@ -39,12 +41,12 @@ static PViewDataList *Img2Data(Fl_RGB_Image &img_init, int quads=1,
     return 0;
   }
 
-  PViewDataList *d = new PViewDataList(true);
+  PViewDataList *d = new PViewDataList();
 
   double z = 0.;
   for(int i = 0; i < height - 1; i++) {
-    const uchar *a = data + i * width * dim;
-    const uchar *a1 = data + (i + 1) * width * dim;
+    const unsigned char *a = data + i * width * dim;
+    const unsigned char *a1 = data + (i + 1) * width * dim;
     double y = height - i - 1;
     double y1 = height - i - 2;
     for(int j = 0; j < width - 1; j++) {
@@ -55,26 +57,26 @@ static PViewDataList *Img2Data(Fl_RGB_Image &img_init, int quads=1,
       double val3 = (double)a1[j + 1]/255.;
       double val4 = (double)a[j + 1]/255.;
       if(quads){ // generate quads
-        List_Add(d->SQ, &x); List_Add(d->SQ, &x); 
-        List_Add(d->SQ, &x1); List_Add(d->SQ, &x1);
-        List_Add(d->SQ, &y); List_Add(d->SQ, &y1);
-        List_Add(d->SQ, &y1); List_Add(d->SQ, &y);
-        List_Add(d->SQ, &z); List_Add(d->SQ, &z);
-        List_Add(d->SQ, &z); List_Add(d->SQ, &z);
-        List_Add(d->SQ, &val1); List_Add(d->SQ, &val2);
-        List_Add(d->SQ, &val3); List_Add(d->SQ, &val4);
+        d->SQ.push_back(x); d->SQ.push_back(x); 
+        d->SQ.push_back(x1); d->SQ.push_back(x1);
+        d->SQ.push_back(y); d->SQ.push_back(y1);
+        d->SQ.push_back(y1); d->SQ.push_back(y);
+        d->SQ.push_back(z); d->SQ.push_back(z);
+        d->SQ.push_back(z); d->SQ.push_back(z);
+        d->SQ.push_back(val1); d->SQ.push_back(val2);
+        d->SQ.push_back(val3); d->SQ.push_back(val4);
         d->NbSQ++;
       }
       else{ // generate triangles
-        List_Add(d->ST, &x); List_Add(d->ST, &x); List_Add(d->ST, &x1);
-        List_Add(d->ST, &y); List_Add(d->ST, &y1); List_Add(d->ST, &y1);
-        List_Add(d->ST, &z); List_Add(d->ST, &z); List_Add(d->ST, &z);
-        List_Add(d->ST, &val1); List_Add(d->ST, &val2); List_Add(d->ST, &val3);
+        d->ST.push_back(x); d->ST.push_back(x); d->ST.push_back(x1);
+        d->ST.push_back(y); d->ST.push_back(y1); d->ST.push_back(y1);
+        d->ST.push_back(z); d->ST.push_back(z); d->ST.push_back(z);
+        d->ST.push_back(val1); d->ST.push_back(val2); d->ST.push_back(val3);
         d->NbST++;
-        List_Add(d->ST, &x); List_Add(d->ST, &x1); List_Add(d->ST, &x1);
-        List_Add(d->ST, &y); List_Add(d->ST, &y1); List_Add(d->ST, &y);
-        List_Add(d->ST, &z); List_Add(d->ST, &z); List_Add(d->ST, &z);
-        List_Add(d->ST, &val1); List_Add(d->ST, &val3); List_Add(d->ST, &val4);
+        d->ST.push_back(x); d->ST.push_back(x1); d->ST.push_back(x1);
+        d->ST.push_back(y); d->ST.push_back(y1); d->ST.push_back(y);
+        d->ST.push_back(z); d->ST.push_back(z); d->ST.push_back(z);
+        d->ST.push_back(val1); d->ST.push_back(val3); d->ST.push_back(val4);
         d->NbST++;
       }
     }
@@ -110,26 +112,35 @@ static int EndPos(const char *name, PViewData *d)
   }
 }
 
-int read_pnm(const char *name) 
+int read_pnm(std::string fileName) 
 {
-  Fl_PNM_Image img(name);
-  return EndPos(name, Img2Data(img));
+  Fl_PNM_Image img(fileName.c_str());
+  return EndPos(fileName.c_str(), Img2Data(img));
 }
 
-int read_jpeg(const char *name) 
+int read_jpeg(std::string fileName) 
 {
-  Fl_JPEG_Image img(name);
-  return EndPos(name, Img2Data(img));
+  Fl_JPEG_Image img(fileName.c_str());
+  return EndPos(fileName.c_str(), Img2Data(img));
 }
 
-int read_png(const char *name) 
+int read_png(std::string fileName) 
 {
-  Fl_PNG_Image img(name);
-  return EndPos(name, Img2Data(img));
+  Fl_PNG_Image img(fileName.c_str());
+  return EndPos(fileName.c_str(), Img2Data(img));
 }
 
-int read_bmp(const char *name) 
+int read_bmp(std::string fileName) 
 {
-  Fl_BMP_Image img(name);
-  return EndPos(name, Img2Data(img));
+  Fl_BMP_Image img(fileName.c_str());
+  return EndPos(fileName.c_str(), Img2Data(img));
 }
+
+#else
+
+int read_pnm(std::string fileName){ return 0; }
+int read_jpeg(std::string fileName){ return 0; }
+int read_png(std::string fileName){ return 0; }
+int read_bmp(std::string fileName){ return 0; }
+
+#endif

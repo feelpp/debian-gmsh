@@ -1,18 +1,21 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
 #include <set>
 #include "GModel.h"
-#include "MElement.h"
+#include "MTriangle.h"
+#include "MQuadrangle.h"
+#include "MTetrahedron.h"
+#include "MHexahedron.h"
+#include "MPrism.h"
+#include "MPyramid.h"
 #include "ExtrudeParams.h"
 #include "meshGFace.h"
 #include "meshGRegion.h"
 #include "Context.h"
-#include "Message.h"
-
-extern Context_T CTX;
+#include "GmshMessage.h"
 
 static void createPriPyrTet(std::vector<MVertex*> &v, GRegion *to)
 {
@@ -77,8 +80,8 @@ static void createTet(MVertex *v1, MVertex *v2, MVertex *v3, MVertex *v4, GRegio
 }
 
 static int getExtrudedVertices(MElement *ele, ExtrudeParams *ep, int j, int k, 
-			       std::set<MVertex*, MVertexLessThanLexicographic> &pos,
-			       std::vector<MVertex*> &verts)
+                               std::set<MVertex*, MVertexLessThanLexicographic> &pos,
+                               std::vector<MVertex*> &verts)
 {
   std::set<MVertex*, MVertexLessThanLexicographic>::iterator itp;
   double x[8], y[8], z[8];
@@ -110,7 +113,7 @@ static int getExtrudedVertices(MElement *ele, ExtrudeParams *ep, int j, int k,
 }
 
 static void extrudeMesh(GFace *from, GRegion *to,
-			std::set<MVertex*, MVertexLessThanLexicographic> &pos)
+                        std::set<MVertex*, MVertexLessThanLexicographic> &pos)
 {
   ExtrudeParams *ep = to->meshAttributes.extrude;
 
@@ -142,19 +145,25 @@ static void extrudeMesh(GFace *from, GRegion *to,
       }
     }
   }
-  for(unsigned int i = 0; i < from->quadrangles.size(); i++){
-    for(int j = 0; j < ep->mesh.NbLayer; j++) {
-      for(int k = 0; k < ep->mesh.NbElmLayer[j]; k++) {
-        std::vector<MVertex*> verts;
-        if(getExtrudedVertices(from->quadrangles[i], ep, j, k, pos, verts) == 8)
-          createHexPri(verts, to);
+
+  if(from->quadrangles.size() && !ep->mesh.Recombine){
+    Msg::Error("Cannot extrude quadrangles without Recombine");
+  }
+  else{
+    for(unsigned int i = 0; i < from->quadrangles.size(); i++){
+      for(int j = 0; j < ep->mesh.NbLayer; j++) {
+        for(int k = 0; k < ep->mesh.NbElmLayer[j]; k++) {
+          std::vector<MVertex*> verts;
+          if(getExtrudedVertices(from->quadrangles[i], ep, j, k, pos, verts) == 8)
+            createHexPri(verts, to);
+        }
       }
     }
   }
 }
 
 static void insertAllVertices(GRegion *gr, 
-			      std::set<MVertex*, MVertexLessThanLexicographic> &pos)
+                              std::set<MVertex*, MVertexLessThanLexicographic> &pos)
 {
   pos.insert(gr->mesh_vertices.begin(), gr->mesh_vertices.end());
   std::list<GFace*> faces = gr->faces();
@@ -193,7 +202,7 @@ void meshGRegionExtruded::operator() (GRegion *gr)
 
   // build a set with all the vertices on the boundary of gr
   double old_tol = MVertexLessThanLexicographic::tolerance; 
-  MVertexLessThanLexicographic::tolerance = 1.e-12 * CTX.lc;
+  MVertexLessThanLexicographic::tolerance = 1.e-12 * CTX::instance()->lc;
   std::set<MVertex*, MVertexLessThanLexicographic> pos;
   insertAllVertices(gr, pos);
 
@@ -218,21 +227,21 @@ void meshGRegionExtruded::operator() (GRegion *gr)
 }
 
 static int edgeExists(MVertex *v1, MVertex *v2, 
-		      std::set<std::pair<MVertex*, MVertex*> > &edges)
+                      std::set<std::pair<MVertex*, MVertex*> > &edges)
 {
   std::pair<MVertex*, MVertex*> p(std::min(v1, v2), std::max(v1, v2));
   return edges.count(p);
 }
 
 static void createEdge(MVertex *v1, MVertex *v2, 
-		       std::set<std::pair<MVertex*, MVertex*> > &edges)
+                       std::set<std::pair<MVertex*, MVertex*> > &edges)
 {
   std::pair<MVertex*, MVertex*> p(std::min(v1, v2), std::max(v1, v2));
   edges.insert(p);
 }
 
 static void deleteEdge(MVertex *v1, MVertex *v2, 
-		       std::set<std::pair<MVertex*, MVertex*> > &edges)
+                       std::set<std::pair<MVertex*, MVertex*> > &edges)
 {
   std::pair<MVertex*, MVertex*> p(std::min(v1, v2), std::max(v1, v2));
   edges.erase(p);
@@ -240,8 +249,8 @@ static void deleteEdge(MVertex *v1, MVertex *v2,
 
 // subdivide the 3 lateral faces of each prism
 static void phase1(GRegion *gr,
-		   std::set<MVertex*, MVertexLessThanLexicographic> &pos,
-		   std::set<std::pair<MVertex*, MVertex*> > &edges)
+                   std::set<MVertex*, MVertexLessThanLexicographic> &pos,
+                   std::set<std::pair<MVertex*, MVertex*> > &edges)
 {
   ExtrudeParams *ep = gr->meshAttributes.extrude;
   GFace *from = gr->model()->getFaceByTag(std::abs(ep->geo.Source));
@@ -275,10 +284,10 @@ static void phase1(GRegion *gr,
 
 // modify lateral edges to make them "tet-compatible"
 static void phase2(GRegion *gr,
-		   std::set<MVertex*, MVertexLessThanLexicographic> &pos,
-		   std::set<std::pair<MVertex*, MVertex*> > &edges,
-		   std::set<std::pair<MVertex*, MVertex*> > &edges_swap,
-		   int &swap)
+                   std::set<MVertex*, MVertexLessThanLexicographic> &pos,
+                   std::set<std::pair<MVertex*, MVertex*> > &edges,
+                   std::set<std::pair<MVertex*, MVertex*> > &edges_swap,
+                   int &swap)
 {
   ExtrudeParams *ep = gr->meshAttributes.extrude;
   GFace *from = gr->model()->getFaceByTag(std::abs(ep->geo.Source));
@@ -343,8 +352,8 @@ static void phase2(GRegion *gr,
  
 // create tets
 static void phase3(GRegion *gr,
-		   std::set<MVertex*, MVertexLessThanLexicographic> &pos,
-		   std::set<std::pair<MVertex*, MVertex*> > &edges)
+                   std::set<MVertex*, MVertexLessThanLexicographic> &pos,
+                   std::set<std::pair<MVertex*, MVertex*> > &edges)
 {
   ExtrudeParams *ep = gr->meshAttributes.extrude;
   GFace *from = gr->model()->getFaceByTag(std::abs(ep->geo.Source));
@@ -408,7 +417,7 @@ int SubdivideExtrudedMesh(GModel *m)
   // get all non-recombined extruded regions and vertices
   std::vector<GRegion*> regions;
   double old_tol = MVertexLessThanLexicographic::tolerance; 
-  MVertexLessThanLexicographic::tolerance = 1.e-12 * CTX.lc;
+  MVertexLessThanLexicographic::tolerance = 1.e-12 * CTX::instance()->lc;
   std::set<MVertex*, MVertexLessThanLexicographic> pos;
   for(GModel::riter it = m->firstRegion(); it != m->lastRegion(); it++){
     ExtrudeParams *ep = (*it)->meshAttributes.extrude;

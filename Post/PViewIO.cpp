@@ -1,16 +1,14 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
-//
-// Contributor(s):
-// 
 
+#include "GmshConfig.h"
+#include "GmshMessage.h"
 #include "PView.h"
 #include "PViewDataList.h"
 #include "PViewDataGModel.h"
 #include "StringUtils.h"
-#include "Message.h"
 
 bool PView::readPOS(std::string fileName, int fileIndex)
 {
@@ -50,22 +48,14 @@ bool PView::readPOS(std::string fileName, int fileIndex)
         Msg::Error("Unknown data size (%d) in post-processing file", size);
         return false;
       }
-      if(format == 0)
-        format = LIST_FORMAT_ASCII;
-      else if(format == 1)
-        format = LIST_FORMAT_BINARY;
-      else {
-        Msg::Error("Unknown format for view");
-        return false;
-      }
 
     }
     else if(!strncmp(&str[1], "View", 4)){
 
       index++;
       if(fileIndex < 0 || fileIndex == index){
-        PViewDataList *d = new PViewDataList(false);
-        if(!d->readPOS(fp, version, format, size)){
+        PViewDataList *d = new PViewDataList();
+        if(!d->readPOS(fp, version, format ? true : false)){
           Msg::Error("Could not read data in list format");
           delete d;
           return false;
@@ -130,64 +120,64 @@ bool PView::readMSH(std::string fileName, int fileIndex)
       }
     }
     else if(!strncmp(&str[1], "NodeData", 8) ||
-	    !strncmp(&str[1], "ElementData", 11) ||
-	    !strncmp(&str[1], "ElementNodeData", 15)) {
+            !strncmp(&str[1], "ElementData", 11) ||
+            !strncmp(&str[1], "ElementNodeData", 15)) {
       index++;
       if(fileIndex < 0 || fileIndex == index){
-	PViewDataGModel::DataType type;
-	if(!strncmp(&str[1], "NodeData", 8))
-	  type = PViewDataGModel::NodeData;
-	else if(!strncmp(&str[1], "ElementData", 11))
-	  type = PViewDataGModel::ElementData;
-	else
-	  type = PViewDataGModel::ElementNodeData;
-	int numTags;
-	// string tags
-	std::string viewName, interpolName;
+        PViewDataGModel::DataType type;
+        if(!strncmp(&str[1], "NodeData", 8))
+          type = PViewDataGModel::NodeData;
+        else if(!strncmp(&str[1], "ElementData", 11))
+          type = PViewDataGModel::ElementData;
+        else
+          type = PViewDataGModel::ElementNodeData;
+        int numTags;
+        // string tags
+        std::string viewName, interpolName;
         if(!fgets(str, sizeof(str), fp)) return false;
-	if(sscanf(str, "%d", &numTags) != 1) return false;
-	for(int i = 0; i < numTags; i++){
-	  if(!fgets(str, sizeof(str), fp)) return false;
-	  if(i == 0) 
-	    viewName = ExtractDoubleQuotedString(str, sizeof(str));
-	  else if(i == 1) 
-	    interpolName = ExtractDoubleQuotedString(str, sizeof(str));
-	}
-	// double tags
+        if(sscanf(str, "%d", &numTags) != 1) return false;
+        for(int i = 0; i < numTags; i++){
+          if(!fgets(str, sizeof(str), fp)) return false;
+          if(i == 0) 
+            viewName = ExtractDoubleQuotedString(str, sizeof(str));
+          else if(i == 1) 
+            interpolName = ExtractDoubleQuotedString(str, sizeof(str));
+        }
+        // double tags
         double time = 0.;
         if(!fgets(str, sizeof(str), fp)) return false;
-	if(sscanf(str, "%d", &numTags) != 1) return false;
-	for(int i = 0; i < numTags; i++){
-	  if(!fgets(str, sizeof(str), fp)) return false;
-	  if(i == 0){
-	    if(sscanf(str, "%lf", &time) != 1) return false;
-	  }
-	}
-	// integer tags
+        if(sscanf(str, "%d", &numTags) != 1) return false;
+        for(int i = 0; i < numTags; i++){
+          if(!fgets(str, sizeof(str), fp)) return false;
+          if(i == 0){
+            if(sscanf(str, "%lf", &time) != 1) return false;
+          }
+        }
+        // integer tags
         int timeStep = 0, numComp = 0, numEnt = 0, partition = 0;
         if(!fgets(str, sizeof(str), fp)) return false;
-	if(sscanf(str, "%d", &numTags) != 1) return false;
-	for(int i = 0; i < numTags; i++){
-	  if(!fgets(str, sizeof(str), fp)) return false;
-	  if(i == 0){
-	    if(sscanf(str, "%d", &timeStep) != 1) return false;
-	  }
-	  else if(i == 1){
-	    if(sscanf(str, "%d", &numComp) != 1) return false;
-	  }
-	  else if(i == 2){
-	    if(sscanf(str, "%d", &numEnt) != 1) return false;
-	  }
-	  else if(i == 3){
-	    if(sscanf(str, "%d", &partition) != 1) return false;
-	  }
-	}
+        if(sscanf(str, "%d", &numTags) != 1) return false;
+        for(int i = 0; i < numTags; i++){
+          if(!fgets(str, sizeof(str), fp)) return false;
+          if(i == 0){
+            if(sscanf(str, "%d", &timeStep) != 1) return false;
+          }
+          else if(i == 1){
+            if(sscanf(str, "%d", &numComp) != 1) return false;
+          }
+          else if(i == 2){
+            if(sscanf(str, "%d", &numEnt) != 1) return false;
+          }
+          else if(i == 3){
+            if(sscanf(str, "%d", &partition) != 1) return false;
+          }
+        }
         // either get existing viewData, or create new one
         PView *p = getViewByName(viewName, timeStep, partition);
         PViewDataGModel *d = 0;
         if(p) d = dynamic_cast<PViewDataGModel*>(p->getData());
         bool create = d ? false : true;
-	if(create) d = new PViewDataGModel(type);
+        if(create) d = new PViewDataGModel(type);
         if(!d->readMSH(fileName, fileIndex, fp, binary, swap, timeStep, 
                        time, partition, numComp, numEnt)){
           Msg::Error("Could not read data in msh file");
@@ -238,14 +228,14 @@ bool PView::readMED(std::string fileName, int fileIndex)
     if(fileIndex < 0 || index == fileIndex){
       PViewDataGModel *d = new PViewDataGModel();
       if(!d->readMED(fileName, index)){
-	Msg::Error("Could not read data in MED file");
-	delete d;
-	return false;
+        Msg::Error("Could not read data in MED file");
+        delete d;
+        return false;
       }
       else{
-	d->setFileName(fileName);
-	d->setFileIndex(index);
-	new PView(d);
+        d->setFileName(fileName);
+        d->setFileIndex(index);
+        new PView(d);
       }
     }
   }

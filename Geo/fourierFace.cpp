@@ -1,11 +1,13 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
+
 #include <list>
+#include "GmshConfig.h"
+#include "GmshMessage.h"
 #include "fourierVertex.h"
 #include "fourierFace.h"
-#include "Message.h"
 
 #if defined(HAVE_FOURIER_MODEL)
 
@@ -67,6 +69,12 @@ Pair<SVector3, SVector3> fourierFace::firstDer(const SPoint2 &param) const
 {
   Msg::Error("First derivative not implemented for fourier face");
   return Pair<SVector3, SVector3>();
+}
+
+void fourierFace::secondDer(const SPoint2 &param, 
+                            SVector3 *dudu, SVector3 *dvdv, SVector3 *dudv) const
+{
+  Msg::Error("Computation of the second derivatives not implemented for fourier face");
 }
 
 #endif

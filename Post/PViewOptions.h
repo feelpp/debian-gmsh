@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -9,6 +9,8 @@
 #include <string>
 #include "ColorTable.h"
 #include "SBoundingBox3d.h"
+
+class mathEvaluator;
 
 // The display options of a post-processing view.
 class PViewOptions {
@@ -49,42 +51,43 @@ class PViewOptions {
     DoubleLogarithmic = 3
   };
 
-  int Type;
-  int Position[2], Size[2], AutoPosition;
-  char Format[256];
-  int Axes, AxesAutoPosition,AxesMikado, AxesTics[3];
-  char AxesFormat[3][256], AxesLabel[3][256];
-  double AxesPosition[6];
-  double CustomMin, CustomMax, TmpMin, TmpMax, ExternalMin, ExternalMax;
-  SBoundingBox3d TmpBBox;
-  double Offset[3], Raise[3], Transform[3][3], DisplacementFactor, NormalRaise;
-  double Explode;
-  double ArrowSize, ArrowRelHeadRadius, ArrowRelStemRadius, ArrowRelStemLength;
-  double Normals, Tangents;
-  int Visible, IntervalsType, NbIso, ArrowSizeProportional;
-  int Light, LightTwoSide, LightLines, SmoothNormals;
-  double AngleSmoothNormals;
-  int SaturateValues, FakeTransparency;
-  int ShowElement, ShowTime, ShowScale;
-  int ScaleType, RangeType;
-  int VectorType, TensorType, GlyphLocation, CenterGlyphs;
-  int TimeStep;
-  int DrawStrings;
-  int DrawPoints, DrawLines, DrawTriangles, DrawQuadrangles;
-  int DrawTetrahedra, DrawHexahedra, DrawPrisms, DrawPyramids;
-  int DrawScalars, DrawVectors, DrawTensors;
-  int Boundary, PointType, LineType, DrawSkinOnly;
-  double PointSize, LineWidth;
-  GmshColorTable CT;
-  int UseStipple, Stipple[10][2];
-  char StippleString[10][32];
-  int ExternalViewIndex, ViewIndexForGenRaise;
-  int UseGenRaise;
-  double GenRaiseFactor;
-  char GenRaiseX[256], GenRaiseY[256], GenRaiseZ[256];
-  void *GenRaise_f[3];
-  double TargetError;
-  int MaxRecursionLevel;
+  int type;
+  int position[2], size[2], autoPosition;
+  std::string format;
+  int axes, axesAutoPosition, axesMikado, axesTics[3];
+  std::string axesFormat[3], axesLabel[3];
+  double axesPosition[6];
+  double customMin, customMax, tmpMin, tmpMax, externalMin, externalMax;
+  SBoundingBox3d tmpBBox;
+  double offset[3], raise[3], transform[3][3], displacementFactor, normalRaise;
+  double explode;
+  double arrowSizeMin, arrowSizeMax;
+  double normals, tangents;
+  int visible, intervalsType, nbIso;
+  int light, lightTwoSide, lightLines, smoothNormals;
+  double angleSmoothNormals;
+  int saturateValues, fakeTransparency;
+  int showElement, showTime, showScale;
+  int scaleType, rangeType;
+  int vectorType, tensorType, glyphLocation, centerGlyphs;
+  int timeStep;
+  int drawStrings;
+  int drawPoints, drawLines, drawTriangles, drawQuadrangles;
+  int drawTetrahedra, drawHexahedra, drawPrisms, drawPyramids;
+  int drawScalars, drawVectors, drawTensors;
+  int boundary, pointType, lineType, drawSkinOnly;
+  double pointSize, lineWidth;
+  GmshColorTable colorTable;
+  int useStipple, stipple[10][2];
+  std::string stippleString[10];
+  int externalViewIndex, viewIndexForGenRaise;
+  int useGenRaise;
+  double genRaiseFactor;
+  std::string genRaiseX, genRaiseY, genRaiseZ;
+  mathEvaluator *genRaiseEvaluator;
+  int adaptVisualizationGrid, maxRecursionLevel;
+  double targetError;
+  int clip; // status of clip planes (bit array)
   struct{
     unsigned int point, line, triangle, quadrangle;
     unsigned int tetrahedron, hexahedron, prism, pyramid;
@@ -96,14 +99,23 @@ class PViewOptions {
   static PViewOptions reference;
   PViewOptions();
   ~PViewOptions();
-  void createGeneralRaise();
-  void destroyGeneralRaise();
+  // return a floating point value in [min, max] corresponding to the
+  // integer iso in [0, numIso - 1]
   double getScaleValue(int iso, int numIso, double min, double max);
+  // return an integer in [0, numIso - 1] corresponding to the
+  // floating point value val in [min, max]
   int getScaleIndex(double val, int numIso, double min, double max, 
                     bool forceLinear=false);
+  // get color for val in [min, max] (only use numColors if > 0
+  // instead of all available colors)
+  unsigned int getColor(double val, double min, double max, 
+                        bool forceLinear=false, int numColors=-1);
+  // get i-th color amongst nb (i in [0, nb - 1])
   unsigned int getColor(int i, int nb);
-  unsigned int getColor(double val, double min, double max, bool forceLinear=false);
-  bool skipElement(int numEdges);
+  // create math evaluator for general raise option
+  void createGeneralRaise();
+  // return true if one should not draw elements with type type
+  bool skipElement(int type);
 };
 
 #endif

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -9,14 +9,13 @@
 #include "GEdge.h"
 #include "GFace.h"
 #include "MVertex.h"
-#include "MElement.h"
+#include "MTriangle.h"
+#include "MQuadrangle.h"
 #include "Context.h"
-#include "Message.h"
+#include "GmshMessage.h"
 #include "Numeric.h"
 
 #define SQU(a)      ((a)*(a))
-
-extern Context_T CTX;
 
 /*
    s4 +-----c3-----+ s3
@@ -37,28 +36,123 @@ extern Context_T CTX;
 // f(u,v) = u c2 (v) + (1-v) c1(u) + v c3(u) - u(1-v) s2 - uv s3
 #define TRAN_TRI(c1,c2,c3,s1,s2,s3,u,v) u*c2+(1.-v)*c1+v*c3-(u*(1.-v)*s2+u*v*s3)
 
+void findTransfiniteCorners(GFace *gf, std::vector<MVertex*> &corners)
+{
+  if(gf->meshAttributes.corners.size()){
+    // corners have been specified explicitly
+    for(unsigned int i = 0; i < gf->meshAttributes.corners.size(); i++)
+      corners.push_back(gf->meshAttributes.corners[i]->mesh_vertices[0]);
+  }
+  else{
+    // try to find the corners automatically
+    std::list<GEdge*> fedges = gf->edges();
+    GEdgeLoop el(fedges);
+    for(GEdgeLoop::iter it = el.begin(); it != el.end(); it++)
+      corners.push_back(it->getBeginVertex()->mesh_vertices[0]);
+    
+    // try reaaally hard for 3-sided faces
+    if(corners.size() == 3){
+      GEdge *first = 0, *last = 0;
+      for(std::list<GEdge*>::iterator it = fedges.begin(); it != fedges.end(); it++){
+        if(((*it)->getBeginVertex()->mesh_vertices[0] == corners[0] &&
+            (*it)->getEndVertex()->mesh_vertices[0] == corners[1]) ||
+           ((*it)->getBeginVertex()->mesh_vertices[0] == corners[1] &&
+            (*it)->getEndVertex()->mesh_vertices[0] == corners[0])){
+          first = *it;
+        }
+        if(((*it)->getBeginVertex()->mesh_vertices[0] == corners[2] &&
+            (*it)->getEndVertex()->mesh_vertices[0] == corners[0]) ||
+           ((*it)->getBeginVertex()->mesh_vertices[0] == corners[0] &&
+            (*it)->getEndVertex()->mesh_vertices[0] == corners[2])){
+          last = *it;
+        }
+      }
+      if(first && last){
+        if(first->mesh_vertices.size() != last->mesh_vertices.size()){
+          std::vector<MVertex*> corners2(3);
+          corners2[0] = corners[1];
+          corners2[1] = corners[2];
+          corners2[2] = corners[0];
+          corners = corners2;
+        }
+      }
+    }
+  }
+}
+
+static void computeEdgeLoops(const GFace *gf, std::vector<MVertex*> &all_mvertices,
+                             std::vector<int> &indices)
+{
+  std::list<GEdge*> edges = gf->edges();
+  std::list<int> ori = gf->orientations();
+  std::list<GEdge*>::iterator it = edges.begin();
+  std::list<int>::iterator ito = ori.begin();
+
+  indices.push_back(0);
+  GVertex *start = ((*ito) == 1) ? (*it)->getBeginVertex() : (*it)->getEndVertex();
+  GVertex *v_end = ((*ito) != 1) ? (*it)->getBeginVertex() : (*it)->getEndVertex();
+  all_mvertices.push_back(start->mesh_vertices[0]);
+  if(*ito == 1)
+    for(unsigned int i = 0; i < (*it)->mesh_vertices.size(); i++)
+      all_mvertices.push_back((*it)->mesh_vertices[i]);
+  else
+    for(int i = (*it)->mesh_vertices.size() - 1; i >= 0; i--)
+      all_mvertices.push_back((*it)->mesh_vertices[i]);
+  
+  GVertex *v_start = start;
+  while(1){
+    ++it;
+    ++ito;
+    if(v_end == start){
+      indices.push_back(all_mvertices.size());
+      if(it == edges.end ()) break;
+      start = ((*ito) == 1) ? (*it)->getBeginVertex() : (*it)->getEndVertex();
+      v_end = ((*ito) != 1) ? (*it)->getBeginVertex() : (*it)->getEndVertex();
+      v_start = start;
+    }
+    else{
+      if(it == edges.end ()){
+        Msg::Error("Something wrong in edge loop computation");
+        return;
+      }
+      v_start = ((*ito) == 1) ? (*it)->getBeginVertex() : (*it)->getEndVertex();
+      if(v_start != v_end){
+        Msg::Error("Something wrong in edge loop computation");
+        return;
+      }
+      v_end = ((*ito) != 1) ? (*it)->getBeginVertex() : (*it)->getEndVertex();
+    }
+    all_mvertices.push_back(v_start->mesh_vertices[0]);
+    if(*ito == 1)
+      for(unsigned int i = 0; i < (*it)->mesh_vertices.size(); i++)
+        all_mvertices.push_back((*it)->mesh_vertices[i]);
+    else
+      for(int i = (*it)->mesh_vertices.size()-1; i >= 0; i--)
+        all_mvertices.push_back((*it)->mesh_vertices[i]);
+  }
+}
+
 int MeshTransfiniteSurface(GFace *gf)
 {
   if(gf->meshAttributes.Method != MESH_TRANSFINITE) return 0;
 
   Msg::StatusBar(2, true, "Meshing surface %d (transfinite)", gf->tag());
 
-  std::vector <MVertex *> corners, d_vertices;
-  std::vector <int> indices;
-
-  for(unsigned int i = 0; i < gf->meshAttributes.corners.size(); i++)
-    corners.push_back(gf->meshAttributes.corners[i]->mesh_vertices[0]);
-
-  computeEdgeLoops(gf, d_vertices, indices);
-
+  std::vector<MVertex*> corners;
+  findTransfiniteCorners(gf, corners);
   if(corners.size () != 3 && corners.size () != 4){
     Msg::Error("Surface %d is transfinite but has %d corners",
-        gf->tag(), corners.size());
+               gf->tag(), corners.size());
     return 0;
   }
+
+  std::vector<MVertex*> d_vertices;
+  std::vector<int> indices;
+  computeEdgeLoops(gf, d_vertices, indices);
+
   if(indices.size () != 2){
     Msg::Error("Surface %d is transfinite but has %d holes",
-        gf->tag(), indices.size() - 2);
+               gf->tag(), indices.size() - 2);
     return 0;
   }
 
@@ -93,10 +187,8 @@ int MeshTransfiniteSurface(GFace *gf)
 
   // get the indices of the interpolation corners as well as the u,v
   // coordinates of all the boundary vertices
-  int iCorner = 0;
-  int N[4] = {0, 0, 0, 0};
-  std::vector<double> U;
-  std::vector<double> V;
+  int iCorner = 0, N[4] = {0, 0, 0, 0};
+  std::vector<double> U, V;
   for(unsigned int i = 0; i < m_vertices.size(); i++){
     MVertex *v = m_vertices[i];
     if(v == corners[0] || v == corners[1] || v == corners[2] || 
@@ -108,41 +200,18 @@ int MeshTransfiniteSurface(GFace *gf)
       }
     }
     SPoint2 param;
-    if(v->onWhat()->dim() == 0){
-      GVertex *gv = (GVertex*)v->onWhat();
-      param = gv->reparamOnFace(gf, 1);
-    }
-    else if(v->onWhat()->dim() == 1){
-      GEdge *ge = (GEdge*)v->onWhat();
-      double UU;
-      v->getParameter(0, UU);
-      param = ge->reparamOnFace(gf, UU, 1);
-    }
-    else{
-      double UU, VV;
-      if(v->onWhat() == gf && v->getParameter(0, UU) && v->getParameter(1, VV))
-        param = SPoint2(UU, VV);
-      else
-        param = gf->parFromPoint(SPoint3(v->x(), v->y(), v->z()));
-    }
-    U.push_back(param.x());
-    V.push_back(param.y());
+    reparamMeshVertexOnFace(v, gf, param);
+    U.push_back(param[0]);
+    V.push_back(param[1]);
   }
 
-  int N1 = N[0];
-  int N2 = N[1];
-  int N3 = N[2];
-  int N4 = N[3];
-
-  int L = N2 - N1;
-  int H = N3 - N2;
-
+  int N1 = N[0], N2 = N[1], N3 = N[2], N4 = N[3];
+  int L = N2 - N1, H = N3 - N2;
   if(corners.size () == 4){
-    int Lb = N4 - N3;
-    int Hb = m_vertices.size() - N4;
+    int Lb = N4 - N3, Hb = m_vertices.size() - N4;
     if(Lb != L || Hb != H){
       Msg::Error("Surface %d cannot be meshed using the transfinite algo", 
-          gf->tag());
+                 gf->tag());
       return 0;
     }
   }
@@ -150,15 +219,13 @@ int MeshTransfiniteSurface(GFace *gf)
     int Lb = m_vertices.size() - N3;      
     if(Lb != L){
       Msg::Error("Surface %d cannot be meshed using the transfinite algo %d != %d", 
-          gf->tag(), L, Lb);
+                 gf->tag(), L, Lb);
       return 0;
     }      
   }
   
-  std::vector<double> lengths_i;
-  std::vector<double> lengths_j;
-  double L_i = 0;
-  double L_j = 0;
+  std::vector<double> lengths_i, lengths_j;
+  double L_i = 0, L_j = 0;
   lengths_i.push_back(0.);
   lengths_j.push_back(0.);
   for(int i = 0; i < L; i++){
@@ -219,12 +286,8 @@ int MeshTransfiniteSurface(GFace *gf)
     }
   }
 
-  double UC1 = U[N1];
-  double UC2 = U[N2];
-  double UC3 = U[N3];
-  double VC1 = V[N1];
-  double VC2 = V[N2];
-  double VC3 = V[N3];
+  double UC1 = U[N1], UC2 = U[N2], UC3 = U[N3];
+  double VC1 = V[N1], VC2 = V[N2], VC3 = V[N3];
 
   //create points using transfinite interpolation
   if(corners.size() == 4){
@@ -285,68 +348,78 @@ int MeshTransfiniteSurface(GFace *gf)
     }
   }  
 
-  // elliptic smoother (don't apply this by default)
-  if(corners.size() == 4 && gf->geomType() == GEntity::Plane){
-    int numSmooth = 0;
-    if(gf->meshAttributes.transfiniteSmoothing < 0 && CTX.mesh.nb_smoothing > 1)
-      numSmooth = CTX.mesh.nb_smoothing;
-    else if(gf->meshAttributes.transfiniteSmoothing > 0)
-      numSmooth = gf->meshAttributes.transfiniteSmoothing;
-    for (int IT = 0; IT < numSmooth; IT++){
-      for(int i = 1; i < L; i++){
-        for(int j = 1; j < H; j++){
-          MVertex *v11 = tab[i - 1][j - 1];
-          MVertex *v12 = tab[i - 1][j    ];
-          MVertex *v13 = tab[i - 1][j + 1];           
-          MVertex *v21 = tab[i    ][j - 1];
-          MVertex *v22 = tab[i    ][j    ];
-          MVertex *v23 = tab[i    ][j + 1];
-          MVertex *v31 = tab[i + 1][j - 1];
-          MVertex *v32 = tab[i + 1][j    ];
-          MVertex *v33 = tab[i + 1][j + 1];
-          double alpha = 0.25 * (SQU(v23->x() - v21->x()) +
-                                 SQU(v23->y() - v21->y()) +
-                                 SQU(v23->z() - v21->z()));
-          double gamma = 0.25 * (SQU(v32->x() - v12->x()) +
-                                 SQU(v32->y() - v12->y()) +
-                                 SQU(v32->z() - v12->z()));
-          double beta = 0.0625 * ((v32->x() - v12->x()) * (v23->x() - v21->x()) +
-                                  (v32->y() - v12->y()) * (v23->y() - v21->y()) +
-                                  (v32->z() - v12->z()) * (v23->z() - v21->z()));
-          v22->x() = 0.5 * (alpha * (v32->x() + v12->x()) + 
-                            gamma * (v23->x() + v21->x()) -
-                            2. * beta * (v33->x() - v13->x() - 
-                                         v31->x() + v11->x())) / (alpha + gamma);
-          v22->y() = 0.5 * (alpha * (v32->y() + v12->y()) +
-                            gamma * (v23->y() + v21->y()) -
-                            2. * beta * (v33->y() - v13->y() -
-                                         v31->y() + v11->y())) / (alpha + gamma);
-          v22->z() = 0.5 * (alpha * (v32->z() + v12->z()) +
-                            gamma * (v23->z() + v21->z()) -
-                            2. * beta * (v33->z() - v13->z() -
-                                         v31->z() + v11->z())) / (alpha + gamma);
+  // should we apply the elliptic smoother?
+  int numSmooth = 0;
+  if(gf->meshAttributes.transfiniteSmoothing < 0 && CTX::instance()->mesh.nbSmoothing > 1)
+    numSmooth = CTX::instance()->mesh.nbSmoothing;
+  else if(gf->meshAttributes.transfiniteSmoothing > 0)
+    numSmooth = gf->meshAttributes.transfiniteSmoothing;
+
+  if(corners.size() == 4 && numSmooth){
+    std::vector<std::vector<double> > u(L + 1), v(L + 1);
+    for(int i = 0; i <= L; i++){
+      u[i].resize(H + 1);
+      v[i].resize(H + 1);
+    }
+    for(int i = 0; i <= L; i++){
+      for(int j = 0; j <= H; j++){ 
+        int iP1 = N1 + i;
+        int iP2 = N2 + j;
+        int iP3 = N4 - i;
+        int iP4 = (N4 + (N3 - N2) - j) % m_vertices.size();
+        if(j == 0)     { u[i][j] = U[iP1]; v[i][j] = V[iP1]; }
+        else if(i == L){ u[i][j] = U[iP2]; v[i][j] = V[iP2]; }
+        else if(j == H){ u[i][j] = U[iP3]; v[i][j] = V[iP3]; }
+        else if(i == 0){ u[i][j] = U[iP4]; v[i][j] = V[iP4]; }
+        else{
+          tab[i][j]->getParameter(0, u[i][j]);
+          tab[i][j]->getParameter(1, v[i][j]);
         }
       }
     }
-    // recompute corresponding u,v coordinates (necessary e.g. for 2nd order algo)
+    for(int IT = 0; IT < numSmooth; IT++){
+      for(int i = 1; i < L; i++){
+        for(int j = 1; j < H; j++){
+          double alpha = 0.25 * (SQU(u[i][j + 1] - u[i][j - 1]) +
+                                 SQU(v[i][j + 1] - v[i][j - 1])) ;
+          double gamma = 0.25 * (SQU(u[i + 1][j] - u[i - 1][j]) +
+                                 SQU(v[i + 1][j] - v[i - 1][j]));
+          double beta = 0.0625 * 
+            ((u[i + 1][j] - u[i - 1][j]) * (u[i][j + 1] - u[i][j - 1]) +
+             (v[i + 1][j] - v[i - 1][j]) * (v[i][j + 1] - v[i][j - 1]));
+          u[i][j] = 0.5 * 
+            (alpha * (u[i + 1][j] + u[i - 1][j]) + 
+             gamma * (u[i][j + 1] + u[i][j - 1]) -
+             2. * beta * (u[i + 1][j + 1] - u[i - 1][j + 1] - 
+                          u[i + 1][j - 1] + u[i - 1][j - 1])) / (alpha + gamma);
+          v[i][j] = 0.5 * 
+            (alpha * (v[i + 1][j] + v[i - 1][j]) + 
+             gamma * (v[i][j + 1] + v[i][j - 1]) -
+             2. * beta * (v[i + 1][j + 1] - v[i - 1][j + 1] - 
+                          v[i + 1][j - 1] + v[i - 1][j - 1])) / (alpha + gamma);
+        }
+      }
+    }
     for(int i = 1; i < L; i++){
       for(int j = 1; j < H; j++){
-        MVertex *v = tab[i][j];
-        SPoint2 param = gf->parFromPoint(SPoint3(v->x(), v->y(), v->z()));
-        v->setParameter(0, param[0]);
-        v->setParameter(1, param[1]);
+        GPoint p = gf->point(SPoint2(u[i][j], v[i][j]));
+        tab[i][j]->x() = p.x();
+        tab[i][j]->y() = p.y();
+        tab[i][j]->z() = p.z();
+        tab[i][j]->setParameter(0, u[i][j]);
+        tab[i][j]->setParameter(1, v[i][j]);
       }
     }
   }
 
+  // create elements
   if(corners.size() == 4){ 
-    // create elements
     for(int i = 0; i < L ; i++){
       for(int j = 0; j < H; j++){
-        MVertex *v1 = tab[i    ][j    ];
-        MVertex *v2 = tab[i + 1][j    ];
+        MVertex *v1 = tab[i][j];
+        MVertex *v2 = tab[i + 1][j];
         MVertex *v3 = tab[i + 1][j + 1];
-        MVertex *v4 = tab[i    ][j + 1];
+        MVertex *v4 = tab[i][j + 1];
         if(gf->meshAttributes.recombine)
           gf->quadrangles.push_back(new MQuadrangle(v1, v2, v3, v4));
         else if(gf->meshAttributes.transfiniteArrangement == 1 ||
@@ -365,17 +438,17 @@ int MeshTransfiniteSurface(GFace *gf)
   }
   else{      
     for(int j = 0; j < H; j++){
-      MVertex *v1 = tab[0    ][0    ];
-      MVertex *v2 = tab[1    ][j    ];
-      MVertex *v3 = tab[1    ][j + 1];
+      MVertex *v1 = tab[0][0];
+      MVertex *v2 = tab[1][j];
+      MVertex *v3 = tab[1][j + 1];
       gf->triangles.push_back(new MTriangle(v1, v2, v3));
     }
     for(int i = 1; i < L ; i++){
       for(int j = 0; j < H; j++){
-        MVertex *v1 = tab[i    ][j    ];
-        MVertex *v2 = tab[i + 1][j    ];
+        MVertex *v1 = tab[i][j];
+        MVertex *v2 = tab[i + 1][j];
         MVertex *v3 = tab[i + 1][j + 1];
-        MVertex *v4 = tab[i    ][j + 1];
+        MVertex *v4 = tab[i][j + 1];
         if(gf->meshAttributes.recombine)
           gf->quadrangles.push_back(new MQuadrangle(v1, v2, v3, v4));
         else if(gf->meshAttributes.transfiniteArrangement == 1 ||

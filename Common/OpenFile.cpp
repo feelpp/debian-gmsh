@@ -1,19 +1,22 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
 #include <string.h>
-#include "Message.h"
+#include "GmshConfig.h"
+#include "GmshMessage.h"
 #include "Geo.h"
 #include "GModel.h"
 #include "Numeric.h"
+#include "HighOrder.h"
 #include "Context.h"
 #include "OpenFile.h"
 #include "CommandLine.h"
 #include "ReadImg.h"
 #include "OS.h"
 #include "StringUtils.h"
+#include "GeomMeshMatcher.h"
 
 #if !defined(HAVE_NO_PARSER)
 #include "Parser.h"
@@ -25,62 +28,45 @@
 #endif
 
 #if defined(HAVE_FLTK)
-#include "GmshUI.h"
-#include "Draw.h"
-#include "SelectBuffer.h"
-#include "GUI.h"
-extern GUI *WID;
+#include <FL/fl_ask.H>
+#include "FlGui.h"
+#include "drawContext.h"
 #endif
-
-extern Context_T CTX;
 
 #define SQU(a)      ((a)*(a))
 
 static void FinishUpBoundingBox()
 {
   double range[3];
+  for(int i = 0; i < 3; i++) 
+    range[i] = CTX::instance()->max[i] - CTX::instance()->min[i];
 
-  for(int i = 0; i < 3; i++){
-    CTX.cg[i] = 0.5 * (CTX.min[i] + CTX.max[i]);
-    range[i] = CTX.max[i] - CTX.min[i];
+  if(range[0] < CTX::instance()->geom.tolerance && 
+     range[1] < CTX::instance()->geom.tolerance && 
+     range[2] < CTX::instance()->geom.tolerance) {
+    CTX::instance()->min[0] -= 1.; CTX::instance()->min[1] -= 1.;
+    CTX::instance()->max[0] += 1.; CTX::instance()->max[1] += 1.;
   }
-
-  if(range[0] < CTX.geom.tolerance && 
-     range[1] < CTX.geom.tolerance && 
-     range[2] < CTX.geom.tolerance) {
-    CTX.min[0] -= 1.; CTX.min[1] -= 1.;
-    CTX.max[0] += 1.; CTX.max[1] += 1.;
-    CTX.lc = 1.;
+  else if(range[0] < CTX::instance()->geom.tolerance && 
+          range[1] < CTX::instance()->geom.tolerance) {
+    CTX::instance()->min[0] -= range[2]; CTX::instance()->min[1] -= range[2];
+    CTX::instance()->max[0] += range[2]; CTX::instance()->max[1] += range[2];
   }
-  else if(range[0] < CTX.geom.tolerance && 
-          range[1] < CTX.geom.tolerance) {
-    CTX.lc = range[2];
-    CTX.min[0] -= CTX.lc; CTX.min[1] -= CTX.lc;
-    CTX.max[0] += CTX.lc; CTX.max[1] += CTX.lc;
+  else if(range[0] < CTX::instance()->geom.tolerance && 
+          range[2] < CTX::instance()->geom.tolerance) {
+    CTX::instance()->min[0] -= range[1]; CTX::instance()->max[0] += range[1];
   }
-  else if(range[0] < CTX.geom.tolerance && 
-          range[2] < CTX.geom.tolerance) {
-    CTX.lc = range[1];
-    CTX.min[0] -= CTX.lc; CTX.max[0] += CTX.lc;
+  else if(range[1] < CTX::instance()->geom.tolerance && 
+          range[2] < CTX::instance()->geom.tolerance) {
+    CTX::instance()->min[1] -= range[0]; CTX::instance()->max[1] += range[0];
   }
-  else if(range[1] < CTX.geom.tolerance && 
-          range[2] < CTX.geom.tolerance) {
-    CTX.lc = range[0];
-    CTX.min[1] -= CTX.lc; CTX.max[1] += CTX.lc;
+  else if(range[0] < CTX::instance()->geom.tolerance) {
+    double l = sqrt(SQU(range[1]) + SQU(range[2]));
+    CTX::instance()->min[0] -= l; CTX::instance()->max[0] += l;
   }
-  else if(range[0] < CTX.geom.tolerance) {
-    CTX.lc = sqrt(SQU(range[1]) + SQU(range[2]));
-    CTX.min[0] -= CTX.lc; CTX.max[0] += CTX.lc;
-  }
-  else if(range[1] < CTX.geom.tolerance) {
-    CTX.lc = sqrt(SQU(range[0]) + SQU(range[2]));
-    CTX.min[1] -= CTX.lc; CTX.max[1] += CTX.lc;
-  }
-  else if(range[2] < CTX.geom.tolerance) {
-    CTX.lc = sqrt(SQU(range[0]) + SQU(range[1]));
-  }
-  else {
-    CTX.lc = sqrt(SQU(range[0]) + SQU(range[1]) + SQU(range[2]));
+  else if(range[1] < CTX::instance()->geom.tolerance) {
+    double l = sqrt(SQU(range[0]) + SQU(range[2]));
+    CTX::instance()->min[1] -= l; CTX::instance()->max[1] += l;
   }
 }
 
@@ -88,15 +74,20 @@ void SetBoundingBox(double xmin, double xmax,
                     double ymin, double ymax, 
                     double zmin, double zmax)
 {
-  CTX.min[0] = xmin; CTX.max[0] = xmax;
-  CTX.min[1] = ymin; CTX.max[1] = ymax;
-  CTX.min[2] = zmin; CTX.max[2] = zmax;
+  CTX::instance()->min[0] = xmin; CTX::instance()->max[0] = xmax;
+  CTX::instance()->min[1] = ymin; CTX::instance()->max[1] = ymax;
+  CTX::instance()->min[2] = zmin; CTX::instance()->max[2] = zmax;
   FinishUpBoundingBox();
+  CTX::instance()->lc = sqrt(SQU(CTX::instance()->max[0] - CTX::instance()->min[0]) +
+                             SQU(CTX::instance()->max[1] - CTX::instance()->min[1]) + 
+                             SQU(CTX::instance()->max[2] - CTX::instance()->min[2]));
+  for(int i = 0; i < 3; i++) 
+    CTX::instance()->cg[i] = 0.5 * (CTX::instance()->min[i] + CTX::instance()->max[i]);
 }
 
 void SetBoundingBox()
 {
-  if(CTX.forced_bbox) return;
+  if(CTX::instance()->forcedBBox) return;
 
   SBoundingBox3d bb = GModel::current()->bounds();
   
@@ -113,17 +104,22 @@ void SetBoundingBox()
     bb += SPoint3(1., 1., 1.);
   }
   
-  CTX.min[0] = bb.min().x(); CTX.max[0] = bb.max().x();
-  CTX.min[1] = bb.min().y(); CTX.max[1] = bb.max().y();
-  CTX.min[2] = bb.min().z(); CTX.max[2] = bb.max().z();
+  CTX::instance()->min[0] = bb.min().x(); CTX::instance()->max[0] = bb.max().x();
+  CTX::instance()->min[1] = bb.min().y(); CTX::instance()->max[1] = bb.max().y();
+  CTX::instance()->min[2] = bb.min().z(); CTX::instance()->max[2] = bb.max().z();
   FinishUpBoundingBox();
+  CTX::instance()->lc = sqrt(SQU(CTX::instance()->max[0] - CTX::instance()->min[0]) +
+                             SQU(CTX::instance()->max[1] - CTX::instance()->min[1]) + 
+                             SQU(CTX::instance()->max[2] - CTX::instance()->min[2]));
+  for(int i = 0; i < 3; i++) 
+    CTX::instance()->cg[i] = 0.5 * (CTX::instance()->min[i] + CTX::instance()->max[i]);
 }
 
-// FIXME: this is necessary for now to have an approximate CTX.lc
-// *while* parsing input files (it's important since some of the
-// geometrical operations use a tolerance that depends on
-// CTX.lc). This will be removed once the new database is filled
-// directly during the parsing step
+// FIXME: this is necessary for now to have an approximate
+// CTX::instance()->lc *while* parsing input files (it's important
+// since some of the geometrical operations use a tolerance that
+// depends on CTX::instance()->lc). This will be removed once the new
+// database is filled directly during the parsing step
 static SBoundingBox3d temp_bb;
 
 void ResetTemporaryBoundingBox()
@@ -134,26 +130,28 @@ void ResetTemporaryBoundingBox()
 void AddToTemporaryBoundingBox(double x, double y, double z)
 {
   temp_bb += SPoint3(x, y, z);
-  CTX.min[0] = temp_bb.min().x(); CTX.max[0] = temp_bb.max().x();
-  CTX.min[1] = temp_bb.min().y(); CTX.max[1] = temp_bb.max().y();
-  CTX.min[2] = temp_bb.min().z(); CTX.max[2] = temp_bb.max().z();
-  FinishUpBoundingBox();
+  if(temp_bb.empty()) return;
+  CTX::instance()->lc = sqrt(SQU(temp_bb.max().x() - temp_bb.min().x()) +
+                             SQU(temp_bb.max().y() - temp_bb.min().y()) + 
+                             SQU(temp_bb.max().z() - temp_bb.min().z()));
+  if(CTX::instance()->lc == 0) CTX::instance()->lc = 1.;
+  // to get correct cg during interctive point creation
+  for(int i = 0; i < 3; i++) CTX::instance()->cg[i] = temp_bb.center()[i];
 }
 
-int ParseFile(const char *f, int close, int warn_if_missing)
+int ParseFile(std::string fileName, bool close, bool warnIfMissing)
 {
 #if defined(HAVE_NO_PARSER)
   Msg::Error("Gmsh parser is not compiled in this version");
   return 0;
 #else
-  char yyname_old[256], tmp[256];
-  FILE *yyin_old, *fp;
-  int yylineno_old, yyerrorstate_old, yyviewindex_old;
 
   // add 'b' for pure Windows programs: opening in text mode messes up
   // fsetpos/fgetpos (used e.g. for user-defined functions)
-  if(!(fp = fopen(f, "rb"))){
-    if(warn_if_missing) Msg::Warning("Unable to open file '%s'", f);
+  FILE *fp;
+  if(!(fp = fopen(fileName.c_str(), "rb"))){
+    if(warnIfMissing)
+      Msg::Warning("Unable to open file '%s'", fileName.c_str());
     return 0;
   }
 
@@ -161,282 +159,315 @@ int ParseFile(const char *f, int close, int warn_if_missing)
   int numViewsBefore = PView::list.size();
 #endif
 
-  strncpy(yyname_old, gmsh_yyname, 255);
-  yyin_old = gmsh_yyin;
-  yyerrorstate_old = gmsh_yyerrorstate;
-  yylineno_old = gmsh_yylineno;
-  yyviewindex_old = gmsh_yyviewindex;
+  std::string old_yyname = gmsh_yyname;
+  FILE *old_yyin = gmsh_yyin;
+  int old_yyerrorstate = gmsh_yyerrorstate;
+  int old_yylineno = gmsh_yylineno;
+  int old_yyviewindex = gmsh_yyviewindex;
 
-  strncpy(gmsh_yyname, f, 255);
+  gmsh_yyname = fileName;
   gmsh_yyin = fp;
   gmsh_yyerrorstate = 0;
   gmsh_yylineno = 1;
   gmsh_yyviewindex = 0;
 
-  fpos_t position;
-  fgetpos(gmsh_yyin, &position);
-  fgets(tmp, sizeof(tmp), gmsh_yyin);
-  fsetpos(gmsh_yyin, &position);
-
   while(!feof(gmsh_yyin)){
     gmsh_yyparse();
     if(gmsh_yyerrorstate > 20){
       Msg::Error("Too many errors: aborting...");
-      force_yyflush();
+      gmsh_yyflush();
       break;
     }
   }
 
   if(close) fclose(gmsh_yyin);
 
-  strncpy(gmsh_yyname, yyname_old, 255);
-  gmsh_yyin = yyin_old;
-  gmsh_yyerrorstate = yyerrorstate_old;
-  gmsh_yylineno = yylineno_old;
-  gmsh_yyviewindex = yyviewindex_old;
+  gmsh_yyname = old_yyname;
+  gmsh_yyin = old_yyin;
+  gmsh_yyerrorstate = old_yyerrorstate;
+  gmsh_yylineno = old_yylineno;
+  gmsh_yyviewindex = old_yyviewindex;
 
 #if defined(HAVE_FLTK) && !defined(HAVE_NO_POST)
-  if(!CTX.batch && numViewsBefore != (int)PView::list.size())
-    WID->update_views();
+  if(FlGui::available() && numViewsBefore != (int)PView::list.size())
+    FlGui::instance()->updateViews();
 #endif
 
   return 1;
 #endif
 }
 
-void ParseString(const char *str)
+void ParseString(std::string str)
 {
-  if(!str) return;
-  FILE *fp;
-  if((fp = fopen(CTX.tmp_filename_fullpath, "w"))) {
-    fprintf(fp, str);
-    fprintf(fp, "\n");
+  if(str.empty()) return;
+  std::string fileName = CTX::instance()->homeDir + CTX::instance()->tmpFileName;
+  FILE *fp = fopen(fileName.c_str(), "w");
+  if(fp){
+    fprintf(fp, "%s\n", str.c_str());
     fclose(fp);
-    ParseFile(CTX.tmp_filename_fullpath, 1);
-    GModel::current()->importGEOInternals();
+    GModel::readGEO(fileName);
   }
 }
 
-void SetProjectName(const char *name)
+static void SetProjectName(std::string fileName)
 {
-  char no_ext[256], ext[256], base[256];
-  SplitFileName(name, no_ext, ext, base);
-
-  if(CTX.filename != name) // yes, we mean to compare the pointers
-    strncpy(CTX.filename, name, 255);
-  strncpy(CTX.no_ext_filename, no_ext, 255);
-  strncpy(CTX.base_filename, base, 255);
-
-  GModel::current()->setName(base);
-    
-#if defined(HAVE_FLTK)
-  if(!CTX.batch) WID->set_title(CTX.filename);
-#endif
+  GModel::current()->setFileName(fileName);
+  GModel::current()->setName(SplitFileName(fileName)[1]);
 }
 
-int MergeFile(const char *name, int warn_if_missing)
+int MergeFile(std::string fileName, bool warnIfMissing)
 {
+  if(GModel::current()->getName() == "")
+    SetProjectName(fileName);
+
+#if defined(HAVE_FLTK)
+  if(FlGui::available())
+    FlGui::instance()->setGraphicTitle(GModel::current()->getFileName());
+#endif
+
   // added 'b' for pure Windows programs, since some of these files
   // contain binary data
-  FILE *fp = fopen(name, "rb");
+  FILE *fp = fopen(fileName.c_str(), "rb");
   if(!fp){
-    if(warn_if_missing) Msg::Warning("Unable to open file '%s'", name);
+    if(warnIfMissing) 
+      Msg::Warning("Unable to open file '%s'", fileName.c_str());
     return 0;
   }
 
   char header[256];
-  fgets(header, sizeof(header), fp);
+  if(!fgets(header, sizeof(header), fp)) return 0;
   fclose(fp);
 
-  Msg::StatusBar(2, true, "Reading '%s'", name);
+  Msg::StatusBar(2, true, "Reading '%s'", fileName.c_str());
 
-  char no_ext[256], ext[256], base[256];
-  SplitFileName(name, no_ext, ext, base);
+  std::vector<std::string> split = SplitFileName(fileName);
+  std::string noExt = split[0] + split[1], ext = split[2];
 
 #if defined(HAVE_FLTK)
-  if(!CTX.batch) {
-    if(!strcmp(ext, ".gz")) {
+  if(FlGui::available()) {
+    if(ext == ".gz") {
       // the real solution would be to rewrite all our I/O functions in
       // terms of gzFile, but until then, this is better than nothing
       if(fl_choice("File '%s' is in gzip format.\n\nDo you want to uncompress it?", 
-                   "Cancel", "Uncompress", NULL, name)){
-        char tmp[256];
-        sprintf(tmp, "gunzip -c %s > %s", name, no_ext);
-        if(SystemCall(tmp))
-          Msg::Error("Failed to uncompress `%s': check directory permissions", name);
-        if(!strcmp(CTX.filename, name)) // this is the project file
-          SetProjectName(no_ext);
-        return MergeFile(no_ext);
+                   "Cancel", "Uncompress", NULL, fileName.c_str())){
+        if(SystemCall(std::string("gunzip -c ") + fileName + " > " + noExt))
+          Msg::Error("Failed to uncompress `%s': check directory permissions", 
+                     fileName.c_str());
+        SetProjectName(noExt);
+        return MergeFile(noExt);
       }
     }
   }
 #endif
 
-  CTX.geom.draw = 0; // don't try to draw the model while reading
-
-  GModel *m = GModel::current();
-
-  // FIXME: We need to decide what do do for CAD entities, meshes,
-  // etc.  For meshes we should definitely create one new model per
-  // merge (and reset current() to the previous value after the
-  // merge). This will make multi-step multi-meshes post-pro views
-  // work out of the box.
-  // GModel *m = new GModel;
+  CTX::instance()->geom.draw = 0; // don't try to draw the model while reading
 
 #if !defined(HAVE_NO_POST)
   int numViewsBefore = PView::list.size();
 #endif
 
   int status = 0;
-  if(!strcmp(ext, ".stl") || !strcmp(ext, ".STL")){
-    status = m->readSTL(name, CTX.geom.tolerance);
+  if(ext == ".stl" || ext == ".STL"){
+    status = GModel::current()->readSTL(fileName, CTX::instance()->geom.tolerance);
   }
-  else if(!strcmp(ext, ".brep") || !strcmp(ext, ".rle") ||
-          !strcmp(ext, ".brp") || !strcmp(ext, ".BRP")){
-    status = m->readOCCBREP(std::string(name));
+  else if(ext == ".brep" || ext == ".rle" || ext == ".brp" || ext == ".BRP"){
+    status = GModel::current()->readOCCBREP(fileName);
   }
-  else if(!strcmp(ext, ".iges") || !strcmp(ext, ".IGES") ||
-          !strcmp(ext, ".igs") || !strcmp(ext, ".IGS")){
-    status = m->readOCCIGES(std::string(name));
+  else if(ext == ".iges" || ext == ".IGES" || ext == ".igs" || ext == ".IGS"){
+    status = GModel::current()->readOCCIGES(fileName);
   }
-  else if(!strcmp(ext, ".step") || !strcmp(ext, ".STEP") ||
-          !strcmp(ext, ".stp") || !strcmp(ext, ".STP")){
-    status = m->readOCCSTEP(std::string(name));
+  else if(ext == ".step" || ext == ".STEP" || ext == ".stp" || ext == ".STP"){
+    status = GModel::current()->readOCCSTEP(fileName);
   }
-  else if(!strcmp(ext, ".unv") || !strcmp(ext, ".UNV")){
-    status = m->readUNV(name);
+  else if(ext == ".unv" || ext == ".UNV"){
+    status = GModel::current()->readUNV(fileName);
   }
-  else if(!strcmp(ext, ".wrl") || !strcmp(ext, ".WRL") || 
-          !strcmp(ext, ".vrml") || !strcmp(ext, ".VRML") ||
-          !strcmp(ext, ".iv") || !strcmp(ext, ".IV")){
-    status = m->readVRML(name);
+  else if(ext == ".vtk" || ext == ".VTK"){
+    status = GModel::current()->readVTK(fileName, CTX::instance()->bigEndian);
   }
-  else if(!strcmp(ext, ".mesh") || !strcmp(ext, ".MESH")){
-    status = m->readMESH(name);
+  else if(ext == ".wrl" || ext == ".WRL" || ext == ".vrml" || ext == ".VRML" ||
+          ext == ".iv" || ext == ".IV"){
+    status = GModel::current()->readVRML(fileName);
   }
+  else if(ext == ".mesh" || ext == ".MESH"){
+    status = GModel::current()->readMESH(fileName);
+  }
+  else if(ext == ".med" || ext == ".MED" || ext == ".mmed" || ext == ".MMED" ||
+          ext == ".rmed" || ext == ".RMED"){
+    status = GModel::readMED(fileName);
 #if !defined(HAVE_NO_POST)
-  else if(!strcmp(ext, ".med") || !strcmp(ext, ".MED") ||
-	  !strcmp(ext, ".mmed") || !strcmp(ext, ".MMED") ||
-	  !strcmp(ext, ".rmed") || !strcmp(ext, ".RMED")){
-    status = GModel::readMED(name);
-    if(status > 1) status = PView::readMED(name);
-  }
+    if(status > 1) status = PView::readMED(fileName);
 #endif
-  else if(!strcmp(ext, ".bdf") || !strcmp(ext, ".BDF") ||
-          !strcmp(ext, ".nas") || !strcmp(ext, ".NAS")){
-    status = m->readBDF(name);
   }
-  else if(!strcmp(ext, ".p3d") || !strcmp(ext, ".P3D")){
-    status = m->readP3D(name);
+  else if(ext == ".bdf" || ext == ".BDF" || ext == ".nas" || ext == ".NAS"){
+    status = GModel::current()->readBDF(fileName);
   }
-  else if(!strcmp(ext, ".fm") || !strcmp(ext, ".FM")) {
-    status = m->readFourier(name);
+  else if(ext == ".p3d" || ext == ".P3D"){
+    status = GModel::current()->readP3D(fileName);
+  }
+  else if(ext == ".fm" || ext == ".FM") {
+    status = GModel::current()->readFourier(fileName);
   }
 #if defined(HAVE_FLTK)
-  else if(!strcmp(ext, ".pnm") || !strcmp(ext, ".PNM") ||
-          !strcmp(ext, ".pbm") || !strcmp(ext, ".PBM") ||
-          !strcmp(ext, ".pgm") || !strcmp(ext, ".PGM") ||
-          !strcmp(ext, ".ppm") || !strcmp(ext, ".PPM")) {
-    status = read_pnm(name);
+  else if(ext == ".pnm" || ext == ".PNM" || ext == ".pbm" || ext == ".PBM" ||
+          ext == ".pgm" || ext == ".PGM" || ext == ".ppm" || ext == ".PPM") {
+    status = read_pnm(fileName);
   }
-  else if(!strcmp(ext, ".bmp") || !strcmp(ext, ".BMP")) {
-    status = read_bmp(name);
+  else if(ext == ".bmp" || ext == ".BMP") {
+    status = read_bmp(fileName);
   }
 #if defined(HAVE_LIBJPEG)
-  else if(!strcmp(ext, ".jpg") || !strcmp(ext, ".JPG") ||
-          !strcmp(ext, ".jpeg") || !strcmp(ext, ".JPEG")) {
-    status = read_jpeg(name);
+  else if(ext == ".jpg" || ext == ".JPG" || ext == ".jpeg" || ext == ".JPEG") {
+    status = read_jpeg(fileName);
   }
 #endif
 #if defined(HAVE_LIBPNG)
-  else if(!strcmp(ext, ".png") || !strcmp(ext, ".PNG")) {
-    status = read_png(name);
+  else if(ext == ".png" || ext == ".PNG") {
+    status = read_png(fileName);
   }
 #endif
 #endif
   else {
-    CTX.geom.draw = 1;
+    CTX::instance()->geom.draw = 1;
     if(!strncmp(header, "$PTS", 4) || !strncmp(header, "$NO", 3) || 
        !strncmp(header, "$PARA", 5) || !strncmp(header, "$ELM", 4) ||
-       !strncmp(header, "$MeshFormat", 11)) {
-      status = m->readMSH(name);
+       !strncmp(header, "$MeshFormat", 11) || !strncmp(header, "$Comments", 9)) {
+
+      // MATCHER
+      if(CTX::instance()->geom.matchGeomAndMesh  && !GModel::current()->empty() ) {
+        GModel* tmp_model = new GModel();
+        tmp_model->readMSH(fileName);
+        //tmp_model->scaleMesh(1000);
+        int match_status = GeomMeshMatcher::instance()->match(GModel::current(), tmp_model);
+        if (match_status)
+          fileName = "out.msh";
+        delete tmp_model;
+      }
+      // MATCHER END
+
+      status = GModel::current()->readMSH(fileName);
 #if !defined(HAVE_NO_POST)
-      if(status > 1) status = PView::readMSH(name);
+      if(status > 1) status = PView::readMSH(fileName);
 #endif
+      if(CTX::instance()->mesh.order > 1) 
+        SetOrderN(GModel::current(), CTX::instance()->mesh.order,
+                  CTX::instance()->mesh.secondOrderLinear, 
+                  CTX::instance()->mesh.secondOrderIncomplete);
     }
 #if !defined(HAVE_NO_POST)
     else if(!strncmp(header, "$PostFormat", 11) || 
             !strncmp(header, "$View", 5)) {
-      status = PView::readPOS(name);
+      status = PView::readPOS(fileName);
     }
 #endif
     else {
-      status = m->readGEO(name);
+      status = GModel::readGEO(fileName);
     }
   }
 
   SetBoundingBox();
 
-  CTX.geom.draw = 1;
-  CTX.mesh.changed = ENT_ALL;
+  CTX::instance()->geom.draw = 1;
+  CTX::instance()->mesh.changed = ENT_ALL;
 
 #if defined(HAVE_FLTK) && !defined(HAVE_NO_POST)
-  if(!CTX.batch && numViewsBefore != (int)PView::list.size())
-    WID->update_views();
+  if(FlGui::available() && numViewsBefore != (int)PView::list.size())
+    FlGui::instance()->updateViews();
 #endif
 
-  Msg::StatusBar(2, true, "Read '%s'", name);
+  if(!status) Msg::Error("Error loading '%s'", fileName.c_str());
+  Msg::StatusBar(2, true, "Read '%s'", fileName.c_str());
   return status;
 }
 
-void OpenProject(const char *name)
+void ClearProject()
 {
-  if(CTX.threads_lock) {
+#if !defined(HAVE_NO_POST)
+  for(int i = PView::list.size() - 1; i >= 0; i--)
+    delete PView::list[i];
+#endif
+#if !defined(HAVE_NO_PARSER)
+  gmsh_yysymbols.clear();
+#endif
+  for(int i = GModel::list.size() - 1; i >= 0; i--)
+    delete GModel::list[i];
+  new GModel();
+  SetProjectName(CTX::instance()->defaultFileName);
+#if defined(HAVE_FLTK)
+  if(FlGui::available()){
+    FlGui::instance()->setGraphicTitle(GModel::current()->getFileName());
+    FlGui::instance()->resetVisibility();
+    FlGui::instance()->updateViews();
+    FlGui::instance()->updateFields();
+    GModel::current()->setSelection(0);
+  }
+#endif
+}
+
+void OpenProject(std::string fileName)
+{
+  if(CTX::instance()->lock) {
     Msg::Info("I'm busy! Ask me that later...");
     return;
   }
-  CTX.threads_lock = 1;
+  CTX::instance()->lock = 1;
 
-  // FIXME: this will change once we clarify Open/Merge/Clear
-#if !defined(HAVE_NO_POST)
-  for(int i = PView::list.size() - 1; i >= 0; i--)
-    if(PView::list[i]->getData()->hasModel(GModel::current()))
-      delete PView::list[i];
+  if(GModel::current()->empty()){
+    // if the current model is empty, make sure it's reaaally
+    // cleaned-up, and reuse it (don't clear the parser variables: if
+    // the model is empty we probably just launched gmsh, and we don't
+    // want to delete variables set e.g. using the -string command
+    // line option)
+    GModel::current()->destroy();
+    GModel::current()->getGEOInternals()->destroy();
+  }
+  else{
+    // if the current model is not empty make it invisible, clear the
+    // parser variables and add a new model
+    GModel::current()->setVisibility(0);
+#if !defined(HAVE_NO_PARSER)
+    gmsh_yysymbols.clear();
 #endif
-  GModel::current()->destroy();
-  GModel::current()->getGEOInternals()->destroy();
+    new GModel();
+    GModel::current(GModel::list.size() - 1);
+  }
 
   // temporary hack until we fill the current GModel on the fly during
   // parsing
   ResetTemporaryBoundingBox();
 
-  SetProjectName(name);
-  MergeFile(name);
+  // merge the file
+  MergeFile(fileName);
 
-  CTX.threads_lock = 0;
+  // merge the associated option file if there is one
+  if(!StatFile(fileName + ".opt"))
+    MergeFile(fileName + ".opt");
+
+  CTX::instance()->lock = 0;
 
 #if defined(HAVE_FLTK)
-  if(!CTX.batch){
-    WID->reset_visibility();
-    WID->update_views();
+  if(FlGui::available()){
+    FlGui::instance()->resetVisibility();
+    FlGui::instance()->updateViews();
+    FlGui::instance()->updateFields();
+    GModel::current()->setSelection(0);
   }
-  ZeroHighlight();
 #endif
 }
 
-void OpenProjectMacFinder(const char *filename)
+void OpenProjectMacFinder(const char *fileName)
 {
+#if defined(HAVE_FLTK)
   static int first = 1;
-  if(first || CTX.batch){
+  if(first || !FlGui::available()){
     // just copy the filename: it will be opened when the GUI is ready
     // in main()
-    strncpy(CTX.filename, filename, 255);
+    GModel::current()->setFileName(fileName);
     first = 0;
   }
   else{
-    OpenProject(filename);
-#if defined(HAVE_FLTK)
-    Draw();
-#endif
+    OpenProject(fileName);
+    drawContext::global()->draw();
   }
+#endif
 }

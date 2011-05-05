@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -8,7 +8,7 @@
 
 #include "Plugin.h"
 
-class GMSH_LevelsetPlugin : public GMSH_Post_Plugin
+class GMSH_LevelsetPlugin : public GMSH_PostPlugin
 {
  private:
   double _invert;
@@ -22,10 +22,10 @@ class GMSH_LevelsetPlugin : public GMSH_Post_Plugin
                           PViewDataList *out);
  protected:
   double _ref[3], _targetError;
-  int _valueTimeStep, _valueView, _valueIndependent, _recurLevel, _extractVolume;  
+  int _valueTimeStep, _valueView, _valueIndependent, _recurLevel, _extractVolume;
   typedef enum {NONE, PLANE, SPHERE, MAP} ORIENTATION;
   ORIENTATION _orientation;
-public:
+ public:
   GMSH_LevelsetPlugin();
   virtual double levelset(double x, double y, double z, double val) const = 0;
   virtual PView *execute(PView *);

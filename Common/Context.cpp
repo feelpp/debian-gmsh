@@ -1,101 +1,130 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
-#include "Numeric.h"
+#include <stdlib.h>
+#include <string.h>
+#include "GmshConfig.h"
 #include "Context.h"
-#include "Trackball.h"
 
-// the single static option context
-Context_T CTX;
+#if defined(HAVE_FLTK)
+#include <FL/Fl.H>
+#endif
 
-void Context_T::buildRotationMatrix(void)
+static const char *getEnvironmentVariable(const char *var)
 {
-  if(useTrackball) {
-    build_rotmatrix(rot, quaternion);
-    setEulerAnglesFromRotationMatrix();
-  }
-  else {
-    double x = r[0] * M_PI / 180.;
-    double y = r[1] * M_PI / 180.;
-    double z = r[2] * M_PI / 180.;
-    double A = cos(x);
-    double B = sin(x);
-    double C = cos(y);
-    double D = sin(y);
-    double E = cos(z);
-    double F = sin(z);
-    double AD = A * D;
-    double BD = B * D;
-    rot[0] = C*E; rot[1] = BD*E+A*F; rot[2] =-AD*E+B*F; rot[3] = 0.;
-    rot[4] =-C*F; rot[5] =-BD*F+A*E; rot[6] = AD*F+B*E; rot[7] = 0.;
-    rot[8] = D;   rot[9] =-B*C;      rot[10] = A*C;     rot[11] = 0.;
-    rot[12] = 0.; rot[13] = 0.;      rot[14] = 0.;      rot[15] = 1.;
-    setQuaternionFromEulerAngles();
-  }
+#if !defined(WIN32)
+  return getenv(var);
+#else
+  const char *tmp = getenv(var);
+  // Don't accept top dir or anything partially expanded like
+  // c:\Documents and Settings\%USERPROFILE%, etc.
+  if(!tmp || !strcmp(tmp, "/") || strstr(tmp, "%") || strstr(tmp, "$"))
+    return 0;
+  else
+    return tmp;
+#endif
 }
 
-void Context_T::addQuaternion(double p1x, double p1y, double p2x, double p2y)
+CTX::CTX()
 {
-  double quat[4];
-  trackball(quat, p1x, p1y, p2x, p2y);
-  add_quats(quat, quaternion, quaternion);
+  // Initialize everything that has no default value in
+  // DefaultOptions.h
+
+  short int word = 0x0001;
+  char *byte = (char*)&word;
+  bigEndian = (byte[0] ? 0 : 1);
+
+  const char *tmp;
+  if((tmp = getEnvironmentVariable("GMSH_HOME")))
+    homeDir = tmp;
+  else if((tmp = getEnvironmentVariable("HOME")))
+    homeDir = tmp;
+  else if((tmp = getEnvironmentVariable("TMP")))
+    homeDir = tmp;
+  else if((tmp = getEnvironmentVariable("TEMP")))
+    homeDir = tmp;
+  else
+    homeDir = "";
+  int len = homeDir.size();
+  if(len && homeDir[len - 1] != '/')
+    homeDir += "/";
+
+  batch = batchAfterMesh = 0;
+  outputFileName = "";
+  bgmFileName = "";
+  createAppendMeshStatReport = 0;
+  lc = 1.;
+  min[0] = min[1] = min[2] = max[2] = 0.; 
+  max[0] = max[1] = 1.; // for nice view when adding point in new model
+  cg[0] = cg[1] = cg[2] = 0.;
+  polygonOffset = 0;
+  printing = 0;
+  meshTimer[0] = meshTimer[1] = meshTimer[2] = 0.;
+  drawRotationCenter = 0;
+  pickElements = 0;
+  geom.draw = 1;
+  mesh.draw = 1;
+  post.draw = 1;
+  lock = 0; // very primitive locking
+  mesh.changed = 0;
+  post.combineTime = 0; // try to combineTime views at startup
+#if defined(HAVE_FLTK)
+  glFontEnum = FL_HELVETICA;
+#else
+  glFontEnum = -1;
+#endif
+  forcedBBox = 0;
+  hideUnselected = 0;
+  numWindows = numTiles = 1;
+  deltaFontSize = 0;
 }
 
-void Context_T::addQuaternionFromAxisAndAngle(double axis[3], double angle)
+CTX *CTX::_instance = 0;
+
+CTX *CTX::instance()
 {
-  double a = angle * M_PI / 180.;
-  double quat[4];
-  axis_to_quat(axis, a, quat);
-  add_quats(quat, quaternion, quaternion);  
+  if(!_instance) _instance = new CTX();
+  return _instance;
 }
 
-void Context_T::setQuaternion(double q0, double q1, double q2, double q3)
+unsigned int CTX::packColor(int R, int G, int B, int A)
 {
-  quaternion[0] = q0;
-  quaternion[1] = q1;
-  quaternion[2] = q2;
-  quaternion[3] = q3;
+  if(bigEndian)
+    return ( (unsigned int)((R)<<24 | (G)<<16 | (B)<<8 | (A)) );
+  else
+    return ( (unsigned int)((A)<<24 | (B)<<16 | (G)<<8 | (R)) );
 }
 
-void Context_T::setQuaternionFromEulerAngles()
+int CTX::unpackRed(unsigned int X)
 {
-  double x = r[0] * M_PI / 180.;
-  double y = r[1] * M_PI / 180.;
-  double z = r[2] * M_PI / 180.;
-  double xx[3] = {1.,0.,0.};
-  double yy[3] = {0.,1.,0.};
-  double zz[3] = {0.,0.,1.};
-  double q1[4], q2[4], q3[4], tmp[4];
-  axis_to_quat(xx, -x, q1);
-  axis_to_quat(yy, -y, q2);
-  axis_to_quat(zz, -z, q3);
-  add_quats(q1, q2, tmp);
-  add_quats(tmp, q3, quaternion);
+  if(bigEndian)
+    return ( ( (X) >> 24 ) & 0xff );
+  else
+    return ( (X) & 0xff );
 }
 
-void Context_T::setEulerAnglesFromRotationMatrix()
+int CTX::unpackGreen(unsigned int X)
 {
-  r[1] = asin(rot[8]); // Calculate Y-axis angle
-  double C =  cos(r[1]);
-  r[1] *=  180. / M_PI;
-  if(fabs(C) > 0.005){ // Gimball lock?
-    double tmpx =  rot[10] / C; // No, so get X-axis angle
-    double tmpy = -rot[9] / C;
-    r[0] = atan2(tmpy, tmpx) * 180. / M_PI;
-    tmpx =  rot[0] / C; // Get Z-axis angle
-    tmpy = -rot[4] / C;
-    r[2] = atan2(tmpy, tmpx) * 180. / M_PI;
-  }
-  else{ // Gimball lock has occurred
-    r[0] = 0.; // Set X-axis angle to zero
-    double tmpx = rot[5]; // And calculate Z-axis angle
-    double tmpy = rot[1];
-    r[2] = atan2(tmpy, tmpx) * 180. / M_PI;
-  }
-  // return only positive angles in [0,360]
-  if(r[0] < 0.) r[0] += 360.;
-  if(r[1] < 0.) r[1] += 360.;
-  if(r[2] < 0.) r[2] += 360.;
+  if(bigEndian)
+    return ( ( (X) >> 16 ) & 0xff );
+  else
+    return ( ( (X) >> 8 ) & 0xff );
+}
+
+int CTX::unpackBlue(unsigned int X)
+{
+  if(bigEndian)
+    return ( ( (X) >> 8 ) & 0xff );
+  else
+    return ( ( (X) >> 16 ) & 0xff );
+}
+
+int CTX::unpackAlpha(unsigned int X)
+{
+  if(bigEndian)
+    return ( (X) & 0xff );
+  else
+    return ( ( (X) >> 24 ) & 0xff );
 }

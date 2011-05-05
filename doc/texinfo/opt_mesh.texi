@@ -5,12 +5,12 @@
 
 @ftable @code
 @item Mesh.Algorithm
-2D mesh algorithm (1=MeshAdapt+Delaunay, 4=MeshAdapt, 5=Delaunay)@*
+2D mesh algorithm (1=MeshAdapt, 5=Delaunay, 6=Frontal)@*
 Default value: @code{1}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.Algorithm3D
-3D mesh algorithm (1=Tetgen+Delaunay, 4=Netgen)@*
+3D mesh algorithm (1=Delaunay, 4=Frontal)@*
 Default value: @code{1}@*
 Saved in: @code{General.OptionsFileName}
 
@@ -29,8 +29,88 @@ Field format for Nastran BDF files (0=free, 1=small, 2=large)@*
 Default value: @code{1}@*
 Saved in: @code{General.OptionsFileName}
 
-@item Mesh.C1Continuity
-Impose C1 continuity to high order meshes (only valid in 2D plane and ElemenOrder = 2)@*
+@item Mesh.Binary
+Write mesh files in binary format (if possible)@*
+Default value: @code{0}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.ChacoArchitecture
+(Adv. Chaco): Parallel architecture topology (0=hypercube, 1-3=mesh dimensions)@*
+Default value: @code{1}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.ChacoEigensolver
+(Adv. Chaco): Type of eigensolver for a spectral algorithm (0=Lanczos, 1=Multilevel RQI/Symmlq)@*
+Default value: @code{1}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.ChacoEigTol
+(Adv. Chaco): Tolerance of the eigensolver for spectral or multilevel-KL algorithms@*
+Default value: @code{0.001}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.ChacoGlobalMethod
+Chaco partitioning algorithm (1=Multilevel-KL, 2=Spectral, 4=Linear, 5=Random, 6=Scattered)@*
+Default value: @code{1}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.ChacoHypercubeDim
+(Adv. Chaco): Dimensional partitioning for a hypercube topology@*
+Default value: @code{2}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.ChacoLocalMethod
+(Adv. Chaco): Local partitioning algorithm@*
+Default value: @code{1}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.ChacoMeshDim1
+(Adv. Chaco): Number of partitions in the first dimension of a mesh topology@*
+Default value: @code{4}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.ChacoMeshDim2
+(Adv. Chaco): Number of partitions in the second dimension of a mesh topology@*
+Default value: @code{1}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.ChacoMeshDim3
+(Adv. Chaco): Number of partitions in the third dimension of a mesh topology@*
+Default value: @code{1}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.ChacoPartitionSection
+(Adv. Chaco): Partition by (1=bisection, 2=quadrisection, 3=octasection@*
+Default value: @code{1}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.ChacoSeed
+(Adv. Chaco): Seed for random number generator@*
+Default value: @code{7.65432e+06}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.ChacoVMax
+(Adv. Chaco): Maximum vertices in a coarse graph (for multilevel-KL algorithm and Multilevel RQI/Symmlq eigensolver)@*
+Default value: @code{250}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.ChacoParamINTERNAL_VERTICES
+(Adv. Chaco): Parameter INTERNAL_VERTICES@*
+Default value: @code{0}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.ChacoParamREFINE_MAP
+(Adv. Chaco): Parameter REFINE_MAP@*
+Default value: @code{1}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.ChacoParamREFINE_PARTITION
+(Adv. Chaco): Parameter REFINE_PARTITION@*
+Default value: @code{0}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.ChacoParamTERMINAL_PROPOGATION
+(Adv. Chaco): Parameter TERMINAL_PROPOGATION@*
 Default value: @code{0}@*
 Saved in: @code{General.OptionsFileName}
 
@@ -63,6 +143,11 @@ Saved in: @code{General.OptionsFileName}
 Compute characteristic lengths from values given at geometry points@*
 Default value: @code{1}@*
 Saved in: @code{General.OptionsFileName}
+
+@item Mesh.Clip
+Enable clipping planes? (Plane[i]=2^i, i=0,...,5)@*
+Default value: @code{0}@*
+Saved in: @code{-}
 
 @item Mesh.ColorCarousel
 Mesh coloring (0=by element type, 1=by elementary entity, 2=by physical entity, 3=by partition)@*
@@ -114,6 +199,11 @@ Type of element label (0=element number, 1=elementary entity number, 2=physical 
 Default value: @code{0}@*
 Saved in: @code{General.OptionsFileName}
 
+@item Mesh.LcIntegrationPrecision
+Accuracy of evaluation of the LC field for 1D mesh generation@*
+Default value: @code{1e-09}@*
+Saved in: @code{General.OptionsFileName}
+
 @item Mesh.Light
 Enable lighting for the mesh@*
 Default value: @code{1}@*
@@ -144,6 +234,26 @@ Display width of mesh lines (in pixels)@*
 Default value: @code{1}@*
 Saved in: @code{General.OptionsFileName}
 
+@item Mesh.MeshOnlyVisible
+Mesh only visible entities (experimental: use with caution!)@*
+Default value: @code{0}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.MetisAlgorithm
+METIS partitioning algorithm (1=Recursive, 2=K-way)@*
+Default value: @code{1}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.MetisEdgeMatching
+(Adv. METIS): Determines the matching type (1=Random, 2=Heavy-Edge, 3=Sorted Heavy-Edge)@*
+Default value: @code{3}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.MetisRefinementAlgorithm
+(Adv. METIS): Algorithm for k-way refinement (1=Random, 2=Greedy, 3=Random with minimized connectivity)@*
+Default value: @code{3}@*
+Saved in: @code{General.OptionsFileName}
+
 @item Mesh.MinimumCirclePoints
 Minimum number of points used to mesh a circle@*
 Default value: @code{7}@*
@@ -154,14 +264,9 @@ Minimum number of points used to mesh a (non-straight) curve@*
 Default value: @code{3}@*
 Saved in: @code{General.OptionsFileName}
 
-@item Mesh.MshBinary
-Write MSH files in binary format?@*
-Default value: @code{0}@*
-Saved in: @code{General.OptionsFileName}
-
 @item Mesh.MshFileVersion
 Version of the MSH file format to use@*
-Default value: @code{2}@*
+Default value: @code{2.1}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.NbHexahedra
@@ -173,6 +278,11 @@ Saved in: @code{-}
 Number of nodes in the current mesh (read-only)@*
 Default value: @code{0}@*
 Saved in: @code{-}
+
+@item Mesh.NbPartitions
+Number of partitions@*
+Default value: @code{4}@*
+Saved in: @code{General.OptionsFileName}
 
 @item Mesh.NbPrisms
 Number of prisms in the current mesh (read-only)@*
@@ -204,6 +314,11 @@ Display size of normal vectors (in pixels)@*
 Default value: @code{0}@*
 Saved in: @code{General.OptionsFileName}
 
+@item Mesh.NumSubEdges
+Number of edge subdivisions when displaying high order elements@*
+Default value: @code{2}@*
+Saved in: @code{General.OptionsFileName}
+
 @item Mesh.Optimize
 Optimize the mesh to improve the quality of tetrahedral elements@*
 Default value: @code{0}@*
@@ -212,6 +327,11 @@ Saved in: @code{General.OptionsFileName}
 @item Mesh.OptimizeNetgen
 Optimize the mesh using Netgen to improve the quality of tetrahedral elements@*
 Default value: @code{0}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.Partitioner
+Partitioner software (1=Chacho, 2=METIS)@*
+Default value: @code{2}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.Points
@@ -275,18 +395,13 @@ Default value: @code{0}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.RandomFactor
-Random factor used in 2D and 3D meshing algorithm (test other values when the algorithm fails)@*
+Random factor used in the 2D meshing algorithm (should be increased if RandomFactor * size(triangle)/size(model) approaches machine accuracy)@*
 Default value: @code{1e-09}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.RefineSteps
 Number of refinement steps in the MeshAdapt-based 2D algorithms@*
 Default value: @code{10}@*
-Saved in: @code{General.OptionsFileName}
-
-@item Mesh.RecombineAlgo
-Recombine algorithm (1=mixed triangles-quadrangles, 2=all quadrangles)@*
-Default value: @code{1}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.ReverseAllNormals
@@ -299,10 +414,20 @@ Ignore Physical definitions and save all elements@*
 Default value: @code{0}@*
 Saved in: @code{-}
 
+@item Mesh.SaveElementTagType
+Type of the element tag saved in mesh formats that don't support saving physical or partition ids (1=elementary, 2=physical, 3=partition)@*
+Default value: @code{1}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.SaveParametric
+Save parametric coordinates of nodes@*
+Default value: @code{0}@*
+Saved in: @code{General.OptionsFileName}
+
 @item Mesh.SaveGroupsOfNodes
 Save groups of nodes for each physical line and surface (UNV mesh format only)@*
 Default value: @code{0}@*
-Saved in: @code{-}
+Saved in: @code{General.OptionsFileName}
 
 @item Mesh.ScalingFactor
 Global scaling factor applied to the saved mesh@*
@@ -324,11 +449,6 @@ Should second order vertices simply be created by linear interpolation?@*
 Default value: @code{0}@*
 Saved in: @code{General.OptionsFileName}
 
-@item Mesh.LcIntegrationPrecision
-Accuracy of evaluation of the LC field for 1D mesh generation@*
-Default value: @code{1e-09}@*
-Saved in: @code{General.OptionsFileName}
-
 @item Mesh.Smoothing
 Number of smoothing steps applied to the final mesh@*
 Default value: @code{1}@*
@@ -344,8 +464,8 @@ Smooth the mesh normals?@*
 Default value: @code{0}@*
 Saved in: @code{General.OptionsFileName}
 
-@item Mesh.StlBinary
-Save STL files in binary format?@*
+@item Mesh.SubdivisionAlgorithm
+Mesh subdivision algorithm (0=none, 1=all quadrangles, 2=all hexahedra)@*
 Default value: @code{0}@*
 Saved in: @code{General.OptionsFileName}
 
@@ -374,6 +494,11 @@ Display mesh tetrahedra?@*
 Default value: @code{1}@*
 Saved in: @code{General.OptionsFileName}
 
+@item Mesh.ToleranceEdgeLength
+Skip a model edge in mesh generation if its length is less than user's defined tolerance@*
+Default value: @code{0}@*
+Saved in: @code{General.OptionsFileName}
+
 @item Mesh.Triangles
 Display mesh triangles?@*
 Default value: @code{1}@*
@@ -391,6 +516,16 @@ Saved in: @code{General.OptionsFileName}
 
 @item Mesh.VolumeNumbers
 Display volume mesh element numbers?@*
+Default value: @code{0}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.Voronoi
+Display the voronoi diagram@*
+Default value: @code{0}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.ZoneDefinition
+Method for defining a zone (0=single zone, 1=by partition, 2=by physical)@*
 Default value: @code{0}@*
 Saved in: @code{General.OptionsFileName}
 

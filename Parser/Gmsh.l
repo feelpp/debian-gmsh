@@ -1,5 +1,5 @@
 %{
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -8,14 +8,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-
-#include "Message.h"
+#include "GmshMessage.h"
 #include "Geo.h"
 #include "Gmsh.tab.hpp"
-
-char gmsh_yyname[256] = "";
-int  gmsh_yyerrorstate = 0;
-int  gmsh_yyviewindex = 0;
 
 void   parsestring(char endchar);
 char  *strsave(char *ptr);
@@ -96,8 +91,6 @@ Atan2                   return tAtan2;
 ArcTan2                 return tAtan2;
 
 Bezier			return tBezier;
-Boundary		return tBoundary;
-Bump                    return tBump;
 BSpline			return tBSpline;
 BoundingBox             return tBoundingBox;
 
@@ -111,13 +104,15 @@ Characteristic          return tCharacteristic;
 Complex                 return tComplex;
 Color                   return tColor;
 ColorTable              return tColorTable;
+Compound                return tCompound;
 Coordinates             return tCoordinates;
 CatmullRom		return tSpline;
 Call                    return tCall;
+CreateTopology          return tCreateTopology;
 
 Delete                  return tDelete;
+Degenerated             return tDegenerated;
 Dilate                  return tDilate;
-Duplicata               return tDuplicata;
 Draw                    return tDraw;
 
 Exp                     return tExp;
@@ -149,8 +144,9 @@ Hypot                   return tHypot;
 In                      return tIn;
 If                      return tIf;
 Intersect               return tIntersect;
+INTERPOLATION_SCHEME    return tInterpolationScheme;
 
-Knots			return tKnots;
+Knots			return tNurbsKnots;
 
 Length                  return tLength;
 Line                    return tLine;
@@ -158,6 +154,7 @@ Loop                    return tLoop;
 Log                     return tLog;
 Log10                   return tLog10;
 Layers                  return tLayers;
+Levelset                return tLevelset;
 
 Modulo                  return tModulo;
 MPI_Rank                return tMPI_Rank;
@@ -165,14 +162,13 @@ MPI_Size                return tMPI_Size;
 
 Nurbs			return tNurbs;
 
-Order			return tOrder;
+Order			return tNurbsOrder;
+OCCShape  	        return tOCCShape;
 
 Physical                return tPhysical;
 Pi                      return tPi;
 Plane                   return tPlane;
 Point                   return tPoint;
-Power                   return tProgression;
-Progression             return tProgression;
 Parametric		return tParametric;
 PolarSphere             return tPolarSphere;
 Printf                  return tPrintf;
@@ -190,14 +186,19 @@ Sin                     return tSin;
 Sinh                    return tSinh;
 Sphere                  return tSphere;
 Spline                  return tSpline;
+Split                   return tSplit;
 Surface                 return tSurface;
-Symmetry                return tSymmetry;
 Sprintf                 return tSprintf;
 StrCat                  return tStrCat;
 StrPrefix               return tStrPrefix;
 StrRelative             return tStrRelative;
 Show                    return tShow;
+Symmetry                return tSymmetry;
+SyncModel               return tSyncModel;
 
+T2                      return tText2D;
+T3                      return tText3D;
+TIME                    return tTime;
 Transfinite             return tTransfinite;
 Translate               return tTranslate;
 Tanh                    return tTanh;
@@ -207,11 +208,6 @@ Today                   return tToday;
 Using                   return tUsing;
 
 Volume                  return tVolume;
-
-T2                      return tText2D;
-T3                      return tText3D;
-INTERPOLATION_SCHEME    return tInterpolationScheme;
-TIME                    return tTime;
 
 {digit}+ |
 {digit}+"."{digit}*({exp})? |
@@ -342,4 +338,4 @@ void skip_until(const char *skip, const char *until)
   }
 }
 
-void force_yyflush() { YY_FLUSH_BUFFER; }
+void gmsh_yyflush() { YY_FLUSH_BUFFER; }

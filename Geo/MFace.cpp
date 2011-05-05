@@ -1,62 +1,41 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
-// Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
-//
-// This program is free software; you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation; either version 2 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program; if not, write to the Free Software
-// Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
-// USA.
-// 
-// Please report all bugs and problems to <gmsh@geuz.org>.
 
+#include <vector>
+#include <algorithm>
+#include "GmshConfig.h"
 #include "MFace.h"
+#include "Numeric.h"
+#include "Context.h"
 
-#if defined(HAVE_GMSH_EMBEDDED)
-#  include "GmshEmbedded.h"
-#else
-#  include "Numeric.h"
-#  include "Context.h"
-#endif
-
-extern Context_T CTX;
-
-MFace::MFace() 
-{ 
-  for(int i = 0; i < 4; i++){
-    _v[i] = 0; 
-    _si[i] = 0;
-  }
+void sortVertices(std::vector<MVertex*> v, std::vector<char> &si)
+{
+  std::vector<MVertex*> sorted = v;
+  std::sort(sorted.begin(), sorted.end());
+  for(unsigned int i = 0; i < sorted.size(); i++)
+    si.push_back(std::distance(v.begin(), std::find(v.begin(), v.end(), sorted[i])));
 }
 
 MFace::MFace(MVertex *v0, MVertex *v1, MVertex *v2, MVertex *v3) 
 {
-  if(CTX.mesh.reverse_all_normals){
+  _v.push_back(v0);
+  if(CTX::instance()->mesh.reverseAllNormals){
     // Note that we cannot simply change the normal computation,
     // since OpenGL wants the normal to a polygon to be coherent
     // with the ordering of its vertices
-    if(v3){
-      _v[0] = v0; _v[1] = v3; _v[2] = v2; _v[3] = v1;
-    }
-    else{
-      _v[0] = v0; _v[1] = v2; _v[2] = v1; _v[3] = v3;
-    }
+    if(v3) _v.push_back(v3);
+    _v.push_back(v2);
+    _v.push_back(v1);
   }
   else{
-    _v[0] = v0; _v[1] = v1; _v[2] = v2; _v[3] = v3;
+    _v.push_back(v1);
+    _v.push_back(v2);
+    if(v3) _v.push_back(v3);
   }
-  // This is simply an unrolled insertion sort (hopefully fast).  Note that if
+  sortVertices(_v, _si);
+  /*// This is simply an unrolled insertion sort (hopefully fast).  Note that if
   // _v[3] == 0, _v[3] is not sorted.
   if(_v[1] < _v[0]) {
     _si[0] = 1;
@@ -92,7 +71,14 @@ MFace::MFace(MVertex *v0, MVertex *v1, MVertex *v2, MVertex *v3)
       _si[2] = 3;
   }
   else
-    _si[3] = 3;
+    _si[3] = 3;*/
+    
+}
+MFace::MFace(std::vector<MVertex*> v)
+{
+  for(unsigned int i = 0; i < v.size(); i++)
+    _v.push_back(v[i]);
+  sortVertices(_v,_si);
 }
 
 SVector3 MFace::normal() const
@@ -104,3 +90,23 @@ SVector3 MFace::normal() const
   return SVector3(n[0], n[1], n[2]);
 }
 
+bool MFace::computeCorrespondence(const MFace &other, int &rotation, bool &swap) const
+{
+  rotation = 0;
+  swap = false;
+  
+  if (*this == other) {
+    for (int i = 0; i < getNumVertices(); i++) {
+      if (_v[0] == other.getVertex(i)) {
+        rotation = i;
+        break;
+      }
+    }
+    if (_v[1] == other.getVertex((rotation + 1) % getNumVertices())) swap = false;
+    else swap = true;
+    return true;
+  }
+  return false;
+}
+
+  

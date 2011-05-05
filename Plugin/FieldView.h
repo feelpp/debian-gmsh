@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -13,12 +13,12 @@ extern "C"
   GMSH_Plugin *GMSH_RegisterFieldViewPlugin();
 }
 
-class GMSH_FieldViewPlugin : public GMSH_Post_Plugin
+class GMSH_FieldViewPlugin : public GMSH_PostPlugin
 {
  public:
-  void getName(char *name) const;
-  void getInfos(char *author, char *copyright, char *help_text) const;
-  void catchErrorMessage(char *errorMessage) const;
+  std::string getName() const { return "FieldView"; }
+  std::string getHelp() const;
+  std::string getAuthor() const { return "J. Lambrechts"; }
   int getNbOptions() const;
   StringXNumber* getOption(int iopt);  
   PView *execute(PView *);

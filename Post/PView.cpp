@@ -1,21 +1,18 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
-//
-// Contributor(s):
-// 
 
 #include <string.h>
 #include <algorithm>
 #include "PView.h"
-#include "PViewOptions.h"
-#include "PViewData.h"
 #include "PViewDataList.h"
+#include "PViewDataGModel.h"
+#include "PViewOptions.h"
 #include "VertexArray.h"
 #include "SmoothData.h"
 #include "adaptiveData.h"
-#include "Message.h"
+#include "GmshMessage.h"
 
 int PView::_globalNum = 0;
 std::vector<PView*> PView::list;
@@ -32,11 +29,14 @@ void PView::_init()
   for(unsigned int i = 0; i < list.size(); i++) list[i]->setIndex(i);
 }
 
-PView::PView(bool allocate)
+PView::PView()
 {
   _init();
-  _data = new PViewDataList(allocate);
+  _data = new PViewDataList();
   _options = new PViewOptions(PViewOptions::reference);
+  if(_options->adaptVisualizationGrid)
+    _data->initAdaptiveData(_options->timeStep, _options->maxRecursionLevel,
+                            _options->targetError);
 }
 
 PView::PView(PViewData *data)
@@ -44,6 +44,9 @@ PView::PView(PViewData *data)
   _init();
   _data = data;
   _options = new PViewOptions(PViewOptions::reference);
+  if(_options->adaptVisualizationGrid)
+    _data->initAdaptiveData(_options->timeStep, _options->maxRecursionLevel,
+                            _options->targetError);
 }
 
 PView::PView(PView *ref, bool copyOptions)
@@ -55,37 +58,74 @@ PView::PView(PView *ref, bool copyOptions)
     _options = new PViewOptions(*ref->getOptions());
   else
     _options = new PViewOptions(PViewOptions::reference);
+  if(_options->adaptVisualizationGrid)
+    _data->initAdaptiveData(_options->timeStep, _options->maxRecursionLevel,
+                            _options->targetError);
 }
 
 PView::PView(std::string xname, std::string yname,
              std::vector<double> &x, std::vector<double> &y)
 {
   _init();
-  PViewDataList *data = new PViewDataList(true);
-  _data = data;
+  PViewDataList *data = new PViewDataList();
   for(unsigned int i = 0; i < y.size(); i++){
     double d;
     if(x.size() == y.size()){
-      List_Add(data->SP, &x[i]);
+      data->SP.push_back(x[i]);
     }
     else{
       d = y.size() > 1 ? (double)i / (double)(y.size() - 1) : 0.;
-      List_Add(data->SP, &d);
+      data->SP.push_back(d);
     }
     d = 0.;
-    List_Add(data->SP, &d);
-    List_Add(data->SP, &d);
-    List_Add(data->SP, &y[i]);
+    data->SP.push_back(d);
+    data->SP.push_back(d);
+    data->SP.push_back(y[i]);
     data->NbSP++;
   }
   data->setName(yname);
   data->setFileName(yname + ".pos");
   data->finalize();
-
+  _data = data;
   _options = new PViewOptions(PViewOptions::reference);
-  _options->Type = PViewOptions::Plot2DSpace;
-  _options->Axes = 2;
-  strcpy(_options->AxesLabel[0], xname.c_str());
+  _options->type = PViewOptions::Plot2DSpace;
+  _options->axes = 2;
+  _options->axesLabel[0] = xname;
+}
+
+PView::PView(std::string name, std::string type, 
+             GModel *model, std::map<int, std::vector<double> > &data,
+             double time)
+{
+  _init();
+  PViewDataGModel::DataType t;
+  if(type == "NodeData")
+    t = PViewDataGModel::NodeData;
+  else if(type == "ElementData")
+    t = PViewDataGModel::ElementData;
+  else if(type == "ElementNodeData")
+    t = PViewDataGModel::ElementNodeData;
+  else{
+    Msg::Error("Unknown type of view to create '%s'", type.c_str());
+    return;
+  }
+  PViewDataGModel *d = new PViewDataGModel(t);
+  d->addData(model, data, 0, time, 1);
+  d->setName(name);
+  d->setFileName(name + ".msh");
+  _data = d;
+  _options = new PViewOptions(PViewOptions::reference);
+  if(_options->adaptVisualizationGrid)
+    _data->initAdaptiveData(_options->timeStep, _options->maxRecursionLevel,
+                            _options->targetError);
+}
+
+void PView::addStep(GModel *model, std::map<int, std::vector<double> > &data, 
+                    double time)
+{
+  PViewDataGModel *d = dynamic_cast<PViewDataGModel*>(_data);
+  if(d) d->addData(model, data, d->getNumTimeSteps(), time, 1);
+  else Msg::Error("Can only add step data to model-based datasets");
 }
 
 PView::~PView()
@@ -134,9 +174,10 @@ void PView::setOptions(PViewOptions *val)
 
 PViewData *PView::getData(bool useAdaptiveIfAvailable)
 { 
-  if(useAdaptiveIfAvailable && _data->isAdaptive()) 
+  if(useAdaptiveIfAvailable && _data->isAdaptive())
     return _data->getAdaptiveData()->getData();
-  return _data;
+  else
+    return _data;
 }
 
 void PView::setChanged(bool val)
@@ -158,7 +199,7 @@ void PView::combine(bool time, int how, bool remove)
   for(unsigned int i = 0; i < list.size(); i++) {
     PView *p = list[i];
     PViewData *data = p->getData();
-    if(how || p->getOptions()->Visible) {
+    if(how || p->getOptions()->visible) {
       nameData nd;
       // this will lead to weird results if there are views named
       // "__all__" or "__vis__" :-)
@@ -189,12 +230,23 @@ void PView::combine(bool time, int how, bool remove)
   for(unsigned int i = 0; i < nds.size(); i++){
     if(nds[i].data.size() > 1){
       // there's potentially something to combine
-      PView *p = new PView(true);
+      PView *p = new PView();
       PViewData *data = p->getData();
       bool res = time ? data->combineTime(nds[i]): data->combineSpace(nds[i]);
-      if(res)
+      if(res){
         for(unsigned int j = 0; j < nds[i].indices.size(); j++)
           rm.insert(list[nds[i].indices[j]]);
+
+        PViewOptions *opt = p->getOptions();
+        if(opt->adaptVisualizationGrid){
+          // the (empty) adaptive data created in PView() must be
+          // recreated, since we added some data
+          data->destroyAdaptiveData();
+          data->initAdaptiveData
+            (opt->timeStep, opt->maxRecursionLevel, opt->targetError);
+        }
+
+      }
       else
         delete p;
     }

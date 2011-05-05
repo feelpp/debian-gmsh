@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2008 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -6,7 +6,7 @@
 #include "meshGRegionLocalMeshMod.h"
 #include "GEntity.h"
 #include "GRegion.h"
-#include "Message.h"
+#include "GmshMessage.h"
 #include "Numeric.h"
 
 static int edges[6][2] =    {{0,1},{0,2},{0,3},{1,2},{1,3},{2,3}};
@@ -50,12 +50,9 @@ void computeNeighboringTetsOfACavity(const std::vector<MTet4*> &cavity,
   }
 }
                    
-bool gmshBuildEdgeCavity(MTet4 *t, 
-                         int iLocalEdge, 
-                         MVertex **v1,MVertex **v2,
-                         std::vector<MTet4*> &cavity,
-                         std::vector<MTet4*> &outside,
-                         std::vector<MVertex*> &ring)
+bool buildEdgeCavity(MTet4 *t, int iLocalEdge, MVertex **v1, MVertex **v2,
+                     std::vector<MTet4*> &cavity, std::vector<MTet4*> &outside,
+                     std::vector<MVertex*> &ring)
 {
   cavity.clear();
   ring.clear();
@@ -142,7 +139,6 @@ void BuildSwapPattern4(SwapPattern *sc)
   sc->trianguls = trgul ;
 }
 
-
 void BuildSwapPattern5(SwapPattern *sc)
 {
   static int trgl[][3] = 
@@ -202,17 +198,17 @@ void BuildSwapPattern7(SwapPattern *sc)
   sc->trianguls = trgul ;
 }
 
-bool gmshEdgeSwap (std::vector<MTet4 *> &newTets,
-                   MTet4 *tet, 
-                   int iLocalEdge,
-                   const gmshQualityMeasure4Tet &cr)
+bool edgeSwap(std::vector<MTet4 *> &newTets,
+              MTet4 *tet, 
+              int iLocalEdge,
+              const qualityMeasure4Tet &cr)
 {
   std::vector<MTet4*> cavity;
   std::vector<MTet4*> outside;
   std::vector<MVertex*> ring;
   MVertex *v1, *v2;
 
-  bool closed = gmshBuildEdgeCavity(tet, iLocalEdge, &v1, &v2, cavity, outside, ring);
+  bool closed = buildEdgeCavity(tet, iLocalEdge, &v1, &v2, cavity, outside, ring);
 
   if (!closed) return false;
   
@@ -310,18 +306,15 @@ bool gmshEdgeSwap (std::vector<MTet4 *> &newTets,
   return true;
 }
 
-bool gmshEdgeSplit(std::vector<MTet4 *> &newTets,
-                   MTet4 *tet,
-                   MVertex *newVertex,
-                   int iLocalEdge,
-                   const gmshQualityMeasure4Tet &cr)
+bool edgeSplit(std::vector<MTet4 *> &newTets, MTet4 *tet, MVertex *newVertex,
+               int iLocalEdge, const qualityMeasure4Tet &cr)
 {
   std::vector<MTet4*> cavity;
   std::vector<MTet4*> outside;
   std::vector<MVertex*> ring;
   MVertex *v1, *v2;
 
-  bool closed = gmshBuildEdgeCavity(tet, iLocalEdge, &v1, &v2, cavity, outside, ring);
+  bool closed = buildEdgeCavity(tet, iLocalEdge, &v1, &v2, cavity, outside, ring);
   if (!closed) return false;
   
   for(unsigned int j = 0; j < ring.size(); j++){
@@ -347,10 +340,8 @@ bool gmshEdgeSplit(std::vector<MTet4 *> &newTets,
 }
 
 // swap a face i.e. remove a face shared by 2 tets
-bool gmshFaceSwap(std::vector<MTet4 *> &newTets,
-                  MTet4 *t1, 
-                  int iLocalFace,
-                  const gmshQualityMeasure4Tet &cr)
+bool faceSwap(std::vector<MTet4 *> &newTets, MTet4 *t1, int iLocalFace,
+              const qualityMeasure4Tet &cr)
 {
   MTet4 *t2 = t1->getNeigh(iLocalFace);
   if (!t2) return false;
@@ -437,9 +428,7 @@ bool gmshFaceSwap(std::vector<MTet4 *> &newTets,
   return true;
 }
 
-void gmshBuildVertexCavity_recur(MTet4 *t, 
-                                 MVertex *v, 
-                                 std::vector<MTet4*> &cavity)
+void buildVertexCavity_recur(MTet4 *t, MVertex *v, std::vector<MTet4*> &cavity)
 {
   // if (recur > 20)printf("oufti %d\n",recur);
   if(t->isDeleted()){
@@ -468,7 +457,7 @@ void gmshBuildVertexCavity_recur(MTet4 *t,
       }
       if(!found){
         cavity.push_back(neigh);
-        gmshBuildVertexCavity_recur(neigh, v, cavity);
+        buildVertexCavity_recur(neigh, v, cavity);
       }
     }
   }
@@ -479,9 +468,8 @@ void gmshBuildVertexCavity_recur(MTet4 *t,
 // another one (of course, not the other one on the unswappable edge)
 // after that crap, the sliver is trashed
 
-bool gmshSliverRemoval(std::vector<MTet4*> &newTets,
-                       MTet4 *t, 
-                       const gmshQualityMeasure4Tet &cr)
+bool sliverRemoval(std::vector<MTet4*> &newTets, MTet4 *t, 
+                   const qualityMeasure4Tet &cr)
 {
   std::vector<MTet4*> cavity;
   std::vector<MTet4*> outside;
@@ -492,7 +480,7 @@ bool gmshSliverRemoval(std::vector<MTet4*> &newTets,
   int nbSwappable = 0;
   int iSwappable = 0;
   for (int i = 0; i < 6; i++){
-     isClosed[i] = gmshBuildEdgeCavity(t, i, &v1, &v2, cavity, outside, ring);    
+     isClosed[i] = buildEdgeCavity(t, i, &v1, &v2, cavity, outside, ring);    
      if (isClosed[i]){
        nbSwappable++;
        iSwappable = i;
@@ -507,7 +495,7 @@ bool gmshSliverRemoval(std::vector<MTet4*> &newTets,
   else if (nbSwappable == 1){
     // classical case, the sliver has 5 edges on the boundary
     // try to swap first
-    if (gmshEdgeSwap(newTets,t,iSwappable,QMTET_3))return true;
+    if (edgeSwap(newTets,t,iSwappable,QMTET_3))return true;
     // if it does not work, split, smooth and collapse
     MVertex *v1 = t->tet()->getVertex(edges[iSwappable][0]);
     MVertex *v2 = t->tet()->getVertex(edges[iSwappable][1]);
@@ -516,11 +504,11 @@ bool gmshSliverRemoval(std::vector<MTet4*> &newTets,
                                  0.5 * (v1->z() + v2->z()), t->onWhat());
     t->onWhat()->mesh_vertices.push_back(newv);
 
-    if (!gmshEdgeSplit(newTets, t, newv, iSwappable, QMTET_ONE)) return false;
+    if (!edgeSplit(newTets, t, newv, iSwappable, QMTET_ONE)) return false;
     for (int i = 0; i < 4; i++){
       if (newTets[newTets.size() - 1]->tet()->getVertex(i) == newv){
-        gmshSmoothVertex(newTets[newTets.size() - 1], i, cr);
-        gmshSmoothVertexOptimize (newTets[newTets.size() - 1], i, cr);
+        smoothVertex(newTets[newTets.size() - 1], i, cr);
+        smoothVertexOptimize(newTets[newTets.size() - 1], i, cr);
       }
     }
     
@@ -532,11 +520,11 @@ bool gmshSliverRemoval(std::vector<MTet4*> &newTets,
           MVertex *vb = new_t->tet()->getVertex(edges[j][1]);
           if (va == newv &&
               (va != v1  && vb != v1 && va != v2  && vb != v2)){
-            gmshCollapseVertex(newTets,new_t,edges[j][0],edges[j][1],cr);
+            collapseVertex(newTets,new_t,edges[j][0],edges[j][1],cr);
           }
           else if (vb == newv &&
                    (va != v1  && vb != v1 && va != v2  && vb != v2)){
-            gmshCollapseVertex(newTets,new_t,edges[j][1],edges[j][0],cr);
+            collapseVertex(newTets,new_t,edges[j][1],edges[j][0],cr);
           }
         }
       }
@@ -545,19 +533,19 @@ bool gmshSliverRemoval(std::vector<MTet4*> &newTets,
   }
   else{
     for (int i = 0; i < 4; i++){
-      gmshSmoothVertex(t, i, cr);
-      gmshSmoothVertexOptimize(t, i, cr);
+      smoothVertex(t, i, cr);
+      smoothVertexOptimize(t, i, cr);
     }
   }
   return false;
 }
 
-bool gmshCollapseVertex(std::vector<MTet4 *> &newTets,
+bool collapseVertex(std::vector<MTet4 *> &newTets,
                         MTet4 *t, 
                         int iVertex,
                         int iTarget,
-                        const gmshQualityMeasure4Tet &cr,
-                        const gmshLocalMeshModAction action,
+                        const qualityMeasure4Tet &cr,
+                        const localMeshModAction action,
                         double *minQual)
 {
   if(t->isDeleted()){
@@ -574,7 +562,7 @@ bool gmshCollapseVertex(std::vector<MTet4 *> &newTets,
   std::vector<MTet4*> cavity_v;
   std::vector<MTet4*> outside;
   cavity_v.push_back(t);
-  gmshBuildVertexCavity_recur(t, v, cavity_v);
+  buildVertexCavity_recur(t, v, cavity_v);
 
   std::vector<MTet4*> toDelete;
   std::vector<MTet4*> toUpdate;
@@ -648,9 +636,7 @@ bool gmshCollapseVertex(std::vector<MTet4 *> &newTets,
   return true;
 }
 
-bool gmshSmoothVertex(MTet4 *t, 
-                      int iVertex,
-                      const gmshQualityMeasure4Tet &cr)
+bool smoothVertex(MTet4 *t, int iVertex, const qualityMeasure4Tet &cr)
 {
   if(t->isDeleted()){
     Msg::Error("Impossible to collapse vertex");
@@ -660,7 +646,7 @@ bool gmshSmoothVertex(MTet4 *t,
 
   std::vector<MTet4*> cavity;
   cavity.push_back(t);
-  gmshBuildVertexCavity_recur(t, t->tet()->getVertex(iVertex), cavity);
+  buildVertexCavity_recur(t, t->tet()->getVertex(iVertex), cavity);
   
   double xcg = 0, ycg = 0, zcg = 0;
   double vTot = 0;
@@ -713,7 +699,7 @@ bool gmshSmoothVertex(MTet4 *t,
     t->tet()->getVertex(iVertex)->x() = x;
     t->tet()->getVertex(iVertex)->y() = y;
     t->tet()->getVertex(iVertex)->z() = z;
-    return false;//gmshSmoothVertexOptimize (t, iVertex, cr);
+    return false; // smoothVertexOptimize(t, iVertex, cr);
   }
   else{
     // restore new quality
@@ -753,33 +739,32 @@ double smoothing_objective_function_3D(double X, double Y, double Z,
   return -qMin;  
 }
 
-void deriv_smoothing_objective_function_3D(double X, double Y, double Z, 
-                                           double &F, 
-                                           double &dFdX, double &dFdY, double &dFdZ,
-                                           void *data)
+void deriv_smoothing_objective_function_3D(double *XYZ, double *dF,
+                                           double &F, void *data)
 {
   smoothVertexData3D *svd = (smoothVertexData3D*)data;
   MVertex *v = svd->v;
-  const double LARGE = svd->LC*1.e5;
-  const double SMALL = 1./LARGE;
-  F = smoothing_objective_function_3D(X, Y, Z, v, svd->ts);
-  double F_X = smoothing_objective_function_3D(X + SMALL, Y, Z, v, svd->ts);
-  double F_Y = smoothing_objective_function_3D(X, Y + SMALL, Z, v, svd->ts);
-  double F_Z = smoothing_objective_function_3D(X, Y, Z + SMALL, v, svd->ts);
-  dFdX = (F_X - F) * LARGE;
-  dFdY = (F_Y - F) * LARGE;
-  dFdZ = (F_Z - F) * LARGE;
+  const double LARGE = svd->LC * 1.e5;
+  const double SMALL = 1. / LARGE;
+  F = smoothing_objective_function_3D(XYZ[0], XYZ[1], XYZ[2], v, svd->ts);
+  double F_X = smoothing_objective_function_3D
+    (XYZ[0] + SMALL, XYZ[1], XYZ[2], v, svd->ts);
+  double F_Y = smoothing_objective_function_3D
+    (XYZ[0], XYZ[1] + SMALL, XYZ[2], v, svd->ts);
+  double F_Z = smoothing_objective_function_3D
+    (XYZ[0], XYZ[1], XYZ[2] + SMALL, v, svd->ts);
+  dF[0] = (F_X - F) * LARGE;
+  dF[1] = (F_Y - F) * LARGE;
+  dF[2] = (F_Z - F) * LARGE;
 }
 
-double smooth_obj_3D(double X, double Y, double Z, void *data)
+double smooth_obj_3D(double *XYZ, void *data)
 {
   smoothVertexData3D *svd = (smoothVertexData3D*)data;
-  return smoothing_objective_function_3D(X, Y, Z, svd->v, svd->ts); 
+  return smoothing_objective_function_3D(XYZ[0], XYZ[1], XYZ[2], svd->v, svd->ts); 
 }
 
-bool gmshSmoothVertexOptimize(MTet4 *t, 
-                              int iVertex,
-                              const gmshQualityMeasure4Tet &cr)
+bool smoothVertexOptimize(MTet4 *t, int iVertex, const qualityMeasure4Tet &cr)
 {
   if(t->tet()->getVertex(iVertex)->onWhat()->dim() < 3) return false;
   
@@ -787,15 +772,14 @@ bool gmshSmoothVertexOptimize(MTet4 *t,
   vd.ts.push_back(t);
   vd.v = t->tet()->getVertex(iVertex);
   vd.LC = 1.0; // WRONG
-  gmshBuildVertexCavity_recur(t, t->tet()->getVertex(iVertex), vd.ts);
+  buildVertexCavity_recur(t, t->tet()->getVertex(iVertex), vd.ts);
 
-  double xopti = vd.v->x();
-  double yopti = vd.v->y();
-  double zopti = vd.v->z();
+  double xyzopti[3] = {vd.v->x(), vd.v->y(), vd.v->z()};
 
-  double val;
-  minimize_3(smooth_obj_3D, deriv_smoothing_objective_function_3D, &vd, 4,
-             xopti, yopti, zopti, val);
+  //double val = 0.;
+  Msg::Error("Fletcher-Reeves minimizer routine must be reimplemented");
+  //minimize_N(3, smooth_obj_3D, deriv_smoothing_objective_function_3D, &vd, 4,
+  //         xyzopti, val);
 
   double vTot = 0;
 
@@ -810,9 +794,9 @@ bool gmshSmoothVertexOptimize(MTet4 *t,
   double y = t->tet()->getVertex(iVertex)->y();
   double z = t->tet()->getVertex(iVertex)->z();
 
-  t->tet()->getVertex(iVertex)->x() = xopti;
-  t->tet()->getVertex(iVertex)->y() = yopti;
-  t->tet()->getVertex(iVertex)->z() = zopti;
+  t->tet()->getVertex(iVertex)->x() = xyzopti[0];
+  t->tet()->getVertex(iVertex)->y() = xyzopti[1];
+  t->tet()->getVertex(iVertex)->z() = xyzopti[2];
 
   double newQuals[2000];
   if(vd.ts.size() >= 2000){
@@ -854,7 +838,7 @@ bool gmshSmoothVertexOptimize(MTet4 *t,
 //               MVertex* v4,
 //               MVertex* v5,
 //               MVertex* v6, 
-//               const gmshQualityMeasure4Tet &cr,
+//               const qualityMeasure4Tet &cr,
 //               MVertex *res[4],
 //               fs_cont &search, 
 //               GFace *fakeFace){
@@ -864,7 +848,7 @@ bool gmshSmoothVertexOptimize(MTet4 *t,
 //                  MVertex* newv2, 
 //                  MVertex* v21, 
 //                  MVertex* v11, 
-//                  const gmshQualityMeasure4Tet &cr,
+//                  const qualityMeasure4Tet &cr,
 //                  MVertex *res[4],
 //                  fs_cont &search, 
 //                  GFace *fakeFace){
@@ -917,7 +901,7 @@ bool gmshSmoothVertexOptimize(MTet4 *t,
 //                  MVertex* v21, 
 //                  MVertex* v11, 
 //                  MVertex* other,
-//                  const gmshQualityMeasure4Tet &cr,
+//                  const qualityMeasure4Tet &cr,
 //                  fs_cont &search, 
 //                  GFace *fakeFace){
 //   MTetrahedron *tr3,*tr4;
@@ -964,7 +948,7 @@ bool gmshSmoothVertexOptimize(MTet4 *t,
 //                    int nbEdges,
 //                    int e[6], 
 //                    MVertex* pts[6],
-//                    const gmshQualityMeasure4Tet &cr,
+//                    const qualityMeasure4Tet &cr,
 //                    fs_cont &search, 
 //                    GFace *fakeFace){
 //   switch(nbEdges){
