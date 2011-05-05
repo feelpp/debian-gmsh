@@ -19,6 +19,11 @@ Threshold angle below which normals are not smoothed@*
 Default value: @code{30}@*
 Saved in: @code{General.OptionsFileName}
 
+@item Mesh.AnisoMax
+Maximum anisotropy of the mesh@*
+Default value: @code{1e+33}@*
+Saved in: @code{General.OptionsFileName}
+
 @item Mesh.AllowSwapAngle
 Treshold angle (in degrees) between faces normals under which we allow an edge swap@*
 Default value: @code{10}@*
@@ -56,7 +61,7 @@ Saved in: @code{General.OptionsFileName}
 
 @item Mesh.ChacoHypercubeDim
 (Adv. Chaco): Dimensional partitioning for a hypercube topology@*
-Default value: @code{2}@*
+Default value: @code{0}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.ChacoLocalMethod
@@ -66,7 +71,7 @@ Saved in: @code{General.OptionsFileName}
 
 @item Mesh.ChacoMeshDim1
 (Adv. Chaco): Number of partitions in the first dimension of a mesh topology@*
-Default value: @code{4}@*
+Default value: @code{1}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.ChacoMeshDim2
@@ -115,32 +120,32 @@ Default value: @code{0}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.CharacteristicLengthExtendFromBoundary
-Extend characteristic lengths from the boundaries inside the surface/volume@*
+Extend computation of mesh element sizes from the boundaries into the surfaces/volumes@*
 Default value: @code{1}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.CharacteristicLengthFactor
-Factor applied to all characteristic lengths@*
+Factor applied to all mesh element sizes@*
 Default value: @code{1}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.CharacteristicLengthMin
-Minimum characteristic length@*
+Minimum mesh element size@*
 Default value: @code{0}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.CharacteristicLengthMax
-Maximum characteristic length@*
+Maximum mesh element size@*
 Default value: @code{1e+22}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.CharacteristicLengthFromCurvature
-Compute characteristic lengths from curvature@*
+Automatically compute mesh element sizes from curvature (experimental)@*
 Default value: @code{0}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.CharacteristicLengthFromPoints
-Compute characteristic lengths from values given at geometry points@*
+Compute mesh element sizes from values given at geometry points@*
 Default value: @code{1}@*
 Saved in: @code{General.OptionsFileName}
 
@@ -180,8 +185,8 @@ Default value: @code{1}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.Format
-Mesh output format (1=msh, 2=unv, 19=vrml, 27=stl, 30=mesh, 31=bdf, 32=cgns, 33=med)@*
-Default value: @code{1}@*
+Mesh output format (1=msh, 2=unv, 10=automatic, 19=vrml, 27=stl, 30=mesh, 31=bdf, 32=cgns, 33=med, 40=ply2)@*
+Default value: @code{10}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.Hexahedra
@@ -189,9 +194,9 @@ Display mesh hexahedra?@*
 Default value: @code{1}@*
 Saved in: @code{General.OptionsFileName}
 
-@item Mesh.LabelsFrequency
-Labels display frequency?@*
-Default value: @code{100}@*
+@item Mesh.LabelSampling
+Label sampling rate (display one label every `LabelSampling' elements)@*
+Default value: @code{1}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.LabelType
@@ -240,7 +245,7 @@ Default value: @code{0}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.MetisAlgorithm
-METIS partitioning algorithm (1=Recursive, 2=K-way)@*
+METIS partitioning algorithm (1=Recursive, 2=K-way, 3=Nodal weight)@*
 Default value: @code{1}@*
 Saved in: @code{General.OptionsFileName}
 
@@ -266,7 +271,47 @@ Saved in: @code{General.OptionsFileName}
 
 @item Mesh.MshFileVersion
 Version of the MSH file format to use@*
-Default value: @code{2.1}@*
+Default value: @code{2.2}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.MshFilePartitioned
+Split MSH file by mesh partition@*
+Default value: @code{0}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.PartitionHexWeight
+Weight of hexahedral element for METIS load balancing@*
+Default value: @code{1}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.PartitionPrismWeight
+Weight of prismatic element (wedge) for METIS load balancing@*
+Default value: @code{1}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.PartitionPyramidWeight
+Weight of pyramidal element for METIS load balancing@*
+Default value: @code{1}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.PartitionQuadWeight
+Weight of quadrangle for METIS load balancing@*
+Default value: @code{1}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.PartitionTetWeight
+Weight of tetrahedral element for METIS load balancing@*
+Default value: @code{1}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.PartitionTriWeight
+Weight of triangle for METIS load balancing@*
+Default value: @code{1}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.PartitionByExtrusion
+Special partitioner that annotates all all extruded elements to the same node as the source element@*
+Default value: @code{0}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.NbHexahedra
@@ -281,7 +326,7 @@ Saved in: @code{-}
 
 @item Mesh.NbPartitions
 Number of partitions@*
-Default value: @code{4}@*
+Default value: @code{1}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.NbPrisms
@@ -399,9 +444,34 @@ Random factor used in the 2D meshing algorithm (should be increased if RandomFac
 Default value: @code{1e-09}@*
 Saved in: @code{General.OptionsFileName}
 
+@item Mesh.RecombinationAlgorithm
+Mesh recombination algorithm (0=standard, 1=blossom)@*
+Default value: @code{0}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.RecombineAll
+Apply recombination algorithm to all surfaces, ignoring per-surface spec@*
+Default value: @code{0}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.RemeshAlgorithm
+Remeshing algorithm (0=no split, 1=automatic, 2=automatic only with metis)@*
+Default value: @code{0}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.RemeshParametrization
+Remsh Parametrization (0=harmonic, 1=conformal)@*
+Default value: @code{0}@*
+Saved in: @code{General.OptionsFileName}
+
 @item Mesh.RefineSteps
 Number of refinement steps in the MeshAdapt-based 2D algorithms@*
 Default value: @code{10}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.Remove4Triangles
+Try to remove nodes surrounded by 4 triangles in 2D triangular meshes@*
+Default value: @code{0}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.ReverseAllNormals
@@ -441,7 +511,7 @@ Saved in: @code{General.OptionsFileName}
 
 @item Mesh.SecondOrderIncomplete
 Create incomplete second order elements? (8-node quads, 20-node hexas, etc.)@*
-Default value: @code{1}@*
+Default value: @code{0}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.SecondOrderLinear
@@ -462,6 +532,11 @@ Saved in: @code{General.OptionsFileName}
 @item Mesh.SmoothNormals
 Smooth the mesh normals?@*
 Default value: @code{0}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Mesh.SmoothRatio
+Ratio between mesh sizes at vertices of a same edeg (used in BAMG)@*
+Default value: @code{1.8}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.SubdivisionAlgorithm
@@ -591,92 +666,92 @@ Saved in: @code{General.OptionsFileName}
 
 @item Mesh.Color.One
 Color 1 in color carousel@*
-Default value: @code{@{255,160,0@}}@*
+Default value: @code{@{0,255,132@}}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.Color.Two
 Color 2 in color carousel@*
-Default value: @code{@{255,200,0@}}@*
+Default value: @code{@{255,160,0@}}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.Color.Three
 Color 3 in color carousel@*
-Default value: @code{@{255,240,0@}}@*
+Default value: @code{@{0,255,192@}}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.Color.Four
 Color 4 in color carousel@*
-Default value: @code{@{228,255,0@}}@*
+Default value: @code{@{255,200,0@}}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.Color.Five
 Color 5 in color carousel@*
-Default value: @code{@{188,255,0@}}@*
+Default value: @code{@{0,216,255@}}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.Color.Six
 Color 6 in color carousel@*
-Default value: @code{@{148,255,0@}}@*
+Default value: @code{@{255,240,0@}}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.Color.Seven
 Color 7 in color carousel@*
-Default value: @code{@{108,255,0@}}@*
+Default value: @code{@{0,176,255@}}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.Color.Eight
 Color 8 in color carousel@*
-Default value: @code{@{68,255,0@}}@*
+Default value: @code{@{228,255,0@}}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.Color.Nine
 Color 9 in color carousel@*
-Default value: @code{@{0,255,52@}}@*
+Default value: @code{@{0,116,255@}}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.Color.Ten
 Color 10 in color carousel@*
-Default value: @code{@{0,255,132@}}@*
+Default value: @code{@{188,255,0@}}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.Color.Eleven
 Color 11 in color carousel@*
-Default value: @code{@{0,255,192@}}@*
+Default value: @code{@{0,76,255@}}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.Color.Twelve
 Color 12 in color carousel@*
-Default value: @code{@{0,216,255@}}@*
+Default value: @code{@{148,255,0@}}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.Color.Thirteen
 Color 13 in color carousel@*
-Default value: @code{@{0,176,255@}}@*
+Default value: @code{@{24,0,255@}}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.Color.Fourteen
 Color 14 in color carousel@*
-Default value: @code{@{0,116,255@}}@*
+Default value: @code{@{108,255,0@}}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.Color.Fifteen
 Color 15 in color carousel@*
-Default value: @code{@{0,76,255@}}@*
+Default value: @code{@{84,0,255@}}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.Color.Sixteen
 Color 16 in color carousel@*
-Default value: @code{@{24,0,255@}}@*
+Default value: @code{@{68,255,0@}}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.Color.Seventeen
 Color 17 in color carousel@*
-Default value: @code{@{84,0,255@}}@*
+Default value: @code{@{104,0,255@}}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.Color.Eighteen
 Color 18 in color carousel@*
-Default value: @code{@{104,0,255@}}@*
+Default value: @code{@{0,255,52@}}@*
 Saved in: @code{General.OptionsFileName}
 
 @item Mesh.Color.Nineteen

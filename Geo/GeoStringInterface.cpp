@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -7,23 +7,62 @@
 #include <sstream>
 #include "GmshConfig.h"
 #include "GmshMessage.h"
+#include "GModel.h"
 #include "Numeric.h"
 #include "StringUtils.h"
 #include "Geo.h"
 #include "GeoStringInterface.h"
 #include "OpenFile.h"
 #include "Context.h"
-#include "GModel.h"
+#include "OS.h"
 
-#if !defined(HAVE_NO_PARSER)
+#if defined(HAVE_PARSER)
 #include "Parser.h"
 #endif
 
-void add_infile(std::string text, std::string fileName, bool deleted_something)
+void add_infile(std::string text, std::string fileName, bool forceDestroy)
 {
-#if defined(HAVE_NO_PARSER)
-  Msg::Error("GEO file creation not available without Gmsh parser");
-#else
+  // make sure we don't add stuff in a non-geo file
+  if(!CTX::instance()->expertMode) {
+    std::vector<std::string> split = SplitFileName(fileName);
+    if(split[2].size() && split[2] != ".geo" && split[2] != ".GEO"){
+      std::ostringstream sstream;
+      sstream << 
+        "A scripting command is going to be appended to a non-`.geo' file. Are\n"
+        "you sure you want to proceed?\n\n"
+        "You probably want to create a new `.geo' file containing the command\n"
+        "`Merge \"" << split[1] + split[2] << "\";' and use that file instead.\n\n"
+        "(To disable this warning in the future, select `Enable expert mode'\n"
+        "in the option dialog.)";
+      int ret = Msg::GetAnswer(sstream.str().c_str(), 2, "Cancel", "Proceed as is", 
+                               "Create new `.geo' file");
+      if(ret == 2){
+        std::string newFileName = split[0] + split[1] + ".geo";
+        if(CTX::instance()->confirmOverwrite) {
+          if(!StatFile(newFileName)){
+            std::ostringstream sstream;
+            sstream << "File '" << fileName << "' already exists.\n\n"
+              "Do you want to replace it?";
+            if(!Msg::GetAnswer(sstream.str().c_str(), 0, "Cancel", "Replace"))
+              return;
+          }
+        }
+        FILE *fp = fopen(newFileName.c_str(), "w");
+        if(!fp) {
+          Msg::Error("Unable to open file '%s'", newFileName.c_str());
+          return;
+        }
+        fprintf(fp, "Merge \"%s\";\n%s\n", (split[1] + split[2]).c_str(), text.c_str());
+        fclose(fp);
+        OpenProject(newFileName);
+        return;
+      }
+      else if(ret == 0)
+        return;
+    }
+  }
+
+#if defined(HAVE_PARSER)
   std::string tmpFileName = CTX::instance()->homeDir + CTX::instance()->tmpFileName;
   FILE *gmsh_yyin_old = gmsh_yyin;
   if(!(gmsh_yyin = fopen(tmpFileName.c_str(), "w"))) {
@@ -32,7 +71,6 @@ void add_infile(std::string text, std::string fileName, bool deleted_something)
     return;
   }
   fprintf(gmsh_yyin, "%s\n", text.c_str());
-  Msg::StatusBar(2, true, "%s", text.c_str());
   fclose(gmsh_yyin);
   gmsh_yyin = fopen(tmpFileName.c_str(), "r");
   while(!feof(gmsh_yyin)) {
@@ -41,9 +79,9 @@ void add_infile(std::string text, std::string fileName, bool deleted_something)
   fclose(gmsh_yyin);
   gmsh_yyin = gmsh_yyin_old;
 
-  if(deleted_something){
-    // we need to start from scratch since the command just parsed
-    // could have deleted some entities
+  if(forceDestroy){
+    // we need to start from scratch (e.g. if the command just parsed
+    // could have deleted some entities)
     GModel::current()->destroy();
   }
   GModel::current()->importGEOInternals();
@@ -54,27 +92,10 @@ void add_infile(std::string text, std::string fileName, bool deleted_something)
     Msg::Error("Unable to open file '%s'", fileName.c_str());
     return;
   }
-  
-  if(!CTX::instance()->expertMode) {
-    std::string ext = SplitFileName(fileName)[2];
-    if(ext.size() && ext != ".geo" && ext != ".GEO"){
-      char question[1024];
-      sprintf(question, 
-              "A scripting command is going to be appended to a non-`.geo' file.\n\n"
-              "Are you sure you want to proceed?\n\n"
-              "(You might want to create a new `.geo' file containing the command\n\n"
-              "Merge \"%s\";\n\n"
-              "and use that file instead. To disable this warning in the future, select\n"
-              "`Enable expert mode' in the option dialog.)", fileName.c_str());
-      if(!Msg::GetBinaryAnswer(question, "Proceed", "Cancel", false)){
-        fclose(fp);
-        return;
-      }
-    }
-  }
-
   fprintf(fp, "%s\n", text.c_str());
   fclose(fp);
+#else
+  Msg::Error("GEO file creation not available without Gmsh parser");
 #endif
 }
 
@@ -159,6 +180,18 @@ void add_trsfvol(std::vector<int> &l, std::string fileName)
   }
   sstream << "};";
   add_infile(sstream.str(), fileName);
+}
+
+void add_embedded(std::string what, std::vector<int> &l, std::string fileName)
+{
+  std::ostringstream sstream;
+  sstream << "Point{";
+  for(unsigned int i = 1; i < l.size(); i++) {
+    if(i > 1) sstream << ", ";
+    sstream << l[i];
+  }
+  sstream << "} In Surface{" << l[0] << "};";
+  add_infile(sstream.str(), fileName, true);
 }
 
 void add_param(std::string par, std::string value, std::string fileName)
@@ -274,6 +307,25 @@ void add_physical(std::string type, List_T *list, std::string fileName)
   std::ostringstream sstream;
   sstream << "Physical " << type << "(" << NEWPHYSICAL() << ") = {" 
           << list2string(list) << "};";
+  add_infile(sstream.str(), fileName);
+}
+
+void add_compound(std::string type, List_T *list, std::string fileName)
+{
+  std::ostringstream sstream;
+  if(SplitFileName(fileName)[2] != ".geo") sstream << "CreateTopology;\n";
+  if (type == "Surface"){
+    sstream << "Compound " << type << "(" << NEWSURFACE()+1000 << ") = {" 
+	    << list2string(list) << "};";
+  }
+  else if (type == "Line"){
+    sstream << "Compound " << type << "(" << NEWLINE()+1000 << ") = {" 
+	    << list2string(list) << "};";
+  }
+  else{
+    sstream << "Compound " << type << "(" << NEWREG() << ") = {" 
+	    << list2string(list) << "};";
+  }
   add_infile(sstream.str(), fileName);
 }
 

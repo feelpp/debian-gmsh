@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -18,6 +18,10 @@ class GMSH_SphericalRaisePlugin : public GMSH_PostPlugin
  public:
   GMSH_SphericalRaisePlugin(){}
   std::string getName() const { return "SphericalRaise"; }
+  std::string getShortHelp() const
+  {
+    return "Create spherical elevation plot";
+  }
   std::string getHelp() const;
   int getNbOptions() const;
   StringXNumber *getOption(int iopt);  

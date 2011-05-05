@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -8,6 +8,7 @@
 
 #include "MElement.h"
 
+class binding;
 /*
  * MPrism
  *
@@ -60,8 +61,9 @@ class MPrism : public MElement {
     for(int i = 0; i < 6; i++) _v[i] = v[i];
   }
   ~MPrism(){}
-  virtual int getDim(){ return 3; }
+  virtual int getDim() const { return 3; }
   virtual int getNumVertices() const { return 6; }
+  virtual double getInnerRadius();
   virtual MVertex *getVertex(int num){ return _v[num]; }
   virtual MVertex *getVertexMED(int num)
   {
@@ -86,6 +88,7 @@ class MPrism : public MElement {
     _getEdgeVertices(num, v);
   }
   virtual int getNumFaces(){ return 5; }
+  virtual void getFaceInfo(const MFace & face, int &ithFace, int &sign, int &rot) const; 
   virtual MFace getFace(int num)
   {
     if(num < 2)
@@ -122,14 +125,17 @@ class MPrism : public MElement {
   virtual int getTypeForVTK() const { return 13; }
   virtual const char *getStringForPOS() const { return "SI"; }
   virtual const char *getStringForBDF() const { return "CPENTA"; }
+  virtual const char *getStringForINP() const { return "C3D6"; }
   virtual void revert()
   {
     MVertex *tmp;
     tmp = _v[0]; _v[0] = _v[1]; _v[1] = tmp;
     tmp = _v[3]; _v[3] = _v[4]; _v[4] = tmp;
   }
+  virtual const polynomialBasis* getFunctionSpace(int o=-1) const;
+  virtual const JacobianBasis* getJacobianFuncSpace(int o=-1) const;
   virtual int getVolumeSign();
-  virtual void getShapeFunctions(double u, double v, double w, double s[], int o) 
+/*  virtual void getShapeFunctions(double u, double v, double w, double s[], int o) 
   {
     s[0] = (1. - u - v) * (1. - w) * 0.5;
     s[1] =       u      * (1. - w) * 0.5;
@@ -137,8 +143,8 @@ class MPrism : public MElement {
     s[3] = (1. - u - v) * (1. + w) * 0.5;
     s[4] =       u      * (1. + w) * 0.5;
     s[5] =           v  * (1. + w) * 0.5;
-  }
-  virtual void getGradShapeFunctions(double u, double v, double w, double s[][3], int o) 
+  }*/
+/*  virtual void getGradShapeFunctions(double u, double v, double w, double s[][3], int o) 
   {
     s[0][0] = -0.5 * (1. - w)    ;
     s[0][1] = -0.5 * (1. - w)    ;
@@ -158,7 +164,7 @@ class MPrism : public MElement {
     s[5][0] =  0.                ;
     s[5][1] =  0.5 * (1. + w)    ;
     s[5][2] =  0.5 * v           ;
-  }
+  }*/
   virtual bool isInside(double u, double v, double w)
   {
     double tol = _isInsideTolerance;
@@ -167,6 +173,7 @@ class MPrism : public MElement {
       return false;
     return true;
   }
+  virtual void getIntegrationPoints(int pOrder, int *npts, IntPt **pts);
  private:
   int edges_prism(const int edge, const int vert) const
   {
@@ -194,6 +201,8 @@ class MPrism : public MElement {
     };
     return f[face][vert];
   }
+  public:
+  static void registerBindings(binding *b);
 };
 
 /*

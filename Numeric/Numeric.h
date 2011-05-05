@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -7,7 +7,10 @@
 #define _NUMERIC_H_
 
 #include <math.h>
+#include <vector>
 #include "fullMatrix.h"
+#include "SPoint3.h"
+#include "SVector3.h"
 
 #define myhypot(a,b) (sqrt((a)*(a)+(b)*(b)))
 #define sign(x)      (((x)>=0)?1:-1)
@@ -26,6 +29,7 @@ inline void prosca(double a[3], double b[3], double *c)
   *c = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 void matvec(double mat[3][3], double vec[3], double res[3]);
+void matmat(double mat1[3][3], double mat2[3][3], double res[3][3]);
 inline double norm3(double a[3])
 {
   return sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
@@ -58,10 +62,17 @@ double inv2x2(double mat[2][2], double inv[2][2]);
 double angle_02pi(double A3);
 double angle_plan(double V[3], double P1[3], double P2[3], double n[3]);
 double triangle_area(double p0[3], double p1[3], double p2[3]);
+double triangle_area2d(double p0[2], double p1[2], double p2[2]);
 void circumCenterXY(double *p1, double *p2, double *p3, double *res);
 void circumCenterXYZ(double *p1, double *p2, double *p3, double *res, double *uv=0);
+// operate a transformation on the 4 points of a Quad in 3D, to have an equivalent Quad in 2D
+void planarQuad_xyz2xy(double *x, double *y, double *z, double *xn, double *yn);
+// compute the radius of the circle that is tangent to the 3 edges defined by 4 points
+// edge_1=(x0,y0)->(x1,y1); edge_2=(x1,y1)->(x2,y2); edge_3=(x2,y2)->(x3,y3) 
+double computeInnerRadiusForQuad(double *x, double *y, int i);
 char float2char(float f);
 float char2float(char c);
+void eigenvalue2x2(double mat[2][2], double v[2]);
 void eigenvalue(double mat[3][3], double re[3]);
 void FindCubicRoots(const double coeff[4], double re[3], double im[3]);
 void eigsort(double d[3]);
@@ -73,5 +84,30 @@ bool newton_fd(void (*func)(fullVector<double> &, fullVector<double> &, void *),
                fullVector<double> &x, void *data, double relax=1., double tolx=1.e-6);
 double minimize_grad_fd(double (*func)(fullVector<double> &, void *),
                         fullVector<double> &x, void *data);
+void signedDistancesPointsTriangle(std::vector<double> &distances,
+                                   std::vector<SPoint3> &closePts,
+                                   const std::vector<SPoint3> &pts,
+                                   const SPoint3 &p1,
+                                   const SPoint3 &p2,
+                                   const SPoint3 &p3);
+void signedDistancePointLine(const SPoint3 &p1, const SPoint3 &p2, const SPoint3 &p,
+                             double &distance, SPoint3 &closePt);
+void signedDistancesPointsLine (std::vector<double>&distances,
+                                std::vector<SPoint3>&closePts,
+                                const std::vector<SPoint3> &pts,
+                                const SPoint3 &p1, const SPoint3 &p2);
 
+void changeReferential(const int direction, const SPoint3 &p, const SPoint3 &closePt,
+                       const SPoint3 &p1, const SPoint3 &p2, double *xp, double*yp,
+                       double *otherp, double *x, double *y, double *other);
+int computeDistanceRatio(const double &y, const double &yp, const double &x,
+                         const double &xp, double *distance, const double &r1,
+                         const double &r2);
+
+void signedDistancesPointsEllipseLine (std::vector<double>&distances,
+                                       std::vector<double>&distancesE,
+                                       std::vector<int>&isInYarn,
+                                       std::vector<SPoint3>&closePts,
+                                       const std::vector<SPoint3> &pts,
+                                       const SPoint3 &p1, const SPoint3 &p2);
 #endif

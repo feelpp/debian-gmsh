@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -15,15 +15,17 @@ class discreteFace : public GFace {
  public:
   discreteFace(GModel *model, int num);
   virtual ~discreteFace() {}
-  virtual GPoint point(double par1, double par2) const;
-  virtual SPoint2 parFromPoint(const SPoint3 &p) const;
-  virtual SVector3 normal(const SPoint2 &param) const;
-  virtual GEntity::GeomType geomType() const { return DiscreteSurface; }
+  GPoint point(double par1, double par2) const;
+  SPoint2 parFromPoint(const SPoint3 &p, bool onSurface=true) const;
+  SVector3 normal(const SPoint2 &param) const;
+  double curvatureMax(const SPoint2 &param) const;
+  GEntity::GeomType geomType() const { return DiscreteSurface; }
   virtual Pair<SVector3, SVector3> firstDer(const SPoint2 &param) const;
   virtual void secondDer(const SPoint2 &param, 
                          SVector3 *dudu, SVector3 *dvdv, SVector3 *dudv) const;
   void setBoundEdges(std::vector<int> tagEdges);
   void findEdges(std::map<MEdge, std::vector<int>, Less_Edge > &map_edges);
+  void writeGEO(FILE *fp);
 };
 
 #endif

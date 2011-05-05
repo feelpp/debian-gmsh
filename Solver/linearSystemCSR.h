@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -11,7 +11,9 @@
 #include "GmshMessage.h"
 #include "linearSystem.h"
 
-typedef int INDEX_TYPE ;  
+class binding;
+
+typedef int INDEX_TYPE ;
 typedef struct {
   int nmax;
   int size;
@@ -20,8 +22,8 @@ typedef struct {
   int isorder;
   char *array;
 } CSRList_T;
-  
-void CSRList_Add(CSRList_T *liste, void *data);
+
+void CSRList_Add(CSRList_T *liste, const void *data);
 int  CSRList_Nbr(CSRList_T *liste);
 
 template <class scalar>
@@ -29,12 +31,12 @@ class linearSystemCSR : public linearSystem<scalar> {
  protected:
   bool sorted;
   char *something;
-  CSRList_T *a_,*ai_,*ptr_,*jptr_; 
+  CSRList_T *_a, *_ai, *_ptr, *_jptr;
   std::vector<scalar> *_b, *_x;
  public:
   linearSystemCSR()
-    : sorted(false), a_(0) {}
-  virtual bool isAllocated() const { return a_ != 0; }
+    : sorted(false), _a(0), _b(0), _x(0) {}
+  virtual bool isAllocated() const { return _a != 0; }
   virtual void allocate(int) ;
   virtual void clear()
   {
@@ -44,74 +46,85 @@ class linearSystemCSR : public linearSystem<scalar> {
   {
     allocate(0);
   }
-  virtual void addToMatrix ( int il, int ic, double val) 
+  virtual void addToMatrix(int il, int ic, const scalar &val) 
   {
-    //    if (sorted)throw;
-    
-    INDEX_TYPE  *jptr  = (INDEX_TYPE*) jptr_->array;
-    INDEX_TYPE  *ptr   = (INDEX_TYPE*) ptr_->array;
-    INDEX_TYPE  *ai    = (INDEX_TYPE*) ai_->array;
-    scalar      *a     = ( scalar * ) a_->array;
-    
-    INDEX_TYPE  position_ = jptr[il];
-    
+    INDEX_TYPE  *jptr  = (INDEX_TYPE*) _jptr->array;
+    INDEX_TYPE  *ptr   = (INDEX_TYPE*) _ptr->array;
+    INDEX_TYPE  *ai    = (INDEX_TYPE*) _ai->array;
+    scalar      *a     = ( scalar * ) _a->array;
+
+    INDEX_TYPE  position = jptr[il];
+
     if(something[il]) {
       while(1){
-        if(ai[position_] == ic){
-          a[position_] += val;
-          //      if (il == 0)    printf("FOUND %d %d %d\n",il,ic,position_);
+        if(ai[position] == ic){
+          a[position] += val;
           return;
         }
-        if (ptr[position_] == 0)break;
-        position_ = ptr[position_];
+        if (ptr[position] == 0) break;
+        position = ptr[position];
       }
-    }  
-    
+    }
+
     INDEX_TYPE zero = 0;
-    CSRList_Add (a_, &val);
-    CSRList_Add (ai_, &ic);
-    CSRList_Add (ptr_, &zero);
-    // The pointers may have been modified
-    // if there has been a reallocation in CSRList_Add  
-    
-    ptr = (INDEX_TYPE*) ptr_->array;
-    ai  = (INDEX_TYPE*) ai_->array;
-    a   = (scalar*) a_->array;
-    
-    INDEX_TYPE n = CSRList_Nbr(a_) - 1;
-    
+    CSRList_Add(_a, &val);
+    CSRList_Add(_ai, &ic);
+    CSRList_Add(_ptr, &zero);
+    // The pointers may have been modified if there has been a
+    // reallocation in CSRList_Add
+
+    ptr = (INDEX_TYPE*) _ptr->array;
+    ai  = (INDEX_TYPE*) _ai->array;
+    a   = (scalar*) _a->array;
+
+    INDEX_TYPE n = CSRList_Nbr(_a) - 1;
+
     if(!something[il]) {
       jptr[il] = n;
-      something[il] = 1;      
+      something[il] = 1;
     }
-    else ptr[position_] = n;
+    else ptr[position] = n;
   }
-  
-  virtual scalar getFromMatrix (int _row, int _col) const
+  virtual void getMatrix(INDEX_TYPE*& jptr,INDEX_TYPE*& ai,double*& a);
+
+  virtual void getFromMatrix (int row, int col, scalar &val) const
   {
-    throw;
+    Msg::Error("getFromMatrix not implemented for CSR");
   }
-  virtual void addToRightHandSide(int _row, scalar _val) 
+  virtual void addToRightHandSide(int row, const scalar &val)
   {
-    if(_val != 0.0) (*_b)[_row] += _val;
+    if(val != 0.0) (*_b)[row] += val;
   }
-  virtual scalar getFromRightHandSide(int _row) const 
+  virtual void getFromRightHandSide(int row, scalar &val) const
   {
-    return (*_b)[_row];
+    val = (*_b)[row];
   }
-  virtual scalar getFromSolution(int _row) const
+  virtual void getFromSolution(int row, scalar &val) const
   {
-    return (*_x)[_row];
+    val = (*_x)[row];
   }
   virtual void zeroMatrix()
   {
-    int N=CSRList_Nbr(a_);
-    scalar *a = (scalar*) a_->array;
-    for (int i=0;i<N;i++)a[i]=0;
+    if (!_a) return;
+    int N = CSRList_Nbr(_a);
+    scalar *a = (scalar*) _a->array;
+    for (int i = 0; i < N; i++) a[i] = 0;
   }
-  virtual void zeroRightHandSide() 
+  virtual void zeroRightHandSide()
   {
+    if (!_b) return;
     for(unsigned int i = 0; i < _b->size(); i++) (*_b)[i] = 0.;
+  }
+  virtual double normInfRightHandSide() const
+  {
+    double nor = 0.;
+    double temp;
+    for(unsigned int i = 0; i < _b->size(); i++){
+      temp = (*_b)[i];
+      if(temp < 0) temp = -temp;
+      if(nor < temp) nor = temp;
+    }
+    return nor;
   }
 };
 
@@ -121,22 +134,42 @@ class linearSystemCSRGmm : public linearSystemCSR<scalar> {
   double _prec;
   int _noisy, _gmres;
  public:
-  linearSystemCSRGmm()
-    : _prec(1.e-8), _noisy(0), _gmres(0) {}
-  virtual ~linearSystemCSRGmm()
-  {}
+  linearSystemCSRGmm() : _prec(1.e-8), _noisy(0), _gmres(0) {}
+  virtual ~linearSystemCSRGmm(){}
   void setPrec(double p){ _prec = p; }
   void setNoisy(int n){ _noisy = n; }
   void setGmres(int n){ _gmres = n; }
-  virtual int systemSolve() 
-#if defined(HAVE_GMM)
-    ;
-#else
+  virtual int systemSolve()
+#if !defined(HAVE_GMM)
   {
     Msg::Error("Gmm++ is not available in this version of Gmsh");
     return 0;
   }
 #endif
+  ;
+  static void registerBindings(binding *b);
+};
+
+template <class scalar>
+class linearSystemCSRTaucs : public linearSystemCSR<scalar> {
+ public:
+  linearSystemCSRTaucs(){}
+  virtual ~linearSystemCSRTaucs(){}
+  virtual void addToMatrix(int il, int ic, const double &val)
+  {
+    if (il <= ic)
+      linearSystemCSR<scalar>::addToMatrix(il, ic, val);
+  }
+  virtual int systemSolve()
+#if !defined(HAVE_TAUCS)
+  {
+    Msg::Error("TAUCS is not available in this version of Gmsh");
+    return 0;
+  }
+#endif
+  ;
+ int getNNZ() {return CSRList_Nbr(linearSystemCSR<scalar>::_a);}
+ int getNbUnk() {return linearSystemCSR<scalar>::_b->size();}
 };
 
 #endif

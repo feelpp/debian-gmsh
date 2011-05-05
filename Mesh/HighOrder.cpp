@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -21,42 +21,38 @@
 #include "Numeric.h"
 #include "Context.h"
 #include "fullMatrix.h"
-#include "functionSpace.h"
+#include "polynomialBasis.h"
 
 #define SQU(a)      ((a)*(a))
 
 static bool mappingIsInvertible(MTetrahedron *e)
 {
-  if (e->getPolynomialOrder() == 1) return 1.0;
+  if (e->getPolynomialOrder() == 1) return true;
   
   double mat[3][3];
   e->getPrimaryJacobian(0., 0., 0., mat);  
   double det0 = det3x3(mat);
-
-  IntPt *pts;
-  int npts;
-  e->getIntegrationPoints(e->getPolynomialOrder(), &npts, &pts);
   
-  for (int i = 0; i < npts; i++){
-    const double u = pts[i].pt[0];
-    const double v = pts[i].pt[1];
-    const double w = pts[i].pt[2];
-    e->getJacobian(u, v, w, mat);
-    double detN = det3x3(mat);
-    if (det0 * detN <= 0.) return false;
+  fullMatrix<double> df;
+  {
+    const fullMatrix<double> &alldf = 
+      e->getGradShapeFunctionsAtIntegrationPoints(e->getPolynomialOrder());
+    for (int i = 0; i < alldf.size2()/3; i++){
+      df.setAsProxy(alldf, 3*i, 3);
+      e->getJacobian(df, mat);
+      if (det0 * det3x3(mat) <= 0.) return false;
+    }
   }
-
-  const fullMatrix<double> &points = e->getFunctionSpace()->points;
-
-  for (int i = 0; i < e->getNumPrimaryVertices(); i++) {
-    const double u = points(i,0);
-    const double v = points(i,1);
-    const double w = points(i,2);
-    e->getJacobian(u, v, w, mat);
-    double detN = det3x3(mat);
-    if (det0 * detN <= 0.) return false;
+  {
+    const fullMatrix<double> &points = e->getFunctionSpace()->points;
+    const fullMatrix<double> &alldf = 
+      e->getGradShapeFunctionsAtNodes(e->getPolynomialOrder());
+    for (int i = 0; i < alldf.size2() / 3; i++){
+      df.setAsProxy(alldf, 3*i, 3);
+      e->getJacobian(df, mat);
+      if (det0 * det3x3(mat) <= 0.) return false;
+    }
   }
-  
   return true;
 }
 
@@ -118,7 +114,7 @@ static bool computeEquidistantParameters(GEdge *ge, double u0, double uN, int N,
     if (M == 1)
       DU(0) = R(0) / J(0, 0);
     else
-      J.lu_solve(R, DU);
+      J.luSolve(R, DU);
     
     for (int i = 0; i < M; i++){
       u[i+1] -= underRelax*DU(i);
@@ -204,7 +200,7 @@ static bool computeEquidistantParameters(GFace *gf, double u0, double uN,
     if (M == 1)
       DU(0) = R(0) / J(0, 0);
     else
-      J.lu_solve(R, DU);
+      J.luSolve(R, DU);
     
     for (int i = 0; i < M; i++){
       t[i + 1] -= DU(i);
@@ -408,28 +404,6 @@ static void getFaceVertices(GFace *gf, MElement *incomplete, MElement *ele,
   if(gf->geomType() == GEntity::DiscreteSurface ||
      gf->geomType() == GEntity::BoundaryLayerSurface)
     linear = true;
-
-  fullMatrix<double> points;
-  int start = 0;
-
-  switch (nPts){
-  case 2 :
-    points = functionSpaces::find(MSH_TRI_10).points;
-    start = 9;
-    break;
-  case 3 :
-    points = functionSpaces::find(MSH_TRI_15).points;
-    start = 12;
-    break;
-  case 4 :
-    points = functionSpaces::find(MSH_TRI_21).points;
-    start = 15;
-    break;
-  default :  
-    // do nothing (e.g. for 2nd order tri faces or for quad faces)
-    break;
-  }
-
   for(int i = 0; i < ele->getNumFaces(); i++){
     MFace face = ele->getFace(i);
     faceContainer::iterator fIter = faceVertices.find(face);
@@ -438,87 +412,60 @@ static void getFaceVertices(GFace *gf, MElement *incomplete, MElement *ele,
     }
     else{
       std::vector<MVertex*> &vtcs = faceVertices[face];
-      SPoint2 pts[20];
+      SPoint2 pts[100];
       bool reparamOK = true;
       if(!linear){
         for(int k = 0; k < incomplete->getNumVertices(); k++)
           reparamOK &= reparamMeshVertexOnFace(incomplete->getVertex(k), gf, pts[k]);
       }
-      if(face.getNumVertices() == 3 && nPts > 1){ // tri face
-        for(int k = start; k < points.size1(); k++){
-          MVertex *v;
-          const double t1 = points(k, 0);
-          const double t2 = points(k, 1);
-          if(linear){
-            SPoint3 pc = face.interpolate(t1, t2);
-            v = new MVertex(pc.x(), pc.y(), pc.z(), gf);
-          }
-          else{
-            double X(0), Y(0), Z(0), GUESS[2] = {0, 0};
-            double sf[256]; 
-            incomplete->getShapeFunctions(t1, t2, 0, sf);
-            for (int j = 0; j < incomplete->getNumVertices(); j++){
-              MVertex *vt = incomplete->getVertex(j);
-              X += sf[j] * vt->x();
-              Y += sf[j] * vt->y();
-              Z += sf[j] * vt->z();
-              if (reparamOK){
-                GUESS[0] += sf[j] * pts[j][0];
-                GUESS[1] += sf[j] * pts[j][1];
-              }
+      int start = face.getNumVertices()*(nPts+1);
+      const fullMatrix<double> &points = ele->getFunctionSpace(nPts+1)->points;
+      for(int k = start; k < points.size1(); k++){
+        MVertex *v;
+        const double t1 = points(k, 0);
+        const double t2 = points(k, 1);
+        if(linear){
+          SPoint3 pc = face.interpolate(t1, t2);
+          v = new MVertex(pc.x(), pc.y(), pc.z(), gf);
+        }
+        else{
+          double X(0), Y(0), Z(0), GUESS[2] = {0, 0};
+          double sf[256]; 
+          incomplete->getShapeFunctions(-1., -1., 0, sf);
+          for (int j = 0; j < incomplete->getNumVertices(); j++)
+          incomplete->getShapeFunctions(t1, t2, 0, sf);
+          for (int j = 0; j < incomplete->getNumVertices(); j++){
+            MVertex *vt = incomplete->getVertex(j);
+            X += sf[j] * vt->x();
+            Y += sf[j] * vt->y();
+            Z += sf[j] * vt->z();
+            if (reparamOK){
+              GUESS[0] += sf[j] * pts[j][0];
+              GUESS[1] += sf[j] * pts[j][1];
             }
-            if(reparamOK){
-              GPoint gp = gf->closestPoint(SPoint3(X, Y, Z), GUESS);
-              if (gp.g()){
-                v = new MFaceVertex(gp.x(), gp.y(), gp.z(), gf, gp.u(), gp.v());
-              }
-              else{
-                v = new MVertex(X, Y, Z, gf);
-              }
+          }
+          if(reparamOK){
+            GPoint gp = gf->closestPoint(SPoint3(X, Y, Z), GUESS);
+            if (gp.g()){
+              v = new MFaceVertex(gp.x(), gp.y(), gp.z(), gf, gp.u(), gp.v());
             }
             else{
               v = new MVertex(X, Y, Z, gf);
             }
-            if(displ3D || displ2D){
-              SPoint3 pc2 = face.interpolate(t1, t2);
-              if(displ3D)displ3D->add(v, SVector3(pc2.x(), pc2.y(), pc2.z()));
-              if(displ2D)displ2D->add(v, SVector3(pc2.x(), pc2.y(), pc2.z()));
-            }       
           }
-          // should be expensive -> induces a new search each time
-          vtcs.push_back(v);
-          gf->mesh_vertices.push_back(v);
-          vf.push_back(v);
-        }
-      }
-      else if(face.getNumVertices() == 4){ // quad face
-        for(int j = 0; j < nPts; j++){
-          for(int k = 0; k < nPts; k++){
-            MVertex *v;
-            // parameters are between -1 and 1
-            double t1 = 2. * (double)(j + 1) / (nPts + 1) - 1.;
-            double t2 = 2. * (double)(k + 1) / (nPts + 1) - 1.;
-            if(linear || !reparamOK){
-              SPoint3 pc = face.interpolate(t1, t2);
-              v = new MVertex(pc.x(), pc.y(), pc.z(), gf);
-            }
-            else{
-              double uc = 0.25 * ((1 - t1) * (1 - t2) * pts[0][0] + 
-                                  (1 + t1) * (1 - t2) * pts[1][0] + 
-                                  (1 + t1) * (1 + t2) * pts[2][0] + 
-                                  (1 - t1) * (1 + t2) * pts[3][0]); 
-              double vc = 0.25 * ((1 - t1) * (1 - t2) * pts[0][1] + 
-                                  (1 + t1) * (1 - t2) * pts[1][1] + 
-                                  (1 + t1) * (1 + t2) * pts[2][1] + 
-                                  (1 - t1) * (1 + t2) * pts[3][1]); 
-              GPoint pc = gf->point(uc, vc);
-              v = new MFaceVertex(pc.x(), pc.y(), pc.z(), gf, uc, vc);
-            }
-            vtcs.push_back(v);
-            gf->mesh_vertices.push_back(v);
-            vf.push_back(v);
+          else{
+            v = new MVertex(X, Y, Z, gf);
           }
+          if(displ3D || displ2D){
+            SPoint3 pc2 = face.interpolate(t1, t2);
+            if(displ3D)displ3D->add(v, SVector3(pc2.x(), pc2.y(), pc2.z()));
+            if(displ2D)displ2D->add(v, SVector3(pc2.x(), pc2.y(), pc2.z()));
+          }       
         }
+        // should be expensive -> induces a new search each time
+        vtcs.push_back(v);
+        gf->mesh_vertices.push_back(v);
+        vf.push_back(v);
       }
     }
   }  
@@ -528,29 +475,29 @@ static void reorientTrianglePoints(std::vector<MVertex*> &vtcs, int orientation,
                                    bool swap)
 {
   int nbPts = vtcs.size();
-
-  if(nbPts <= 1) return;
-
-  if(nbPts > 3){
-    Msg::Error("Interior face nodes reorientation not supported for order > 4");
-    return;
-  }
-  
+  if (nbPts <= 1) return;
   std::vector<MVertex*> tmp(nbPts);
-
-  // rotation
-  // --- interior "principal vertices"
-  for (int i = 0; i < 3; i++) tmp[(i + orientation) % 3] = vtcs[i];
- 
-  // normal swap
-  if (swap) {
-    // --- interior "principal vertices"
-    vtcs[orientation]           = tmp[orientation];
-    vtcs[(orientation + 1) % 3] = tmp[(orientation + 2) % 3];
-    vtcs[(orientation + 2) % 3] = tmp[(orientation + 1) % 3];
+  int interiorOrder = (int)((sqrt(1. + 8. * nbPts) - 3) / 2);
+  int pos = 0;
+  for (int o = interiorOrder; o>0; o-=3) {
+    if (swap) {
+      tmp[pos] = vtcs[pos];
+      tmp[pos+1] = vtcs[pos+2];
+      tmp[pos+2] = vtcs[pos+1];
+      for (int i = 0; i < 3*(o-1); i++)
+        tmp[pos+3+i] = vtcs[pos+3*o-i-1];
+    } else {
+      for (int i=0; i< 3*o; i++)
+        tmp[pos+i] = vtcs[pos+i];
+    }
+    for (int i = 0; i < 3; i++) {
+      int ri = (i+orientation)%3;
+      vtcs[pos+ri] = tmp[pos+i];
+      for (int j = 0; j < o-1; j++)
+        vtcs[pos+3+(o-1)*ri+j] = tmp[pos+3+(o-1)*i+j];
+    }
+    pos += 3*o;
   }
-  // no swap
-  else vtcs = tmp;
 } 
 
 // KH: check face orientation wrt element ... 
@@ -561,22 +508,45 @@ static void getFaceVertices(GRegion *gr, MElement *ele, std::vector<MVertex*> &v
 {
   fullMatrix<double> points;
   int start = 0;
-  
   switch (nPts){
+  case 0 :
+  case 1 :
+    // do nothing (e.g. for 2nd order tri faces or for quad faces)
+    break;
   case 2 :
-    points = functionSpaces::find(MSH_TRI_10).points;
+    points = polynomialBases::find(MSH_TRI_10)->points;
     start = 9;
     break;
   case 3 :
-    points = functionSpaces::find(MSH_TRI_15).points;
+    points = polynomialBases::find(MSH_TRI_15)->points;
     start = 12;
     break;
   case 4 :
-    points = functionSpaces::find(MSH_TRI_21).points;
+    points = polynomialBases::find(MSH_TRI_21)->points;
     start = 15;
     break;
+  case 5 :
+    points = polynomialBases::find(MSH_TRI_28)->points;
+    start = 18;
+    break;
+  case 6 :
+    points = polynomialBases::find(MSH_TRI_36)->points;
+    start = 21;
+    break;
+  case 7 :
+    points = polynomialBases::find(MSH_TRI_45)->points;
+    start = 24;
+    break;
+  case 8 :
+    points = polynomialBases::find(MSH_TRI_55)->points;
+    start = 27;
+    break;
+  case 9 :
+    points = polynomialBases::find(MSH_TRI_66)->points;
+    start = 30;
+    break;
   default :  
-    // do nothing (e.g. for 2nd order tri faces or for quad faces)
+    Msg::Error("getFaceVertices not implemented for order %i\n",nPts +1);
     break;
   }
   
@@ -656,18 +626,36 @@ static void getRegionVertices(GRegion *gr, MElement *incomplete, MElement *ele,
   int start = 0;
 
   switch (nPts){
-  case 3 :
-    points = functionSpaces::find(MSH_TET_35).points;
-    start = 34;
-    break;
-  case 4 :
-    points = functionSpaces::find(MSH_TET_56).points;
-    start = 52;
-    break;
-  default :  
+    case 0:
+    case 1:
+    case 2:
     // done: return!
     return;
+  case 3 :
+    points = polynomialBases::find(MSH_TET_35)->points;
+    break;
+  case 4 :
+    points = polynomialBases::find(MSH_TET_56)->points;
+    break;
+  case 5 :
+    points = polynomialBases::find(MSH_TET_84)->points;
+    break;
+  case 6 :
+    points = polynomialBases::find(MSH_TET_120)->points;
+    break;
+  case 7 :
+    points = polynomialBases::find(MSH_TET_165)->points;
+    break;
+  case 8 :
+    points = polynomialBases::find(MSH_TET_220)->points;
+    break;
+  case 9 :
+    points = polynomialBases::find(MSH_TET_286)->points;
+    break;
+  default :  
+    Msg::Error("getRegionVertices not implemented for order %i\n", nPts+1);
   }
+  start = ((nPts+2)*(nPts+3)*(nPts+4)-(nPts-2)*(nPts-1)*(nPts))/6;
 
   for(int k = start; k < points.size1(); k++){
     MVertex *v;
@@ -701,7 +689,7 @@ static void setHighOrder(GEdge *ge, edgeContainer &edgeVertices, bool linear,
   ge->deleteVertexArrays();
 }
 
-MTriangle* setHighOrder(MTriangle *t, GFace *gf, 
+MTriangle *setHighOrder(MTriangle *t, GFace *gf, 
                         edgeContainer &edgeVertices, 
                         faceContainer &faceVertices, 
                         bool linear, bool incomplete, int nPts, 
@@ -738,6 +726,47 @@ MTriangle* setHighOrder(MTriangle *t, GFace *gf,
   }  
 }
 
+static MQuadrangle *setHighOrder(MQuadrangle *q, GFace *gf,
+                                 edgeContainer &edgeVertices, 
+                                 faceContainer &faceVertices, 
+                                 bool linear, bool incomplete, int nPts, 
+                                 highOrderSmoother *displ2D,
+                                 highOrderSmoother *displ3D)
+{
+  std::vector<MVertex*> ve, vf;
+  getEdgeVertices(gf, q, ve, edgeVertices, linear, nPts, displ2D, displ3D);
+  if(incomplete){
+    if(nPts == 1){
+      return new MQuadrangle8(q->getVertex(0), q->getVertex(1), q->getVertex(2), 
+                              q->getVertex(3), ve[0], ve[1], ve[2], ve[3]);
+    }
+    else{
+      return new MQuadrangleN(q->getVertex(0), q->getVertex(1), q->getVertex(2),
+                              q->getVertex(3), ve, nPts + 1);
+    }
+  } 
+  else {
+    if (displ2D && gf->geomType() == GEntity::Plane){
+      MQuadrangle incpl(q->getVertex(0), q->getVertex(1), q->getVertex(2), 
+                        q->getVertex(3));
+      getFaceVertices(gf, &incpl, q, vf, faceVertices, linear, nPts, displ2D, displ3D);
+    }else{
+      MQuadrangleN incpl(q->getVertex(0), q->getVertex(1), q->getVertex(2), 
+                         q->getVertex(3), ve, nPts + 1);
+      getFaceVertices(gf, &incpl, q, vf, faceVertices, linear, nPts, displ2D, displ3D);
+    }
+    ve.insert(ve.end(), vf.begin(), vf.end());
+    if(nPts == 1){
+      return new MQuadrangle9(q->getVertex(0), q->getVertex(1), q->getVertex(2),
+                              q->getVertex(3), ve[0], ve[1], ve[2], ve[3], vf[0]);
+    }
+    else{
+      return new MQuadrangleN(q->getVertex(0), q->getVertex(1), q->getVertex(2),
+                              q->getVertex(3), ve, nPts + 1);
+    }
+  }
+}  
+
 static void setHighOrder(GFace *gf, edgeContainer &edgeVertices, 
                          faceContainer &faceVertices, bool linear, bool incomplete,
                          int nPts = 1, highOrderSmoother *displ2D = 0,
@@ -746,29 +775,18 @@ static void setHighOrder(GFace *gf, edgeContainer &edgeVertices,
   std::vector<MTriangle*> triangles2;
   for(unsigned int i = 0; i < gf->triangles.size(); i++){
     MTriangle *t = gf->triangles[i];
-    MTriangle *tNew = setHighOrder(t,gf,edgeVertices,faceVertices, linear, incomplete,
-                                   nPts,displ2D,displ3D);
+    MTriangle *tNew = setHighOrder(t, gf,edgeVertices, faceVertices, linear, incomplete,
+                                   nPts, displ2D, displ3D);
     triangles2.push_back(tNew);
     delete t;
   }
   gf->triangles = triangles2;
-  
   std::vector<MQuadrangle*> quadrangles2;
   for(unsigned int i = 0; i < gf->quadrangles.size(); i++){
     MQuadrangle *q = gf->quadrangles[i];
-    std::vector<MVertex*> ve, vf;
-    getEdgeVertices(gf, q, ve, edgeVertices, linear, nPts, displ2D, displ3D);
-    if(incomplete){
-      quadrangles2.push_back
-        (new MQuadrangle8(q->getVertex(0), q->getVertex(1), q->getVertex(2),
-                          q->getVertex(3), ve[0], ve[1], ve[2], ve[3]));
-    }
-    else{
-      getFaceVertices(gf, q, q, vf, faceVertices, linear, nPts);
-      quadrangles2.push_back
-        (new MQuadrangle9(q->getVertex(0), q->getVertex(1), q->getVertex(2),
-                          q->getVertex(3), ve[0], ve[1], ve[2], ve[3], vf[0]));
-    }
+    MQuadrangle *qNew = setHighOrder(q, gf, edgeVertices, faceVertices, linear,
+                                     incomplete, nPts, displ2D, displ3D);
+    quadrangles2.push_back(qNew);
     delete q;
   }
   gf->quadrangles = quadrangles2;
@@ -801,8 +819,9 @@ static void setHighOrder(GRegion *gr, edgeContainer &edgeVertices,
       ve.insert(ve.end(), vr.begin(), vr.end());
       MTetrahedron* n = new MTetrahedronN(t->getVertex(0), t->getVertex(1), 
                                           t->getVertex(2), t->getVertex(3), ve, nPts + 1);
-      if (!mappingIsInvertible(n))
+      if (!mappingIsInvertible(n)){
         Msg::Warning("Found invalid curved volume element (# %d in list)", i);
+      }
       tetrahedra2.push_back(n);
     }
     delete t;
@@ -928,6 +947,8 @@ static void removeHighOrderVertices(GEntity *e)
 
 void SetOrder1(GModel *m)
 {
+  m->destroyMeshCaches();
+
   // replace all elements with first order elements
   for(GModel::eiter it = m->firstEdge(); it != m->lastEdge(); ++it){
     setFirstOrder(*it, (*it)->lines);
@@ -952,7 +973,7 @@ void SetOrder1(GModel *m)
     removeHighOrderVertices(*it);
 }
 
-static void checkHighOrderTriangles(const char* cc, GModel *m, 
+void checkHighOrderTriangles(const char* cc, GModel *m, 
                                     std::vector<MElement*> &bad, double &minJGlob)
 {
   bad.clear();
@@ -972,12 +993,23 @@ static void checkHighOrderTriangles(const char* cc, GModel *m,
       if (disto < 0) bad.push_back(t);
       else if (disto < 0.2) nbfair++;
     }
+    for(unsigned int i = 0; i < (*it)->quadrangles.size(); i++){
+      MQuadrangle *t = (*it)->quadrangles[i];
+      double disto_ = t->distoShapeMeasure();
+      double gamma_ = t->gammaShapeMeasure();
+      double disto = disto_;
+      minJGlob = std::min(minJGlob, disto);
+      minGGlob = std::min(minGGlob, gamma_);
+      avg += disto; count++;
+      if (disto < 0) bad.push_back(t);
+      else if (disto < 0.2) nbfair++;
+    }
   }
   if (minJGlob > 0) 
-    Msg::Info("%s : Worst Triangle Smoothness %g Gamma %g NbFair = %d", 
+    Msg::Info("%s : Worst Face Smoothness %g Gamma %g NbFair = %d", 
               cc, minJGlob, minGGlob,nbfair );
-  else
-    Msg::Warning("%s : Worst Triangle Smoothness %g (%d negative jacobians) "
+    else
+    Msg::Warning("%s : Worst Face Smoothness %g (%d negative jacobians) "
                  "Worst Gamma %g Avg Smoothness %g", cc, minJGlob, bad.size(),
                  minGGlob, avg / (count ? count : 1));
 }
@@ -1003,16 +1035,16 @@ static void checkHighOrderTetrahedron(const char* cc, GModel *m,
       else if (disto < 0.2) nbfair++;
     }
   }
-  if (minJGlob > 0)
+  if (minJGlob < 0)
     Msg::Info("%s : Worst Tetrahedron Smoothness %g Gamma %g NbFair = %d", 
               cc, minJGlob, minGGlob, nbfair);
-  else 
+    else 
     Msg::Warning("%s : Worst Tetrahedron Smoothness %g (%d negative jacobians) "
                  "Worst Gamma %g Avg Smoothness %g", cc, minJGlob, bad.size(),
                  minGGlob, avg / (count ? count : 1));
 }
 
-extern double mesh_functional_distorsion(MTriangle *t, double u, double v);
+extern double mesh_functional_distorsion(MElement *t, double u, double v);
 
 static void printJacobians(GModel *m, const char *nm)
 {
@@ -1083,7 +1115,7 @@ void SetOrderN(GModel *m, int order, bool linear, bool incomplete)
 
   int nPts = order - 1;
 
-  Msg::StatusBar(1, true, "Meshing order %d...", order);
+  Msg::StatusBar(2, true, "Meshing order %d...", order);
   double t1 = Cpu();
 
   // first, make sure to remove any existsing second order vertices/elements
@@ -1100,17 +1132,15 @@ void SetOrderN(GModel *m, int order, bool linear, bool incomplete)
   edgeContainer edgeVertices;
   faceContainer faceVertices;
   
-  Msg::StatusBar(1, true, "Meshing edges order %d...", order);
+  Msg::StatusBar(2, true, "Meshing curves order %d...", order);
   for(GModel::eiter it = m->firstEdge(); it != m->lastEdge(); ++it)
     setHighOrder(*it, edgeVertices, linear, nPts, displ2D, displ3D);
 
-  Msg::StatusBar(1, true, "Meshing faces %d...", order);
+  Msg::StatusBar(2, true, "Meshing surfaces order %d...", order);
   for(GModel::fiter it = m->firstFace(); it != m->lastFace(); ++it)
     setHighOrder(*it, edgeVertices, faceVertices, linear, incomplete, nPts,
                  displ2D, displ3D);
 
-  Msg::StatusBar(1, true, "Done meshing order %d", order);
-  
   // now we smooth mesh the internal vertices of the faces
   // we do that model face by model face
   std::vector<MElement*> bad;
@@ -1122,6 +1152,7 @@ void SetOrderN(GModel *m, int order, bool linear, bool incomplete)
     checkHighOrderTriangles("After optimization", m, bad, worst);
   }
 
+  Msg::StatusBar(2, true, "Meshing volumes order %d...", order);
   for(GModel::riter it = m->firstRegion(); it != m->lastRegion(); ++it)
     setHighOrder(*it, edgeVertices, faceVertices, linear, incomplete, nPts,
                  displ2D, displ3D);
@@ -1137,9 +1168,8 @@ void SetOrderN(GModel *m, int order, bool linear, bool incomplete)
   if(displ2D) delete displ2D;
   if(displ3D) delete displ3D;
 
-  //  printJacobians(m, "smoothness.pos");
+  // printJacobians(m, "smoothness.pos");
   
   double t2 = Cpu();
-  Msg::Info("Meshing order %d complete (%g s)", order, t2 - t1);
-  Msg::StatusBar(1, false, "Mesh");
+  Msg::StatusBar(2, true, "Done meshing order %d (%g s)", order, t2 - t1);
 }

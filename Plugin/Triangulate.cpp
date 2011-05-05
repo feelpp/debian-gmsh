@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -14,7 +14,7 @@
 #include "Context.h"
 
 StringXNumber TriangulateOptions_Number[] = {
-  {GMSH_FULLRC, "iView", NULL, -1.}
+  {GMSH_FULLRC, "View", NULL, -1.}
 };
 
 extern "C"
@@ -27,13 +27,12 @@ extern "C"
 
 std::string GMSH_TriangulatePlugin::getHelp() const
 {
-  return "Plugin(Triangulate) triangulates the points in the\n"
-         "view `iView', assuming that all the points belong\n"
-         "to a surface that can be projected one-to-one\n"
-         "onto a plane. If `iView' < 0, the plugin is run on\n"
-         "the current view.\n"
-         "\n"
-         "Plugin(Triangulate) creates one new view.\n";
+  return "Plugin(Triangulate) triangulates the points in the "
+    "view `View', assuming that all the points belong "
+    "to a surface that can be projected one-to-one "
+    "onto a plane.\n\n"
+    "If `View' < 0, the plugin is run on the current view.\n\n"
+    "Plugin(Triangulate) creates one new view.";
 }
 
 int GMSH_TriangulatePlugin::getNbOptions() const

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -15,9 +15,10 @@
 #include "VertexArray.h"
 #include "fullMatrix.h"
 #include "Numeric.h"
-#include "EigSolve.h"
 #include "GaussLegendre1D.h"
 #include "Context.h"
+#include "meshGFaceLloyd.h"
+#include "Bindings.h"
 
 #define SQU(a)      ((a)*(a))
 
@@ -37,10 +38,10 @@ GFace::~GFace()
     ++it;
   }
 
-  deleteMesh();
-
   if(va_geom_triangles)
     delete va_geom_triangles;
+
+  deleteMesh();
 }
 
 void GFace::delFreeEdge(GEdge *e)
@@ -83,6 +84,8 @@ void GFace::deleteMesh()
   quadrangles.clear();
   for(unsigned int i = 0; i < polygons.size(); i++) delete polygons[i];
   polygons.clear();
+  deleteVertexArrays();
+  model()->destroyMeshCaches();
 }
 
 unsigned int GFace::getNumMeshElements()
@@ -178,12 +181,9 @@ SOrientedBoundingBox GFace::getOBB()
       }
     } 
     else if(buildSTLTriangulation()) {
-      int N = va_geom_triangles->getNumVertices();
-      for (int i = 0; i < N; i++) {
-        SPoint3 p((va_geom_triangles->getVertexArray(3 * i))[0],
-                  (va_geom_triangles->getVertexArray(3 * i))[1],
-                  (va_geom_triangles->getVertexArray(3 * i))[2]);
-        vertices.push_back(p);
+      for (unsigned int i = 0; i < stl_vertices.size(); i++){
+        GPoint p = point(stl_vertices[i]);
+        vertices.push_back(SPoint3(p.x(), p.y(), p.z()));
       }
     }
     else {
@@ -291,6 +291,30 @@ void GFace::writeGEO(FILE *fp)
       Msg::Error("Skipping surface %d in export", tag());
     }
   }
+
+  for(std::list<GEdge*>::iterator it = embedded_edges.begin(); 
+      it != embedded_edges.end(); it++)
+    fprintf(fp, "Line {%d} In Surface {%d};\n", (*it)->tag(), tag());
+
+  for(std::list<GVertex*>::iterator it = embedded_vertices.begin(); 
+      it != embedded_vertices.end(); it++)
+    fprintf(fp, "Point {%d} In Surface {%d};\n", (*it)->tag(), tag());
+
+  if(meshAttributes.Method == MESH_TRANSFINITE){
+    fprintf(fp, "Transfinite Surface {%d}", tag());
+    if(meshAttributes.corners.size()){
+      fprintf(fp, " = {");
+      for(unsigned int i = 0; i < meshAttributes.corners.size(); i++){
+        if(i) fprintf(fp, ",");
+        fprintf(fp, "%d", meshAttributes.corners[i]->tag());
+      }
+      fprintf(fp, "}");
+    }
+    fprintf(fp, ";\n");
+  }
+
+  if(meshAttributes.recombine)
+    fprintf(fp, "Recombine Surface {%d};\n", tag());
 }
 
 void GFace::computeMeanPlane()
@@ -474,15 +498,97 @@ end:
       double d = meanPlane.a * v->x() + meanPlane.b * v->y() +
         meanPlane.c * v->z() - meanPlane.d;
       if(fabs(d) > lc * 1.e-3) {
-        Msg::Error("Plane surface %d (%gx+%gy+%gz+%g=0) is not plane!",
+        Msg::Error("Plane surface %d (%gx+%gy+%gz=%g) is not plane!",
                    tag(), meanPlane.a, meanPlane.b, meanPlane.c, meanPlane.d);
         Msg::Error("Control point %d = (%g,%g,%g), val=%g",
                    v->tag(), v->x(), v->y(), v->z(), d);
-        return;
+        break;
       }
     }
   }
 }
+
+void computeMeanPlane(const std::vector<SPoint3> &points, mean_plane &meanPlane)
+{
+  double xm = 0., ym = 0., zm = 0.;
+  int ndata = points.size();
+  int na = 3;
+  for(int i = 0; i < ndata; i++) {
+    xm += points[i].x();
+    ym += points[i].y();
+    zm += points[i].z();
+  }
+  xm /= (double)ndata;
+  ym /= (double)ndata;
+  zm /= (double)ndata;
+
+  fullMatrix<double> U(ndata, na), V(na, na);
+  fullVector<double> sigma(na);
+  for(int i = 0; i < ndata; i++) {
+    U(i, 0) = points[i].x() - xm;
+    U(i, 1) = points[i].y() - ym;
+    U(i, 2) = points[i].z() - zm;
+  }
+  U.svd(V, sigma);
+  double res[4], svd[3];
+  svd[0] = sigma(0);
+  svd[1] = sigma(1);
+  svd[2] = sigma(2);
+  int min;
+  if(fabs(svd[0]) < fabs(svd[1]) && fabs(svd[0]) < fabs(svd[2]))
+    min = 0;
+  else if(fabs(svd[1]) < fabs(svd[0]) && fabs(svd[1]) < fabs(svd[2]))
+    min = 1;
+  else
+    min = 2;
+  res[0] = V(0, min);
+  res[1] = V(1, min);
+  res[2] = V(2, min);
+  norme(res);
+
+  double ex[3], t1[3], t2[3];
+
+  ex[0] = ex[1] = ex[2] = 0.0;
+  if(res[0] == 0.)
+    ex[0] = 1.0;
+  else if(res[1] == 0.)
+    ex[1] = 1.0;
+  else
+    ex[2] = 1.0;
+
+  prodve(res, ex, t1);
+  norme(t1);
+  prodve(t1, res, t2);
+  norme(t2);
+
+  res[3] = (xm * res[0] + ym * res[1] + zm * res[2]);
+
+  for(int i = 0; i < 3; i++)
+    meanPlane.plan[0][i] = t1[i];
+  for(int i = 0; i < 3; i++)
+    meanPlane.plan[1][i] = t2[i];
+  for(int i = 0; i < 3; i++)
+    meanPlane.plan[2][i] = res[i];
+
+  meanPlane.a = res[0];
+  meanPlane.b = res[1];
+  meanPlane.c = res[2];
+  meanPlane.d = res[3];
+
+  meanPlane.x = meanPlane.y = meanPlane.z = 0.;
+  if(fabs(meanPlane.a) >= fabs(meanPlane.b) &&
+     fabs(meanPlane.a) >= fabs(meanPlane.c) ){
+    meanPlane.x = meanPlane.d / meanPlane.a;
+  }
+  else if(fabs(meanPlane.b) >= fabs(meanPlane.a) &&
+          fabs(meanPlane.b) >= fabs(meanPlane.c)){
+    meanPlane.y = meanPlane.d / meanPlane.b;
+  }
+  else{
+    meanPlane.z = meanPlane.d / meanPlane.c;
+  }
+}
+
 
 void GFace::getMeanPlaneData(double VX[3], double VY[3],
                              double &x, double &y, double &z) const
@@ -644,41 +750,40 @@ void GFace::getMetricEigenVectors(const SPoint2 &param,
   inv_form1[1][0] = inv_form1[0][1] = -1 * inv_det_form1 * form1[0][1];
 
   // N = (inverse of form1) X (form2)
-  double N[4]; // { N00 N01 N10 N11 }
-  N[0] = inv_form1[0][0] * form2[0][0] + inv_form1[0][1] * form2[1][0];
-  N[1] = inv_form1[0][0] * form2[0][1] + inv_form1[0][1] * form2[1][1];
-  N[2] = inv_form1[1][0] * form2[0][0] + inv_form1[1][1] * form2[1][0];
-  N[3] = inv_form1[1][0] * form2[0][1] + inv_form1[1][1] * form2[1][1];
+  fullMatrix<double> N(2, 2);
+  N(0, 0) = inv_form1[0][0] * form2[0][0] + inv_form1[0][1] * form2[1][0];
+  N(0, 1) = inv_form1[0][0] * form2[0][1] + inv_form1[0][1] * form2[1][1];
+  N(1, 0) = inv_form1[1][0] * form2[0][0] + inv_form1[1][1] * form2[1][0];
+  N(1, 1) = inv_form1[1][0] * form2[0][1] + inv_form1[1][1] * form2[1][1];
   
   // eigen values and vectors of N
-  int work1[2];
-  double work2[2];
-  double eigValI[2];
-  if (EigSolve(2, 2, N, eigVal, eigValI, eigVec, work1, work2) != 1) {
-    Msg::Error("Problem in eigen vectors computation");
-    Msg::Error(" N: %f %f %f %f", N[0], N[1], N[2], N[3]);
-    Msg::Error(" * Eigen values:");
-    Msg::Error("   %f + i * %f,  %f + i * %f",
-               eigVal[0], eigValI[0], eigVal[1], eigValI[1]);
-    Msg::Error(" * Eigen vectors (trust it only if eigen values are real):");
-    Msg::Error("   ( %f, %f ), ( %f, %f )",
-               eigVec[0], eigVec[2], eigVec[1], eigVec[3]);
+  fullMatrix<double> vl(2, 2), vr(2, 2);
+  fullVector<double> dr(2), di(2);
+  if(N.eig(dr, di, vl, vr, true)){
+    eigVal[0] = fabs(dr(0));
+    eigVal[1] = fabs(dr(1));
+    eigVec[0] = vr(0, 0);
+    eigVec[2] = vr(1, 0);
+    eigVec[1] = vr(0, 1);
+    eigVec[3] = vr(1, 1);
   }
-  if (fabs(eigValI[0]) > 1.e-12 || fabs(eigValI[1]) > 1.e-12) {
+  else{
+    Msg::Error("Problem in eigen vectors computation");
+    Msg::Error(" N = [ %f %f ]", N(0, 0), N(0, 1));
+    Msg::Error("     [ %f %f ]", N(1, 0), N(1, 1));
+    for(int i = 0; i < 2; i++) eigVal[i] = 0.;
+    for(int i = 0; i < 4; i++) eigVec[i] = 0.;
+  }
+  if (fabs(di(0)) > 1.e-12 || fabs(di(1)) > 1.e-12) {
     Msg::Error("Found imaginary eigenvalues");
   }
-
-  eigVal[0] = fabs(eigVal[0]);
-  eigVal[1] = fabs(eigVal[1]);
-  EigSort(2, eigVal, eigValI, eigVec);
 }
 
-void GFace::XYZtoUV(const double X, const double Y, const double Z,
-                    double &U, double &V, const double relax,
-                    const bool onSurface) const
+void GFace::XYZtoUV(double X, double Y, double Z, double &U, double &V,
+                    double relax, bool onSurface) const
 {
-  const double Precision = 1.e-8;
-  const int MaxIter = 25;
+  const double Precision = onSurface ? 1.e-8 : 1.e-3;
+  const int MaxIter = onSurface ? 25 : 10;
   const int NumInitGuess = 11;
 
   double Unew = 0., Vnew = 0., err, err2;
@@ -749,6 +854,8 @@ void GFace::XYZtoUV(const double X, const double Y, const double Z,
     }
   }
 
+  if(!onSurface) return;
+
   if(relax < 1.e-6)
     Msg::Error("Could not converge: surface mesh will be wrong");
   else {
@@ -757,14 +864,14 @@ void GFace::XYZtoUV(const double X, const double Y, const double Z,
   }
 }
 
-SPoint2 GFace::parFromPoint(const SPoint3 &p) const
+SPoint2 GFace::parFromPoint(const SPoint3 &p, bool onSurface) const
 {
   double U = 0., V = 0.;
-  XYZtoUV(p.x(), p.y(), p.z(), U, V, 1.0);
+  XYZtoUV(p.x(), p.y(), p.z(), U, V, 1.0, onSurface);
   return SPoint2(U, V);
 }
 
-GPoint GFace::closestPoint(const SPoint3 & queryPoint, const double initialGuess[2]) const
+GPoint GFace::closestPoint(const SPoint3 &queryPoint, const double initialGuess[2]) const
 {
   Msg::Error("Closest point not implemented for this type of surface");
   return GPoint(0, 0, 0);
@@ -789,10 +896,16 @@ SVector3 GFace::normal(const SPoint2 &param) const
   return n;
 }
 
-bool GFace::buildRepresentationCross()
+bool GFace::buildRepresentationCross(bool force)
 {
+  if(cross.size()){
+    if(force)
+      cross.clear();
+    else
+      return true;
+  }
+
   if(geomType() != Plane){
-    // don't try again
     cross.clear();
     cross.push_back(SPoint3(0., 0., 0.));
     return false;
@@ -804,7 +917,6 @@ bool GFace::buildRepresentationCross()
     GEdge *ge = *it;
     if(ge->geomType() == GEntity::DiscreteCurve ||
        ge->geomType() == GEntity::BoundaryLayerCurve){
-      // don't try again
       cross.clear();
       cross.push_back(SPoint3(0., 0., 0.));
       return false;
@@ -853,8 +965,8 @@ bool GFace::buildRepresentationCross()
     }
     if(end_line) cross.push_back(pt_last_inside);
   }
-  // if we couldn't determine a cross, add a dummy point so that
-  // we won't try again
+  // if we couldn't determine a cross, add a dummy point so that we
+  // won't try again unless we force the recomputation
   if(!cross.size()){
     cross.push_back(SPoint3(0., 0., 0.));
     return false;
@@ -862,66 +974,84 @@ bool GFace::buildRepresentationCross()
   return true;
 }
 
-struct graphics_point{
-  double xyz[3];
-  SVector3 n;
-};
-
-bool GFace::buildSTLTriangulation()
+bool GFace::buildSTLTriangulation(bool force)
 {
-  // Build a simple triangulation for surfaces which we know are not
-  // trimmed
-  if(geomType() != ParametricSurface && geomType() != ProjectionFace)
-    return false;
-
-  const int nu = 64, nv = 64;
-  graphics_point p[nu][nv];
-
-  if(va_geom_triangles) delete va_geom_triangles;
-  va_geom_triangles = new VertexArray(3, 2 * (nu - 1) * (nv - 1));
-
-  Range<double> ubounds = parBounds(0);
-  Range<double> vbounds = parBounds(1);
-  double umin = ubounds.low(), umax = ubounds.high();
-  double vmin = vbounds.low(), vmax = vbounds.high();
-
-  for(int i = 0; i < nu; i++){
-    for(int j = 0; j < nv; j++){
-      double u = umin + (double)i / (double)(nu - 1) * (umax - umin);
-      double v = vmin + (double)j / (double)(nv - 1) * (vmax - vmin);
-      GPoint gp = point(u, v);
-      p[i][j].xyz[0] = gp.x();
-      p[i][j].xyz[1] = gp.y();
-      p[i][j].xyz[2] = gp.z();
-      p[i][j].n = normal(SPoint2(u, v));
+  if(stl_triangles.size()){
+    if(force){
+      stl_vertices.clear();
+      stl_triangles.clear();
     }
+    else
+      return true;
   }
 
-  // i,j+1 *---* i+1,j+1
-  //       | / |
-  //   i,j *---* i+1,j
+  // Build a simple triangulation for surfaces which we know are not
+  // trimmed
+  if(geomType() == ParametricSurface || geomType() == ProjectionFace){
+    const int nu = 64, nv = 64;
+    Range<double> ubounds = parBounds(0);
+    Range<double> vbounds = parBounds(1);
+    double umin = ubounds.low(), umax = ubounds.high();
+    double vmin = vbounds.low(), vmax = vbounds.high();
+    for(int i = 0; i < nu; i++){
+      for(int j = 0; j < nv; j++){
+        double u = umin + (double)i / (double)(nu - 1) * (umax - umin);
+        double v = vmin + (double)j / (double)(nv - 1) * (vmax - vmin);
+        stl_vertices.push_back(SPoint2(u, v));
+      }
+    }
+    for(int i = 0; i < nu - 1; i++){
+      for(int j = 0; j < nv - 1; j++){
+        stl_triangles.push_back(i * nv + j);
+        stl_triangles.push_back((i + 1) * nv + j);
+        stl_triangles.push_back((i + 1) * nv + j + 1);
+        stl_triangles.push_back(i * nv + j);
+        stl_triangles.push_back((i + 1) * nv + j + 1);
+        stl_triangles.push_back(i * nv + j + 1);
+      }
+    }
+    return true;
+  }
+  
+  // build STL for general surfaces here
+
+  return false;
+}
+
+bool GFace::fillVertexArray(bool force)
+{
+  if(va_geom_triangles){
+    if(force)
+      delete va_geom_triangles;
+    else
+      return true;
+  }
+
+  if(!buildSTLTriangulation(force)) return false;
+  if(stl_triangles.empty()) return false;
+
+  va_geom_triangles = new VertexArray(3, stl_triangles.size() / 3);
   unsigned int c = CTX::instance()->color.geom.surface;
   unsigned int col[4] = {c, c, c, c};
-  for(int i = 0; i < nu - 1; i++){
-    for(int j = 0; j < nv - 1; j++){
-      double x1[3] = {p[i][j].xyz[0], p[i + 1][j].xyz[0], p[i + 1][j + 1].xyz[0]};
-      double y1[3] = {p[i][j].xyz[1], p[i + 1][j].xyz[1], p[i + 1][j + 1].xyz[1]};
-      double z1[3] = {p[i][j].xyz[2], p[i + 1][j].xyz[2], p[i + 1][j + 1].xyz[2]};
-      SVector3 n1[3] = {p[i][j].n, p[i + 1][j].n, p[i + 1][j + 1].n};
-      va_geom_triangles->add(x1, y1, z1, n1, col);
-      double x2[3] = {p[i][j].xyz[0], p[i + 1][j + 1].xyz[0], p[i][j + 1].xyz[0]};
-      double y2[3] = {p[i][j].xyz[1], p[i + 1][j + 1].xyz[1], p[i][j + 1].xyz[1]};
-      double z2[3] = {p[i][j].xyz[2], p[i + 1][j + 1].xyz[2], p[i][j + 1].xyz[2]};
-      SVector3 n2[3] = {p[i][j].n, p[i + 1][j + 1].n, p[i][j + 1].n};
-      va_geom_triangles->add(x2, y2, z2, n2, col);
-    }
+  for (unsigned int i = 0; i < stl_triangles.size(); i += 3){
+    SPoint2 &p1(stl_vertices[stl_triangles[i]]);
+    SPoint2 &p2(stl_vertices[stl_triangles[i + 1]]);
+    SPoint2 &p3(stl_vertices[stl_triangles[i + 2]]);
+    GPoint gp1 = point(p1);
+    GPoint gp2 = point(p2);
+    GPoint gp3 = point(p3);
+    double x[3] = {gp1.x(), gp2.x(), gp3.x()};
+    double y[3] = {gp1.y(), gp2.y(), gp3.y()};
+    double z[3] = {gp1.z(), gp2.z(), gp3.z()};
+    SVector3 n[3] = {normal(p1), normal(p2), normal(p3)};
+    va_geom_triangles->add(x, y, z, n, col);
   }
   va_geom_triangles->finalize();
   return true;
 }
 
 // by default we assume that straight lines are geodesics
-SPoint2 GFace::geodesic(const SPoint2 &pt1 , const SPoint2 &pt2 , double t)
+SPoint2 GFace::geodesic(const SPoint2 &pt1, const SPoint2 &pt2, double t)
 {
   if(CTX::instance()->mesh.secondOrderExperimental && geomType() != GEntity::Plane ){
     // FIXME: this is buggy -- remove the CTX option once we do it in
@@ -986,9 +1116,114 @@ int GFace::genusGeom()
     if ((*it)->isSeam(this)){
       nSeams++;
       std::set<GEdge*>::iterator it2 = single_seams.find(*it);
-      if (it2 != single_seams.end())single_seams.erase(it2);
+      if (it2 != single_seams.end()) single_seams.erase(it2);
       else single_seams.insert(*it);
     }
   }
   return nSeams - single_seams.size();
+}
+
+bool GFace::fillPointCloud(double maxDist, std::vector<SPoint3> *points,
+                           std::vector<SVector3> *normals)
+{
+  if(!buildSTLTriangulation()){
+    Msg::Error("No STL triangulation available to fill point cloud");
+    return false;
+  }
+  
+  if(!points) return false;
+
+  for(unsigned int i = 0; i < stl_triangles.size(); i += 3){
+    SPoint2 &p0(stl_vertices[stl_triangles[i]]);
+    SPoint2 &p1(stl_vertices[stl_triangles[i + 1]]);
+    SPoint2 &p2(stl_vertices[stl_triangles[i + 2]]);
+
+    GPoint gp0 = point(p0);
+    GPoint gp1 = point(p1);
+    GPoint gp2 = point(p2);
+    double maxEdge = std::max(gp0.distance(gp1),
+                              std::max(gp1.distance(gp2), gp2.distance(gp0)));
+    int N = (int)(maxEdge / maxDist);
+    for(double u = 0.; u < 1.; u += 1. / N){
+      for(double v = 0.; v < 1 - u; v += 1. / N){
+        SPoint2 p = p0 * (1. - u - v) + p1 * u + p2 * v;
+        GPoint gp(point(p));
+        points->push_back(SPoint3(gp.x(), gp.y(), gp.z())); 
+        if(normals) normals->push_back(normal(p));
+      }
+    }
+  }
+  return true;
+}
+
+void GFace::lloyd(int nbiter, int infn)
+{
+#if defined(HAVE_MESH)
+  lloydAlgorithm algo(nbiter, infn);
+  algo(this);
+#endif
+}
+
+void GFace::replaceEdges (std::list<GEdge*> &new_edges)
+{
+  replaceEdgesInternal (new_edges);
+  std::list<GEdge*>::iterator it  = l_edges.begin();
+  std::list<GEdge*>::iterator it2 = new_edges.begin();
+  std::list<int>::iterator it3 = l_dirs.begin();
+  std::list<int> newdirs;
+  for ( ; it != l_edges.end(); ++it, ++it2, ++it3){
+    (*it)->delFace(this);
+    (*it2)->addFace(this);        
+    if ((*it2)->getBeginVertex() == (*it)->getBeginVertex())
+      newdirs.push_back(*it3);
+    else
+      newdirs.push_back(-(*it3));
+  }
+  l_edges = new_edges;
+  l_dirs = newdirs;
+}
+
+void GFace::moveToValidRange(SPoint2 &pt) const
+{
+  //  printf("coucou %8d %12.5E %12.5E %d %d\n",
+  //	 tag(),pt.x(),pt.y(),
+  //	 periodic(0),periodic(1));
+  for(int i=0; i < 2; i++){
+    if(periodic(i)){
+      Range<double> range = parBounds(i);
+      double tol = 1e-6*(range.high()-range.low());
+      if(pt[i] < range.low()-tol)
+	pt[i] += period(i);
+      if(pt[i] > range.high()+tol)
+	pt[i] -= period(i);
+      if(pt[i] < range.low())
+	pt[i] = range.low();
+      if(pt[i] > range.high())
+	pt[i] = range.high();
+    }
+  }
+}
+
+#include "Bindings.h"
+
+void GFace::registerBindings(binding *b)
+{
+  classBinding *cb = b->addClass<GFace>("GFace");
+  cb->setParentClass<GEntity>();
+  cb->setDescription("A GFace is a geometrical 2D entity");
+  methodBinding *mb;
+  mb = cb->addMethod("lloyd", &GFace::lloyd);
+  mb->setDescription("do N iteration of Lloyd's algorithm using or not the infinite norm");
+  mb->setArgNames("N","infiniteNorm",NULL);
+  mb = cb->addMethod("addTriangle", &GFace::addTriangle);
+  mb->setDescription("insert a triangle mesh element");
+  mb->setArgNames("triangle", NULL);
+  mb = cb->addMethod("addQuadrangle", &GFace::addQuadrangle);
+  mb->setDescription("insert a quadrangle mesh element");
+  mb->setArgNames("quadrangle", NULL);
+  mb = cb->addMethod("edges", &GFace::edges);
+  mb->setDescription("return the list of edges bounding this surface");
+/*  mb = cb->addMethod("addPolygon", &GFace::addPolygon);
+  mb->setDescription("insert a polygon mesh element");
+  mb->setArgNames("polygon", NULL);*/
 }

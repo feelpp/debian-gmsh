@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -13,10 +13,15 @@
 void SwapBytes(char *array, int size, int n);
 std::string ExtractDoubleQuotedString(const char *str, int len);
 std::string SanitizeTeXString(const char *in, int equation);
-std::string FixWindowsPath(std::string in);
-std::string FixRelativePath(std::string reference, std::string in);
-std::vector<std::string> SplitFileName(std::string fileName);
-std::vector<std::string> SplitWhiteSpace(std::string in, unsigned int len);
-std::string ReplacePercentS(std::string in, std::string val);
+std::string FixWindowsPath(const std::string &in);
+std::string FixRelativePath(const std::string &reference, const std::string &in);
+std::vector<std::string> SplitFileName(const std::string &fileName);
+std::string GetFileNameWithoutPath(const std::string &fileName);
+std::string ConvertFileToString(const std::string &fileName);
+void ReplaceSubStringInPlace(const std::string &olds, const std::string &news, 
+                             std::string &str);
+std::string ReplaceSubString(const std::string &olds, const std::string &news, 
+                             const std::string &str);
+void ConvertToHTML(std::string &in);
 
 #endif

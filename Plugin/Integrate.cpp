@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -8,7 +8,7 @@
 #include "PViewOptions.h"
 
 StringXNumber IntegrateOptions_Number[] = {
-  {GMSH_FULLRC, "iView", NULL, -1.}
+  {GMSH_FULLRC, "View", NULL, -1.}
 };
 
 extern "C"
@@ -21,13 +21,12 @@ extern "C"
 
 std::string GMSH_IntegratePlugin::getHelp() const
 {
-  return "Plugin(Integrate) integrates scalar fields over\n"
-         "all the elements in the view `iView', as well\n"
-         "as the circulation/flux of vector fields over\n"
-         "line/surface elements. If `iView' < 0, the\n"
-         "plugin is run on the current view.\n"
-         "\n"
-         "Plugin(Integrate) creates one new view.\n";
+  return "Plugin(Integrate) integrates scalar fields over "
+    "all the elements in the view `View', as well "
+    "as the circulation/flux of vector fields over "
+    "line/surface elements.\n\n"
+    "If `View' < 0, the plugin is run on the current view.\n\n"
+    "Plugin(Integrate) creates one new view.";
 }
 
 int GMSH_IntegratePlugin::getNbOptions() const
@@ -47,7 +46,7 @@ PView *GMSH_IntegratePlugin::execute(PView * v)
   PView *v1 = getView(iView, v);
   if(!v1) return v;
 
-  PViewData *data1 = v1->getData();
+  PViewData *data1 = v1->getData(true); // get adaptive data if available
   PView *v2 = new PView();
   PViewDataList *data2 = getDataList(v2);
   

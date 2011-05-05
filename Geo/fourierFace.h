@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -24,7 +24,7 @@ class fourierFace : public GFace {
   virtual ~fourierFace() {}
   Range<double> parBounds(int i) const; 
   virtual GPoint point(double par1, double par2) const; 
-  virtual SPoint2 parFromPoint(const SPoint3 &p) const;
+  virtual SPoint2 parFromPoint(const SPoint3 &p, bool onSurface=true) const;
   virtual bool containsParam(const SPoint2 &pt) const; 
   virtual SVector3 normal(const SPoint2 &param) const; 
   virtual GEntity::GeomType geomType() const;

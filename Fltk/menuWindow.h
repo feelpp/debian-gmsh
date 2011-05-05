@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -49,7 +49,9 @@ extern contextItem menu_mesh[];
 extern    contextItem menu_mesh_edit[]; 
 extern        contextItem menu_mesh_delete[]; 
 extern    contextItem menu_mesh_define[]; 
-extern        contextItem menu_mesh_define_transfinite[]; 
+extern        contextItem menu_mesh_define_transfinite[];
+extern        contextItem menu_mesh_define_compound[];
+extern    contextItem menu_mesh_degree[];
 extern contextItem menu_solver[]; 
 extern contextItem menu_post[]; 
 
@@ -74,9 +76,11 @@ class menuWindow{
  public:
   menuWindow();
   void setContext(contextItem *menu_asked, int flag);
+  void fillRecentHistoryMenu();
 };
 
 void file_quit_cb(Fl_Widget *w, void *data);
+void file_watch_cb(Fl_Widget *w, void *data);
 void mod_geometry_cb(Fl_Widget *w, void *data);
 void mod_mesh_cb(Fl_Widget *w, void *data);
 void mod_solver_cb(Fl_Widget *w, void *data);

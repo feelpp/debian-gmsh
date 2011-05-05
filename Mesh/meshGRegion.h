@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -48,22 +48,23 @@ class deMeshGRegion {
   void operator () (GRegion *);
 };
 
-
 void MeshDelaunayVolume(std::vector<GRegion*> &delaunay);
 int MeshTransfiniteVolume(GRegion *gr);
 int SubdivideExtrudedMesh(GModel *m);
 void carveHole(GRegion *gr, int num, double distance, std::vector<int> &surfaces);
 
-typedef std::multimap<MVertex*,std::pair<MTriangle*,GFace*> > fs_cont ;
-typedef std::multimap<MVertex*,std::pair<MLine*,GEdge*> > es_cont ;
-GFace* findInFaceSearchStructure ( MVertex *p1,MVertex *p2,MVertex *p3, const fs_cont&search );
-GEdge* findInEdgeSearchStructure ( MVertex *p1,MVertex *p2, const es_cont&search );
-bool buildFaceSearchStructure ( GModel *model , fs_cont&search );
-bool buildEdgeSearchStructure ( GModel *model , es_cont&search );
+typedef std::multimap<MVertex*, std::pair<MTriangle*, GFace*> > fs_cont ;
+typedef std::multimap<MVertex*, std::pair<MLine*, GEdge*> > es_cont ;
+GFace* findInFaceSearchStructure(MVertex *p1, MVertex *p2, MVertex *p3, 
+                                 const fs_cont &search);
+GEdge* findInEdgeSearchStructure(MVertex *p1, MVertex *p2, const es_cont &search);
+bool buildFaceSearchStructure(GModel *model, fs_cont &search);
+bool buildEdgeSearchStructure(GModel *model, es_cont &search);
 
 // adapt the mesh of a region
 class adaptMeshGRegion {
-  es_cont *_es; fs_cont *_fs;
+  es_cont *_es;
+  fs_cont *_fs;
  public :
   void operator () (GRegion *);
 };

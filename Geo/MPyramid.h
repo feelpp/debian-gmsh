@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -64,7 +64,7 @@ class MPyramid : public MElement {
     for(int i = 0; i < 5; i++) _v[i] = v[i];
   }
   ~MPyramid(){}
-  virtual int getDim(){ return 3; }
+  virtual int getDim() const { return 3; }
   virtual int getNumVertices() const { return 5; }
   virtual MVertex *getVertex(int num){ return _v[num]; }
   virtual MVertex *getVertexMED(int num)

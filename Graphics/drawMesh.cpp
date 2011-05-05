@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -163,16 +163,6 @@ static bool areSomeElementsCurved(std::vector<T*> &elements)
   return false;
 }
 
-static int getLabelStep(int total)
-{
-  int step;
-  if(CTX::instance()->mesh.labelFrequency == 0.0) 
-    step = total;
-  else 
-    step = (int)(100.0 / CTX::instance()->mesh.labelFrequency);
-  return (step > total) ? total : step;
-}
-
 template<class T>
 static void drawElementLabels(drawContext *ctx, GEntity *e,
                               std::vector<T*> &elements, int forceColor=0,
@@ -181,7 +171,8 @@ static void drawElementLabels(drawContext *ctx, GEntity *e,
   unsigned col = forceColor ? color : getColorByEntity(e);
   glColor4ubv((GLubyte *) & col);
 
-  int labelStep = getLabelStep(elements.size());
+  int labelStep = CTX::instance()->mesh.labelSampling;
+  if(labelStep <= 0) labelStep = 1;
 
   for(unsigned int i = 0; i < elements.size(); i++){
     MElement *ele = elements[i];
@@ -267,7 +258,12 @@ static void drawVertexLabel(drawContext *ctx, GEntity *e, MVertex *v,
     glColor4ubv((GLubyte *) & CTX::instance()->color.mesh.vertexSup);
   else
     glColor4ubv((GLubyte *) & CTX::instance()->color.mesh.vertex);   
-  glRasterPos3d(v->x(), v->y(), v->z());
+
+  double offset = (0.5 * CTX::instance()->mesh.pointSize + 
+                   0.1 * CTX::instance()->glFontSize) * ctx->pixel_equiv_x;
+  glRasterPos3d(v->x() + offset / ctx->s[0],
+                v->y() + offset / ctx->s[1],
+                v->z() + offset / ctx->s[2]);
   ctx->drawString(str);
 }
 
@@ -301,7 +297,8 @@ static void drawVerticesPerEntity(drawContext *ctx, GEntity *e)
     }
   }
   if(CTX::instance()->mesh.pointsNum) {
-    int labelStep = getLabelStep(e->mesh_vertices.size());
+    int labelStep = CTX::instance()->mesh.labelSampling;
+    if(labelStep <= 0) labelStep = 1;
     for(unsigned int i = 0; i < e->mesh_vertices.size(); i++)
       if(i % labelStep == 0) drawVertexLabel(ctx, e, e->mesh_vertices[i]);
   }
@@ -331,7 +328,7 @@ static void drawVerticesPerElement(drawContext *ctx, GEntity *e,
           }
         }
         if(CTX::instance()->mesh.pointsNum)
-          drawVertexLabel(ctx, e, v);
+          drawVertexLabel(ctx, v->onWhat() ? v->onWhat() : e, v);
       }
     }
   }
@@ -945,6 +942,10 @@ class drawMeshGRegion {
       drawBarycentricDual(r->polyhedra);
     }
 
+    if(CTX::instance()->mesh.voronoi) {
+      if(CTX::instance()->mesh.tetrahedra) drawVoronoiDual(r->tetrahedra);
+    }
+
     if(select) {
       glPopName();
       glPopName();
@@ -980,13 +981,13 @@ void drawContext::drawMesh()
   // make sure to flag any model-dependent post-processing view as
   // changed if the underlying mesh has, before resetting the changed
   // flag
-  for(unsigned int i = 0; i < GModel::list.size(); i++){
-    GModel *m = GModel::list[i];
-    for(unsigned int j = 0; j < PView::list.size(); j++)
-      if(PView::list[j]->getData()->hasModel(m) && CTX::instance()->mesh.changed)
-        PView::list[j]->setChanged(true);
+  if(CTX::instance()->mesh.changed){
+    for(unsigned int i = 0; i < GModel::list.size(); i++)
+      for(unsigned int j = 0; j < PView::list.size(); j++)
+        if(PView::list[j]->getData()->hasModel(GModel::list[i]))
+          PView::list[j]->setChanged(true);
   }
-
+  
   glPointSize((float)CTX::instance()->mesh.pointSize);
   gl2psPointSize((float)(CTX::instance()->mesh.pointSize * 
                          CTX::instance()->print.epsPointSizeFactor));
@@ -1008,48 +1009,42 @@ void drawContext::drawMesh()
         glDisable((GLenum)(GL_CLIP_PLANE0 + i));
   }
 
-  static bool busy = false;
-  if(!busy){
-    busy = true;
-
-    for(unsigned int i = 0; i < GModel::list.size(); i++){
-      GModel *m = GModel::list[i];
-      if(m->getVisibility()){
-        int status = m->getMeshStatus();
-        if(CTX::instance()->mesh.changed) {
-          Msg::Debug("Mesh has changed: reinitializing drawing data",
-                     CTX::instance()->mesh.changed);
-          if(status >= 1 && CTX::instance()->mesh.changed & ENT_LINE)
-            std::for_each(m->firstEdge(), m->lastEdge(), initMeshGEdge());
-          if(status >= 2 && CTX::instance()->mesh.changed & ENT_SURFACE){
-            if(m->normals) delete m->normals;
-            m->normals = new smooth_normals(CTX::instance()->mesh.angleSmoothNormals);
-            if(CTX::instance()->mesh.smoothNormals)
-              std::for_each(m->firstFace(), m->lastFace(), initSmoothNormalsGFace());
-            std::for_each(m->firstFace(), m->lastFace(), initMeshGFace());
-          }
-          if(status >= 3 && CTX::instance()->mesh.changed & ENT_VOLUME)
-            std::for_each(m->firstRegion(), m->lastRegion(), initMeshGRegion());
+  for(unsigned int i = 0; i < GModel::list.size(); i++){
+    GModel *m = GModel::list[i];
+    if(m->getVisibility()){
+      int status = m->getMeshStatus();
+      if(CTX::instance()->mesh.changed) {
+        Msg::Debug("Mesh has changed: reinitializing drawing data",
+                   CTX::instance()->mesh.changed);
+        if(status >= 1 && CTX::instance()->mesh.changed & ENT_LINE)
+          std::for_each(m->firstEdge(), m->lastEdge(), initMeshGEdge());
+        if(status >= 2 && CTX::instance()->mesh.changed & ENT_SURFACE){
+          if(m->normals) delete m->normals;
+          m->normals = new smooth_normals(CTX::instance()->mesh.angleSmoothNormals);
+          if(CTX::instance()->mesh.smoothNormals)
+            std::for_each(m->firstFace(), m->lastFace(), initSmoothNormalsGFace());
+          std::for_each(m->firstFace(), m->lastFace(), initMeshGFace());
         }
-        if(isVisible(m)){
-          if(status >= 0)
-            std::for_each(m->firstVertex(), m->lastVertex(), drawMeshGVertex(this));
-          if(status >= 1)
-            std::for_each(m->firstEdge(), m->lastEdge(), drawMeshGEdge(this));
-          if(status >= 2){
-            beginFakeTransparency();
-            std::for_each(m->firstFace(), m->lastFace(), drawMeshGFace(this));
-            endFakeTransparency();
-          }
-          if(status >= 3)
-            std::for_each(m->firstRegion(), m->lastRegion(), drawMeshGRegion(this));
+        if(status >= 3 && CTX::instance()->mesh.changed & ENT_VOLUME)
+          std::for_each(m->firstRegion(), m->lastRegion(), initMeshGRegion());
+      }
+      if(isVisible(m)){
+        if(status >= 0)
+          std::for_each(m->firstVertex(), m->lastVertex(), drawMeshGVertex(this));
+        if(status >= 1)
+          std::for_each(m->firstEdge(), m->lastEdge(), drawMeshGEdge(this));
+        if(status >= 2){
+          beginFakeTransparency();
+          std::for_each(m->firstFace(), m->lastFace(), drawMeshGFace(this));
+          endFakeTransparency();
         }
+        if(status >= 3)
+          std::for_each(m->firstRegion(), m->lastRegion(), drawMeshGRegion(this));
       }
     }
-
-    CTX::instance()->mesh.changed = 0;
-    busy = false;
   }
+  
+  CTX::instance()->mesh.changed = 0;
 
   for(int i = 0; i < 6; i++)
     glDisable((GLenum)(GL_CLIP_PLANE0 + i));

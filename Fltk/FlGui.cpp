@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -38,6 +38,7 @@
 #include "OpenFile.h"
 #include "Win32Icon.h"
 #include "Options.h"
+#include "CommandLine.h"
 #include "Context.h"
 #include "StringUtils.h"
 #include "gl2ps.h"
@@ -279,7 +280,26 @@ FlGui *FlGui::_instance = 0;
 
 FlGui *FlGui::instance(int argc, char **argv)
 {
-  if(!_instance) _instance = new FlGui(argc, argv);
+  if(!_instance){
+    _instance = new FlGui(argc, argv);
+    // set all options in the new GUI
+    InitOptionsGUI(0);
+    // say welcome!
+    Msg::StatusBar(1, false, "Geometry");
+    Msg::StatusBar(2, false, "Gmsh %s", GetGmshVersion());
+    // log the following for bug reports
+    Msg::Info("-------------------------------------------------------");
+    Msg::Info("Gmsh version   : %s", GetGmshVersion());
+    Msg::Info("Build OS       : %s", GetGmshBuildOS());
+    Msg::Info("Build options  :%s", GetGmshBuildOptions());
+    Msg::Info("Build date     : %s", GetGmshBuildDate());
+    Msg::Info("Build host     : %s", GetGmshBuildHost());
+    Msg::Info("Packager       : %s", GetGmshPackager());
+    Msg::Info("Home directory : %s", CTX::instance()->homeDir.c_str());
+    Msg::Info("Launch date    : %s", Msg::GetLaunchDate().c_str());
+    Msg::Info("Command line   : %s", Msg::GetCommandLineArgs().c_str());
+    Msg::Info("-------------------------------------------------------");
+  }
   return _instance;
 }
 
@@ -338,6 +358,10 @@ int FlGui::testGlobalShortcuts(int event)
   }
   else if(Fl::test_shortcut('>')) {
     mod_forward_cb(0, 0);
+    status = 1;
+  }
+  else if(Fl::test_shortcut('w')) {
+    file_watch_cb(0, 0);
     status = 1;
   }
   else if(Fl::test_shortcut('e')) {
@@ -558,25 +582,14 @@ int FlGui::testGlobalShortcuts(int event)
     status = 2;
   }
   else if(Fl::test_shortcut(FL_ALT + 'm')) {
-    int old = opt_mesh_points(0, GMSH_GET, 0) || 
-      opt_mesh_lines(0, GMSH_GET, 0) ||
-      opt_mesh_surfaces_edges(0, GMSH_GET, 0) ||
-      opt_mesh_surfaces_faces(0, GMSH_GET, 0);
-    opt_mesh_points(0, GMSH_SET | GMSH_GUI, !old);
-    opt_mesh_lines(0, GMSH_SET | GMSH_GUI, !old);
-    opt_mesh_surfaces_edges(0, GMSH_SET | GMSH_GUI, !old);
-    opt_mesh_surfaces_faces(0, GMSH_SET | GMSH_GUI, !old);
-    opt_mesh_volumes_edges(0, GMSH_SET | GMSH_GUI, !old);
-    opt_mesh_volumes_faces(0, GMSH_SET | GMSH_GUI, !old);
+    status_options_cb(0, (void *)"M");
     status = 2;
   }
   else if(Fl::test_shortcut(FL_ALT + 't')) {
     for(unsigned int i = 0; i < PView::list.size(); i++)
-      if(opt_view_visible(i, GMSH_GET, 0)){
-        double t = opt_view_intervals_type(i, GMSH_GET, 0) + 1;
-        if(t == 4) t++; // skip numeric
-        opt_view_intervals_type(i, GMSH_SET | GMSH_GUI, t);
-      }
+      if(opt_view_visible(i, GMSH_GET, 0))
+        opt_view_intervals_type
+          (i, GMSH_SET | GMSH_GUI, opt_view_intervals_type(i, GMSH_GET, 0) + 1);
     status = 2;
   }
   else if(Fl::test_shortcut(FL_ALT + 'r')) {
@@ -656,17 +669,19 @@ void FlGui::setGraphicTitle(std::string title)
   }
 }
 
-void FlGui::updateViews()
+void FlGui::updateViews(bool numberOfViewsHasChanged)
 {
   for(unsigned int i = 0; i < graph.size(); i++)
     graph[i]->checkAnimButtons();
-  if(menu->module->value() == 3)
-    menu->setContext(menu_post, 0);
-  options->resetBrowser();
-  options->resetExternalViewList();
-  fields->loadFieldViewList();
-  plugins->resetViewBrowser();
-  clipping->resetBrowser();
+  if(numberOfViewsHasChanged){
+    if(menu->module->value() == 3)
+      menu->setContext(menu_post, 0);
+    options->resetBrowser();
+    options->resetExternalViewList();
+    fields->loadFieldViewList();
+    plugins->resetViewBrowser();
+    clipping->resetBrowser();
+  }
 }
 
 void FlGui::updateFields()
@@ -767,8 +782,8 @@ void FlGui::storeCurrentWindowsInfo()
   CTX::instance()->ctxPosition[1] = meshContext->win->y();
   CTX::instance()->solverPosition[0] = solver[0]->win->x();
   CTX::instance()->solverPosition[1] = solver[0]->win->y();
-  file_chooser_get_position(&CTX::instance()->fileChooserPosition[0],
-                            &CTX::instance()->fileChooserPosition[1]);
+  fileChooserGetPosition(&CTX::instance()->fileChooserPosition[0],
+                         &CTX::instance()->fileChooserPosition[1]);
 }
 
 void FlGui::callForSolverPlugin(int dim)
@@ -862,31 +877,3 @@ void window_cb(Fl_Widget *w, void *data)
   }
 }
 
-void add_multiline_in_browser(Fl_Browser *o, const char *prefix, 
-                              const char *str, int wrap)
-{
-  int start = 0, len;
-  if(!str || !strlen(str) || !strcmp(str, "\n")) {
-    o->add(" ");
-    return;
-  }
-  for(int i = 0; i < (int)strlen(str); i++) {
-    if(i == (int)strlen(str) - 1 || str[i] == '\n' || 
-       (wrap > 0 && i - start == wrap)) {
-      if(wrap > 0 && i - start == wrap){ //line is longer than wrap
-        while(str[i] != ' ' && i > start) //go back to the previous space
-          i--;
-        if(i == start) //no space in this line, cut the word
-          i += wrap;
-      }
-      len = i - start + (str[i] == '\n' ? 0 : 1);
-      char *buff = new char[len + strlen(prefix) + 2];
-      strcpy(buff, prefix);
-      strncat(buff, &str[start], len);
-      buff[len + strlen(prefix)] = '\0';
-      o->add(buff);
-      start = i + 1;
-      delete [] buff;
-    }
-  }
-}

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -6,7 +6,7 @@
 #include "MakeSimplex.h"
 
 StringXNumber MakeSimplexOptions_Number[] = {
-  {GMSH_FULLRC, "iView", NULL, -1.}
+  {GMSH_FULLRC, "View", NULL, -1.}
 };
 
 extern "C"
@@ -19,14 +19,11 @@ extern "C"
 
 std::string GMSH_MakeSimplexPlugin::getHelp() const
 {
-  return "Plugin(MakeSimplex) decomposes all non-\n"
-         "simplectic elements (quadrangles, prisms,\n"
-         "hexahedra, pyramids) in the view `iView' into\n"
-         "simplices (triangles, tetrahedra). If `iView' < 0,\n"
-         "the plugin is run on the current view.\n"
-         "\n"
-         "Plugin(MakeSimplex) is executed\n"
-         "in-place.\n";
+  return "Plugin(MakeSimplex) decomposes all non-simplectic "
+    "elements (quadrangles, prisms, hexahedra, pyramids) in the "
+    "view `View' into simplices (triangles, tetrahedra).\n\n"
+    "If `View' < 0, the plugin is run on the current view.\n\n"
+    "Plugin(MakeSimplex) is executed in-place.";
 }
 
 int GMSH_MakeSimplexPlugin::getNbOptions() const

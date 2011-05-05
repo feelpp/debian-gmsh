@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -54,7 +54,7 @@ class MHexahedron : public MElement {
     for(int i = 0; i < 8; i++) _v[i] = v[i];
   }
   ~MHexahedron(){}
-  virtual int getDim(){ return 3; }
+  virtual int getDim() const { return 3; }
   virtual int getNumVertices() const { return 8; }
   virtual MVertex *getVertex(int num){ return _v[num]; }
   virtual MVertex *getVertexMED(int num)
@@ -92,6 +92,7 @@ class MHexahedron : public MElement {
                  _v[faces_hexa(num, 2)],
                  _v[faces_hexa(num, 3)]);
   }
+  virtual void getFaceInfo (const MFace & face, int &ithFace, int &sign, int &rot)const; 
   virtual int getNumFacesRep(){ return 12; }
   virtual void getFaceRep(int num, double *x, double *y, double *z, SVector3 *n)
   { 
@@ -118,6 +119,7 @@ class MHexahedron : public MElement {
   virtual const char *getStringForPOS() const { return "SH"; }
   virtual const char *getStringForBDF() const { return "CHEXA"; }
   virtual const char *getStringForDIFF() const { return "ElmB8n3D"; }
+  virtual const char *getStringForINP() const { return "C3D8"; }
   virtual void revert()
   {
     MVertex *tmp;
@@ -171,7 +173,7 @@ class MHexahedron : public MElement {
       return false;
     return true;
   }
-  virtual void getIntegrationPoints(int pOrder, int *npts, IntPt **pts) const;
+  virtual void getIntegrationPoints(int pOrder, int *npts, IntPt **pts);
  private:
   int edges_hexa(const int edge, const int vert) const
   {

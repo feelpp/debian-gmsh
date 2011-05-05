@@ -1,8 +1,8 @@
-// This demonstrates how to import an OpenCascade model WITHOUT using
+// This demonstrates how to import an OpenCASCADE model WITHOUT using
 // Gmsh's own I/O layer (useful if you create OCC objects in your own
 // code, that you want to import dynamically in Gmsh).
 //
-// If you just want to load OpenCascade files (.brep, .step, etc.) you
+// If you just want to load OpenCASCADE files (.brep, .step, etc.) you
 // SHOULD NOT use this interface: simply use the standard I/O API.
 
 // g++ -I/usr/local/opencascade/inc driverOCC.cpp -lGmsh
@@ -13,10 +13,10 @@
 // -lTKMath -lTKernel -lm
 
 #include <stdio.h>
-#include <gmsh/Gmsh.h>
-#include <gmsh/GmshConfig.h>
-#include <gmsh/GModel.h>
-#include <gmsh/MElement.h>
+#include "Gmsh.h"
+#include "GmshConfig.h"
+#include "GModel.h"
+#include "MElement.h"
 
 #if !defined(HAVE_NO_OCC_CONFIG_H)
 #include "config.h"
@@ -38,10 +38,10 @@ public:
     if(level == "Fatal" || level == "Error"){
       GEntity *e = _model->getCurrentMeshEntity();
       if(e){
-	printf("error occurred while meshing entity:\n");
-	printf("  tag=%d\n", e->tag());
-	printf("  dimension=%d\n", e->dim());
-	printf("  native pointer=%p\n", e->getNativePtr());
+        printf("error occurred while meshing entity:\n");
+        printf("  tag=%d\n", e->tag());
+        printf("  dimension=%d\n", e->dim());
+        printf("  native pointer=%p\n", e->getNativePtr());
       }
     }
     if(level == "Fatal") throw "Fatal error in Gmsh";
@@ -80,8 +80,8 @@ int main(int argc, char **argv)
       MElement *e = f->getMeshElement(i);
       printf("  element %d:", e->getNum());
       for(unsigned int j = 0; j < e->getNumVertices(); j++){
-	MVertex *v = e->getVertex(j);
-	printf(" %d (%g,%g,%g)", v->getNum(), v->x(), v->y(), v->z());
+        MVertex *v = e->getVertex(j);
+        printf(" %d (%g,%g,%g)", v->getNum(), v->x(), v->y(), v->z());
       }
       printf("\n");
     }

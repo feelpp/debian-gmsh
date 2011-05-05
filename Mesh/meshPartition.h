@@ -1,19 +1,20 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
-#ifndef _PARTITION_H_
-#define _PARTITION_H_
+#ifndef _MESH_PARTITION_H_
+#define _MESH_PARTITION_H_
 
 #include <vector>
+#include "partitionEdge.h"
+#include "GFaceCompound.h"
+#include "GFace.h"
 
-struct meshPartitionOptions;
-struct BoElemGr;
 class GModel;
+class GFace;
 class Graph;
-
-typedef std::vector<BoElemGr> BoElemGrVec;
+struct meshPartitionOptions;
 
 /*******************************************************************************
  *
@@ -21,10 +22,19 @@ typedef std::vector<BoElemGr> BoElemGrVec;
  *
  ******************************************************************************/
 
-int MakeGraph(GModel *const model, Graph &graph,
-              BoElemGrVec *const boElemGrVec = 0);
 int PartitionGraph(Graph &graph, meshPartitionOptions &options);
+int RenumberGraph(Graph &graph, meshPartitionOptions &options);
 int PartitionMesh(GModel *const model, meshPartitionOptions &options);
-int CreatePartitionBoundaries (GModel *model);
+int RenumberMesh(GModel *const model, meshPartitionOptions &options);
+int PartitionMeshFace(std::list<GFace*> &cFaces, meshPartitionOptions &options);
+int PartitionMeshElements(std::vector<MElement*> &elements, 
+                          meshPartitionOptions &options);
+bool PartitionZeroGenus(std::list<GFace*> &cFaces, int &nbParts);
+int CreatePartitionBoundaries(GModel *model, bool createGhostCells);
+
+void splitBoundaryEdges(GModel *model,
+                        std::set<partitionEdge*, Less_partitionEdge> &newEdges);
+void createPartitionFaces(GModel *model, GFaceCompound *gf, int num_parts,
+                          std::vector<discreteFace*> &pFaces);
 
 #endif

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -12,14 +12,14 @@
 #include "gl2ps.h"
 #include "SVector3.h"
 
-void drawContext::drawString(std::string s, std::string &font_name, int font_enum, 
-                             int font_size, int align)
+void drawContext::drawString(const std::string &s, const std::string &font_name,
+                             int font_enum, int font_size, int align)
 {
   if(CTX::instance()->printing && !CTX::instance()->print.text) return;
 
   // change the raster position only if not creating TeX files
   if(align > 0 && (!CTX::instance()->printing || 
-                   CTX::instance()->print.format != FORMAT_TEX)){
+                   CTX::instance()->print.fileFormat != FORMAT_TEX)){
     GLboolean valid;
     glGetBooleanv(GL_CURRENT_RASTER_POSITION_VALID, &valid);
     if(valid == GL_TRUE){
@@ -50,7 +50,7 @@ void drawContext::drawString(std::string s, std::string &font_name, int font_enu
     drawContext::global()->drawString(s.c_str());
   }
   else{
-    if(CTX::instance()->print.format == FORMAT_TEX){
+    if(CTX::instance()->print.fileFormat == FORMAT_TEX){
       std::string tmp = SanitizeTeXString
         (s.c_str(), CTX::instance()->print.texAsEquation);
       int opt;
@@ -68,10 +68,10 @@ void drawContext::drawString(std::string s, std::string &font_name, int font_enu
       gl2psTextOpt(tmp.c_str(), font_name.c_str(), font_size, opt, 0.);
     }
     else if(CTX::instance()->print.epsQuality && 
-            (CTX::instance()->print.format == FORMAT_PS ||
-             CTX::instance()->print.format == FORMAT_EPS ||
-             CTX::instance()->print.format == FORMAT_PDF ||
-             CTX::instance()->print.format == FORMAT_SVG)){
+            (CTX::instance()->print.fileFormat == FORMAT_PS ||
+             CTX::instance()->print.fileFormat == FORMAT_EPS ||
+             CTX::instance()->print.fileFormat == FORMAT_PDF ||
+             CTX::instance()->print.fileFormat == FORMAT_SVG)){
       gl2psText(s.c_str(), font_name.c_str(), font_size);
     }
     else{
@@ -81,25 +81,25 @@ void drawContext::drawString(std::string s, std::string &font_name, int font_enu
   }
 }
 
-void drawContext::drawString(std::string s)
+void drawContext::drawString(const std::string &s)
 {
   drawString(s, CTX::instance()->glFont, CTX::instance()->glFontEnum, 
              CTX::instance()->glFontSize, 0);
 }
 
-void drawContext::drawStringCenter(std::string s)
+void drawContext::drawStringCenter(const std::string &s)
 {
   drawString(s, CTX::instance()->glFont, CTX::instance()->glFontEnum,
              CTX::instance()->glFontSize, 1);
 }
 
-void drawContext::drawStringRight(std::string s)
+void drawContext::drawStringRight(const std::string &s)
 {
   drawString(s, CTX::instance()->glFont, CTX::instance()->glFontEnum,
              CTX::instance()->glFontSize, 2);
 }
 
-void drawContext::drawString(std::string s, double style)
+void drawContext::drawString(const std::string &s, double style)
 {
   unsigned int bits = (unsigned int)style;
 

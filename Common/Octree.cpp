@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -14,8 +14,8 @@ Octree* Octree_Create(int maxElements, double origin[3], double size[3],
                       int   (*InEle)(void *, double *))
 {
   Octree *myOctree = new Octree;
-  initializeOctantBuckets (origin, size, maxElements,
-                           &(myOctree->root), &(myOctree->info));       
+  initializeOctantBuckets(origin, size, maxElements,
+                          &(myOctree->root), &(myOctree->info));       
   myOctree->function_BB = BB;
   myOctree->function_centroid = Centroid;
   myOctree->function_inElement = InEle;
@@ -46,25 +46,29 @@ void free_buckets(octantBucket * bucket)
 
 void Octree_Delete(Octree *myOctree)
 {
+  if(!myOctree) return;
   delete myOctree->info;
   free_buckets(myOctree->root);
   delete myOctree->root;
   delete myOctree;
 }
 
-void Octree_Insert(void * element, Octree *myOctree)
+void Octree_Insert(void *element, Octree *myOctree)
 {
+  if(!myOctree) return;
   double minBB[3], maxBB[3], centroid[3];
   octantBucket *bucket;
   (*(myOctree->function_BB))(element, minBB, maxBB);
   (*(myOctree->function_centroid))(element, centroid);
   bucket = findElementBucket(myOctree->root, centroid);
-  addElement2Bucket(bucket, element, minBB, maxBB,
-                    centroid, myOctree->info);  
+  if(bucket)
+    addElement2Bucket(bucket, element, minBB, maxBB,
+                      centroid, myOctree->info);  
 }
 
 void Octree_Arrange(Octree *myOctree)
-{  
+{
+  if(!myOctree) return;
   std::list<void *>::iterator iter;
   double minPt[3], maxPt[3];
   for(iter = myOctree->info->listAllElements.begin(); iter!= 
@@ -75,14 +79,16 @@ void Octree_Arrange(Octree *myOctree)
   myOctree->info->listAllElements.clear();
 }   
 
-void * Octree_Search(double *pt, Octree *myOctree)
+void *Octree_Search(double *pt, Octree *myOctree)
 {
+  if(!myOctree) return 0;
   return searchElement(myOctree->root, pt, myOctree->info, 
                        myOctree->function_BB, myOctree->function_inElement);
 }
 
-void Octree_SearchAll(double * pt, Octree * myOctree, std::list<void *> * output)
+void Octree_SearchAll(double *pt, Octree *myOctree, std::list<void*> *output)
 {
+  if(!myOctree) return;
   searchAllElements(myOctree->root, pt, myOctree->info, myOctree->function_BB,
                     myOctree->function_inElement, output);      
 }

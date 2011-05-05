@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -22,21 +22,19 @@ class openglWindow : public Fl_Gl_Window {
  private:
   static openglWindow *_lastHandled;
   static void _setLastHandled(openglWindow*);
+  bool _lock;
   mousePosition _click, _curr, _prev;
   drawContext *_ctx;
   double _point[3];
   int _selection, _trySelection, _trySelectionXYWH[4];
   double _lassoXY[2];
-  void drawScreenMessage();
-  void drawBorder();
-  bool processSelectionBuffer(int type, 
-                              bool multipleSelection, bool meshSelection,
-                              int x, int y, int w, int h,
-                              std::vector<GVertex*> &vertices,
-                              std::vector<GEdge*> &edges,
-                              std::vector<GFace*> &faces,
-                              std::vector<GRegion*> &regions,
-                              std::vector<MElement*> &elements);
+  void _drawScreenMessage();
+  void _drawBorder();
+  bool _select(int type, bool multiple, bool mesh, int x, int y, int w, int h,
+               std::vector<GVertex*> &vertices, std::vector<GEdge*> &edges,
+               std::vector<GFace*> &faces, std::vector<GRegion*> &regions,
+               std::vector<MElement*> &elements);
+ protected:
   void draw();
   int handle(int);
  public:

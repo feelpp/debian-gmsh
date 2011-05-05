@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -117,10 +117,11 @@ static void drawVectorArray(drawContext *ctx, PView *p, VertexArray *va)
         double d = ctx->pixel_equiv_x / ctx->s[0];
         double dx = px * d, dy = py * d, dz = pz * d;
         double x = s[0], y = s[1], z = s[2];
-        if(opt->centerGlyphs){
-          x -= 0.5 * dx;
-          y -= 0.5 * dy;
-          z -= 0.5 * dz;
+        if(opt->centerGlyphs == 2){
+          x -= dx; y -= dy; z -= dz;
+        }
+        else if(opt->centerGlyphs == 1){
+          x -= 0.5 * dx; y -= 0.5 * dy; z -= 0.5 * dz;
         }
         ctx->drawVector(opt->vectorType, opt->intervalsType != PViewOptions::Iso,
                         x, y, z, dx, dy, dz, opt->light);
@@ -168,7 +169,9 @@ static void drawNumberGlyphs(drawContext *ctx, PView *p, int numNodes, int numCo
       unsigned int col = opt->getColor(v, vmin, vmax, false, opt->nbIso);
       glColor4ubv((GLubyte *) & col);
       glRasterPos3d(pc.x(), pc.y(), pc.z());
-      if(opt->centerGlyphs)
+      if(opt->centerGlyphs == 2)
+        ctx->drawStringRight(stringValue(numComp, d, v, opt->format.c_str()));
+      else if(opt->centerGlyphs == 1)
         ctx->drawStringCenter(stringValue(numComp, d, v, opt->format.c_str()));
       else
         ctx->drawString(stringValue(numComp, d, v, opt->format.c_str()));
@@ -181,7 +184,9 @@ static void drawNumberGlyphs(drawContext *ctx, PView *p, int numNodes, int numCo
         unsigned int col = opt->getColor(v, vmin, vmax, false, opt->nbIso);
         glColor4ubv((GLubyte *) & col);
         glRasterPos3d(xyz[i][0], xyz[i][1], xyz[i][2]);
-        if(opt->centerGlyphs)
+        if(opt->centerGlyphs == 2)
+          ctx->drawStringRight(stringValue(numComp, val[i], v, opt->format.c_str()));
+        else if(opt->centerGlyphs == 1)
           ctx->drawStringCenter(stringValue(numComp, val[i], v, opt->format.c_str()));
         else
           ctx->drawString(stringValue(numComp, val[i], v, opt->format.c_str()));
@@ -244,7 +249,7 @@ static void drawGlyphs(drawContext *ctx, PView *p)
   for(int ent = 0; ent < data->getNumEntities(opt->timeStep); ent++){
     if(data->skipEntity(opt->timeStep, ent)) continue;
     for(int i = 0; i < data->getNumElements(opt->timeStep, ent); i++){
-      if(data->skipElement(opt->timeStep, ent, i, true)) continue;
+      if(data->skipElement(opt->timeStep, ent, i, true, opt->sampling)) continue;
       int type = data->getType(opt->timeStep, ent, i);
       if(opt->skipElement(type)) continue;
       int dim = data->getDimension(opt->timeStep, ent, i);
@@ -252,10 +257,22 @@ static void drawGlyphs(drawContext *ctx, PView *p)
       int numNodes = data->getNumNodes(opt->timeStep, ent, i);
       for(int j = 0; j < numNodes; j++){
         data->getNode(opt->timeStep, ent, i, j, xyz[j][0], xyz[j][1], xyz[j][2]);
-        for(int k = 0; k < numComp; k++)
-          data->getValue(opt->timeStep, ent, i, j, k, val[j][k]);
+        if(opt->forceNumComponents){
+          for(int k = 0; k < opt->forceNumComponents; k++){
+            int comp = opt->componentMap[k];
+            if(comp >= 0 && comp < numComp)
+              data->getValue(opt->timeStep, ent, i, j, comp, val[j][k]);
+            else
+              val[j][k] = 0.;
+          }
+        }
+        else
+          for(int k = 0; k < numComp; k++)
+            data->getValue(opt->timeStep, ent, i, j, k, val[j][k]);
       }
+      if(opt->forceNumComponents) numComp = opt->forceNumComponents;
       changeCoordinates(p, ent, i, numNodes, type, numComp, xyz, val);
+      if(!isElementVisible(opt, dim, numNodes, xyz)) continue;
       if(opt->intervalsType == PViewOptions::Numeric)
         drawNumberGlyphs(ctx, p, numNodes, numComp, xyz, val);
       if(dim == 2 && opt->normals)
@@ -324,9 +341,11 @@ class drawPView {
       }
       else{
         // real translucent blending (requires back-to-front traversal)
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // glBlendEquation(GL_FUNC_ADD);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        // glBlendEquation(GL_FUNC_ADD);
         glEnable(GL_BLEND);
-        if(eyeChanged(_ctx, p)){
+        if(p->va_triangles && p->va_triangles->getNumVertices() && 
+           eyeChanged(_ctx, p)){
           Msg::Debug("Sorting View[%d] for transparency", p->getIndex());
           p->va_triangles->sort(p->getEye().x(), p->getEye().y(), p->getEye().z());
         }
@@ -356,8 +375,9 @@ class drawPView {
     // draw the "pseudo" vertex arrays for vectors
     drawVectorArray(_ctx, p, p->va_vectors);
 
-    // to avoid looping over elements we should also store these
-    // glyphs in "pseudo" vertex arrays
+    // to avoid looping over elements (and to enable drawing glyphs
+    // for remote views) we should also store these glyphs in "pseudo"
+    // vertex arrays
     drawGlyphs(_ctx, p);
 
     // draw the 3D strings
@@ -442,12 +462,7 @@ void drawContext::drawPost()
 
   if(!CTX::instance()->post.draw) return;
 
-  static bool busy = false;
-  if(!busy){
-    busy = true;
-    for(unsigned int i = 0; i < PView::list.size(); i++)
-      PView::list[i]->fillVertexArrays();
-    std::for_each(PView::list.begin(), PView::list.end(), drawPView(this));
-    busy = false;
-  }
+  for(unsigned int i = 0; i < PView::list.size(); i++)
+    PView::list[i]->fillVertexArrays();
+  std::for_each(PView::list.begin(), PView::list.end(), drawPView(this));
 }

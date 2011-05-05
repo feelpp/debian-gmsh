@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -27,7 +27,7 @@ class MPoint : public MElement {
     _v[0] = v[0];
   }
   ~MPoint(){}
-  virtual int getDim(){ return 0; }
+  virtual int getDim() const { return 0; }
   virtual int getNumVertices() const { return 1; }
   virtual MVertex *getVertex(int num){ return _v[0]; }
   virtual int getNumEdges(){ return 0; }
@@ -50,9 +50,27 @@ class MPoint : public MElement {
   {
     s[0][0] = s[0][1] = s[0][2] = 0.;
   }
+  virtual const polynomialBasis* getFunctionSpace(int o) const
+  { 
+    return polynomialBases::find(MSH_PNT); 
+  }
+  virtual const JacobianBasis* getJacobianFuncSpace(int o) const 
+  { 
+    return JacobianBases::find(MSH_PNT); 
+  }
   virtual bool isInside(double u, double v, double w)
   {
     return true;
+  }
+  virtual void getIntegrationPoints(int pOrder, int *npts, IntPt **pts)
+  {
+    static IntPt GQL[1]; 
+    GQL[0].pt[0] = 0;
+    GQL[0].pt[1] = 0;
+    GQL[0].pt[2] = 0;
+    GQL[0].weight = 1;
+    *npts = 1;
+    *pts = GQL;
   }
 };
 

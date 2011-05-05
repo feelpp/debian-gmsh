@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -22,10 +22,10 @@ StringXNumber CutGridOptions_Number[] = {
   {GMSH_FULLRC, "X2", GMSH_CutGridPlugin::callbackX2, 0.},
   {GMSH_FULLRC, "Y2", GMSH_CutGridPlugin::callbackY2, 1.},
   {GMSH_FULLRC, "Z2", GMSH_CutGridPlugin::callbackZ2, 0.},
-  {GMSH_FULLRC, "nPointsU", GMSH_CutGridPlugin::callbackU, 20},
-  {GMSH_FULLRC, "nPointsV", GMSH_CutGridPlugin::callbackV, 20},
+  {GMSH_FULLRC, "NumPointsU", GMSH_CutGridPlugin::callbackU, 20},
+  {GMSH_FULLRC, "NumPointsV", GMSH_CutGridPlugin::callbackV, 20},
   {GMSH_FULLRC, "ConnectPoints", GMSH_CutGridPlugin::callbackConnect, 1},
-  {GMSH_FULLRC, "iView", NULL, -1.}
+  {GMSH_FULLRC, "View", NULL, -1.}
 };
 
 extern "C"
@@ -41,6 +41,21 @@ void GMSH_CutGridPlugin::draw(void *context)
 #if defined(HAVE_OPENGL)
   glColor4ubv((GLubyte *) & CTX::instance()->color.fg);
   double p[3];
+  drawContext *ctx = (drawContext*)context;
+
+  getPoint(0, 0, p);
+  glRasterPos3d(p[0], p[1], p[2]);
+  ctx->drawString("(X0, Y0, Z0)");
+  if(getNbU() > 1){
+    getPoint(getNbU() - 1, 0, p);
+    glRasterPos3d(p[0], p[1], p[2]);
+    ctx->drawString("(X1, Y1, Z1)");
+  }
+  if(getNbV() > 1){
+    getPoint(0, getNbV() - 1, p);
+    glRasterPos3d(p[0], p[1], p[2]);
+    ctx->drawString("(X2, Y2, Z2)");
+  }
 
   if(CutGridOptions_Number[11].def){
     glBegin(GL_LINES);
@@ -59,7 +74,6 @@ void GMSH_CutGridPlugin::draw(void *context)
     glEnd();
   }
   else{
-    drawContext *ctx = (drawContext*)context;
     for(int i = 0; i < getNbU(); ++i){
       for(int j = 0; j < getNbV(); ++j){
         getPoint(i, j, p);
@@ -87,76 +101,76 @@ double GMSH_CutGridPlugin::callback(int num, int action, double value, double *o
 double GMSH_CutGridPlugin::callbackX0(int num, int action, double value)
 {
   return callback(num, action, value, &CutGridOptions_Number[0].def,
-                  CTX::instance()->lc / 100., -2 * CTX::instance()->lc,
-                  2 * CTX::instance()->lc);
+                  CTX::instance()->lc / 100., CTX::instance()->min[0],
+                  CTX::instance()->max[0]);
 }
 
 double GMSH_CutGridPlugin::callbackY0(int num, int action, double value)
 {
   return callback(num, action, value, &CutGridOptions_Number[1].def,
-                  CTX::instance()->lc / 100., -2 * CTX::instance()->lc,
-                  2 * CTX::instance()->lc);
+                  CTX::instance()->lc / 100., CTX::instance()->min[1],
+                  CTX::instance()->max[1]);
 }
 
 double GMSH_CutGridPlugin::callbackZ0(int num, int action, double value)
 {
   return callback(num, action, value, &CutGridOptions_Number[2].def,
-                  CTX::instance()->lc / 100., -2 * CTX::instance()->lc,
-                  2 * CTX::instance()->lc);
+                  CTX::instance()->lc / 100., CTX::instance()->min[2],
+                  CTX::instance()->max[2]);
 }
 
 double GMSH_CutGridPlugin::callbackX1(int num, int action, double value)
 {
   return callback(num, action, value, &CutGridOptions_Number[3].def,
-                  CTX::instance()->lc / 100., -2 * CTX::instance()->lc,
-                  2 * CTX::instance()->lc);
+                  CTX::instance()->lc / 100., CTX::instance()->min[0],
+                  CTX::instance()->max[0]);
 }
 
 double GMSH_CutGridPlugin::callbackY1(int num, int action, double value)
 {
   return callback(num, action, value, &CutGridOptions_Number[4].def,
-                  CTX::instance()->lc / 100., -2 * CTX::instance()->lc, 
-                  2 * CTX::instance()->lc);
+                  CTX::instance()->lc / 100., CTX::instance()->min[1],
+                  CTX::instance()->max[1]);
 }
 
 double GMSH_CutGridPlugin::callbackZ1(int num, int action, double value)
 {
   return callback(num, action, value, &CutGridOptions_Number[5].def,
-                  CTX::instance()->lc / 100., -2 * CTX::instance()->lc, 
-                  2 * CTX::instance()->lc);
+                  CTX::instance()->lc / 100., CTX::instance()->min[2],
+                  CTX::instance()->max[2]);
 }
 
 double GMSH_CutGridPlugin::callbackX2(int num, int action, double value)
 {
   return callback(num, action, value, &CutGridOptions_Number[6].def,
-                  CTX::instance()->lc / 100., -2 * CTX::instance()->lc,
-                  2 * CTX::instance()->lc);
+                  CTX::instance()->lc / 100., CTX::instance()->min[0],
+                  CTX::instance()->max[0]);
 }
 
 double GMSH_CutGridPlugin::callbackY2(int num, int action, double value)
 {
   return callback(num, action, value, &CutGridOptions_Number[7].def,
-                  CTX::instance()->lc / 100., -2 * CTX::instance()->lc,
-                  2 * CTX::instance()->lc);
+                  CTX::instance()->lc / 100., CTX::instance()->min[1],
+                  CTX::instance()->max[1]);
 }
 
 double GMSH_CutGridPlugin::callbackZ2(int num, int action, double value)
 {
   return callback(num, action, value, &CutGridOptions_Number[8].def,
-                  CTX::instance()->lc / 100., -2 * CTX::instance()->lc,
-                  2 * CTX::instance()->lc);
+                  CTX::instance()->lc / 100., CTX::instance()->min[2],
+                  CTX::instance()->max[2]);
 }
 
 double GMSH_CutGridPlugin::callbackU(int num, int action, double value)
 {
   return callback(num, action, value, &CutGridOptions_Number[9].def,
-                  1, 1, 100);
+                  1, 1, 200);
 }
 
 double GMSH_CutGridPlugin::callbackV(int num, int action, double value)
 {
   return callback(num, action, value, &CutGridOptions_Number[10].def,
-                  1, 1, 100);
+                  1, 1, 200);
 }
 
 double GMSH_CutGridPlugin::callbackConnect(int num, int action, double value)
@@ -167,19 +181,18 @@ double GMSH_CutGridPlugin::callbackConnect(int num, int action, double value)
 
 std::string GMSH_CutGridPlugin::getHelp() const
 {
-  return "Plugin(CutGrid) cuts the view `iView' with a\n"
-         "rectangular grid defined by the 3 points\n"
-         "(`X0',`Y0',`Z0') (origin), (`X1',`Y1',`Z1') (axis of\n"
-         "U) and (`X2',`Y2',`Z2') (axis of V). The number of\n"
-         "points along U and V is set with the options\n"
-         "`nPointsU' and `nPointsV'. If `ConnectPoints' is\n"
-         "zero, the plugin creates points; otherwise, the\n"
-         "plugin generates quadrangles, lines or points\n"
-         " depending on the values of `nPointsU' and\n"
-         "`nPointsV'. If `iView' < 0, the plugin is run on\n"
-         "the current view.\n"
-         "\n"
-         "Plugin(CutGrid) creates one new view.\n";
+  return "Plugin(CutGrid) cuts the view `View' with a "
+    "rectangular grid defined by the 3 points "
+    "(`X0',`Y0',`Z0') (origin), (`X1',`Y1',`Z1') (axis of U) "
+    "and (`X2',`Y2',`Z2') (axis of V).\n\n"
+    "The number of points along U and V is set with the "
+    "options `NumPointsU' and `NumPointsV'.\n\n"
+    "If `ConnectPoints' is zero, the plugin creates points; "
+    "otherwise, the plugin generates quadrangles, lines or "
+    "points depending on the values of `NumPointsU' and "
+    "`NumPointsV'.\n\n"
+    "If `View' < 0, the plugin is run on the current view.\n\n"
+    "Plugin(CutGrid) creates one new view.";
 }
 
 int GMSH_CutGridPlugin::getNbOptions() const
@@ -300,7 +313,7 @@ PView *GMSH_CutGridPlugin::GenerateView(PView *v1, int connect)
   if(getNbU() <= 0 || getNbV() <= 0)
     return v1;
 
-  PViewData *data1 = v1->getData();
+  PViewData *data1 = v1->getData(true); // get adaptive data if available
 
   PView *v2 = new PView();
   PViewDataList *data2 = getDataList(v2);

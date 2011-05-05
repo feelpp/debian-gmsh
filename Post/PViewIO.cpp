@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -51,7 +51,6 @@ bool PView::readPOS(std::string fileName, int fileIndex)
 
     }
     else if(!strncmp(&str[1], "View", 4)){
-
       index++;
       if(fileIndex < 0 || fileIndex == index){
         PViewDataList *d = new PViewDataList();
@@ -89,6 +88,12 @@ bool PView::readMSH(std::string fileName, int fileIndex)
     return false;
   }
 
+  GModel *model = GModel::current();
+  if(model->empty()){
+    Msg::Error("Model is empty: please load a mesh before loading the dataset");
+    return false;
+  }
+
   char str[256] = "XXX";
   int index = -1;
   bool binary = false, swap = false;
@@ -110,7 +115,7 @@ bool PView::readMSH(std::string fileName, int fileIndex)
       if(sscanf(str, "%lf %d %d", &version, &format, &size) != 3) return false;
       if(format){
         binary = true;
-        Msg::Info("Mesh is in binary format");
+        Msg::Info("View data is in binary format");
         int one;
         if(fread(&one, sizeof(int), 1, fp) != 1) return 0;
         if(one != 1){
@@ -256,7 +261,7 @@ bool PView::readMED(std::string fileName, int fileIndex)
 
 bool PView::write(std::string fileName, int format, bool append)
 {
-  Msg::StatusBar(2, true, "Writing '%s'", fileName.c_str());
+  Msg::StatusBar(2, true, "Writing '%s'...", fileName.c_str());
   
   bool ret;
   switch(format){
@@ -267,9 +272,24 @@ bool PView::write(std::string fileName, int format, bool append)
   case 4: ret = _data->writeTXT(fileName); break;
   case 5: ret = _data->writeMSH(fileName); break;
   case 6: ret = _data->writeMED(fileName); break;
+  case 10: 
+    {
+      std::string ext = SplitFileName(fileName)[2];
+      if(ext == ".pos")
+        ret = _data->writePOS(fileName, false, true, append);
+      else if(ext == ".stl")
+        ret = _data->writeSTL(fileName);
+      else if(ext == ".msh")
+        ret = _data->writeMSH(fileName);
+      else if(ext == ".med") 
+        ret = _data->writeMED(fileName);
+      else
+        ret = _data->writeTXT(fileName);
+      break;
+    }
   default: ret = false; Msg::Error("Unknown view format %d", format); break;
   }
   
-  if(ret) Msg::StatusBar(2, true, "Wrote '%s'", fileName.c_str());
+  if(ret) Msg::StatusBar(2, true, "Done writing '%s'", fileName.c_str());
   return ret;
 }

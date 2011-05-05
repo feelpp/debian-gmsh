@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -308,7 +308,7 @@ class FaceAllocator
     offset2 = f2.get_offset();
     Face6 f6;
     offset6 = f6.get_offset();
-    Face2 f8;
+    Face8 f8;
     offset8 = f8.get_offset();
     Face16 f16;
     offset16 = f16.get_offset();

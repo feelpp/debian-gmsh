@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -218,7 +218,7 @@ int MZone<DIM>::zoneData()
       ++eVecIt) {
     if(eVecIt->index == 0) {
       // The element index
-      eVecIt->index == cElem++;
+      eVecIt->index = cElem++;
       // The type of element
       const int iElemType = eVecIt->element->getTypeForMSH() - 1;
       // Load connectivity for this element type

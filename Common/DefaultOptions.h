@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -56,10 +56,23 @@ StringXString GeneralOptions_String[] = {
 
   { F|O, "GraphicsFont" , opt_general_graphics_font , "Helvetica" ,
     "Font used in the graphic window" }, 
+  { F|O, "GraphicsFontTitle" , opt_general_graphics_font_title , "Helvetica" ,
+    "Font used in the graphic window for titles" }, 
 
   { F|S, "OptionsFileName" , opt_general_options_filename , ".gmsh-options" ,
     "Option file created with `Tools->Options->Save'; automatically read on startup" },
 
+  { F|S, "RecentFile1", opt_general_recent_file1 , "" ,
+    "Most recent opened file"},
+  { F|S, "RecentFile2", opt_general_recent_file2 , "" ,
+    "2nd most recent opened file"},
+  { F|S, "RecentFile3", opt_general_recent_file3 , "" ,
+    "3rd most recent opened file"},
+  { F|S, "RecentFile4", opt_general_recent_file4 , "" ,
+    "4th most recent opened file"},
+  { F|S, "RecentFile5", opt_general_recent_file5 , "" ,
+    "5th most recent opened file"},
+  
   { 0,   "SessionFileName" , opt_general_session_filename , ".gmshrc" ,
     "Option file into which session specific information is saved; automatically "
     "read on startup" },
@@ -86,7 +99,10 @@ StringXString GeneralOptions_String[] = {
 #endif
     "System command to launch a web browser" },
 
-  { 0, 0 , 0 , "" , 0 }
+  { F, "WatchFilePattern", opt_general_watch_file_pattern , "" ,
+     "Pattern of files to merge as they become available"},
+
+   { 0, 0 , 0 , "" , 0 }
 } ;
 
 StringXString GeometryOptions_String[] = {
@@ -109,8 +125,8 @@ StringXString SolverOptions_String[] = {
   { F|O, "Name0" , opt_solver_name0 , "GetDP" ,
     "Name of solver 0" },
   { F|O, "Help0" , opt_solver_help0 , 
-    "A General environment for the treatment of\nDiscrete Problems\n\n"
-    "Copyright (C) 1997-2009\nPatrick Dular and Christophe Geuzaine\n\n"
+    "A General environment for the treatment of Discrete Problems\n\n"
+    "Copyright (C) 1997-2010 Patrick Dular and Christophe Geuzaine\n\n"
     "Visit http://www.geuz.org/getdp/ for more info",
     "Help string for solver 0" },
   { F|O, "Executable0" , opt_solver_executable0 , 
@@ -120,6 +136,8 @@ StringXString SolverOptions_String[] = {
     "getdp" , 
 #endif
     "System command to launch solver 0 (should not contain the `&' character)" },
+  { F|O, "ExtraArguments0" , opt_solver_extra_arguments0 , "" , 
+    "Extra arguments to pass to solver 0" },
   { F, "InputName0" , opt_solver_input_name0 , "" ,
     "Default input file name for solver 0" },
   { F|O, "Extension0" , opt_solver_extension0 , ".pro" ,
@@ -171,6 +189,8 @@ StringXString SolverOptions_String[] = {
     "Help string for solver 1" },
   { F|O, "Executable1" , opt_solver_executable1 , "" , 
     "System command to launch solver 1 (should not contain the `&' character)" },
+  { F|O, "ExtraArguments1" , opt_solver_extra_arguments1 , "" ,
+    "Extra arguments to pass to solver 1" },
   { F, "InputName1" , opt_solver_input_name1 , "" ,
     "Default input file name for solver 1" },
   { F|O, "Extension1" , opt_solver_extension1 , "" ,
@@ -222,6 +242,8 @@ StringXString SolverOptions_String[] = {
     "Help string for solver 2" },
   { F|O, "Executable2" , opt_solver_executable2 , "" , 
     "System command to launch solver 2 (should not contain the `&' character)" },
+  { F|O, "ExtraArguments2" , opt_solver_extra_arguments2 , "" ,
+    "Extra arguments to pass to solver 2" },
   { F, "InputName2" , opt_solver_input_name2 , "" ,
     "Default input file name for solver 2" },
   { F|O, "Extension2" , opt_solver_extension2 , "" ,
@@ -273,6 +295,8 @@ StringXString SolverOptions_String[] = {
     "Help string for solver 3" },
   { F|O, "Executable3" , opt_solver_executable3 , "" , 
     "System command to launch solver 3 (should not contain the `&' character)" },
+  { F|O, "ExtraArguments3" , opt_solver_extra_arguments3 , "" ,
+    "Extra arguments to pass to solver 3" },
   { F, "InputName3" , opt_solver_input_name3 , "" ,
     "Default input file name for solver 3" },
   { F|O, "Extension3" , opt_solver_extension3 , "" ,
@@ -324,6 +348,8 @@ StringXString SolverOptions_String[] = {
     "Help string for solver 4" },
   { F|O, "Executable4" , opt_solver_executable4 , "" , 
     "System command to launch solver 4 (should not contain the `&' character)" },
+  { F|O, "ExtraArguments4" , opt_solver_extra_arguments4 , "" ,
+    "Extra arguments to pass to solver 4" },
   { F, "InputName4" , opt_solver_input_name4 , "" ,
     "Default input file name for solver 4" },
   { F|O, "Extension4" , opt_solver_extension4 , "" ,
@@ -334,7 +360,7 @@ StringXString SolverOptions_String[] = {
     "Command used to specify the mesh file for solver 4" },
   { F|O, "SocketCommand4", opt_solver_socket_command4, "-socket %s",
     "Command to specify the socket to solver 4" },
-  { F|O, "NameCommand4", opt_solver_name_command1, "%s",
+  { F|O, "NameCommand4", opt_solver_name_command4, "%s",
     "Command to specify the problem name to solver 4" },
   { F|O, "OptionCommand4" , opt_solver_option_command4 , "" ,
     "Command to get options from solver 4" },
@@ -587,6 +613,8 @@ StringXNumber GeneralOptions_Number[] = {
 
   { F|O, "GraphicsFontSize" , opt_general_graphics_fontsize , 17. ,
     "Size of the font in the graphic window" }, 
+  { F|O, "GraphicsFontSizeTitle" , opt_general_graphics_fontsize_title , 19. ,
+    "Size of the font in the graphic window for titles" }, 
   { F|S, "GraphicsHeight" , opt_general_graphics_size1 , 600. , 
     "Height (in pixels) of the graphic window" }, 
   { F|S, "GraphicsPositionX" , opt_general_graphics_position0 , 50. , 
@@ -804,6 +832,8 @@ StringXNumber GeneralOptions_Number[] = {
   { F|S, "StatisticsPositionY" , opt_general_statistics_position1 , 150. , 
     "Vertical position (in pixels) of the upper left corner of the statistic"
     " window" }, 
+  { F|O, "Stereo" , opt_general_stereo , 0. ,
+    "Use stereo rendering" },
   { F|S, "SystemMenuBar" , opt_general_system_menu_bar , 1. , 
     "Use the system menu bar on Mac OS X?" }, 
 
@@ -980,6 +1010,8 @@ StringXNumber MeshOptions_Number[] = {
     "3D mesh algorithm (1=Delaunay, 4=Frontal)" }, 
   { F|O, "AngleSmoothNormals" , opt_mesh_angle_smooth_normals , 30.0 ,
     "Threshold angle below which normals are not smoothed" }, 
+  { F|O, "AnisoMax" , opt_mesh_aniso_max, 1.e33,
+    "Maximum anisotropy of the mesh" },
   { F|O, "AllowSwapAngle" , opt_mesh_allow_swap_edge_angle , 10.0 ,
     "Treshold angle (in degrees) between faces normals under which we allow "
     "an edge swap" }, 
@@ -1031,17 +1063,17 @@ StringXNumber MeshOptions_Number[] = {
     "(Adv. Chaco): Parameter TERMINAL_PROPOGATION" },
   { F|O, "CharacteristicLengthExtendFromBoundary" , 
     opt_mesh_lc_extend_from_boundary, 1. ,
-    "Extend characteristic lengths from the boundaries inside the surface/volume" },
+    "Extend computation of mesh element sizes from the boundaries into the surfaces/volumes" },
   { F|O, "CharacteristicLengthFactor" , opt_mesh_lc_factor , 1.0 ,
-    "Factor applied to all characteristic lengths" },
+    "Factor applied to all mesh element sizes" },
   { F|O, "CharacteristicLengthMin" , opt_mesh_lc_min, 0.0 ,
-    "Minimum characteristic length" },
+    "Minimum mesh element size" },
   { F|O, "CharacteristicLengthMax" , opt_mesh_lc_max, 1.e22,
-    "Maximum characteristic length" },
+    "Maximum mesh element size" },
   { F|O, "CharacteristicLengthFromCurvature" , opt_mesh_lc_from_curvature , 0. ,
-    "Compute characteristic lengths from curvature" },
+    "Automatically compute mesh element sizes from curvature (experimental)" },
   { F|O, "CharacteristicLengthFromPoints" , opt_mesh_lc_from_points , 1. ,
-    "Compute characteristic lengths from values given at geometry points" },
+    "Compute mesh element sizes from values given at geometry points" },
   { F,   "Clip" , opt_mesh_clip , 0.,
     "Enable clipping planes? (Plane[i]=2^i, i=0,...,5)" },
   { F|O, "ColorCarousel" , opt_mesh_color_carousel , 1. ,
@@ -1061,15 +1093,15 @@ StringXNumber MeshOptions_Number[] = {
   { F|O, "Explode" , opt_mesh_explode , 1.0 ,
     "Element shrinking factor (between 0 and 1)" },
 
-  { F|O, "Format" , opt_mesh_format , FORMAT_MSH , 
-    "Mesh output format (1=msh, 2=unv, 19=vrml, 27=stl, 30=mesh, 31=bdf, "
-    "32=cgns, 33=med)" },
+  { F|O, "Format" , opt_mesh_file_format , FORMAT_AUTO , 
+    "Mesh output format (1=msh, 2=unv, 10=automatic, 19=vrml, 27=stl, 30=mesh, 31=bdf, "
+    "32=cgns, 33=med, 40=ply2)" },
 
   { F|O, "Hexahedra" , opt_mesh_hexahedra , 1. , 
     "Display mesh hexahedra?" },
 
-  { F|O, "LabelsFrequency" , opt_mesh_label_frequency , 100. , 
-    "Labels display frequency?" },
+  { F|O, "LabelSampling" , opt_mesh_label_sampling , 1. , 
+    "Label sampling rate (display one label every `LabelSampling' elements)" },
   { F|O, "LabelType" , opt_mesh_label_type , 0. , 
     "Type of element label (0=element number, 1=elementary entity number, "
     "2=physical entity number, 3=partition number, 4=coordinates)" },
@@ -1091,7 +1123,7 @@ StringXNumber MeshOptions_Number[] = {
   { F|O, "MeshOnlyVisible" , opt_mesh_mesh_only_visible, 0. ,
     "Mesh only visible entities (experimental: use with caution!)" },
   { F|O, "MetisAlgorithm" , opt_mesh_partition_metis_algorithm, 1. ,
-    "METIS partitioning algorithm (1=Recursive, 2=K-way)" },
+    "METIS partitioning algorithm (1=Recursive, 2=K-way, 3=Nodal weight)" },
   { F|O, "MetisEdgeMatching" , opt_mesh_partition_metis_edge_matching, 3. ,
     "(Adv. METIS): Determines the matching type (1=Random, 2=Heavy-Edge, "
     "3=Sorted Heavy-Edge)" },
@@ -1102,14 +1134,33 @@ StringXNumber MeshOptions_Number[] = {
     "Minimum number of points used to mesh a circle" },
   { F|O, "MinimumCurvePoints" , opt_mesh_min_curv_points, 3. ,
     "Minimum number of points used to mesh a (non-straight) curve" },
-  { F|O, "MshFileVersion" , opt_mesh_msh_file_version , 2.1 , 
+  { F|O, "MshFileVersion" , opt_mesh_msh_file_version , 2.2 , 
     "Version of the MSH file format to use" },
+  { F|O, "MshFilePartitioned" , opt_mesh_msh_file_partitioned , 0. , 
+    "Split MSH file by mesh partition" },
+  
+  { F|O, "PartitionHexWeight"     , opt_mesh_partition_hex_weight , 1 , 
+    "Weight of hexahedral element for METIS load balancing" },
+  { F|O, "PartitionPrismWeight"   , opt_mesh_partition_pri_weight , 1 , 
+    "Weight of prismatic element (wedge) for METIS load balancing" },
+  { F|O, "PartitionPyramidWeight" , opt_mesh_partition_pyr_weight , 1 , 
+    "Weight of pyramidal element for METIS load balancing" },
+  { F|O, "PartitionQuadWeight"    , opt_mesh_partition_qua_weight , 1 , 
+    "Weight of quadrangle for METIS load balancing" },
+  { F|O, "PartitionTetWeight"     , opt_mesh_partition_tet_weight , 1 , 
+    "Weight of tetrahedral element for METIS load balancing" },
+  { F|O, "PartitionTriWeight"     , opt_mesh_partition_tri_weight , 1 , 
+    "Weight of triangle for METIS load balancing" ,},
 
+  { F|O, "PartitionByExtrusion" , opt_mesh_partition_by_extrusion, 0. ,
+    "Special partitioner that annotates all all extruded elements to the same "
+    "node as the source element" },
+    
   { F, "NbHexahedra" , opt_mesh_nb_hexahedra , 0. , 
     "Number of hexahedra in the current mesh (read-only)" },
   { F, "NbNodes" , opt_mesh_nb_nodes , 0. , 
     "Number of nodes in the current mesh (read-only)" },
-  { F|O, "NbPartitions" , opt_mesh_partition_num, 4. ,
+  { F|O, "NbPartitions" , opt_mesh_partition_num, 1. ,
     "Number of partitions" },
   { F, "NbPrisms" , opt_mesh_nb_prisms , 0. , 
     "Number of prisms in the current mesh (read-only)" },
@@ -1164,6 +1215,16 @@ StringXNumber MeshOptions_Number[] = {
   { F|O, "RandomFactor" , opt_mesh_rand_factor , 1.e-9 ,
     "Random factor used in the 2D meshing algorithm (should be increased if "
     "RandomFactor * size(triangle)/size(model) approaches machine accuracy)" },
+  { F|O, "RecombinationAlgorithm" , opt_mesh_algo_recombine , 0 ,
+    "Mesh recombination algorithm (0=standard, 1=blossom)" }, 
+  { F|O, "RecombineAll" , opt_mesh_recombine_all , 0 ,
+    "Apply recombination algorithm to all surfaces, ignoring per-surface spec" }, 
+
+  { F|O, "RemeshAlgorithm" , opt_mesh_remesh_algo , 0 ,
+    "Remeshing algorithm (0=no split, 1=automatic, 2=automatic only with metis)" }, 
+  { F|O, "RemeshParametrization" , opt_mesh_remesh_param , 0 ,
+    "Remsh Parametrization (0=harmonic, 1=conformal)" }, 
+
   { F|O, "RefineSteps" , opt_mesh_refine_steps , 10 ,
     "Number of refinement steps in the MeshAdapt-based 2D algorithms" }, 
   { F|O, "Remove4Triangles" , opt_mesh_remove_4_triangles , 0 ,
@@ -1185,7 +1246,7 @@ StringXNumber MeshOptions_Number[] = {
     "Global scaling factor applied to the saved mesh" },
   { F|O, "SecondOrderExperimental" , opt_mesh_second_order_experimental , 0. ,
     "Use experimental code to generate second order mesh" },
-  { F|O, "SecondOrderIncomplete" , opt_mesh_second_order_incomplete , 1. ,
+  { F|O, "SecondOrderIncomplete" , opt_mesh_second_order_incomplete , 0. ,
     "Create incomplete second order elements? (8-node quads, 20-node hexas, etc.)" },
   { F|O, "SecondOrderLinear" , opt_mesh_second_order_linear , 0. ,
     "Should second order vertices simply be created by linear interpolation?" },
@@ -1195,6 +1256,8 @@ StringXNumber MeshOptions_Number[] = {
     "Number of smoothing steps of internal edges for high order meshes" },
   { F|O, "SmoothNormals" , opt_mesh_smooth_normals , 0. , 
     "Smooth the mesh normals?" },
+  { F|O, "SmoothRatio" , opt_mesh_smooth_ratio , 1.8 ,
+    "Ratio between mesh sizes at vertices of a same edeg (used in BAMG)" },
   { F|O, "SubdivisionAlgorithm" , opt_mesh_algo_subdivide , 0 ,
     "Mesh subdivision algorithm (0=none, 1=all quadrangles, 2=all hexahedra)" }, 
   { F|O, "SurfaceEdges" , opt_mesh_surfaces_edges , 1. , 
@@ -1272,17 +1335,18 @@ StringXNumber SolverOptions_Number[] = {
 } ;
 
 StringXNumber PostProcessingOptions_Number[] = {
-  { F|O, "AnimationDelay" , opt_post_anim_delay , 0.25 ,
+  { F|O, "AnimationDelay" , opt_post_anim_delay , 0.1 ,
     "Delay (in seconds) between frames in automatic animation mode" },
   { F|O, "AnimationCycle" , opt_post_anim_cycle , 0. ,
-    "Cycle through views instead of time steps in automatic animation mode" },
+    "Cycle through time steps (0) or views (1) for animations" },
 
   { F|O, "CombineRemoveOriginal" , opt_post_combine_remove_orig , 1. ,
     "Remove original views after a Combine operation" },
 
-  { F|O, "Format" , opt_post_file_format , 0. ,
+  { F|O, "Format" , opt_post_file_format , 10. ,
     "Default file format for post-processing views (0=ASCII view, 1=binary "
-    "view, 2=parsed view, 3=STL triangulation, 4=text, 5=mesh)" },
+    "view, 2=parsed view, 3=STL triangulation, 4=raw text, 5=Gmsh mesh, 6=MED file, "
+    "10=automatic)" },
 
   { F|O, "HorizontalScales" , opt_post_horizontal_scales , 1. , 
     "Display value scales horizontally" },
@@ -1344,7 +1408,7 @@ StringXNumber ViewOptions_Number[] = {
     "dimension, b=option value)" },
 
   { F|O, "CenterGlyphs" , opt_view_center_glyphs , 0, 
-    "Center glyphs (arrows, numbers, etc.)" },
+    "Center glyphs (arrows, numbers, etc.)? (0=left, 1=centered, 2=right)" },
   { F,   "Clip" , opt_view_clip , 0.,
     "Enable clipping planes? (Plane[i]=2^i, i=0,...,5)" },
   { F|O, "ColormapAlpha" , opt_view_colormap_alpha , 1.0 ,
@@ -1365,6 +1429,24 @@ StringXNumber ViewOptions_Number[] = {
     "Incremental colormap rotation" },
   { F|O, "ColormapSwap" , opt_view_colormap_swap , 0. ,
     "Swap the min/max values in the colormap?" },
+  { F|O, "ComponentMap0" , opt_view_component_map0 , 0, 
+    "Forced component 0 (if View.ForceComponents > 0)" },
+  { F|O, "ComponentMap1" , opt_view_component_map1 , 1, 
+    "Forced component 1 (if View.ForceComponents > 0)" },
+  { F|O, "ComponentMap2" , opt_view_component_map2 , 2, 
+    "Forced component 2 (if View.ForceComponents > 0)" },
+  { F|O, "ComponentMap3" , opt_view_component_map3 , 3, 
+    "Forced component 3 (if View.ForceComponents > 0)" },
+  { F|O, "ComponentMap4" , opt_view_component_map4 , 4, 
+    "Forced component 4 (if View.ForceComponents > 0)" },
+  { F|O, "ComponentMap5" , opt_view_component_map5 , 5, 
+    "Forced component 5 (if View.ForceComponents > 0)" },
+  { F|O, "ComponentMap6" , opt_view_component_map6 , 6, 
+    "Forced component 6 (if View.ForceComponents > 0)" },
+  { F|O, "ComponentMap7" , opt_view_component_map7 , 7, 
+    "Forced component 7 (if View.ForceComponents > 0)" },
+  { F|O, "ComponentMap8" , opt_view_component_map8 , 8, 
+    "Forced component 8 (if View.ForceComponents > 0)" },
   { F,   "CustomMax" , opt_view_custom_max , 0. , 
     "User-defined maximum value to be displayed" },
   { F,   "CustomMin" , opt_view_custom_min , 0. , 
@@ -1406,6 +1488,8 @@ StringXNumber ViewOptions_Number[] = {
 
   { F|O, "FakeTransparency" , opt_view_fake_transparency , 0. ,
     "Use fake transparency (cheaper than the real thing, but incorrect)" },
+  { F|O, "ForceNumComponents" , opt_view_force_num_components , 0. , 
+    "Force number of components to display (see View.ComponentMapN for mapping)" },
 
   { F|O, "GeneralizedRaiseFactor" , opt_view_gen_raise_factor , 1. ,
     "Generalized raise amplification factor" },
@@ -1450,7 +1534,7 @@ StringXNumber ViewOptions_Number[] = {
   { F,   "MinZ" , opt_view_zmin , 0. , 
     "Minimum view coordinate along the Z-axis (read-only)" }, 
 
-  { F|O, "NbIso" , opt_view_nb_iso , 15. ,
+  { F|O, "NbIso" , opt_view_nb_iso , 10. ,
     "Number of intervals" },
   { F,   "NbTimeStep" , opt_view_nb_timestep , 1. ,
     "Number of time steps in the view (do not change this!)" },
@@ -1487,6 +1571,8 @@ StringXNumber ViewOptions_Number[] = {
   { F|O, "RangeType" , opt_view_range_type , 1 ,
     "Value scale range type (1=default, 2=custom, 3=per time step)" },
 
+  { F|O, "Sampling" , opt_view_sampling , 1. , 
+    "Element sampling rate (draw one out every `Sampling' elements)" },
   { F|O, "SaturateValues" , opt_view_saturate_values , 0. ,
     "Saturate the view values to custom min and max (1=true, 0=false)" },
   { F|O, "ScaleType" , opt_view_scale_type , 1 ,
@@ -1495,9 +1581,9 @@ StringXNumber ViewOptions_Number[] = {
     "Show element boundaries?" },
   { F|O, "ShowScale" , opt_view_show_scale , 1. ,
     "Show value scale?" },
-  { F|O, "ShowTime" , opt_view_show_time , 1. ,
-    "Time display mode (0=hidden, 1=value if multi-step, 2=value always, "
-    "3=step if multi-step, 4=step always)" },
+  { F|O, "ShowTime" , opt_view_show_time , 3. ,
+    "Time display mode (0=hidden, 1=time value if multi-step, 2=time value always, "
+    "3=time step if multi-step, 4=time step always)" },
   { F|O, "SmoothNormals" , opt_view_smooth_normals , 0. ,
     "Smooth the normals?" },
   { F|O, "Stipple" , opt_view_use_stipple , 0. ,
@@ -1551,13 +1637,16 @@ StringXNumber PrintOptions_Number[] = {
   { F|O, "CompositeWindows" , opt_print_composite_windows , 0. ,
     "Composite all window tiles in the same output image (for bitmap output only)" },
 
+  { F|O, "DeleteTemporaryFiles" , opt_print_delete_tmp_files , 1. ,
+    "Delete temporary files used during printing" },
+
   { F|O, "EpsBackground" , opt_print_eps_background , 1. ,
     "Save image background in PostScript/PDF output" },
   { F|O, "EpsBestRoot" , opt_print_eps_best_root , 1. ,
     "Try to minimize primitive splitting in BSP tree sorted PostScript/PDF output" },
   { F|O, "EpsCompress" , opt_print_eps_compress , 0. ,
     "Compress PostScript/PDF output using zlib" },
-  { F|O, "EpsLineWidthFactor" , opt_print_eps_line_width_factor , 0.5 ,
+  { F|O, "EpsLineWidthFactor" , opt_print_eps_line_width_factor , 1.0 ,
     "Width factor for lines in PostScript/PDF output" },
   { F|O, "EpsOcclusionCulling" , opt_print_eps_occlusion_culling , 1. ,
     "Cull occluded primitives (to reduce PostScript/PDF file size)" },
@@ -1569,7 +1658,7 @@ StringXNumber PrintOptions_Number[] = {
     "PostScript/PDF quality (0=bitmap, 1=vector (simple sort), 2=vector "
     "(accurate sort), 3=vector (unsorted)" },
 
-  { F|O, "Format" , opt_print_format , FORMAT_AUTO , 
+  { F|O, "Format" , opt_print_file_format , FORMAT_AUTO , 
     "File format (10=automatic)" }, 
 
   { F|O, "GeoLabels" , opt_print_geo_labels , 1. ,
@@ -1696,24 +1785,24 @@ StringXColor GeometryOptions_Color[] = {
 #define COLY  {217, 113, 38, 255}
 
 #define COL0  {255, 120, 0, 255}
-#define COL1  {255, 160, 0, 255}
-#define COL2  {255, 200, 0, 255}
-#define COL3  {255, 240, 0, 255}
-#define COL4  {228, 255, 0, 255}
-#define COL5  {188, 255, 0, 255}
-#define COL6  {148, 255, 0, 255}
-#define COL7  {108, 255, 0, 255}
-#define COL8  {68, 255, 0, 255}
-#define COL9  {0, 255, 52, 255}
-#define COL10 {0, 255, 132, 255}
-#define COL11 {0, 255, 192, 255}
-#define COL12 {0, 216, 255, 255}
-#define COL13 {0, 176, 255, 255}
-#define COL14 {0, 116, 255, 255}
-#define COL15 {0, 76, 255, 255}
-#define COL16 {24, 0, 255, 255}
-#define COL17 {84, 0, 255, 255}
-#define COL18 {104, 0, 255, 255}
+#define COL2  {255, 160, 0, 255}
+#define COL4  {255, 200, 0, 255}
+#define COL6  {255, 240, 0, 255}
+#define COL8  {228, 255, 0, 255}
+#define COL10  {188, 255, 0, 255}
+#define COL12  {148, 255, 0, 255}
+#define COL14  {108, 255, 0, 255}
+#define COL16  {68, 255, 0, 255}
+#define COL18  {0, 255, 52, 255}
+#define COL1 {0, 255, 132, 255}
+#define COL3 {0, 255, 192, 255}
+#define COL5 {0, 216, 255, 255}
+#define COL7 {0, 176, 255, 255}
+#define COL9 {0, 116, 255, 255}
+#define COL11 {0, 76, 255, 255}
+#define COL13 {24, 0, 255, 255}
+#define COL15 {84, 0, 255, 255}
+#define COL17 {104, 0, 255, 255}
 #define COL19 {184, 0, 255, 255}
 
 StringXColor MeshOptions_Color[] = {

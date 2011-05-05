@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -8,7 +8,7 @@
 
 StringXNumber Lambda2Options_Number[] = {
   {GMSH_FULLRC, "Eigenvalue", NULL, 2.},
-  {GMSH_FULLRC, "iView", NULL, -1.}
+  {GMSH_FULLRC, "View", NULL, -1.}
 };
 
 extern "C"
@@ -21,22 +21,22 @@ extern "C"
 
 std::string GMSH_Lambda2Plugin::getHelp() const
 {
-  return "Plugin(Lambda2) computes the eigenvalues\n"
-         "Lambda(1,2,3) of the tensor (S_ik S_kj +\n"
-         "Om_ik Om_kj), where S_ij = 0.5 (ui,j + uj,i)\n"
-         "and Om_ij = 0.5 (ui,j - uj,i) are respectively\n"
-         "the symmetric and antisymmetric parts of the\n"
-         "velocity gradient tensor. Vortices are well\n"
-         "represented by regions where Lambda(2) is\n"
-         "negative. If `iView' contains tensor elements,\n"
-         "the plugin directly uses the tensors as the\n"
-         "values of the velocity gradient tensor; if\n"
-         "`iView' contains vector elements, the plugin\n"
-         "uses them as the velocities from which to derive\n"
-         "the velocity gradient tensor. If `iView' < 0,\n"
-         "the plugin is run on the current view.\n"
-         "\n"
-         "Plugin(Lambda2) creates one new view.\n";
+  return "Plugin(Lambda2) computes the eigenvalues "
+    "Lambda(1,2,3) of the tensor (S_ik S_kj + "
+    "Om_ik Om_kj), where S_ij = 0.5 (ui,j + uj,i) "
+    "and Om_ij = 0.5 (ui,j - uj,i) are respectively "
+    "the symmetric and antisymmetric parts of the "
+    "velocity gradient tensor.\n\n"
+    "Vortices are well represented by regions where "
+    "Lambda(2) is negative.\n\n"
+    "If `View' contains tensor elements, the plugin "
+    "directly uses the tensors as the values of the "
+    "velocity gradient tensor; if `View' contains "
+    "vector elements, the plugin uses them as the "
+    "velocities from which to derive the velocity "
+    "gradient tensor.\n\n"
+    "If `View' < 0, the plugin is run on the current view.\n\n"
+    "Plugin(Lambda2) creates one new view.";
 }
 
 int GMSH_Lambda2Plugin::getNbOptions() const

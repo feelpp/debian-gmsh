@@ -1,9 +1,10 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
 #include <vector>
+#include <string.h>
 #include <FL/Fl_Return_Button.H>
 #include <FL/Fl_Group.H>
 #include <FL/Fl_Value_Input.H>
@@ -11,6 +12,7 @@
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Tabs.H>
 #include <FL/Fl_Scroll.H>
+#include <FL/Fl_Help_View.H>
 #include "FlGui.h"
 #include "drawContext.h"
 #include "pluginWindow.h"
@@ -21,6 +23,8 @@
 #include "GModel.h"
 #include "MVertex.h"
 #include "Context.h"
+#include "GeoStringInterface.h"
+#include "StringUtils.h"
 
 #define MAX_PLUGIN_OPTIONS 50
 class PluginDialogBox{
@@ -103,6 +107,43 @@ static void plugin_browser_cb(Fl_Widget *w, void *data)
   p->dialogBox->group->show();
 }
 
+static void add_scripting(GMSH_PostPlugin *p, PView *view)
+{
+  if(!FlGui::instance()->plugins->record->value()) return;
+
+  std::string fileName;
+  int oldIndex = -1;
+  if(view){
+    for(int i = 0; i < p->getNbOptions(); i++){
+      if(std::string(p->getOption(i)->str) == "View") {
+        oldIndex = (int)(p->getOption(i)->def);
+        p->getOption(i)->def = view->getIndex();
+      }
+    }
+    fileName = view->getData()->getFileName();
+  }
+  else
+    fileName = GModel::current()->getFileName();
+
+  fileName += ".opt";
+  FILE *fp = fopen(fileName.c_str(), "a");
+  if(!fp){
+    Msg::Error("Could not open file '%s'", fileName.c_str());
+  }
+  else{
+    fprintf(fp, "%s", p->serialize().c_str());
+    fclose(fp);
+  }
+
+  if(view && oldIndex != -1){
+    for(int i = 0; i < p->getNbOptions(); i++){
+      if(std::string(p->getOption(i)->str) == "View"){
+        p->getOption(i)->def = oldIndex;
+      }
+    }
+  }
+}
+
 static void plugin_run_cb(Fl_Widget *w, void *data)
 {
   GMSH_PostPlugin *p = (GMSH_PostPlugin*)data;
@@ -127,10 +168,19 @@ static void plugin_run_cb(Fl_Widget *w, void *data)
     if(FlGui::instance()->plugins->view_browser->selected(i)) {
       no_view_selected = false;
       try{
-        if(i - 1 >= 0 && i - 1 < (int)PView::list.size())
-          p->execute(PView::list[i - 1]);
-        else
+        if(i - 1 >= 0 && i - 1 < (int)PView::list.size()){
+          PView *view = PView::list[i - 1];
+          if(view->getData()->isRemote())
+            p->executeRemote(view);
+          else{
+            p->execute(view);
+            add_scripting(p, view);
+          }
+        }
+        else{
           p->execute(0);
+          add_scripting(p, 0);
+        }
       }
       catch(GMSH_Plugin * err) {
         char tmp[256];
@@ -173,13 +223,25 @@ void pluginWindow::_createDialogBox(GMSH_Plugin *p, int x, int y,
   p->dialogBox = new PluginDialogBox;
   p->dialogBox->group = new Fl_Group(x, y, width, height);
 
+  Fl_Box *title = new Fl_Box(x, y, width, BH, strdup(p->getName().c_str()));
+  title->labelfont(FL_BOLD);
+  title->labelsize(FL_NORMAL_SIZE + 3);
+  title->align(FL_ALIGN_INSIDE);
+
+  Fl_Box *help = new Fl_Box
+    (x, y + BH, width, BH + WB, strdup(p->getShortHelp().c_str()));
+  help->align(FL_ALIGN_WRAP | FL_ALIGN_CLIP | FL_ALIGN_TOP | FL_ALIGN_INSIDE);
+
+  int top = 2 * BH + WB;
+
   {
-    Fl_Tabs *o = new Fl_Tabs(x, y, width, height);
+    Fl_Tabs *o = new Fl_Tabs(x, y + top, width, height - top);
     {
-      Fl_Group *g = new Fl_Group(x, y + BH, width, height - BH, "Options");
+      Fl_Group *g = new Fl_Group
+        (x, y + top + BH, width, height - top - BH, "Options");
 
       Fl_Scroll *s = new Fl_Scroll
-        (x + WB, y + WB + BH, width - 2 * WB, height - 2 * BH - 3 * WB);
+        (x + WB, y + top + BH + WB, width - 2 * WB, height - top - 2 * BH - 3 * WB);
 
       int m = p->getNbOptionsStr();
       if(m > MAX_PLUGIN_OPTIONS) m = MAX_PLUGIN_OPTIONS;
@@ -191,7 +253,7 @@ void pluginWindow::_createDialogBox(GMSH_Plugin *p, int x, int y,
       for(int i = 0; i < m; i++) {
         StringXString *sxs = p->getOptionStr(i);
         p->dialogBox->input[i] = new Fl_Input
-          (x + WB, y + WB + (k + 1) * BH, IW, BH, sxs->str);
+          (x + WB, y + top + (k + 1) * BH + WB, IW, BH, sxs->str);
         p->dialogBox->input[i]->align(FL_ALIGN_RIGHT);
         p->dialogBox->input[i]->value(sxs->def.c_str());
         k++;
@@ -199,7 +261,7 @@ void pluginWindow::_createDialogBox(GMSH_Plugin *p, int x, int y,
       for(int i = 0; i < n; i++) {
         StringXNumber *sxn = p->getOption(i);
         p->dialogBox->value[i] = new Fl_Value_Input
-          (x + WB, y + WB + (k + 1) * BH, IW, BH, sxn->str);
+          (x + WB, y + top + (k + 1) * BH + WB, IW, BH, sxn->str);
         p->dialogBox->value[i]->align(FL_ALIGN_RIGHT);
         p->dialogBox->value[i]->value(sxn->def);
         k++;
@@ -211,26 +273,24 @@ void pluginWindow::_createDialogBox(GMSH_Plugin *p, int x, int y,
         (x + width - BB - WB, y + height - BH - WB, BB, BH, "Run");
       run->callback(plugin_run_cb, (void*)p);
 
-      g->resizable(new Fl_Box(x + WB, y + 2 * BH, WB, WB));
+      g->resizable(new Fl_Box(x + 2 * WB, y + top + 2 * BH, 1, 1));
       g->end();
-
       o->resizable(g);
     }
     {
-      Fl_Group *g = new Fl_Group(x, y + BH, width, height - BH, "Help");
+      Fl_Group *g = new Fl_Group
+        (x, y + top + BH, width, height - top - BH, "Help");
 
-      Fl_Browser *o = new Fl_Browser
-        (x + WB, y + WB + BH, width - 2 * WB, height - 2 * WB - BH);
-      o->add(" ");
-      add_multiline_in_browser(o, "@c@b@.", p->getName().c_str(), false);
-      o->add(" ");
-      add_multiline_in_browser(o, "", p->getHelp().c_str(), false);
-      o->add(" ");
-      add_multiline_in_browser(o, "Author: ", p->getAuthor().c_str(), false);
-      add_multiline_in_browser(o, "Copyright (C) ", p->getCopyright().c_str(), 
-                               false);
-      o->add(" ");
+      Fl_Help_View *o = new Fl_Help_View
+        (x + WB, y + top + BH + WB, width - 2 * WB, height - top - 2 * BH - 3 * WB);
+      std::string help = p->getHelp();
+      ConvertToHTML(help);
+      help += std::string("<p><em>Author(s): ") + p->getAuthor() + "</em>";
+      o->value(help.c_str());
+      o->textfont(FL_HELVETICA);
+      o->textsize(FL_NORMAL_SIZE);
 
+      g->resizable(new Fl_Box(x + 2 * WB, y + top + 2 * BH, 1, 1));
       g->end();
     }
     o->end();
@@ -246,6 +306,7 @@ pluginWindow::pluginWindow(int deltaFontSize)
 
   int width0 = 34 * FL_NORMAL_SIZE + WB;
   int height0 = 12 * BH + 4 * WB;
+  int L1 = 10 * FL_NORMAL_SIZE, L2 = 6 * FL_NORMAL_SIZE;
 
   int width = (CTX::instance()->pluginSize[0] < width0) ? width0 : 
     CTX::instance()->pluginSize[0];
@@ -256,7 +317,6 @@ pluginWindow::pluginWindow(int deltaFontSize)
     (width, height, CTX::instance()->nonModalWindows ? true : false, "Plugins");
   win->box(GMSH_WINDOW_BOX);
 
-  int L1 = (int)(0.3 * width), L2 = (int)(0.6 * L1);
   browser = new Fl_Hold_Browser(WB, WB, L1, height - 2 * WB);
   browser->callback(plugin_browser_cb);
 
@@ -282,9 +342,13 @@ pluginWindow::pluginWindow(int deltaFontSize)
       }
     }
   }
+
+  record = new Fl_Check_Button
+    (L1 + L2 + 3 * WB, height - BH - 2 * WB, BB, BH, "Record");
+  record->type(FL_TOGGLE_BUTTON);
+  record->tooltip("Append scripting command to file options when plugin is run");
   
-  Fl_Box *resize_box = new Fl_Box(3*WB + L1+L2, WB, WB, height - 2 * WB);
-  win->resizable(resize_box);
+  win->resizable(new Fl_Box(L1 + L2 + 2 * BH, height - 4 * BH, 10, 10));
   win->size_range(width0, height0);
 
   win->position(CTX::instance()->pluginPosition[0], CTX::instance()->pluginPosition[1]);

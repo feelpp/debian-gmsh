@@ -1,4 +1,4 @@
-             Gmsh is copyright (C) 1997-2009
+             Gmsh is copyright (C) 1997-2010
 
                    Christophe Geuzaine
                  <cgeuzaine at ulg.ac.be>
@@ -11,16 +11,17 @@
 Code contributions to Gmsh have been provided by David Colignon
 (colormaps), Emilie Marchandise (compound geometrical entities),
 Gaetan Bricteux (Gauss integration and levelsets), Jacques Lechelle
-(DIFFPACK mesh format), Jonathan Lambrechts (fields), Jozef Vesely
-(Tetgen), Koen Hillewaert (high order elements), Laurent Stainier
-(eigenvalue solvers, tensor display and MacOS bits), Marc Ume
-(original list code), Mark van Doesburg (OpenCascade face connection),
-Matt Gundry (Plot3d mesh format), Matti Pellikka (Homology), Nicolas
-Tardieu (Netgen), Pascale Noyret (MED mesh format), Pierre Badel (root
-finding and minimization), Ruth Sabariego (pyramids), Stephen Guzik
-(CGNS and partitioners). See comments in the sources for more
-information. If we forgot to list your contributions please send us an
-email!
+(DIFFPACK mesh format), Jonathan Lambrechts (fields, solver), Jozef
+Vesely (Tetgen), Koen Hillewaert (high order elements), Laurent
+Stainier (eigenvalue solvers, tensor display and MacOS bits), Marc Ume
+(original list code), Mark van Doesburg (Open CASCADE face
+connection), Matt Gundry (Plot3d mesh format), Matti Pellikka
+(Homology), Nicolas Tardieu (Netgen), Pascale Noyret (MED mesh
+format), Pierre Badel (root finding and minimization), Ruth Sabariego
+(pyramids), Stephen Guzik (CGNS and partitioners), Bastien Gorissen
+(parallel remote), Eric Bechet (solver). See comments in the sources
+for more information. If we forgot to list your contributions please
+send us an email!
 
 The AVL tree code (Common/avl.*) and the YUV image code
 (Graphics/gl2yuv.*) are copyright (C) 1988-1993, 1995 The Regents of
@@ -86,6 +87,10 @@ subdirectory) written by George Karypis (karypis at cs.umn.edu),
 copyright (C) 1998 Regents of the University of Minnesota: check the
 configuration options.
 
+This version of Gmsh may contain code (in the contrib/mpeg_encode
+subdirectory) copyright (c) 1995 The Regents of the University of
+California: check the configuration options.
+
 This version of Gmsh may contain code (in the
 contrib/NativeFileChooser subdirectory), copyright (C) 2004 Greg
 Ercolano: check the configuration options.
@@ -103,16 +108,16 @@ Ercolano and others for the Fast Light Tool Kit on which Gmsh's GUI is
 based. See http://www.fltk.org for more info on this excellent
 object-oriented, cross-platform toolkit.
 
-Special thanks also to EDF for funding the OpenCascade and MED
+Special thanks also to EDF for funding the Open CASCADE and MED
 integration.
 
 Thanks to the following folks who have contributed by providing fresh
 ideas on theoretical or programming topics, who have sent patches,
 requests for changes or improvements, or who gave us access to exotic
 machines for testing Gmsh: Juan Abanto, Olivier Adam, Guillaume
-Alleon, Eric Bechet, Laurent Champaney, Pascal Dupuis, Patrick Dular,
-Philippe Geuzaine, Johan Gyselinck, Francois Henrotte, Benoit Meys,
-Nicolas Moes, Osamu Nakamura, Chad Schmutzer, Jean-Luc Fl'ejou, Xavier
+Alleon, Laurent Champaney, Pascal Dupuis, Patrick Dular, Philippe
+Geuzaine, Johan Gyselinck, Francois Henrotte, Benoit Meys, Nicolas
+Moes, Osamu Nakamura, Chad Schmutzer, Jean-Luc Fl'ejou, Xavier
 Dardenne, Christophe Prud'homme, Sebastien Clerc, Jose Miguel Pasini,
 Philippe Lussou, Jacques Kools, Bayram Yenikaya, Peter Hornby, Krishna
 Mohan Gundu, Christopher Stott, Timmy Schumacher, Carl Osterwisch,
@@ -121,4 +126,4 @@ Michel Benhamou, Tom De Vuyst, Kris Van den Abeele, Simon Vun, Simon
 Corbin, Thomas De-Soza, Marcus Drosson, Antoine Dechaume, Jose Paulo
 Moitinho de Almeida, Thomas Pinchard, Corrado Chisari, Axel Hackbarth,
 Peter Wainwright, Jiri Hnidek, Thierry Thomas, Konstantinos Poulios,
-Laurent Van Miegroet.
+Laurent Van Miegroet, Shahrokh Ghavamian.

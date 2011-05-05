@@ -1,8 +1,9 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
+#include <sstream>
 #include <stdlib.h>
 #include "GmshConfig.h"
 #include "GmshMessage.h"
@@ -19,8 +20,9 @@
 #include "gmshEdge.h"
 #include "gmshRegion.h"
 #include "Field.h"
+#include "Context.h"
 
-#if !defined(HAVE_NO_PARSER)
+#if defined(HAVE_PARSER)
 #include "Parser.h"
 #endif
 
@@ -31,7 +33,7 @@ void GModel::_createGEOInternals()
 
 void GModel::_deleteGEOInternals()
 {
-  delete _geo_internals;
+  if(_geo_internals) delete _geo_internals;
   _geo_internals = 0;
 }
 
@@ -39,6 +41,77 @@ int GModel::readGEO(const std::string &name)
 {
   ParseFile(name, true);
   return GModel::current()->importGEOInternals();
+}
+
+int GModel::exportDiscreteGEOInternals()
+{
+
+  if(_geo_internals) delete _geo_internals;
+  _geo_internals = new GEO_Internals;
+
+  for(viter it = firstVertex(); it != lastVertex(); it++){
+    Vertex *v = Create_Vertex((*it)->tag(), (*it)->x(), (*it)->y(), (*it)->z(),
+                              (*it)->prescribedMeshSizeAtVertex(), 1.0);
+    Tree_Add(GModel::current()->getGEOInternals()->Points, &v);
+  }
+
+  for(eiter it = firstEdge(); it != lastEdge(); it++){
+    if((*it)->geomType() == GEntity::DiscreteCurve){
+      Curve *c = Create_Curve((*it)->tag(), MSH_SEGM_DISCRETE, 1,
+                              NULL, NULL, -1, -1, 0., 1.);
+      List_T *points = Tree2List(_geo_internals->Points);
+      GVertex *gvb = (*it)->getBeginVertex();
+      GVertex *gve = (*it)->getEndVertex();
+      int nb = 2 ;
+      c->Control_Points = List_Create(nb, 1, sizeof(Vertex *));
+      for(int i = 0; i < List_Nbr(points); i++) {
+        Vertex *v;
+        List_Read(points, i, &v);
+        if (v->Num == gvb->tag()) {
+          List_Add(c->Control_Points, &v);
+          c->beg = v;
+        }
+        if (v->Num == gve->tag()) {
+          List_Add(c->Control_Points, &v);
+          c->end = v;
+        }       
+      }
+      End_Curve(c);
+      Tree_Add(GModel::current()->getGEOInternals()->Curves, &c);
+      CreateReversedCurve(c);
+    }
+  }
+
+  for(fiter it = firstFace(); it != lastFace(); it++){
+    if((*it)->geomType() == GEntity::DiscreteSurface){
+      Surface *s = Create_Surface((*it)->tag(), MSH_SURF_DISCRETE);
+      std::list<GEdge*> edges = (*it)->edges();
+      s->Generatrices = List_Create(edges.size(), 1, sizeof(Curve *));
+      List_T *curves = Tree2List(_geo_internals->Curves);
+      Curve *c;
+      for(std::list<GEdge*>::iterator ite = edges.begin(); ite != edges.end(); ite++){
+        for(int i = 0; i < List_Nbr(curves); i++) {
+          List_Read(curves, i, &c);
+          if (c->Num == (*ite)->tag()) {
+            List_Add(s->Generatrices, &c);
+          }
+        }
+      }
+      Tree_Add(GModel::current()->getGEOInternals()->Surfaces, &s);
+    }
+  }
+
+  // TODO: create Volumes from discreteRegions
+
+  Msg::Debug("Geo internal model has:");
+  List_T *points = Tree2List(_geo_internals->Points);
+  List_T *curves = Tree2List(_geo_internals->Curves);
+  List_T *surfaces = Tree2List(_geo_internals->Surfaces);  
+  Msg::Debug("%d Vertices", List_Nbr(points));
+  Msg::Debug("%d Edges", List_Nbr(curves));
+  Msg::Debug("%d Faces", List_Nbr(surfaces));
+
+  return 1;
 }
 
 int GModel::importGEOInternals()
@@ -62,19 +135,30 @@ int GModel::importGEOInternals()
     for(int i = 0; i < List_Nbr(curves); i++){
       Curve *c;
       List_Read(curves, i, &c);
-      if(c->Num >= 0 && c->beg && c->end){
+      if(c->Num >= 0){
         GEdge *e = getEdgeByTag(c->Num);
-        if(!e){
+        if(!e && c->Typ == MSH_SEGM_COMPOUND){
+          std::vector<GEdge*> comp;
+          for(unsigned int j = 0; j < c->compound.size(); j++){
+            GEdge *ge = getEdgeByTag(c->compound[j]);
+            if(ge) comp.push_back(ge);
+          }
+          e = new GEdgeCompound(this, c->Num, comp);
+          add(e);
+        }
+        else if(!e && c->beg && c->end){
           e = new gmshEdge(this, c,
                            getVertexByTag(c->beg->Num),
                            getVertexByTag(c->end->Num));
-         add(e);
+          add(e);
         }
         else
           e->resetMeshAttributes();
         if(!c->Visible) e->setVisibility(0);
         if(c->Color.type) e->setColor(c->Color.mesh);
-        if(c->degenerated)e->setTooSmall(true);
+        if(c->degenerated) {
+          e->setTooSmall(true);
+        }
       }
     }
     List_Delete(curves);
@@ -85,7 +169,32 @@ int GModel::importGEOInternals()
       Surface *s;
       List_Read(surfaces, i, &s);
       GFace *f = getFaceByTag(s->Num);
-      if(!f){
+      if(!f && s->Typ == MSH_SURF_COMPOUND){
+        std::list<GFace*> comp;
+        for(unsigned int j = 0; j < s->compound.size(); j++){
+          GFace *gf = getFaceByTag(s->compound[j]);
+          if(gf) comp.push_back(gf);
+        }
+        std::list<GEdge*> b[4];
+        for(int j = 0; j < 4; j++){
+          for(unsigned int k = 0; k < s->compoundBoundary[j].size(); k++){
+            GEdge *ge = getEdgeByTag(s->compoundBoundary[j][k]);
+            if(ge) b[j].push_back(ge);
+          }
+        }
+ 	int param = CTX::instance()->mesh.remeshParam;
+	int algo = CTX::instance()->mesh.remeshAlgo;
+        f = new GFaceCompound(this, s->Num, comp,
+                              b[0], b[1], b[2], b[3], 0,
+                              (param == 0) ? GFaceCompound::HARMONIC :
+                              GFaceCompound::CONFORMAL, algo);
+	f->meshAttributes.recombine = s->Recombine;
+	f->meshAttributes.recombineAngle = s->RecombineAngle;
+	f->meshAttributes.Method = s->Method;
+	f->meshAttributes.extrude = s->Extrude;
+        add(f);
+      }
+      else if(!f){
         f = new gmshFace(this, s);
         add(f);
       }
@@ -102,7 +211,16 @@ int GModel::importGEOInternals()
       Volume *v;
       List_Read(volumes, i, &v);
       GRegion *r = getRegionByTag(v->Num);
-      if(!r){
+      if(!r && v->Typ == MSH_VOLUME_COMPOUND){
+        std::vector<GRegion*> comp;
+        for(unsigned int j = 0; j < v->compound.size(); j++){
+          GRegion *gr = getRegionByTag(v->compound[j]);
+          if(gr) comp.push_back(gr);
+        }
+        r = new GRegionCompound(this, v->Num, comp);
+        add(r);
+      }
+      else if(!r){
         r = new gmshRegion(this, v);
         add(r);
       }
@@ -116,82 +234,24 @@ int GModel::importGEOInternals()
   for(int i = 0; i < List_Nbr(_geo_internals->PhysicalGroups); i++){
     PhysicalGroup *p;
     List_Read(_geo_internals->PhysicalGroups, i, &p);
-    std::vector<GEdge*>e_compound;
-    std::list<GFace*>f_compound;
-    std::vector<GRegion*>r_compound;
     for(int j = 0; j < List_Nbr(p->Entities); j++){
       int num;
       List_Read(p->Entities, j, &num);
       GEntity *ge = 0;
       switch(p->Typ){
       case MSH_PHYSICAL_POINT:   ge = getVertexByTag(abs(num)); break;
-      case MSH_PHYSICAL_LINE: 
-        ge = getEdgeByTag(abs(num));
-        e_compound.push_back(getEdgeByTag(abs(num)));
-        break; 
-     case MSH_PHYSICAL_SURFACE: 
-        ge = getFaceByTag(abs(num));
-        f_compound.push_back(getFaceByTag(abs(num))); 
-        break;
-      case MSH_PHYSICAL_VOLUME:  
-        ge = getRegionByTag(abs(num)); 
-        r_compound.push_back(getRegionByTag(abs(num))); 
-        break;
+      case MSH_PHYSICAL_LINE:    ge = getEdgeByTag(abs(num)); break; 
+      case MSH_PHYSICAL_SURFACE: ge = getFaceByTag(abs(num)); break;
+      case MSH_PHYSICAL_VOLUME:  ge = getRegionByTag(abs(num)); break;
       }
       int pnum = sign(num) * p->Num;
       if(ge && std::find(ge->physicals.begin(), ge->physicals.end(), pnum) == 
          ge->physicals.end())
         ge->physicals.push_back(pnum);
     }
-    // the physical is a compound i.e. we allow the meshes
-    // not to conform internal MEdges of the compound
-    // the physical is a compound i.e. we allow the meshes
-    // not to conform internal MEdges of the compound
-
-    if (p->Typ == MSH_PHYSICAL_LINE && p->Boundaries[0]){
-      GEdge *ge = getEdgeByTag(abs(p->Num));
-      if (!ge){
-        GEdgeCompound *ge = new GEdgeCompound(this, p->Num, e_compound);
-        add(ge);
-      }
-      else
-        ge->resetMeshAttributes();
-    }      
-    if (p->Typ == MSH_PHYSICAL_SURFACE && p->Boundaries[0]){
-      int i = 0;
-      List_T *bnd;
-      std::list<GEdge*> b[4];
-      while((bnd = p->Boundaries[i])){
-        if (i > 3)break;
-        for(int j = 0; j < List_Nbr(bnd); j++){
-          int ie;
-          List_Read(bnd, j, &ie);
-          b[i].push_back(getEdgeByTag(abs(ie)));
-        }
-        i++;
-      }
-      GFace *gf = getFaceByTag(abs(p->Num));
-      if (!gf){
-        GFaceCompound *gf = new GFaceCompound(this, p->Num, f_compound, 
-                                              b[0], b[1], b[2], b[3]);
-        add(gf);
-      }
-      else
-        gf->resetMeshAttributes();
-    }   
-    if (p->Typ == MSH_PHYSICAL_VOLUME && p->Boundaries[0]){
-      GRegion *gr = getRegionByTag(abs(p->Num));
-      if (!gr){
-        GRegionCompound *gr = new GRegionCompound(this, p->Num, r_compound);
-        add(gr);
-      }
-      else
-        gr->resetMeshAttributes();
-    }
-   
   }
 
-  Msg::Debug("Gmsh model imported:");
+  Msg::Debug("Gmsh model (GModel) imported:");
   Msg::Debug("%d Vertices", vertices.size());
   Msg::Debug("%d Edges", edges.size());
   Msg::Debug("%d Faces", faces.size());
@@ -280,8 +340,21 @@ int GModel::writeGEO(const std::string &name, bool printLabels)
 {
   FILE *fp = fopen(name.c_str(), "w");
 
-  for(viter it = firstVertex(); it != lastVertex(); it++)
-    (*it)->writeGEO(fp);
+  std::map<double, std::string> meshSizeParameters;
+  int cpt = 0;
+  for(viter it = firstVertex(); it != lastVertex(); it++){
+    double val = (*it)->prescribedMeshSizeAtVertex();
+    if(meshSizeParameters.find(val) == meshSizeParameters.end()){
+      std::ostringstream paramName;
+      paramName << "cl" << ++cpt;
+      fprintf(fp, "%s = %.16g;\n", paramName.str().c_str(),val);
+      meshSizeParameters.insert(std::make_pair(val, paramName.str()));
+    }
+  }
+  for(viter it = firstVertex(); it != lastVertex(); it++){
+    double val = (*it)->prescribedMeshSizeAtVertex();
+    (*it)->writeGEO(fp, meshSizeParameters[val]);
+  }
   for(eiter it = firstEdge(); it != lastEdge(); it++)
     (*it)->writeGEO(fp);
   for(fiter it = firstFace(); it != lastFace(); it++)
@@ -290,7 +363,7 @@ int GModel::writeGEO(const std::string &name, bool printLabels)
     (*it)->writeGEO(fp);
 
   std::map<int, std::string> labels;
-#if !defined(HAVE_NO_PARSER)
+#if defined(HAVE_PARSER)
   // get "old-style" labels from parser
   for(std::map<std::string, std::vector<double> >::iterator it = gmsh_yysymbols.begin();
       it != gmsh_yysymbols.end(); ++it)

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -26,6 +26,7 @@ void gmshEdge::resetMeshAttributes()
   meshAttributes.typeTransfinite = c->typeTransfinite;
   meshAttributes.coeffTransfinite = c->coeffTransfinite;
   meshAttributes.extrude = c->Extrude;
+  setMeshMaster(c->meshMaster);
 }
 
 Range<double> gmshEdge::parBounds(int i) const
@@ -341,4 +342,18 @@ void gmshEdge::writeGEO(FILE *fp)
       fprintf(fp, "\n");
   }
   fprintf(fp, "};\n");
+
+  if(meshAttributes.Method == MESH_TRANSFINITE){
+    fprintf(fp, "Transfinite Line {%d} = %d", 
+            tag() * (meshAttributes.typeTransfinite > 0 ? 1 : -1),
+            meshAttributes.nbPointsTransfinite);
+    if(meshAttributes.typeTransfinite){
+      if(std::abs(meshAttributes.typeTransfinite) == 1)
+        fprintf(fp, "Using Progression ");
+      else if(std::abs(meshAttributes.typeTransfinite) == 2)
+        fprintf(fp, "Using Bump ");
+      fprintf(fp, "%g", meshAttributes.coeffTransfinite);
+    }
+    fprintf(fp, ";\n");
+  }
 }

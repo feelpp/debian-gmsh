@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -284,9 +284,10 @@ Vertex InterpolateCurve(Curve *c, double u, int derivee)
       c->Circle.f2 * sin(theta) * cos(c->Circle.incl);
     V.Pos.Z = 0.0;
     Projette(&V, c->Circle.invmat);
-    V.Pos.X += c->Circle.v[1]->Pos.X;
-    V.Pos.Y += c->Circle.v[1]->Pos.Y;
-    V.Pos.Z += c->Circle.v[1]->Pos.Z;
+    List_Read(c->Control_Points, 1, &v[0]);
+    V.Pos.X += v[0]->Pos.X;
+    V.Pos.Y += v[0]->Pos.Y;
+    V.Pos.Z += v[0]->Pos.Z;
     V.w = (1. - u) * c->beg->w + u * c->end->w;
     V.lc = (1. - u) * c->beg->lc + u * c->end->lc;
     break;
@@ -354,11 +355,11 @@ Vertex InterpolateCurve(Curve *c, double u, int derivee)
     break;
 
   case MSH_SEGM_BND_LAYER:
-    Msg::Error("Cannot interpolate boundary layer curve");
+    Msg::Debug("Cannot interpolate boundary layer curve");
     break;
 
   case MSH_SEGM_DISCRETE:
-    Msg::Error("Cannot interpolate discrete curve");
+    Msg::Debug("Cannot interpolate discrete curve");
     break;
 
   default:
@@ -454,9 +455,9 @@ bool iSRuledSurfaceASphere(Surface *s, SPoint3 &center, double &radius)
       else if(isSphere){
         if(!i){
           List_Read(C[i]->Control_Points, 1, &O);
-          ((double *)center)[0]= O->Pos.X;
-          ((double *)center)[1]= O->Pos.Y;
-          ((double *)center)[2]= O->Pos.Z;
+          ((double *)center)[0] = O->Pos.X;
+          ((double *)center)[1] = O->Pos.Y;
+          ((double *)center)[2] = O->Pos.Z;
         }
         else{
           Vertex *tmp;
@@ -467,7 +468,7 @@ bool iSRuledSurfaceASphere(Surface *s, SPoint3 &center, double &radius)
       }
     }
   }
-  if (isSphere){
+  if (isSphere && C[0]){
     Vertex *p = C[0]->beg;
     radius = sqrt ((p->Pos.X - center.x())+
                    (p->Pos.Y - center.y())+
@@ -565,11 +566,13 @@ static Vertex InterpolateExtrudedSurface(Surface *s, double u, double v)
     }
   }
 
-  if(num < 0)
-    Msg::Error("Unknown curve in extruded surface");
-  
   Vertex T;
 
+  if(num < 0){
+    Msg::Error("Unknown curve in extruded surface");
+    return T;
+  }
+  
   switch(num){
   case 0: 
     T = InterpolateCurve(c, c->ubeg + (c->uend - c->ubeg) * u, 0);

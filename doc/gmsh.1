@@ -1,4 +1,4 @@
-.TH Gmsh 1 "18 january 2009" "Gmsh 2.3" "Gmsh Manual Pages"
+.TH Gmsh 1 "8 february 2010" "Gmsh 2.5" "Gmsh Manual Pages"
 .UC 4
 .\" ********************************************************************
 .SH NAME
@@ -9,10 +9,10 @@ post-processor
 .B gmsh [file(s)] [option(s)]
 .\" ********************************************************************
 .SH DESCRIPTION
-\fIGmsh\fR is an automatic three-dimensional finite element mesh
-generator with build-in CAD and post-processing facilities. Its design
-goal is to provide a simple meshing tool for academic problems with
-parametric input and advanced visualization capabilities.
+\fIGmsh\fR is a 3D finite element grid generator with a build-in CAD
+engine and post-processor. Its design goal is to provide a fast, light
+and user-friendly meshing tool with parametric input and advanced
+visualization capabilities.
 .PP
 \fIGmsh\fR is built around four modules: geometry, mesh, solver and
 post-processing. The specification of any input to these modules is
@@ -51,7 +51,7 @@ save all elements (and discard all physical group definitions).
 specify mesh output file name.
 .TP 4
 .B \-format string
-set output mesh format (msh, msh1, msh2, unv, vrml, stl, mesh, bdf, p3d, cgns, med).
+set output mesh format (msh, msh1, msh2, unv, vrml, stl, mesh, bdf, p3d, cgns, med, fea).
 .TP 4
 .B \-bin
 use binary format when available.
@@ -77,6 +77,7 @@ Set minimum characteristic length.
 .TP 4
 .B \-clmax float
 Set maximum characteristic length.
+.TP 4
 .B \-clcurv
 Compute characteristic lengths from curvatures.
 .TP 4
@@ -85,6 +86,9 @@ set random perturbation factor.
 .TP 4
 .B \-bgm file
 load the post-processing view in file as the current background mesh.
+.TP 4
+.B \-check
+perform various consistency checks on mesh.
 .\" ********************************************************************
 .SH POST-PROCESSING OPTIONS
 .TP 4
@@ -119,6 +123,9 @@ parse input files, then exit.
 .TP 4
 .B \-a, \-g, \-m, \-s, \-p
 start in automatic, geometry, mesh, solver or post-processing mode.
+.TP 4
+.B \-lua
+start an interactive lua session.
 .TP 4
 .B \-pid
 print pid on stdout.
@@ -159,7 +166,7 @@ Christophe Geuzaine (cgeuzaine@ulg.ac.be) and Jean-Francois Remacle
 .br
 Gmsh examples (\fI/usr/share/doc/gmsh-*/\fR),
 .br
-Gmsh homepage (\fIhttp://www.geuz.org/gmsh/\fR).
+Gmsh homepage (\fIhttp://geuz.org/gmsh/\fR).
 .PP
 The full documentation for Gmsh is maintained as a Texinfo manual.  If
 the

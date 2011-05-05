@@ -1,6 +1,15 @@
-$Id: VERSIONS.txt,v 1.61 2009-09-21 17:38:55 geuzaine Exp $
+2.5.0 (Oct 15, 2010): new compound geometrical entities (for remeshing
+and/or trans-patch meshing); improved mesh reclassification tool; new
+client/server visualization mode; new ability to watch a pattern of
+files to merge; new integrated MPEG export; new option to force the
+type of views dynamically; bumped mesh version format to 2.2 (small
+change in the meaning of the partition tags; this only affects
+partitioned (i.e. parallel) meshes); renamed several post-processing
+plugins (as well as plugin options) to make them easier to understand;
+many bug fixes and usability improvements all over the place.
 
-2.4.2 (Sep 21, 2009): solver code refactoring.
+2.4.2 (Sep 21, 2009): solver code refactoring + better IDE
+integration.
 
 2.4.1 (Sep 1, 2009): fixed surface mesh orientation bug introduced in
 2.4.0; mesh and graphics code refactoring, small usability
@@ -88,18 +97,18 @@ at the end of the list returned by extrusion commands; fixed various
 bugs.
 
 2.0 (Feb 5, 2007): new geometry and mesh databases, with support for
-STEP and IGES import via OpenCascade; complete rewrite of geometry and
-mesh drawing code; complete rewrite of mesh I/O layer (with new native
-binary MSH format and support for import/export of I-deas UNV, Nastran
-BDF, STL, Medit MESH and VRML 1.0 files); added support for incomplete
-second order elements; new 2D and 3D meshing algorithms; improved
-integration of Netgen and TetGen algorithms; removed anisotropic
-meshing algorithm (as well as attractors); removed explicit region
-number specification in extrusions; option changes in the graphical
-interface are now applied instantaneously; added support for offscreen
-rendering using OSMesa; added support for SVG output; added string
-labels for Physical entities; lots of other improvements all over the
-place.
+STEP and IGES import via Open CASCADE; complete rewrite of geometry
+and mesh drawing code; complete rewrite of mesh I/O layer (with new
+native binary MSH format and support for import/export of I-deas UNV,
+Nastran BDF, STL, Medit MESH and VRML 1.0 files); added support for
+incomplete second order elements; new 2D and 3D meshing algorithms;
+improved integration of Netgen and TetGen algorithms; removed
+anisotropic meshing algorithm (as well as attractors); removed
+explicit region number specification in extrusions; option changes in
+the graphical interface are now applied instantaneously; added support
+for offscreen rendering using OSMesa; added support for SVG output;
+added string labels for Physical entities; lots of other improvements
+all over the place.
 
 1.65 (May 15, 2006): new Plugin(ExtractEdges); fixed compilation
 errors with gcc4.1; replaced Plugin(DisplacementRaise) and

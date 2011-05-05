@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -11,8 +11,8 @@ StringXNumber WarpOptions_Number[] = {
   {GMSH_FULLRC, "Factor", NULL, 1.},
   {GMSH_FULLRC, "TimeStep", NULL, 0.},
   {GMSH_FULLRC, "SmoothingAngle", NULL, 180.},
-  {GMSH_FULLRC, "dView", NULL, -1.},
-  {GMSH_FULLRC, "iView", NULL, -1.}
+  {GMSH_FULLRC, "View", NULL, -1.},
+  {GMSH_FULLRC, "OtherView", NULL, -1.}
 };
 
 extern "C"
@@ -25,18 +25,17 @@ extern "C"
 
 std::string GMSH_WarpPlugin::getHelp() const
 {
-  return "Plugin(Warp) transforms the elements in the\n"
-         "view `iView' by adding to their node coordinates\n"
-         "the vector field stored in the `TimeStep'-th time\n"
-         "step of the view `dView', scaled by `Factor'. If\n"
-         "`dView' < 0, the vector field is taken as the field\n"
-         "of surface normals multiplied by the `TimeStep'\n"
-         "value in `iView'. (The smoothing of the surface\n"
-         "normals is controlled by the `SmoothingAngle'\n"
-         "parameter.) If `iView' < 0, the plugin is run on\n"
-         "the current view.\n"
-         "\n"
-         "Plugin(Warp) is executed in-place.\n";
+  return "Plugin(Warp) transforms the elements in the "
+    "view `View' by adding to their node coordinates "
+    "the vector field stored in the `TimeStep'-th time "
+    "step of the view `OtherView', scaled by `Factor'.\n\n"
+    "If `View' < 0, the plugin is run on the current view.\n\n"
+    "If `OtherView' < 0, the vector field is taken as the "
+    "field of surface normals multiplied by the `TimeStep' "
+    "value in `View'. (The smoothing of the surface "
+    "normals is controlled by the `SmoothingAngle' "
+    "parameter.)\n\n"
+    "Plugin(Warp) is executed in-place.";
 }
 
 int GMSH_WarpPlugin::getNbOptions() const
@@ -54,13 +53,13 @@ PView *GMSH_WarpPlugin::execute(PView *v)
   double factor = WarpOptions_Number[0].def;
   int TimeStep = (int)WarpOptions_Number[1].def;
   double AngleTol = WarpOptions_Number[2].def;
-  int dView = (int)WarpOptions_Number[3].def;
-  int iView = (int)WarpOptions_Number[4].def;
+  int iView = (int)WarpOptions_Number[3].def;
+  int otherView = (int)WarpOptions_Number[4].def;
 
   PView *v1 = getView(iView, v);
   if(!v1) return v;
-  if(dView < 0) dView = iView;
-  PView *v2 = getView(dView, v);
+  if(otherView < 0) otherView = iView;
+  PView *v2 = getView(otherView, v);
   if(!v2) return v;
 
   PViewData *data1 = v1->getData();
@@ -79,7 +78,7 @@ PView *GMSH_WarpPlugin::execute(PView *v)
   
   // create smooth normal field if we don't have an explicit warp field
   smooth_normals *normals = 0;
-  if(dView < 0){
+  if(otherView < 0){
     normals = new smooth_normals(AngleTol);
     for(int ent = 0; ent < data1->getNumEntities(0); ent++){
       for(int ele = 0; ele < data1->getNumElements(0, ent); ele++){

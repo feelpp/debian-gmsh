@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -152,13 +152,18 @@ double SOrientedBoundingBox::getMaxSize()
   return (std::max(size[0], std::max(size[1], size[2])));
 }
 
+double SOrientedBoundingBox::getMinSize()
+{
+  return (std::min(size[0], std::min(size[1], size[2])));
+}
+
 SVector3 SOrientedBoundingBox::getAxis(int axis)
 {
   SVector3 ret;
   switch (axis) {
-  case 0: ret=axisX;
-  case 1: ret=axisY;
-  case 2: ret=axisZ;
+  case 0: ret=axisX; break;
+  case 1: ret=axisY; break;
+  case 2: ret=axisZ; break;
   }
   return ret;
 }
@@ -258,7 +263,7 @@ SOrientedBoundingBox* SOrientedBoundingBox::buildOBB(std::vector<SPoint3> vertic
   fullMatrix<double> right_eigv(3,3);
   fullVector<double> real_eig(3);
   fullVector<double> img_eig(3);
-  covariance.eig(left_eigv, real_eig, img_eig, right_eigv,true);
+  covariance.eig(real_eig, img_eig, left_eigv, right_eigv,true);
 
   // Now, project the data in the new basis.
   fullMatrix<double> projected(3,num_vertices);
@@ -531,13 +536,14 @@ SOrientedBoundingBox* SOrientedBoundingBox::buildOBB(std::vector<SPoint3> vertic
   center = aux1*center_pca + aux2*least_rectangle.center->at(0) + aux3*least_rectangle.center->at(1);
   //center[1] = -center[1];
 
-
   /*
   Msg::Info("Box center : %f %f %f",center[0],center[1],center[2]);
   Msg::Info("Box size : %f %f %f",size[0],size[1],size[2]);
   Msg::Info("Box axis 1 : %f %f %f",Axis1[0],Axis1[1],Axis1[2]);
   Msg::Info("Box axis 2 : %f %f %f",Axis2[0],Axis2[1],Axis2[2]);
-  Msg::Info("Box axis 1 : %f %f %f",Axis3[0],Axis3[1],Axis3[2]);
+  Msg::Info("Box axis 3 : %f %f %f",Axis3[0],Axis3[1],Axis3[2]);
+  
+  Msg::Info("Volume : %f", size[0]*size[1]*size[2]);
   */
   return (new SOrientedBoundingBox(center,
           size[0], size[1], size[2], Axis1, Axis2, Axis3));

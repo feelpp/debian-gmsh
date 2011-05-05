@@ -27,31 +27,9 @@
  * library in the file named "COPYING.GL2PS"; if not, I will be glad
  * to provide one.
  *
- * Contributors:
- *   Michael Sweet <mike@easysw.com>
- *   Marc Ume <marc.ume@digitalgraphics.be>
- *   Jean-Francois Remacle <remacle@gce.ucl.ac.be>
- *   Bart Kaptein <B.L.Kaptein@lumc.nl>
- *   Quy Nguyen-Dai <quy@nguyendai.org>
- *   Sam Buss <sbuss@ucsd.edu>
- *   Shane Hill <Shane.Hill@dsto.defence.gov.au>
- *   Romain Boman <r_boman@yahoo.fr>
- *   Rouben Rostamian <rostamian@umbc.edu>
- *   Diego Santa Cruz <Diego.SantaCruz@epfl.ch>
- *   Shahzad Muzaffar <Shahzad.Muzaffar@cern.ch>
- *   Lassi Tuura <lassi.tuura@cern.ch>
- *   Guy Barrand <barrand@lal.in2p3.fr>
- *   Prabhu Ramachandran <prabhu@aero.iitm.ernet.in>
- *   Micha Bieber <bieber@traits.de>
- *   Olivier Couet <couet@mail.cern.ch>
- *   Shai Ayal <shaiay@gmail.com>
- *   Fabian Wenzel <wenzel@tu-harburg.de>
- *   Ian D. Gay <gay@sfu.ca>
- *   Cosmin Truta <cosmin@cs.toronto.edu>
- *   Baiju Devani <b.devani@gmail.com>
- *   Alexander Danilov <danilov@lanl.gov>
+ * For the latest info about gl2ps and a full list of contributors,
+ * see http://www.geuz.org/gl2ps/.
  *
- * For the latest info about gl2ps, see http://www.geuz.org/gl2ps/.
  * Please report all bugs and problems to <gl2ps@geuz.org>.
  */
 
@@ -315,24 +293,24 @@ static void *gl2psMalloc(size_t size)
 {
   void *ptr;
 
-  if(!size) return(NULL);
+  if(!size) return NULL;
   ptr = malloc(size);
   if(!ptr){
     gl2psMsg(GL2PS_ERROR, "Couldn't allocate requested memory");
-    exit(1);
+    return NULL;
   }
-  return(ptr);
+  return ptr;
 }
 
 static void *gl2psRealloc(void *ptr, size_t size)
 {
-  if(!size) return(NULL);
+  if(!size) return NULL;
   ptr = realloc(ptr, size);
   if(!ptr){
     gl2psMsg(GL2PS_ERROR, "Couldn't reallocate requested memory");
-    exit(1);
+    return NULL;
   }
-  return(ptr);
+  return ptr;
 }
 
 static void gl2psFree(void *ptr)
@@ -555,7 +533,7 @@ static GL2PSlist *gl2psListCreate(GLint n, GLint incr, GLint size)
   list->n = 0;
   list->array = NULL;
   gl2psListRealloc(list, n);
-  return(list);
+  return list;
 }
 
 static void gl2psListReset(GL2PSlist *list)
@@ -586,7 +564,7 @@ static int gl2psListNbr(GL2PSlist *list)
 {
   if(!list)
     return 0;
-  return(list->n);
+  return list->n;
 }
 
 static void *gl2psListPointer(GL2PSlist *list, GLint index)
@@ -599,7 +577,7 @@ static void *gl2psListPointer(GL2PSlist *list, GLint index)
     gl2psMsg(GL2PS_ERROR, "Wrong list index in gl2psListPointer");
     return NULL;
   }
-  return(&list->array[index * list->size]);
+  return &list->array[index * list->size];
 }
 
 static void gl2psListSort(GL2PSlist *list,
@@ -1071,15 +1049,15 @@ static GLboolean gl2psSamePosition(GL2PSxyz p1, GL2PSxyz p2)
 
 static GLfloat gl2psComparePointPlane(GL2PSxyz point, GL2PSplane plane)
 {
-  return(plane[0] * point[0] + 
-         plane[1] * point[1] + 
-         plane[2] * point[2] + 
-         plane[3]);
+  return (plane[0] * point[0] + 
+          plane[1] * point[1] + 
+          plane[2] * point[2] + 
+          plane[3]);
 }
 
 static GLfloat gl2psPsca(GLfloat *a, GLfloat *b)
 {
-  return(a[0]*b[0] + a[1]*b[1] + a[2]*b[2]);
+  return (a[0]*b[0] + a[1]*b[1] + a[2]*b[2]);
 }
 
 static void gl2psPvec(GLfloat *a, GLfloat *b, GLfloat *c)
@@ -1417,7 +1395,7 @@ static int gl2psTrianglesFirst(const void *a, const void *b)
 
   q = *(GL2PSprimitive**)a;
   w = *(GL2PSprimitive**)b;
-  return(q->type < w->type ? 1 : -1);
+  return (q->type < w->type ? 1 : -1);
 }
 
 static GLint gl2psFindRoot(GL2PSlist *primitives, GL2PSprimitive **root)
@@ -3413,23 +3391,39 @@ static int gl2psPrintPDFLineWidth(GLfloat lw)
 
 static void gl2psPutPDFText(GL2PSstring *text, int cnt, GLfloat x, GLfloat y)
 {
-  gl2ps->streamlength += 
-    gl2psPrintf("BT\n"
-                "/F%d %d Tf\n"
-                "%f %f Td\n"
-                "(%s) Tj\n"
-                "ET\n", 
-                cnt, text->fontsize, x, y, text->str);  
+  GLfloat rad, crad, srad;
+  
+  if(text->angle == 0.0F){
+    gl2ps->streamlength += gl2psPrintf
+      ("BT\n"
+       "/F%d %d Tf\n"
+       "%f %f Td\n"
+       "(%s) Tj\n"
+       "ET\n", 
+       cnt, text->fontsize, x, y, text->str);
+  }
+  else{
+    rad = (GLfloat)M_PI * text->angle / 180.0F;
+    srad = (GLfloat)sin(rad);
+    crad = (GLfloat)cos(rad);
+    gl2ps->streamlength += gl2psPrintf
+      ("BT\n"
+       "/F%d %d Tf\n"
+       "%f %f %f %f %f %f Tm\n"
+       "(%s) Tj\n"
+       "ET\n",
+       cnt, text->fontsize, crad, srad, -srad, crad, x, y, text->str);
+  }
 }
 
 static void gl2psPutPDFImage(GL2PSimage *image, int cnt, GLfloat x, GLfloat y)
 {
-  gl2ps->streamlength += 
-    gl2psPrintf("q\n"
-                "%d 0 0 %d %f %f cm\n"
-                "/Im%d Do\n"
-                "Q\n",
-                (int)image->width, (int)image->height, x, y, cnt);
+  gl2ps->streamlength += gl2psPrintf
+    ("q\n"
+     "%d 0 0 %d %f %f cm\n"
+     "/Im%d Do\n"
+     "Q\n",
+     (int)image->width, (int)image->height, x, y, cnt);
 }
 
 static void gl2psPDFstacksInit(void)
@@ -4493,27 +4487,29 @@ static int gl2psPrintPDFPixmapStreamData(GL2PSimage *im,
                                                           size_t size), 
                                          int gray)
 {
-  int x, y;
+  int x, y, shift;
   GLfloat r, g, b, a;
 
   if(im->format != GL_RGBA && gray)
     return 0;
 
-  if(gray && gray !=8 && gray != 16)
+  if(gray && gray != 8 && gray != 16)
     gray = 8;
 
   gray /= 8;
   
+  shift = (sizeof(unsigned long) - 1) * 8;
+
   for(y = 0; y < im->height; ++y){
     for(x = 0; x < im->width; ++x){
       a = gl2psGetRGB(im, x, y, &r, &g, &b);
       if(im->format == GL_RGBA && gray){
-        (*action)((unsigned long)(a*255) << 24, gray);
+        (*action)((unsigned long)(a * 255) << shift, gray);
       }
       else{
-        (*action)((unsigned long)(r*255) << 24, 1);
-        (*action)((unsigned long)(g*255) << 24, 1);
-        (*action)((unsigned long)(b*255) << 24, 1);
+        (*action)((unsigned long)(r * 255) << shift, 1);
+        (*action)((unsigned long)(g * 255) << shift, 1);
+        (*action)((unsigned long)(b * 255) << shift, 1);
       }
     }
   }

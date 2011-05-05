@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -7,6 +7,7 @@
 #define _GEO_H_
 
 #include <math.h>
+#include <vector>
 #include "GmshDefines.h"
 #include "gmshSurface.h"
 #include "ListUtils.h"
@@ -33,6 +34,7 @@
 #define MSH_SEGM_BND_LAYER     211
 #define MSH_SEGM_DISCRETE      212
 #define MSH_SEGM_FROM_GMODEL   213
+#define MSH_SEGM_COMPOUND      214
 
 #define MSH_SURF_PLAN          300
 #define MSH_SURF_REGL          301
@@ -41,10 +43,12 @@
 #define MSH_SURF_LOOP          304
 #define MSH_SURF_DISCRETE      305
 #define MSH_SURF_FROM_GMODEL   306
+#define MSH_SURF_COMPOUND      307
 
 #define MSH_VOLUME             400
 #define MSH_VOLUME_DISCRETE    401
 #define MSH_VOLUME_FROM_GMODEL 402
+#define MSH_VOLUME_COMPOUND    403
 
 #define MSH_PHYSICAL_POINT     500
 #define MSH_PHYSICAL_LINE      501
@@ -101,7 +105,6 @@ class DrawingColor{
 class CircParam{
  public:
   double t1, t2, f1, f2, incl;
-  Vertex *v[4];
   double invmat[3][3];
   double n[3];
 };
@@ -127,6 +130,8 @@ class Curve{
   CircParam Circle;
   DrawingColor Color;
   gmshSurface *geometry;
+  int meshMaster;
+  std::vector<int> compound;
 };
 
 class EdgeLoop{
@@ -158,6 +163,10 @@ class Surface{
   // should be the only one in gmsh, so parameter "Type" should
   // disappear from the class Surface.
   gmshSurface *geometry;
+  // the mesh master surface
+  int meshMaster;
+  std::map<int,int> edgeCounterparts;
+  std::vector<int> compound, compoundBoundary[4];
 };
 
 class SurfaceLoop{
@@ -178,6 +187,7 @@ class Volume {
   List_T *SurfacesOrientations;
   List_T *SurfacesByTag;
   DrawingColor Color;
+  std::vector<int> compound;
 };
 
 class PhysicalGroup{
@@ -186,7 +196,6 @@ class PhysicalGroup{
   int Typ;
   char Visible;
   List_T *Entities;
-  List_T *Boundaries[4];
 };
 
 class GEO_Internals{
@@ -226,23 +235,22 @@ class LevelSet {
 
 int compareVertex(const void *a, const void *b);
 
-void Projette(Vertex * v, double mat[3][3]);
+void Projette(Vertex *v, double mat[3][3]);
 
 Vertex *Create_Vertex(int Num, double X, double Y, double Z, double lc, double u);
 Vertex *Create_Vertex(int Num, double u, double v, gmshSurface *s, double lc);
-Curve *Create_Curve(int Num, int Typ, int Order, List_T * Liste,
-                    List_T * Knots, int p1, int p2, double u1, double u2);
+Curve *Create_Curve(int Num, int Typ, int Order, List_T *Liste,
+                    List_T *Knots, int p1, int p2, double u1, double u2);
 Curve *CreateReversedCurve(Curve *c);
 Surface *Create_Surface(int Num, int Typ);
 Volume *Create_Volume(int Num, int Typ);
-EdgeLoop *Create_EdgeLoop(int Num, List_T * intlist);
-SurfaceLoop *Create_SurfaceLoop(int Num, List_T * intlist);
-PhysicalGroup *Create_PhysicalGroup(int Num, int typ, List_T * intlist,
-                                    List_T *bndlist[4] = 0);
+EdgeLoop *Create_EdgeLoop(int Num, List_T *intlist);
+SurfaceLoop *Create_SurfaceLoop(int Num, List_T *intlist);
+PhysicalGroup *Create_PhysicalGroup(int Num, int typ, List_T *intlist);
 LevelSet *Create_LevelSet(int Num, gLevelset *l);
 
-void End_Curve(Curve * c);
-void End_Surface(Surface * s);
+void End_Curve(Curve *c);
+void End_Surface(Surface *s);
 
 int NEWPOINT(void);
 int NEWLINE(void);
@@ -268,7 +276,7 @@ void DilatShapes(double X,double Y,double Z, double A, List_T *shapes);
 void RotateShapes(double Ax,double Ay,double Az,
                   double Px,double Py, double Pz, double alpha, List_T *shapes);
 void SymmetryShapes(double A,double B,double C, double D, List_T *shapes);
-void BoundaryShapes(List_T *shapes, List_T *shapesBoundary);
+void BoundaryShapes(List_T *shapes, List_T *shapesBoundary, bool combined);
 void CopyShape(int Type, int Num, int *New);
 void DeleteShape(int Type, int Num);
 void ColorShape(int Type, int Num, unsigned int Color);
@@ -302,7 +310,7 @@ int recognize_surfloop(List_T *liste, int *loop);
 
 void sortEdgesInLoop(int num, List_T *edges);
 void setSurfaceGeneratrices(Surface *s, List_T *loops);
-void setVolumeSurfaces(Volume *v, List_T * loops);
+void setVolumeSurfaces(Volume *v, List_T *loops);
 void setSurfaceEmbeddedPoints(Surface *s, List_T *points);
 void setSurfaceEmbeddedCurves(Surface *s, List_T *curves);
 

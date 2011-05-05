@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -40,7 +40,8 @@ int Mesh2DWithBoundaryLayers(GModel *m)
   std::map<int, bool> sourceFaceInvert;
   for(GModel::fiter it = m->firstFace(); it != m->lastFace(); it++){
     GFace *gf = *it;
-    if(gf->geomType() == GEntity::BoundaryLayerSurface){
+    if(gf->getNativeType() == GEntity::GmshModel && 
+       gf->geomType() == GEntity::BoundaryLayerSurface){
       ExtrudeParams *ep = gf->meshAttributes.extrude;
       if(ep && ep->mesh.ExtrudeMesh && ep->geo.Mode == COPIED_ENTITY){
         GFace *from = m->getFaceByTag(std::abs(ep->geo.Source));
@@ -132,8 +133,7 @@ int Mesh2DWithBoundaryLayers(GModel *m)
   for(GModel::fiter it = m->firstFace(); it != m->lastFace(); it++){
     GFace *gf = *it;
     if(gf->geomType() == GEntity::BoundaryLayerSurface){
-      Msg::StatusBar(2, true, "Meshing surface %d (%s)", gf->tag(), 
-                     gf->getTypeString().c_str());
+      Msg::Info("Meshing surface %d (%s)", gf->tag(), gf->getTypeString().c_str());
       deMeshGFace dem;
       dem(gf);
       MeshExtrudedSurface(gf);

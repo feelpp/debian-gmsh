@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -15,8 +15,6 @@
 gmshVertex::gmshVertex(GModel *m, Vertex *_v)
   : GVertex(m, _v->Num, _v->lc), v(_v)
 {
-  mesh_vertices.push_back(new MVertex(x(), y(), z(), this));
-  points.push_back(new MPoint(mesh_vertices.back()));
 }
 
 void gmshVertex::setPosition(GPoint &p)

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -306,14 +306,15 @@ int GModel::readMED(const std::string &name, int meshIndex)
       Msg::Error("Could not read info for MED family %d", i + 1);
     }
     else{
-      elementaryNames[std::pair<int, int>(-1, -familyNum)] = familyName;
-      if(numGroups > 0){
-        GEntity *ge; // family tags are unique (for all dimensions)
-        if((ge = getRegionByTag(-familyNum))){}
-        else if((ge = getFaceByTag(-familyNum))){}
-        else if((ge = getEdgeByTag(-familyNum))){}
-        else ge = getVertexByTag(-familyNum);
-        if(ge){
+      // family tags are unique (for all dimensions)
+      GEntity *ge;
+      if((ge = getRegionByTag(-familyNum))){}
+      else if((ge = getFaceByTag(-familyNum))){}
+      else if((ge = getEdgeByTag(-familyNum))){}
+      else ge = getVertexByTag(-familyNum);
+      if(ge){      
+        elementaryNames[std::pair<int, int>(ge->dim(), -familyNum)] = familyName;
+        if(numGroups > 0){
           for(int j = 0; j < numGroups; j++) {
             char tmp[MED_TAILLE_LNOM + 1];
             strncpy(tmp, &groupNames[j * MED_TAILLE_LNOM], MED_TAILLE_LNOM);

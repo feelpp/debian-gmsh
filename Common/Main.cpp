@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -20,10 +20,14 @@ int main(int argc, char *argv[])
 
   new GModel();
   GmshInitialize(argc, argv);
-  CTX::instance()->terminal = CTX::instance()->noPopup = 1;
+
+  if(!Msg::GetClient()) CTX::instance()->terminal = 1;
+  CTX::instance()->noPopup = 1;
+
   GmshBatch();
   GmshFinalize();
 
   Msg::Exit(0);
   return 1;
 }
+

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -18,19 +18,24 @@
 #include "SPoint3.h"
 #include "SBoundingBox3d.h"
 
-class Octree;
 class FM_Internals;
 class GEO_Internals;
 class OCC_Internals;
+class ACIS_Internals;
 class smooth_normals;
 class FieldManager;
 class CGNSOptions;
 class gLevelset;
+class discreteFace;
+class binding;
+class MElementOctree;
+class GModelFactory;
 
 // A geometric model. The model is a "not yet" non-manifold B-Rep.
 class GModel
 {
- private:
+  friend class OCCFactory;
+ protected:
   // the name of the model
   std::string _name;
 
@@ -46,9 +51,14 @@ class GModel
   std::map<int, MVertex*> _vertexMapCache;
   std::vector<MElement*> _elementVectorCache;
   std::map<int, MElement*> _elementMapCache;
+  std::map<int, int> _elementIndexCache;
+
+  // ghost cell information (stores partitions for each element acting
+  // as a ghost cell)
+  std::multimap<MElement*, short> _ghostCells;
 
   // an octree for fast mesh element lookup
-  Octree *_octree;
+  MElementOctree *_octree;
 
   // Geo (Gmsh native) model internal data
   GEO_Internals *_geo_internals;
@@ -59,10 +69,17 @@ class GModel
   OCC_Internals *_occ_internals;
   void _deleteOCCInternals();
 
+  // OpenCascade model internal data
+  ACIS_Internals *_acis_internals;
+  void _deleteACISInternals();
+
   // Fourier model internal data
   FM_Internals *_fm_internals;
   void _createFMInternals();
   void _deleteFMInternals();
+
+  // CAD creation factory
+  GModelFactory *_factory;
 
   // characteristic length (mesh size) fields
   FieldManager *_fields;
@@ -100,6 +117,8 @@ class GModel
   std::set<GEdge*, GEntityLessThan> edges;
   std::set<GVertex*, GEntityLessThan> vertices;
 
+  void insertRegion (GRegion*);
+
   // map between the pair <dimension, elementary or physical number>
   // and an optional associated name
   std::map<std::pair<int, int>, std::string> physicalNames, elementaryNames;
@@ -119,6 +138,10 @@ class GModel
   // index >= 0
   static GModel *current(int index=-1);
 
+  // sets a model to current
+  static int setCurrent(GModel *m);
+  int setAsCurrent(){ return setCurrent(this); }
+
   // find a model by name
   static GModel *findByName(std::string name);
 
@@ -128,11 +151,14 @@ class GModel
   // delete all the mesh-related caches (this must be called when the
   // mesh is changed)
   void destroyMeshCaches();
+  //delete the mesh stored in entities and call destroMeshCaches
+  void deleteMesh();
 
   // access internal CAD representations
   GEO_Internals *getGEOInternals(){ return _geo_internals; }
   OCC_Internals *getOCCInternals(){ return _occ_internals; }
   FM_Internals *getFMInternals() { return _fm_internals; }
+  ACIS_Internals *getACISInternals(){ return _acis_internals; }
 
   // access characteristic length (mesh size) fields
   FieldManager *getFields(){ return _fields; }
@@ -181,6 +207,12 @@ class GModel
   GEdge *getEdgeByTag(int n) const;
   GVertex *getVertexByTag(int n) const;
 
+  // for lua bindings, temporary solution while iterator are not binded
+  std::vector<GRegion*> bindingsGetRegions();
+  std::vector<GFace*> bindingsGetFaces();
+  std::vector<GEdge*> bindingsGetEdges();
+  std::vector<GVertex*> bindingsGetVertices();
+
   // add/remove an entity in the model
   void add(GRegion *r) { regions.insert(r); }
   void add(GFace *f) { faces.insert(f); }
@@ -198,7 +230,7 @@ class GModel
   void getEntities(std::vector<GEntity*> &entities);
 
   // return the highest number associated with an elementary entity of
-  // a given dimension
+  // a given dimension (or the highest overall if dim < 0)
   int getMaxElementaryNumber(int dim);
 
   // check if there are no physical entities in the model
@@ -239,6 +271,13 @@ class GModel
   // "dim" and name "name". return -1 if not found
   int getPhysicalNumber(const int &dim, const std::string & name);
 
+  // get the name (if any) of a given elementary entity of dimension
+  // "dim" and id number "num"
+  std::string getElementaryName(int dim, int num);
+
+  //get the highest dimension of the GModel
+  int getDim();
+
   // set the selection flag on all entities
   void setSelection(int val);
 
@@ -261,9 +300,13 @@ class GModel
   // access a mesh element by tag, using the element cache
   MElement *getMeshElementByTag(int n);
 
+  // access temporary mesh element index
+  int getMeshElementIndex(MElement *e);
+  void setMeshElementIndex(MElement *e, int index);
+
   // return the total number of vertices in the mesh
   int getNumMeshVertices();
-
+	
   // access a mesh vertex by tag, using the vertex cache
   MVertex *getMeshVertexByTag(int n);
 
@@ -273,7 +316,7 @@ class GModel
 
   // index all the (used) mesh vertices in a continuous sequence,
   // starting at 1
-  int indexMeshVertices(bool all);
+  int indexMeshVertices(bool all, int singlePartition=0);
 
   // scale the mesh by the given factor
   void scaleMesh(double factor);
@@ -298,6 +341,8 @@ class GModel
   int getMinPartitionSize() const { return partitionSize[0]; }
   int getMaxPartitionSize() const { return partitionSize[1]; }
 
+  std::multimap<MElement*, short> &getGhostCells(){ return _ghostCells; }
+
   // perform various coherence tests on the mesh
   void checkMeshCoherence(double tolerance);
 
@@ -306,9 +351,7 @@ class GModel
 
   // create topology from mesh
   void createTopologyFromMesh();
-
-  // compute distance function
-  void computeDistanceFunction();
+  void createTopologyFromFaces(std::vector<discreteFace*> &pFaces);
 
   // a container for smooth normals
   smooth_normals *normals;
@@ -316,14 +359,95 @@ class GModel
   // mesh the model
   int mesh(int dimension);
 
+  // reclassify a mesh i.e. use an angle threshold to tag edges faces and regions
+  void detectEdges(double _tresholdAngle);
+  void classifyFaces(std::set<GFace*> &_faces);
+
+  // glue entities in the model (assume a tolerance eps and merge
+  // vertices that are too close, then merge edges, faces and
+  // regions). Warning: the gluer changes the geometric model, so that
+  // some pointers could become invalid. FIXME: using references to
+  // some tables of pointers for bindings e.g. could be better.
+  void glue(double eps);
+
+  // change the entity creation factory
+  void setFactory(std::string name);
+
+  // create brep geometry entities using the factory
+  GVertex *addVertex(double x, double y, double z, double lc);
+  GEdge *addLine(GVertex *v1, GVertex *v2);
+  GEdge *addCircleArcCenter(double x, double y, double z, GVertex *start, GVertex *end);
+  GEdge *addCircleArc3Points(double x, double y, double z, GVertex *start, GVertex *end);
+  GEdge *addBezier(GVertex *start, GVertex *end, std::vector<std::vector<double> > points);
+  GEdge *addNURBS(GVertex *start, GVertex *end,
+		  std::vector<std::vector<double> > points,
+		  std::vector<double> knots,
+		  std::vector<double> weights,
+		  std::vector<int> mult);
+  GEntity *revolve(GEntity *e, std::vector<double> p1, std::vector<double> p2,
+                   double angle);
+  GEntity *extrude(GEntity *e, std::vector<double> p1, std::vector<double> p2);
+  GEntity *addPipe(GEntity *e, std::vector<GEdge *>  edges);
+  void createBoundaryLayer(std::vector<GEntity *> e, double h);
+
+  void addRuledFaces(std::vector<std::vector<GEdge *> > edges);
+  GFace *addFace(std::vector<GEdge *> edges, std::vector< std::vector<double > > points);
+  GFace *addPlanarFace(std::vector<std::vector<GEdge *> > edges);
+  GRegion *addVolume(std::vector<std::vector<GFace*> > faces);
+
+  // create solid geometry primitives using the factory
+  GEntity *addSphere(double cx, double cy, double cz, double radius);
+  GEntity *addCylinder(std::vector<double> p1, std::vector<double> p2, double radius);
+  GEntity *addTorus(std::vector<double> p1, std::vector<double> p2, double radius1,
+                    double radius2);
+  GEntity *addBlock(std::vector<double> p1, std::vector<double> p2);
+  GEntity *addCone(std::vector<double> p1, std::vector<double> p2, double radius1,
+                   double radius2);
+
+  // boolean operators acting on 2 models
+  GModel *computeBooleanUnion(GModel *tool, int createNewModel);
+  GModel *computeBooleanIntersection(GModel *tool, int createNewModel);
+  GModel *computeBooleanDifference(GModel *tool, int createNewModel);
+
   // build a new GModel by cutting the elements crossed by the levelset ls
-  GModel *buildCutGModel(gLevelset *ls);
+  // if cutElem is set to false, split the model without cutting the elements
+  GModel *buildCutGModel(gLevelset *ls, bool cutElem = true);
+
+  // create a GModel by importing a mesh (vertexMap has a dim equal to
+  // the number of vertices and all the other vectors have a dim equal
+  // to the number of elements)
+  static GModel *createGModel(std::map<int, MVertex*> &vertexMap,
+                              std::vector<int> &numElement,
+                              std::vector<std::vector<int> > &vertexIndices,
+                              std::vector<int> &elementType,
+                              std::vector<int> &physical,
+                              std::vector<int> &elementary,
+                              std::vector<int> &partition);
+
+  // Store mesh elements of a chain in a new elementary and physical entity
+  void storeChain(int dim, std::map<int, std::vector<MElement*> > &entityMap,
+                  std::map<int, std::map<int, std::string> > &physicalMap)
+  {
+    _storeElementsInEntities(entityMap);
+    _storePhysicalTagsInEntities(dim, physicalMap);
+    _associateEntityWithMeshVertices();
+  }
+  void storeChain(std::vector<MVertex*> &vertices, int dim, 
+                  std::map<int, std::vector<MElement*> > &entityMap,
+                  std::map<int, std::map<int, std::string> > &physicalMap)
+  {
+    _storeVerticesInEntities(vertices);
+    _storeElementsInEntities(entityMap);
+    _storePhysicalTagsInEntities(dim, physicalMap);
+    _associateEntityWithMeshVertices();
+  }
 
   // Gmsh native CAD format (readGEO is static, since it can create
   // multiple models)
   static int readGEO(const std::string &name);
   int writeGEO(const std::string &name, bool printLabels=true);
   int importGEOInternals();
+  int exportDiscreteGEOInternals();
 
   // Fourier model
   int readFourier();
@@ -337,12 +461,26 @@ class GModel
   int writeOCCSTEP(const std::string &name);
   int writeOCCBREP(const std::string &name);
   int importOCCShape(const void *shape);
-  void addShape(std::string name, std::vector<double> &p, std::string op);
+
+  // ACIS Model
+  int readACISSAT(const std::string &name);
 
   // Gmsh mesh file format
   int readMSH(const std::string &name);
-  int writeMSH(const std::string &name, double version=1.0, bool binary=false,
-               bool saveAll=false, bool saveParametric=false, double scalingFactor=1.0);
+  int writeMSH(const std::string &name, double version=2.2, bool binary=false,
+               bool saveAll=false, bool saveParametric=false,
+               double scalingFactor=1.0, int elementStartNum=0,
+               int saveSinglePartition=0);
+  int writePartitionedMSH(const std::string &baseName, bool binary=false,
+                          bool saveAll=false, bool saveParametric=false,
+                          double scalingFactor=1.0);
+  int writeDistanceMSH(const std::string &name, double version=2.2, bool binary=false,
+                       bool saveAll=false, bool saveParametric=false,
+                       double scalingFactor=1.0);
+
+  // Iridium file format
+  int writeIR3(const std::string &name, int elementTagType,
+               bool saveAll, double scalingFactor);
 
   // mesh statistics (saved as a Gmsh post-processing view)
   int writePOS(const std::string &name, bool printElementary,
@@ -353,6 +491,11 @@ class GModel
   int readSTL(const std::string &name, double tolerance=1.e-3);
   int writeSTL(const std::string &name, bool binary=false,
                bool saveAll=false, double scalingFactor=1.0);
+
+  // PLY(2) format (ascii text format)
+  int readPLY(const std::string &name);
+  int readPLY2(const std::string &name);
+  int writePLY2(const std::string &name);
 
   // Inventor/VRML format
   int readVRML(const std::string &name);
@@ -401,6 +544,15 @@ class GModel
   int readDIFF(const std::string &name);
   int writeDIFF(const std::string &name, bool binary=false,
                bool saveAll=false, double scalingFactor=1.0);
+
+  // Abaqus
+  int writeINP(const std::string &name, bool saveAll=false, 
+               double scalingFactor=1.0);
+
+  void save(std::string fileName);
+  void load(std::string fileName);
+
+  static void registerBindings(binding *b);
 };
 
 #endif

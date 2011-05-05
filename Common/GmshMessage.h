@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -10,6 +10,8 @@
 #include <string>
 #include <stdarg.h>
 
+class GmshClient;
+
 // the external message handler
 class GmshMessage{
  public:
@@ -17,6 +19,7 @@ class GmshMessage{
   virtual ~GmshMessage(){}
   virtual void operator()(std::string level, std::string message){}
 };
+class binding;
 
 // a class to manage messages
 class Msg {
@@ -36,6 +39,8 @@ class Msg {
   static GmshMessage *_callback;
   // command-line and startup time
   static std::string _commandLine, _launchDate;
+  // communication with Gmsh when run remotely
+  static GmshClient *_client;
  public:
   Msg() {}
   static void Init(int argc, char **argv);
@@ -70,8 +75,13 @@ class Msg {
   static void ResetErrorCounter(){ _warningCount = 0; _errorCount = 0; }
   static void PrintErrorCounter(const char *title);
   static double GetValue(const char *text, double defaultval);
-  static bool GetBinaryAnswer(const char *question, const char *yes, 
-                              const char *no,  bool defaultval=true);
+  static std::string GetString(const char *text, std::string defaultval);
+  static int GetAnswer(const char *question, int defaultval, const char *zero, 
+                       const char *one, const char *two=0);
+  static void InitClient(std::string sockname);
+  static GmshClient *GetClient(){ return _client; }
+  static void FinalizeClient();
+  static void registerBindings (binding *b);
 };
 
 #endif

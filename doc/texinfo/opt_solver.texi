@@ -16,10 +16,8 @@ Saved in: @code{General.OptionsFileName}
 
 @item Solver.Help0
 Help string for solver 0@*
-Default value: @code{"A General environment for the treatment of
-Discrete Problems.
-Copyright (C) 1997-2009
-Patrick Dular and Christophe Geuzaine.
+Default value: @code{"A General environment for the treatment of Discrete Problems.
+Copyright (C) 1997-2010 Patrick Dular and Christophe Geuzaine.
 Visit http://www.geuz.org/getdp/ for more info"}@*
 Saved in: @code{General.OptionsFileName}
 
@@ -28,10 +26,15 @@ System command to launch solver 0 (should not contain the `&' character)@*
 Default value: @code{"getdp"}@*
 Saved in: @code{General.OptionsFileName}
 
+@item Solver.ExtraArguments0
+Extra arguments to pass to solver 0@*
+Default value: @code{""}@*
+Saved in: @code{General.OptionsFileName}
+
 @item Solver.InputName0
 Default input file name for solver 0@*
 Default value: @code{""}@*
-Saved in: @code{General.OptionsFileName}
+Saved in: @code{-}
 
 @item Solver.Extension0
 Default file name extension for solver 0@*
@@ -41,7 +44,7 @@ Saved in: @code{General.OptionsFileName}
 @item Solver.MeshName0
 Default mesh file name for solver 0@*
 Default value: @code{""}@*
-Saved in: @code{General.OptionsFileName}
+Saved in: @code{-}
 
 @item Solver.MeshCommand0
 Command used to specify the mesh file for solver 0@*
@@ -153,10 +156,15 @@ System command to launch solver 1 (should not contain the `&' character)@*
 Default value: @code{""}@*
 Saved in: @code{General.OptionsFileName}
 
+@item Solver.ExtraArguments1
+Extra arguments to pass to solver 1@*
+Default value: @code{""}@*
+Saved in: @code{General.OptionsFileName}
+
 @item Solver.InputName1
 Default input file name for solver 1@*
 Default value: @code{""}@*
-Saved in: @code{General.OptionsFileName}
+Saved in: @code{-}
 
 @item Solver.Extension1
 Default file name extension for solver 1@*
@@ -166,7 +174,7 @@ Saved in: @code{General.OptionsFileName}
 @item Solver.MeshName1
 Default mesh file name for solver 1@*
 Default value: @code{""}@*
-Saved in: @code{General.OptionsFileName}
+Saved in: @code{-}
 
 @item Solver.MeshCommand1
 Command used to specify the mesh file for solver 1@*
@@ -278,10 +286,15 @@ System command to launch solver 2 (should not contain the `&' character)@*
 Default value: @code{""}@*
 Saved in: @code{General.OptionsFileName}
 
+@item Solver.ExtraArguments2
+Extra arguments to pass to solver 2@*
+Default value: @code{""}@*
+Saved in: @code{General.OptionsFileName}
+
 @item Solver.InputName2
 Default input file name for solver 2@*
 Default value: @code{""}@*
-Saved in: @code{General.OptionsFileName}
+Saved in: @code{-}
 
 @item Solver.Extension2
 Default file name extension for solver 2@*
@@ -291,7 +304,7 @@ Saved in: @code{General.OptionsFileName}
 @item Solver.MeshName2
 Default mesh file name for solver 2@*
 Default value: @code{""}@*
-Saved in: @code{General.OptionsFileName}
+Saved in: @code{-}
 
 @item Solver.MeshCommand2
 Command used to specify the mesh file for solver 2@*
@@ -403,10 +416,15 @@ System command to launch solver 3 (should not contain the `&' character)@*
 Default value: @code{""}@*
 Saved in: @code{General.OptionsFileName}
 
+@item Solver.ExtraArguments3
+Extra arguments to pass to solver 3@*
+Default value: @code{""}@*
+Saved in: @code{General.OptionsFileName}
+
 @item Solver.InputName3
 Default input file name for solver 3@*
 Default value: @code{""}@*
-Saved in: @code{General.OptionsFileName}
+Saved in: @code{-}
 
 @item Solver.Extension3
 Default file name extension for solver 3@*
@@ -416,7 +434,7 @@ Saved in: @code{General.OptionsFileName}
 @item Solver.MeshName3
 Default mesh file name for solver 3@*
 Default value: @code{""}@*
-Saved in: @code{General.OptionsFileName}
+Saved in: @code{-}
 
 @item Solver.MeshCommand3
 Command used to specify the mesh file for solver 3@*
@@ -528,10 +546,15 @@ System command to launch solver 4 (should not contain the `&' character)@*
 Default value: @code{""}@*
 Saved in: @code{General.OptionsFileName}
 
+@item Solver.ExtraArguments4
+Extra arguments to pass to solver 4@*
+Default value: @code{""}@*
+Saved in: @code{General.OptionsFileName}
+
 @item Solver.InputName4
 Default input file name for solver 4@*
 Default value: @code{""}@*
-Saved in: @code{General.OptionsFileName}
+Saved in: @code{-}
 
 @item Solver.Extension4
 Default file name extension for solver 4@*
@@ -541,7 +564,7 @@ Saved in: @code{General.OptionsFileName}
 @item Solver.MeshName4
 Default mesh file name for solver 4@*
 Default value: @code{""}@*
-Saved in: @code{General.OptionsFileName}
+Saved in: @code{-}
 
 @item Solver.MeshCommand4
 Command used to specify the mesh file for solver 4@*

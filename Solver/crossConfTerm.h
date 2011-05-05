@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -14,16 +14,19 @@
 #include "fullMatrix.h"
 #include "Numeric.h"
 
-class crossConfTerm : public femTerm<double, double> {
+class crossConfTerm : public femTerm<double> {
  protected:
   const simpleFunction<double> *_diffusivity;
   const int _iFieldR;
   int _iFieldC;
+  std::map<MVertex*, SPoint3> *_coordView;
  public:
   crossConfTerm(GModel *gm, int iFieldR, int iFieldC, 
-                simpleFunction<double> *diffusivity)
-    : femTerm<double, double>(gm), _iFieldR(iFieldR), _iFieldC(iFieldC), 
-      _diffusivity(diffusivity) {}
+                simpleFunction<double> *diffusivity, 
+		std::map<MVertex*, SPoint3> *coord=NULL)
+    : femTerm<double>(gm), _diffusivity(diffusivity), _iFieldR(iFieldR), 
+    _iFieldC(iFieldC), _coordView(coord) {}
+
   virtual int sizeOfR(SElement *se) const 
   {
     return se->getMeshElement()->getNumVertices(); 
@@ -34,17 +37,19 @@ class crossConfTerm : public femTerm<double, double> {
   }
   Dof getLocalDofR(SElement *se, int iRow) const
   {
-    return Dof(se->getMeshElement()->getVertex(iRow)->getNum(), _iFieldR);
+     return Dof(se->getMeshElement()->getVertex(iRow)->getNum(), 
+               Dof::createTypeWithTwoInts(0, _iFieldR));
   }
   Dof getLocalDofC(SElement *se, int iRow) const
   {
-    return Dof(se->getMeshElement()->getVertex(iRow)->getNum(), _iFieldC);
+    return Dof(se->getMeshElement()->getVertex(iRow)->getNum(),
+               Dof::createTypeWithTwoInts(0, _iFieldC));
   }
   virtual void elementMatrix(SElement *se, fullMatrix<double> &m) const
   {
     MElement *e = se->getMeshElement();
     int nbNodes = e->getNumVertices();
-    int integrationOrder = 2 * (e->getPolynomialOrder() - 1);
+    int integrationOrder = 2 * (e->getPolynomialOrder() - 1); 
     int npts;
     IntPt *GP;
     double jac[3][3];
@@ -52,8 +57,8 @@ class crossConfTerm : public femTerm<double, double> {
     SVector3 Grads [256];
     double grads[256][3];
     e->getIntegrationPoints(integrationOrder, &npts, &GP);
-  
-    m.set_all(0.);
+
+    m.setAll(0.);
     
     for (int i = 0; i < npts; i++){
       const double u = GP[i].pt[0];
@@ -82,7 +87,34 @@ class crossConfTerm : public femTerm<double, double> {
     }
     for (int j = 0; j < nbNodes; j++)
       for (int k = 0; k < j; k++)
-        m(k, j) = -1. * m(j, k);
+        m(k, j) = -1.* m(j, k);
+  }
+ void elementVector(SElement *se, fullVector<double> &m) const
+  {
+   
+    MElement *e = se->getMeshElement();
+    int nbNodes = e->getNumVertices(); 
+
+    fullMatrix<double> *mat;
+    mat = new fullMatrix<double>(nbNodes,nbNodes);
+    elementMatrix(se, *mat);
+
+    fullVector<double> val(nbNodes);
+    val.scale(0.);
+    for (int i = 0; i < nbNodes; i++){
+      std::map<MVertex*, SPoint3>::iterator it = _coordView->find(e->getVertex(i));
+      SPoint3 UV = it->second;
+      if (_iFieldC == 1)  val(i) = UV.x();
+      else if (_iFieldC == 2)  val(i) = UV.y();
+    }
+
+    m.scale(0.);
+    for (int i = 0; i < nbNodes; i++)
+      for (int j = 0; j < nbNodes; j++)
+    	m(i)  +=  -(*mat)(i,j)*val(j);
+
+
+
   }
 };
 

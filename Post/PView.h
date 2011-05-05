@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -17,7 +17,9 @@ class VertexArray;
 class smooth_normals;
 class GModel;
 class GMSH_PostPlugin;
+class ConnectionManager;
 
+class binding;
 // A post-processing view.
 class PView{
  private:
@@ -37,13 +39,13 @@ class PView{
   // the data
   PViewData *_data;
   // initialize private stuff
-  void _init();
+  void _init(int num=0);
 
  public:
   // create a new view with list-based data
-  PView();
+  PView(int num=0);
   // construct a new view using the given data
-  PView(PViewData *data);
+  PView(PViewData *data, int num=0);
   // construct a new view, alias of the view "ref"
   PView(PView *ref, bool copyOptions=true);
   // construct a new list-based view from a simple 2D dataset
@@ -51,10 +53,11 @@ class PView{
         std::vector<double> &x, std::vector<double> &y);
   // construct a new model-based view from a bunch of data
   PView(std::string name, std::string type, GModel *model,
-        std::map<int, std::vector<double> > &data, double time=0.);
+        std::map<int, std::vector<double> > &data, double time=0., 
+        int numComp = -1);
   // add a new time step to a given model-based view
   void addStep(GModel *model, std::map<int, std::vector<double> > &data, 
-               double time=0.);
+               double time=0.,int numComp = -1);
 
   // default destructor
   ~PView();
@@ -94,11 +97,12 @@ class PView{
   // combine view
   static void combine(bool time, int how, bool remove);
 
-  // find view by name (if noTimeStep >= 0, return view only if it
-  // does *not* contain that timestep; if partition >=0, return view
-  // only if it does *not* contain that partition)
+  // find view by name or by number (if timeStep >= 0, return view
+  // only if it does *not* contain that timestep; if partition >= 0,
+  // return view only if it does *not* contain that partition)
   static PView *getViewByName(std::string name, int timeStep=-1, 
                               int partition=-1);
+  static PView *getViewByNum(int num, int timeStep=-1, int partition=-1);
 
   // IO read routines (these are global: they can create multiple
   // views)
@@ -116,10 +120,12 @@ class PView{
   void fillVertexArrays();
 
   // fill a vertex array using a raw stream of bytes
-  static void fillVertexArray(int length, const char *data);
+  static void fillVertexArray(ConnectionManager *remote, int length, 
+                              const char *data, int swap);
 
   // smoothed normals
   smooth_normals *normals;
+  static void registerBindings(binding *b);
 };
 
 // this is the maximum number of nodes of elements we actually *draw*
@@ -129,5 +135,7 @@ class PView{
 void changeCoordinates(PView *p, int ient, int iele,
                        int numNodes, int type, int numComp, 
                        double xyz[PVIEW_NMAX][3], double val[PVIEW_NMAX][9]);
+bool isElementVisible(PViewOptions *opt, int dim, int numNodes, 
+                      double xyz[PVIEW_NMAX][3]);
 
 #endif

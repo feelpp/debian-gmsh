@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -89,7 +89,7 @@ class FlGui{
   // set the title of the graphic windows
   void setGraphicTitle(std::string title);
   // update the GUI when views get added or deleted
-  void updateViews();
+  void updateViews(bool numberOfViewsHasChanged=true);
   // update the GUI when fields change
   void updateFields();
   // reset the visibility window
@@ -110,9 +110,5 @@ class FlGui{
 
 void redraw_cb(Fl_Widget *w, void *data);
 void window_cb(Fl_Widget *w, void *data);
-
-class Fl_Browser;
-void add_multiline_in_browser(Fl_Browser *o, const char *prefix, 
-                              const char *str, int wrap=0);
 
 #endif

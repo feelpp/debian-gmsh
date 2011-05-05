@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -33,6 +33,21 @@
 #endif
 
 #include "GmshMessage.h"
+
+const char *GetEnvironmentVar(const char *var)
+{
+#if !defined(WIN32)
+  return getenv(var);
+#else
+  const char *tmp = getenv(var);
+  // Don't accept top dir or anything partially expanded like
+  // c:\Documents and Settings\%USERPROFILE%, etc.
+  if(!tmp || !strcmp(tmp, "/") || strstr(tmp, "%") || strstr(tmp, "$"))
+    return 0;
+  else
+    return tmp;
+#endif
+}
 
 double GetTimeInSeconds()
 {
@@ -100,6 +115,14 @@ double Cpu()
   double s = 0.;
   GetResources(&s, &mem);
   return s;
+}
+
+long GetMemoryUsage()
+{
+  long mem = 0;
+  double s = 0.;
+  GetResources(&s, &mem);
+  return mem;
 }
 
 int GetProcessId()

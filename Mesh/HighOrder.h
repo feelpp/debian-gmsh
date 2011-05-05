@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -23,15 +23,13 @@ class highOrderSmoother;
 
 void SetOrder1(GModel *m);
 void SetOrderN(GModel *m, int order, bool linear=true, bool incomplete=false);
-
-MTriangle* setHighOrder(MTriangle *t,
-                        GFace *gf, 
+MTriangle* setHighOrder(MTriangle *t, GFace *gf, 
                         edgeContainer &edgeVertices, 
                         faceContainer &faceVertices, 
-                        bool linear, 
-                        bool incomplete,
-                        int nPts = 1, 
+                        bool linear, bool incomplete, int nPts = 1, 
                         highOrderSmoother *displ2D = 0,
                         highOrderSmoother *displ3D = 0);
+void checkHighOrderTriangles(const char* cc, GModel *m, 
+                             std::vector<MElement*> &bad, double &minJGlob);
 
 #endif

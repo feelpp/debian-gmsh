@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -13,7 +13,7 @@
 #endif
 
 StringXNumber TetrahedralizeOptions_Number[] = {
-  {GMSH_FULLRC, "iView", NULL, -1.}
+  {GMSH_FULLRC, "View", NULL, -1.}
 };
 
 extern "C"
@@ -26,11 +26,10 @@ extern "C"
 
 std::string GMSH_TetrahedralizePlugin::getHelp() const
 {
-  return "Plugin(Tetrahedralize) tetrahedralizes the points in the\n"
-         "view `iView'. If `iView' < 0, the plugin is run on\n"
-         "the current view.\n"
-         "\n"
-         "Plugin(Tetrahedralize) creates one new view.\n";
+  return "Plugin(Tetrahedralize) tetrahedralizes the points in "
+    "the view `View'.\n\n"
+    "If `View' < 0, the plugin is run on the current view.\n\n"
+    "Plugin(Tetrahedralize) creates one new view.";
 }
 
 int GMSH_TetrahedralizePlugin::getNbOptions() const

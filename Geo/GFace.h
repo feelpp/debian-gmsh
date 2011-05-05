@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -9,6 +9,7 @@
 #include <list>
 #include <string>
 #include <vector>
+#include <map>
 #include "GEntity.h"
 #include "GPoint.h"
 #include "GEdgeLoop.h"
@@ -49,7 +50,11 @@ class GFace : public GEntity
   mean_plane meanPlane;
   std::list<GEdge *> embedded_edges;
   std::list<GVertex *> embedded_vertices;
-  GFaceCompound *compound; // this model edge belongs to a compound 
+  GFaceCompound *compound; // this model ede belongs to a compound 
+
+  // replace edges (gor gluing) for specific modelers, we have to
+  // re-create internal data
+  virtual void replaceEdgesInternal(std::list<GEdge*> &){}
 
  public: // this will become protected or private
   std::list<GEdgeLoop> edgeLoops;
@@ -64,6 +69,7 @@ class GFace : public GEntity
   // add/delete regions that are bounded by the face
   void addRegion(GRegion *r){ r1 ? r2 = r : r1 = r; }
   void delRegion(GRegion *r){ if(r1 == r) r1 = r2; r2 = 0; }
+  GRegion* getRegion(int num) const{ if (num==0) return r1; else return r2;  };
 
   // get number of regions
   int numRegions() const { int num=0; if(r1) num++; if(r2) num++; return num; }
@@ -99,9 +105,8 @@ class GFace : public GEntity
   virtual void setVisibility(char val, bool recursive=false);
 
   // compute the parameters UV from a point XYZ
-  void XYZtoUV(const double X, const double Y, const double Z,
-               double &U, double &V, const double relax,
-               const bool onSurface=true) const;
+  void XYZtoUV(double X, double Y, double Z, double &U, double &V,
+               double relax, bool onSurface=true) const;
 
   // get the bounding box
   virtual SBoundingBox3d bounds() const;
@@ -121,9 +126,10 @@ class GFace : public GEntity
   // surface. This topological constant can be computed using both the
   // geometry and the mesh. Both approaches should give the same result ;-)
   // by default, genus is ZERO
-  int poincareMesh ();
-  int genusMesh () { return (poincareMesh() + edgeLoops.size() - 2) / 2; }
-  virtual int genusGeom ();
+  int poincareMesh();
+  int genusMesh() { return (poincareMesh() + edgeLoops.size() - 2) / 2; }
+  virtual int genusGeom();
+  virtual bool checkTopology() const { return true; }
 
   // return the point on the face corresponding to the given parameter
   virtual GPoint point(double par1, double par2) const = 0;
@@ -151,13 +157,14 @@ class GFace : public GEntity
 
   // return the parmater location on the face given a point in space
   // that is on the face
-  virtual SPoint2 parFromPoint(const SPoint3 &) const;
+  virtual SPoint2 parFromPoint(const SPoint3 &, bool onSurface=true) const;
 
   // true if the parameter value is interior to the face
   virtual bool containsParam(const SPoint2 &pt) const;
 
   // return the point on the face closest to the given point
-  virtual GPoint closestPoint(const SPoint3 & queryPoint, const double initialGuess[2]) const;
+  virtual GPoint closestPoint(const SPoint3 & queryPoint, 
+                              const double initialGuess[2]) const;
 
   // return the normal to the face at the given parameter location
   virtual SVector3 normal(const SPoint2 &param) const;
@@ -171,8 +178,7 @@ class GFace : public GEntity
                          SVector3 *dudu, SVector3 *dvdv, SVector3 *dudv) const = 0;
 
   // return the curvature computed as the divergence of the normal
-  inline double curvature(const SPoint2 &param) const 
-  {return curvatureMax(param);}
+  inline double curvature(const SPoint2 &param) const { return curvatureMax(param); }
   virtual double curvatureDiv(const SPoint2 &param) const;
 
   // return the maximum curvature at a point
@@ -191,11 +197,14 @@ class GFace : public GEntity
   virtual void writeGEO(FILE *fp);
 
   // fill the crude representation cross
-  virtual bool buildRepresentationCross();
+  virtual bool buildRepresentationCross(bool force=false);
 
-  // build a STL triangulation and fills the vertex array
-  // va_geom_triangles
-  virtual bool buildSTLTriangulation();
+  // build an STL triangulation (or do nothing if it already exists,
+  // unless force=true)
+  virtual bool buildSTLTriangulation(bool force=false);
+
+  // fill the vertex array using an STL triangulation
+  bool fillVertexArray(bool force=false);
 
   // recompute the mean plane of the surface from a list of points
   void computeMeanPlane(const std::vector<MVertex*> &points);
@@ -225,9 +234,21 @@ class GFace : public GEntity
   // reset the mesh attributes to default values
   virtual void resetMeshAttributes();
 
+  // for periodic faces, move parameters into the range chosen
+  // for that face
+  void moveToValidRange(SPoint2 &pt) const;
+
   // compound
   void setCompound(GFaceCompound *gfc) { compound = gfc; }
   GFaceCompound *getCompound() const { return compound; }
+
+  // add points (and optionalluy normals) in vectors so that two
+  // points are at most maxDist apart
+  bool fillPointCloud(double maxDist, std::vector<SPoint3> *points,
+                      std::vector<SVector3> *normals=0);
+
+  // apply Lloyd's algorithm to the mesh
+  void lloyd (int nIter, int infNorm = 0); 
 
   struct {
     // do we recombine the triangles of the mesh?
@@ -238,8 +259,8 @@ class GFace : public GEntity
     char Method;
     // corners of the transfinite interpolation
     std::vector<GVertex*> corners;
-    // all diagonals of the triangulation are left (1), right (2) or
-    // alternated (3)
+    // all diagonals of the triangulation are left (-1), right (1) or
+    // alternated (0)
     int transfiniteArrangement;
     // do we smooth (transfinite) mesh? (<0 to use default smoothing)
     int transfiniteSmoothing;
@@ -250,7 +271,7 @@ class GFace : public GEntity
 
   typedef enum {PENDING, DONE, FAILED} meshGenerationStatus;
   struct {
-    meshGenerationStatus status;
+    mutable meshGenerationStatus status;
     double worst_element_shape, best_element_shape, average_element_shape;
     double smallest_edge_length, longest_edge_length, efficiency_index;
     int nbEdge, nbTriangle;
@@ -261,7 +282,12 @@ class GFace : public GEntity
   // of start/end points
   std::vector<SPoint3> cross;
 
-  // a vertex array containing an STL representation of the surface
+  // the STL mesh
+  std::vector<SPoint2> stl_vertices;
+  std::vector<int> stl_triangles;
+
+  // a vertex array containing a geometrical representation of the
+  // surface
   VertexArray *va_geom_triangles;
 
   // a array for accessing the transfinite vertices using a pair of
@@ -271,6 +297,28 @@ class GFace : public GEntity
   std::vector<MTriangle*> triangles;
   std::vector<MQuadrangle*> quadrangles;
   std::vector<MPolygon*> polygons;
+
+  void addTriangle(MTriangle *t){ triangles.push_back(t); }
+  void addQuadrangle(MQuadrangle *q){ quadrangles.push_back(q); }
+  void addPolygon(MPolygon *p){ polygons.push_back(p); }
+
+  // an array with additional vertices that are supposed to exist
+  // in the final mesh of the model face. This can be used for 
+  // boundary layer meshes or when using Lloyd-like smoothing algorithms
+  // those vertices are classifed on this GFace, their type is MFaceVertex.
+  // After mesh generation, those are moved to the mesh_vertices array 
+  std::vector<MVertex*> _additional_vertices;
+
+  // replace edges (gor gluing)
+  void replaceEdges(std::list<GEdge*> &);
+  
+  static void registerBindings(binding *b);
+
+  // periodic counterparts of edges
+  std::map<int,int> edgeCounterparts;
+
+  // tells if it's a sphere, and if it is, returns parameters
+  virtual bool isSphere (double &radius, SPoint3 &center) const {return false;}
 };
 
 #endif

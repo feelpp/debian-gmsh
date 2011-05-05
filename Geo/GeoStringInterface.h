@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -19,6 +19,7 @@ void add_trsfline(std::vector<int> &l, std::string fileName, std::string type,
                   std::string typearg, std::string pts);
 void add_trsfsurf(std::vector<int> &l, std::string fileName, std::string dir);
 void add_trsfvol(std::vector<int> &l, std::string fileName);
+void add_embedded(std::string what, std::vector<int> &l, std::string fileName);
 void add_param(std::string par, std::string value, std::string fileName);
 void add_point(std::string fileName, std::string x, std::string y, std::string z, 
                std::string lc);
@@ -35,6 +36,7 @@ void add_surf(std::string type, List_T *list, std::string fileName);
 void add_surfloop(List_T *list, std::string fileName, int *numvol);
 void add_vol(List_T *list, std::string fileName);
 void add_physical(std::string type, List_T *list, std::string fileName);
+void add_compound(std::string type, List_T *list, std::string fileName);
 void translate(int add, List_T *list, std::string fileName, std::string what,
                std::string tx, std::string ty, std::string tz);
 void rotate(int add, List_T *list, std::string fileName, std::string what, 

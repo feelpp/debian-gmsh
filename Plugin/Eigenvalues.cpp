@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -8,7 +8,7 @@
 #include "GmshDefines.h"
 
 StringXNumber EigenvaluesOptions_Number[] = {
-  {GMSH_FULLRC, "iView", NULL, -1.}
+  {GMSH_FULLRC, "View", NULL, -1.}
 };
 
 extern "C"
@@ -21,11 +21,10 @@ extern "C"
 
 std::string GMSH_EigenvaluesPlugin::getHelp() const
 {
-  return "Plugin(Eigenvalues) computes the three real\n"
-         "eigenvalues of each tensor in the view `iView'.\n"
-         "If `iView' < 0, the plugin is run on the current view.\n"
-         "\n"
-         "Plugin(Eigenvalues) creates three new scalar views.\n";
+  return "Plugin(Eigenvalues) computes the three real "
+    "eigenvalues of each tensor in the view `View'.\n\n"
+    "If `View' < 0, the plugin is run on the current view.\n\n"
+    "Plugin(Eigenvalues) creates three new scalar views.";
 }
 
 int GMSH_EigenvaluesPlugin::getNbOptions() const
@@ -36,21 +35,6 @@ int GMSH_EigenvaluesPlugin::getNbOptions() const
 StringXNumber *GMSH_EigenvaluesPlugin::getOption(int iopt)
 {
   return &EigenvaluesOptions_Number[iopt];
-}
-
-static std::vector<double> *incrementList(PViewDataList *data2, int type)
-{
-  switch(type){
-  case TYPE_PNT: data2->NbSP++; return &data2->SP;
-  case TYPE_LIN: data2->NbSL++; return &data2->SL;
-  case TYPE_TRI: data2->NbST++; return &data2->ST;
-  case TYPE_QUA: data2->NbSQ++; return &data2->SQ;
-  case TYPE_TET: data2->NbSS++; return &data2->SS;
-  case TYPE_HEX: data2->NbSH++; return &data2->SH;
-  case TYPE_PRI: data2->NbSI++; return &data2->SI;
-  case TYPE_PYR: data2->NbSY++; return &data2->SY;
-  default: return 0;
-  }
 }
 
 PView *GMSH_EigenvaluesPlugin::execute(PView *v)
@@ -80,9 +64,9 @@ PView *GMSH_EigenvaluesPlugin::execute(PView *v)
       int numComp = data1->getNumComponents(0, ent, ele);
       if(numComp != 9) continue;
       int type = data1->getType(0, ent, ele);
-      std::vector<double> *outmin = incrementList(dmin, type);
-      std::vector<double> *outmid = incrementList(dmid, type);
-      std::vector<double> *outmax = incrementList(dmax, type);
+      std::vector<double> *outmin = dmin->incrementList(1, type);
+      std::vector<double> *outmid = dmid->incrementList(1, type);
+      std::vector<double> *outmax = dmax->incrementList(1, type);
       if(!outmin || !outmid || !outmax) continue;
       int numNodes = data1->getNumNodes(0, ent, ele);
       double xyz[3][8];

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -14,12 +14,14 @@
 #include "MLine.h"
 #include "GaussLegendre1D.h"
 #include "Context.h"
+#include "Bindings.h"
 
 GEdge::GEdge(GModel *model, int tag, GVertex *_v0, GVertex *_v1)
   : GEntity(model, tag), _tooSmall(false), v0(_v0), v1(_v1), compound(0)
 {
   if(v0) v0->addEdge(this);
   if(v1 && v1 != v0) v1->addEdge(this);
+  meshStatistics.status = GEdge::PENDING;
   resetMeshAttributes();
 }
 
@@ -37,6 +39,18 @@ void GEdge::deleteMesh()
   mesh_vertices.clear();
   for(unsigned int i = 0; i < lines.size(); i++) delete lines[i];
   lines.clear();
+  _normals.clear();
+  deleteVertexArrays();
+  model()->destroyMeshCaches();
+}
+
+void GEdge::reverse()
+{
+  GVertex* tmp = v0;
+  v0 = v1;
+  v1 = tmp;
+  for(std::vector<MLine*>::iterator line = lines.begin(); line != lines.end(); line++)
+    (*line)->revert();
 }
 
 unsigned int GEdge::getNumMeshElements()
@@ -76,6 +90,10 @@ void GEdge::resetMeshAttributes()
 void GEdge::addFace(GFace *e)
 {
   l_faces.push_back(e);
+}
+
+void GEdge::addLine (MLine *line){
+  lines.push_back(line);
 }
 
 void GEdge::delFace(GFace *e)
@@ -179,6 +197,20 @@ void GEdge::writeGEO(FILE *fp)
       fprintf(fp, ", p%d + %d", tag(), i);
     fprintf(fp, ", %d};\n", getEndVertex()->tag());
   }
+
+  if(meshAttributes.Method == MESH_TRANSFINITE){
+    fprintf(fp, "Transfinite Line {%d} = %d", 
+            tag() * (meshAttributes.typeTransfinite > 0 ? 1 : -1),
+            meshAttributes.nbPointsTransfinite);
+    if(meshAttributes.typeTransfinite){
+      if(std::abs(meshAttributes.typeTransfinite) == 1)
+        fprintf(fp, " Using Progression ");
+      else
+        fprintf(fp, " Using Bump ");
+      fprintf(fp, "%g", meshAttributes.coeffTransfinite);
+    }
+    fprintf(fp, ";\n");
+  }
 }
 
 bool GEdge::containsParam(double pt) const
@@ -198,7 +230,7 @@ SVector3 GEdge::secondDer(double par) const
 
 SPoint2 GEdge::reparamOnFace(const GFace *face, double epar,int dir) const
 {
-  // reparmaterize the point onto the given face.
+  // reparametrize the point onto the given face.
   const GPoint p3 = point(epar);
   SPoint3 sp3(p3.x(), p3.y(), p3.z());
   return face->parFromPoint(sp3);
@@ -286,8 +318,6 @@ bool GEdge::XYZToU(const double X, const double Y, const double Z,
   double uMin = uu.low();
   double uMax = uu.high();
 
-  printf("dans GEdge uMin=%g, uMax=%g \n", uMin, uMax);
-
   SVector3 Q(X, Y, Z), P;
   
   double init[NumInitGuess];
@@ -330,4 +360,33 @@ bool GEdge::XYZToU(const double X, const double Y, const double Z,
   Msg::Error("Could not converge reparametrisation of point (%e,%e,%e) on edge %d",
              Q.x(), Q.y(), Q.z(), tag());
   return false;
+}
+
+void GEdge::replaceEndingPoints (GVertex *replOfv0, GVertex *replOfv1)
+{
+  replaceEndingPointsInternals (replOfv0, replOfv1);
+  if (replOfv0 != v0){
+    v0->delEdge(this);
+    replOfv0->addEdge(this);
+    v0 = replOfv0;
+  }
+  if (replOfv1 != v1){
+    v1->delEdge(this);
+    replOfv1->addEdge(this);
+    v1 = replOfv1;
+  }  
+}
+
+void GEdge::registerBindings(binding *b)
+{
+  classBinding *cb = b->addClass<GEdge>("GEdge");
+  cb->setDescription("A GEdge is a geometrical 1D entity");
+  cb->setParentClass<GEntity>();
+  methodBinding *mb = cb->addMethod("getBeginVertex", &GEdge::getBeginVertex);
+  mb->setDescription("get the begin-vertex of the edge");
+  mb = cb->addMethod("getEndVertex", &GEdge::getEndVertex);
+  mb->setDescription("get the end-vertex of the edge");
+  mb = cb->addMethod("addLine", &GEdge::addLine);
+  mb->setDescription("insert a line mesh element");
+  mb->setArgNames("line", NULL);
 }

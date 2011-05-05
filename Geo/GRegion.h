@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -19,12 +19,17 @@ class MPrism;
 class MPyramid;
 class MPolyhedron;
 class ExtrudeParams;
+class bindings;
 
 // A model region.
 class GRegion : public GEntity {
  protected:
   std::list<GFace*> l_faces;
   std::list<int> l_dirs;
+
+  // replace faces (for gluing) for specific modelers, we have to
+  // re-create internal data ...
+  virtual void replaceFacesInternal (std::list<GFace*> &) {}
 
  public:
   GRegion(GModel *model, int tag);
@@ -42,7 +47,7 @@ class GRegion : public GEntity {
   // get/set faces that bound the region
   virtual std::list<GFace*> faces() const{ return l_faces; }
   virtual std::list<int> faceOrientations() const{ return l_dirs; }
-  void set(std::list<GFace*> &f) { l_faces = f; }
+  inline void set(const std::list<GFace*> f) { l_faces = f; }
 
   // edges that bound the region
   virtual std::list<GEdge*> edges() const;
@@ -96,6 +101,17 @@ class GRegion : public GEntity {
   std::vector<MPrism*> prisms;
   std::vector<MPyramid*> pyramids;
   std::vector<MPolyhedron*> polyhedra;
+
+  void addPrism(MPrism *p);
+
+  // replace edges (gor gluing)
+  void replaceFaces (std::list<GFace*> &);
+
+  // compute volume, moment of intertia and center of gravity
+  double computeSolidProperties (std::vector<double> cg,
+				 std::vector<double> inertia);
+
+  static void registerBindings(binding *b);
 };
 
 #endif

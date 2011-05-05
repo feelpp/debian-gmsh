@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -11,6 +11,7 @@
 #include "Numeric.h"
 #include "GmshMessage.h"
 #include "Context.h"
+#include "STensor3.h"
 
 #define SQU(a)      ((a)*(a))
 
@@ -94,17 +95,42 @@ static double F_Lc(GEdge *ge, double t)
     lc_here = BGM_MeshSize(ge->getEndVertex(), t, 0, p.x(), p.y(), p.z());
   else
     lc_here = BGM_MeshSize(ge, t, 0, p.x(), p.y(), p.z());
-
+ 
   SVector3 der = ge->firstDer(t);
-  const double d = norm(der);
-
-  //printf("lc_here=%g d=%g nb =%g\n", lc_here,d,  d/lc_here);
-
-  return d / lc_here;
-
+  //const double d = norm(der);
+  //return d / lc_here; 
+  SMetric3 metric(1. / (lc_here * lc_here));
+  double lSquared = dot(der, metric, der);
+  return sqrt(lSquared);
 }
 
-static double F_Transfinite(GEdge *ge, double t)
+static double F_Lc_aniso(GEdge *ge, double t)
+{
+  GPoint p = ge->point(t);
+  SMetric3 lc_here;
+
+  Range<double> bounds = ge->parBounds(0);
+  double t_begin = bounds.low();
+  double t_end = bounds.high();
+
+  if(t == t_begin)
+    lc_here = BGM_MeshMetric(ge->getBeginVertex(), t, 0, p.x(), p.y(), p.z());
+  else if(t == t_end)
+    lc_here = BGM_MeshMetric(ge->getEndVertex(), t, 0, p.x(), p.y(), p.z());
+  else
+    lc_here = BGM_MeshMetric(ge, t, 0, p.x(), p.y(), p.z());
+
+  SVector3 der = ge->firstDer(t);
+
+  double lSquared = dot (der,lc_here,der);
+
+  //  der.normalize();
+  //  printf("in the function %g n %g %g\n", sqrt(lSquared),der.x(),der.y());
+
+  return sqrt(lSquared);
+}
+
+static double F_Transfinite(GEdge *ge, double t_)
 {
   double length = ge->length();
   if(length == 0.0){
@@ -112,11 +138,16 @@ static double F_Transfinite(GEdge *ge, double t)
     return 1.;
   }
 
-  SVector3 der = ge->firstDer(t) ;
+  SVector3 der = ge->firstDer(t_) ;
   double d = norm(der);
   double coef = ge->meshAttributes.coeffTransfinite;
   int type = ge->meshAttributes.typeTransfinite;
   int nbpt = ge->meshAttributes.nbPointsTransfinite;
+
+  Range<double> bounds = ge->parBounds(0);
+  double t_begin = bounds.low();
+  double t_end = bounds.high();
+  double t = (t_ - t_begin)/(t_end-t_begin);
 
   double val;
 
@@ -219,21 +250,55 @@ static double Integration(GEdge *ge, double t1, double t2,
   from.lc = f(ge, from.t);
   from.p = 0.0;
   Points.push_back(from);
-
+  
   to.t = t2;
   to.lc = f(ge, to.t);
+  
   RecursiveIntegration(ge, &from, &to, f, Points, Prec, &depth);
-
+  
   return Points.back().p;
+}
+
+static void copyMesh(GEdge *from, GEdge *to, int direction)
+{
+  Range<double> u_bounds = from->parBounds(0);
+  double u_min = u_bounds.low();
+  double u_max = u_bounds.high();
+
+  for(unsigned int i = 0; i < from->mesh_vertices.size(); i++){
+    int index = (direction < 0) ? (from->mesh_vertices.size() - 1 - i) : i;
+    MVertex *v = from->mesh_vertices[index];
+    double u; v->getParameter(0, u);
+    double newu = (direction > 0) ? u : (u_max - u + u_min);
+    GPoint gp = to->point(newu);
+    to->mesh_vertices.push_back(new MEdgeVertex(gp.x(), gp.y(), gp.z(), to, newu));
+  }
+  for(unsigned int i = 0; i < to->mesh_vertices.size() + 1; i++){
+    MVertex *v0 = (i == 0) ?
+      to->getBeginVertex()->mesh_vertices[0] : to->mesh_vertices[i - 1];
+    MVertex *v1 = (i == to->mesh_vertices.size()) ?
+      to->getEndVertex()->mesh_vertices[0] : to->mesh_vertices[i];
+    to->lines.push_back(new MLine(v0, v1));
+  }
 }
 
 void deMeshGEdge::operator() (GEdge *ge) 
 {
   if(ge->geomType() == GEntity::DiscreteCurve) return;
-
   ge->deleteMesh();
-  ge->deleteVertexArrays();
-  ge->model()->destroyMeshCaches();
+  ge->meshStatistics.status = GEdge::PENDING;
+}
+
+static void printFandPrimitive(int tag, std::vector<IntPoint> &Points)
+{
+  char name[256];
+  sprintf(name, "line%d.dat", tag);
+  FILE *f = fopen(name, "w");
+  for (unsigned int i = 0; i < Points.size(); i++){
+    const IntPoint &P = Points[i];
+    fprintf(f, "%g %g %g\n", P.t, 1./P.lc, P.p);
+  }
+  fclose(f);
 }
 
 void meshGEdge::operator() (GEdge *ge) 
@@ -245,10 +310,24 @@ void meshGEdge::operator() (GEdge *ge)
   if(ge->meshAttributes.Method == MESH_NONE) return;
   if(CTX::instance()->mesh.meshOnlyVisible && !ge->getVisibility()) return;
 
+  // look if we are doing the STL triangulation
+  std::vector<MVertex*> &mesh_vertices = ge->mesh_vertices ; 
+  std::vector<MLine*> &lines = ge->lines ; 
+
   deMeshGEdge dem;
   dem(ge);
 
   if(MeshExtrudedCurve(ge)) return;
+
+  if (ge->meshMaster() != ge->tag()){
+    GEdge *gef = ge->model()->getEdgeByTag(abs(ge->meshMaster()));
+    if (gef->meshStatistics.status == GEdge::PENDING) return;
+    Msg::Info("Meshing curve %d (%s) as a copy of %d", ge->tag(),
+              ge->getTypeString().c_str(), ge->meshMaster());
+    copyMesh(gef, ge, ge->meshMaster());
+    ge->meshStatistics.status = GEdge::DONE;
+    return;
+  }
 
   Msg::Info("Meshing curve %d (%s)", ge->tag(), ge->getTypeString().c_str());
 
@@ -258,16 +337,22 @@ void meshGEdge::operator() (GEdge *ge)
   double t_end = bounds.high();
   
   // first compute the length of the curve by integrating one
+  double length;
   std::vector<IntPoint> Points;
-  double length = Integration(ge, t_begin, t_end, F_One, Points, 1.e-8 * CTX::instance()->lc);
+  if(ge->geomType() == GEntity::Line && ge->getBeginVertex() == ge->getEndVertex())
+    length = 0.; // special case t avoid infinite loop in integration
+  else
+    length = Integration(ge, t_begin, t_end, F_One, Points, 1.e-8 * CTX::instance()->lc);
   ge->setLength(length);
   Points.clear();
 
-  if(length == 0.0)
+  if(length == 0. && CTX::instance()->mesh.toleranceEdgeLength == 0.)
+    Msg::Error("Curve %d has a zero length", ge->tag());
+  else if (length == 0.)
     Msg::Debug("Curve %d has a zero length", ge->tag());
 
-  // TEST
-  if (length < CTX::instance()->mesh.toleranceEdgeLength) ge->setTooSmall(true);
+  if(length < CTX::instance()->mesh.toleranceEdgeLength)
+    ge->setTooSmall(true);
 
   // Integrate detJ/lc du 
   double a;
@@ -277,11 +362,12 @@ void meshGEdge::operator() (GEdge *ge)
     N = 1;
   }
   else if(ge->meshAttributes.Method == MESH_TRANSFINITE){
-    a = Integration(ge, t_begin, t_end, F_Transfinite, Points, 1.e-8);
+    a = Integration(ge, t_begin, t_end, F_Transfinite, Points, 
+                    CTX::instance()->mesh.lcIntegrationPrecision);
     N = ge->meshAttributes.nbPointsTransfinite;
   }
   else{
-    if(CTX::instance()->mesh.lcIntegrationPrecision > 1.e-8){
+    if(CTX::instance()->mesh.lcIntegrationPrecision > 1.e-2){
       std::vector<IntPoint> lcPoints;
       Integration(ge, t_begin, t_end, F_Lc_usingInterpLcBis, lcPoints, 
                   CTX::instance()->mesh.lcIntegrationPrecision);
@@ -289,11 +375,19 @@ void meshGEdge::operator() (GEdge *ge)
       a = Integration(ge, t_begin, t_end, F_Lc_usingInterpLc, Points, 1.e-8);
     }
     else{
-      a = Integration(ge, t_begin, t_end, F_Lc, Points,
-                      CTX::instance()->mesh.lcIntegrationPrecision);
+      if (CTX::instance()->mesh.algo2d == ALGO_2D_BAMG) 
+	a = Integration(ge, t_begin, t_end, F_Lc_aniso, Points,
+			CTX::instance()->mesh.lcIntegrationPrecision);
+      else
+	a = Integration(ge, t_begin, t_end, F_Lc, Points,
+			CTX::instance()->mesh.lcIntegrationPrecision);
     }
     N = std::max(ge->minimumMeshSegments() + 1, (int)(a + 1.));
   }
+  
+  if(CTX::instance()->mesh.algoRecombine == 1 && N%2 == 0) N++;
+
+  //  printFandPrimitive(ge->tag(),Points);
 
   // if the curve is periodic and if the begin vertex is identical to
   // the end vertex and if this vertex has only one model curve
@@ -319,7 +413,7 @@ void meshGEdge::operator() (GEdge *ge)
     const double b = a / (double)(N - 1);
     int count = 1, NUMP = 1;
     IntPoint P1, P2;
-    ge->mesh_vertices.resize(N - 2);
+    mesh_vertices.resize(N - 2);
     while(NUMP < N - 1) {
       P1 = Points[count-1];
       P2 = Points[count];
@@ -333,24 +427,24 @@ void meshGEdge::operator() (GEdge *ge)
         const double d = norm(der);  
         double lc  = d/(P1.lc + dlc / dp * (d - P1.p));
         GPoint V = ge->point(t);
-        ge->mesh_vertices[NUMP - 1] = new MEdgeVertex(V.x(), V.y(), V.z(), ge, t, lc);
+        mesh_vertices[NUMP - 1] = new MEdgeVertex(V.x(), V.y(), V.z(), ge, t, lc);
         NUMP++;
       }
       else {
         count++;
       }
     }
-    ge->mesh_vertices.resize(NUMP - 1);
+    mesh_vertices.resize(NUMP - 1);
   }
 
-  for(unsigned int i = 0; i < ge->mesh_vertices.size() + 1; i++){
+  for(unsigned int i = 0; i < mesh_vertices.size() + 1; i++){
     MVertex *v0 = (i == 0) ?
-      ge->getBeginVertex()->mesh_vertices[0] : ge->mesh_vertices[i - 1];
-    MVertex *v1 = (i == ge->mesh_vertices.size()) ?
-      ge->getEndVertex()->mesh_vertices[0] : ge->mesh_vertices[i];
-    ge->lines.push_back(new MLine(v0, v1));
+      ge->getBeginVertex()->mesh_vertices[0] : mesh_vertices[i - 1];
+    MVertex *v1 = (i == mesh_vertices.size()) ?
+      ge->getEndVertex()->mesh_vertices[0] : mesh_vertices[i];
+    lines.push_back(new MLine(v0, v1));
   }
-
+  
   if(ge->getBeginVertex() == ge->getEndVertex() && 
      ge->getBeginVertex()->edges().size() == 1){
     MVertex *v0 = ge->getBeginVertex()->mesh_vertices[0];
@@ -358,4 +452,6 @@ void meshGEdge::operator() (GEdge *ge)
     v0->y() = beg_p.y();
     v0->z() = beg_p.z();
   }
+
+  ge->meshStatistics.status = GEdge::DONE;
 }

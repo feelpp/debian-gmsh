@@ -1,17 +1,19 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
 #include <string.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
 #include <FL/Fl_Box.H>
 #include <FL/fl_ask.H>
+#include <FL/filename.H>
 #include "GmshConfig.h"
 #include "GmshMessage.h"
-#include "GmshRemote.h"
 #include "GmshSocket.h"
+#include "ConnectionManager.h"
 #include "FlGui.h"
 #include "menuWindow.h"
 #include "mainWindow.h"
@@ -28,18 +30,16 @@
 #include "solverWindow.h"
 #include "aboutWindow.h"
 #include "fileDialogs.h"
+#include "extraDialogs.h"
 #include "partitionDialog.h"
 #include "projectionEditor.h"
 #include "classificationEditor.h"
 #include "Options.h"
 #include "CommandLine.h"
-#include "Generator.h"
-#include "HighOrder.h"
 #include "GModel.h"
 #include "PView.h"
 #include "PViewData.h"
 #include "PViewOptions.h"
-#include "Field.h"
 #include "OS.h"
 #include "StringUtils.h"
 #include "OpenFile.h"
@@ -48,12 +48,15 @@
 #include "GeoStringInterface.h"
 #include "Options.h"
 #include "Context.h"
+#include "Generator.h"
+#include "HighOrder.h"
+#include "Field.h"
 
 static void file_new_cb(Fl_Widget *w, void *data)
 {
  test:
-  if(file_chooser(0, 1, "New", "*")) {
-    std::string name = file_chooser_get_name(1);
+  if(fileChooser(FILE_CHOOSER_CREATE, "New", "*")) {
+    std::string name = fileChooserGetName(1);
     if(!StatFile(name)){
       if(fl_choice("File '%s' already exists.\n\nDo you want to erase it?",
                    "Cancel", "Erase", 0, name.c_str()))
@@ -78,49 +81,71 @@ static void file_new_cb(Fl_Widget *w, void *data)
 #if defined(HAVE_NATIVE_FILE_CHOOSER)
 #  define TT "\t"
 #  define NN "\n"
+#  if defined(__APPLE__)
+#    define SEPARATOR_IN    " " TT "*" NN
+#    define SEPARATOR_OUT  {" " TT "*.*", _save_auto},
+#  else
+#    define SEPARATOR_IN
+#    define SEPARATOR_OUT
+#  endif
 #else
 #  define TT " ("
 #  define NN ")\t"
+#  define SEPARATOR_IN
+#  define SEPARATOR_OUT
 #endif
 
 static const char *input_formats =
-  "All files" TT "*" NN
-  "Gmsh geometry" TT "*.geo" NN
-  "Gmsh mesh" TT "*.msh" NN
-  "Gmsh post-processing view" TT "*.pos" NN
+  "All Files" TT "*" NN
+  SEPARATOR_IN
+  "Gmsh Geometry" TT "*.geo" NN
+#if defined(HAVE_LUA)
+  "Gmsh LUA Script" TT "*.lua" NN
+#endif
+  "Gmsh Mesh" TT "*.msh" NN
+  "Gmsh Post-processing View" TT "*.pos" NN
+#if defined(HAVE_ACIS) || defined(HAVE_OCC)
+  SEPARATOR_IN
+#endif
+#if defined(HAVE_ACIS)
+  "ACIS Model" TT "*.sat" NN
+#endif
 #if defined(HAVE_OCC)
-  "STEP model" TT "*.{stp,step}" NN
-  "IGES model" TT "*.{igs,iges}" NN
-  "BRep model" TT "*.brep" NN
+  "BRep Model" TT "*.brep" NN
+  "IGES Model" TT "*.{igs,iges}" NN
+  "STEP Model" TT "*.{stp,step}" NN
 #endif
-  "I-deas universal mesh" TT "*.unv" NN
-  "Diffpack 3D mesh" TT "*.diff" NN
-  "VTK mesh" TT "*.vtk" NN
+  SEPARATOR_IN
+  "Diffpack 3D Mesh" TT "*.diff" NN
+  "I-deas Universal Mesh" TT "*.unv" NN
 #if defined(HAVE_MED)
-  "MED file" TT "*.{med,mmed,rmed}" NN
+  "MED File" TT "*.{med,mmed,rmed}" NN
 #endif
-  "Medit mesh" TT "*.mesh" NN
-  "Nastran bulk data file" TT "*.{bdf,nas}" NN
-  "Plot3D structured mesh" TT "*.p3d" NN
-  "STL surface mesh" TT "*.stl" NN
-  "VRML surface mesh" TT "*.{wrl,vrml}" NN
+  "Medit INRIA Mesh" TT "*.mesh" NN
+  "Nastran Bulk Data File" TT "*.{bdf,nas}" NN
+  "Plot3D Structured Mesh" TT "*.p3d" NN
+  "STL Surface Mesh" TT "*.stl" NN
+  "VTK Mesh" TT "*.vtk" NN
+  "VRML Surface Mesh" TT "*.{wrl,vrml}" NN
+  "PLY2 Surface Mesh" TT "*.{ply2}" NN
+  SEPARATOR_IN
+  "BMP" TT "*.bmp" NN
 #if defined(HAVE_LIBJPEG)
   "JPEG" TT "*.{jpg,jpeg}" NN
 #endif
+  "PBM" TT "*.pbm" NN
+  "PGM" TT "*.pgm" NN
 #if defined(HAVE_LIBPNG)
   "PNG" TT "*.png" NN
 #endif
-  "BMP" TT "*.bmp" NN
-  "PPM" TT "*.ppm" NN
-  "PGM" TT "*.pgm" NN
-  "PBM" TT "*.pbm" NN
-  "PNM" TT "*.pnm" NN;
+  "PNM" TT "*.pnm" NN
+  "PPM" TT "*.ppm" NN;
 
 static void file_open_cb(Fl_Widget *w, void *data)
 {
   int n = PView::list.size();
-  if(file_chooser(0, 0, "Open", input_formats)) {
-    OpenProject(file_chooser_get_name(1));
+  if(fileChooser(FILE_CHOOSER_SINGLE, "Open", input_formats)) {
+    OpenProject(fileChooserGetName(1));
     drawContext::global()->draw();
   }
   if(n != (int)PView::list.size())
@@ -130,12 +155,23 @@ static void file_open_cb(Fl_Widget *w, void *data)
 static void file_merge_cb(Fl_Widget *w, void *data)
 {
   int n = PView::list.size();
-  int f = file_chooser(1, 0, "Merge", input_formats);
+  int f = fileChooser(FILE_CHOOSER_MULTI, "Merge", input_formats);
   if(f) {
     for(int i = 1; i <= f; i++)
-      MergeFile(file_chooser_get_name(i));
+      MergeFile(fileChooserGetName(i));
     drawContext::global()->draw();
   }
+  if(n != (int)PView::list.size())
+    FlGui::instance()->menu->setContext(menu_post, 0);
+}
+
+static void file_open_recent_cb(Fl_Widget *w, void *data)
+{  
+  std::string str((const char*)data);
+
+  int n = PView::list.size();
+  OpenProject(str);
+  drawContext::global()->draw();
   if(n != (int)PView::list.size())
     FlGui::instance()->menu->setContext(menu_post, 0);
 }
@@ -148,64 +184,42 @@ static void file_clear_cb(Fl_Widget *w, void *data)
 
 static void file_remote_cb(Fl_Widget *w, void *data)
 {
+  GmshServer *server = ConnectionManager::get(99)->getServer();
+
   std::string str((const char*)data);
 
   if(str == "start"){
-    Msg::Info("Starting remote Gmsh server");
-    if(GmshRemote::get(99)->getServer()){
-      Msg::Error("A server is already running");
+    if(server){
+      Msg::Error("Cannot start: remote Gmsh is already running");
+      return;
     }
-    else{
-      GmshRemote::get(99)->name = "Remote";
-      GmshRemote::get(99)->socketSwitch = "-socket %s";
-      const char *exe = fl_input
-        ("Command:", 
-         //"ssh ace25 /Users/geuzaine/src/gmsh/bin/gmsh");
-         "./gmsh ../tutorial/view3.pos");
-      if(exe){
-        GmshRemote::get(99)->executable = exe;
-        GmshRemote::get(99)->run("");
-      }
-    }
+    ConnectionManager::get(99)->name = "Remote";
+    ConnectionManager::get(99)->socketSwitch = "-socket %s";
+    ConnectionManager::get(99)->executable = connectionChooser();
+    if(ConnectionManager::get(99)->executable.size())
+      ConnectionManager::get(99)->run("");
   }
-  else if(str == "stop"){
-    if(GmshRemote::get(99)->getServer()){
-      Msg::Info("Stopping remote Gmsh server");
-      GmshRemote::get(99)->getServer()->SendString
-	(GmshSocket::GMSH_STOP, "Disconnect!");
+  else{
+    if(!server){
+      Msg::Error("Cannot %s: remote Gmsh not running", str.c_str());
+      return;
     }
-    else{
-      Msg::Error("Cannot stop remote Gmsh: server not running");
+    if(str == "stop"){
+      server->SendString(GmshSocket::GMSH_STOP, "Disconnect!");
     }
-  }
-  else if(str == "test1"){
-    if(GmshRemote::get(99)->getServer()){
-      Msg::Info("Testing remote Gmsh server");
-      GmshRemote::get(99)->getServer()->SendString
-        (GmshSocket::GMSH_PARSE_STRING, "Send me a view to parse");
+    else if(str == "merge"){
+      const char *file = fl_input("Merge", "/tmp/data.pos");
+      if(file) server->SendString(GmshSocket::GMSH_MERGE_FILE, file);
     }
-    else{
-      Msg::Error("Cannot test remote Gmsh: server not running");
+    else if(str == "clear"){
+      server->SendString(GmshSocket::GMSH_PARSE_STRING, "Delete All;");
+      for(int i = PView::list.size() - 1; i >= 0; i--)
+        if(PView::list[i]->getData()->isRemote()) delete PView::list[i];
+      FlGui::instance()->updateViews();
+      drawContext::global()->draw();
     }
-  }
-  else if(str == "test2"){
-    if(GmshRemote::get(99)->getServer()){
-      Msg::Info("Testing remote Gmsh server");
-      GmshRemote::get(99)->getServer()->SendString
-        (GmshSocket::GMSH_SPEED_TEST, "Send me a huge amount of data!");
-    }
-    else{
-      Msg::Error("Cannot test remote Gmsh: server not running");
-    }
-  }
-  else if(str == "test3"){
-    if(GmshRemote::get(99)->getServer()){
-      Msg::Info("Testing remote Gmsh server");
-      GmshRemote::get(99)->getServer()->SendString
-        (GmshSocket::GMSH_VERTEX_ARRAY, "Send me a vertex array!");
-    }
-    else{
-      Msg::Error("Cannot test remote Gmsh: server not running");
+    else if(str == "test"){
+      server->SendString(GmshSocket::GMSH_SPEED_TEST, "Speed test");
     }
   }
 }
@@ -233,43 +247,50 @@ static void file_window_cb(Fl_Widget *w, void *data)
   }
 }
 
-static int _save_msh(const char *name){ return msh_dialog(name); }
-static int _save_pos(const char *name){ return pos_dialog(name); }
-static int _save_options(const char *name){ return options_dialog(name); }
-static int _save_geo(const char *name){ return geo_dialog(name); }
-static int _save_cgns(const char *name){ return cgns_write_dialog(name); }
-static int _save_unv(const char *name){ return unv_dialog(name); }
-static int _save_vtk(const char *name){ return generic_mesh_dialog
+static int _save_msh(const char *name){ return mshFileDialog(name); }
+static int _save_pos(const char *name){ return posFileDialog(name); }
+static int _save_options(const char *name){ return optionsFileDialog(name); }
+static int _save_geo(const char *name){ return geoFileDialog(name); }
+static int _save_cgns(const char *name){ return cgnsFileDialog(name); }
+static int _save_unv(const char *name){ return unvFileDialog(name); }
+static int _save_vtk(const char *name){ return genericMeshFileDialog
     (name, "VTK Options", FORMAT_VTK, true, false); }
-static int _save_diff(const char *name){ return generic_mesh_dialog
+static int _save_diff(const char *name){ return genericMeshFileDialog
     (name, "Diffpack Options", FORMAT_DIFF, true, false); }
-static int _save_med(const char *name){ return generic_mesh_dialog
+static int _save_inp(const char *name){ return genericMeshFileDialog
+    (name, "Abaqus INP Options", FORMAT_INP, false, false); }
+static int _save_med(const char *name){ return genericMeshFileDialog
     (name, "MED Options", FORMAT_MED, false, false); }
-static int _save_mesh(const char *name){ return generic_mesh_dialog
+static int _save_mesh(const char *name){ return genericMeshFileDialog
     (name, "MESH Options", FORMAT_MESH, false, true); }
-static int _save_bdf(const char *name){ return bdf_dialog(name); }
-static int _save_p3d(const char *name){ return generic_mesh_dialog
+static int _save_bdf(const char *name){ return bdfFileDialog(name); }
+static int _save_p3d(const char *name){ return genericMeshFileDialog
     (name, "P3D Options", FORMAT_P3D, false, false); }
-static int _save_stl(const char *name){ return generic_mesh_dialog
+static int _save_ir3(const char *name){ return genericMeshFileDialog
+    (name, "Iridium Options", FORMAT_IR3, false, true); }
+static int _save_stl(const char *name){ return genericMeshFileDialog
     (name, "STL Options", FORMAT_STL, true, false); }
-static int _save_vrml(const char *name){ return generic_mesh_dialog
+static int _save_vrml(const char *name){ return genericMeshFileDialog
     (name, "VRML Options", FORMAT_VRML, false, false); }
-static int _save_eps(const char *name){ return gl2ps_dialog
+static int _save_ply2(const char *name){ return genericMeshFileDialog
+    (name, "PLY2 Options", FORMAT_PLY2, false, false); }
+static int _save_eps(const char *name){ return gl2psFileDialog
     (name, "EPS Options", FORMAT_EPS); }
-static int _save_gif(const char *name){ return gif_dialog(name); }
-static int _save_jpeg(const char *name){ return jpeg_dialog(name); }
-static int _save_tex(const char *name){ return latex_dialog(name); }
-static int _save_pdf(const char *name){ return gl2ps_dialog
+static int _save_gif(const char *name){ return gifFileDialog(name); }
+static int _save_jpeg(const char *name){ return jpegFileDialog(name); }
+static int _save_mpeg(const char *name){ return mpegFileDialog(name); }
+static int _save_tex(const char *name){ return latexFileDialog(name); }
+static int _save_pdf(const char *name){ return gl2psFileDialog
     (name, "PDF Options", FORMAT_PDF); }
-static int _save_png(const char *name){ return generic_bitmap_dialog
+static int _save_png(const char *name){ return genericBitmapFileDialog
     (name, "PNG Options", FORMAT_PNG); }
-static int _save_ps(const char *name){ return gl2ps_dialog
+static int _save_ps(const char *name){ return gl2psFileDialog
     (name, "PS Options", FORMAT_PS); }
-static int _save_ppm(const char *name){ return generic_bitmap_dialog
+static int _save_ppm(const char *name){ return genericBitmapFileDialog
     (name, "PPM Options", FORMAT_PPM); }
-static int _save_svg(const char *name){ return gl2ps_dialog
+static int _save_svg(const char *name){ return gl2psFileDialog
     (name, "SVG Options", FORMAT_SVG); }
-static int _save_yuv(const char *name){ return generic_bitmap_dialog
+static int _save_yuv(const char *name){ return genericBitmapFileDialog
     (name, "YUV Options", FORMAT_YUV); }
 
 static int _save_auto(const char *name)
@@ -286,12 +307,16 @@ static int _save_auto(const char *name)
   case FORMAT_MESH : return _save_mesh(name);
   case FORMAT_BDF  : return _save_bdf(name);
   case FORMAT_DIFF : return _save_diff(name);
+  case FORMAT_INP  : return _save_inp(name);
   case FORMAT_P3D  : return _save_p3d(name);
+  case FORMAT_IR3  : return _save_ir3(name);
   case FORMAT_STL  : return _save_stl(name);
   case FORMAT_VRML : return _save_vrml(name);
+  case FORMAT_PLY2 : return _save_ply2(name);
   case FORMAT_EPS  : return _save_eps(name);
   case FORMAT_GIF  : return _save_gif(name);
   case FORMAT_JPEG : return _save_jpeg(name);
+  case FORMAT_MPEG : return _save_mpeg(name);
   case FORMAT_TEX  : return _save_tex(name);
   case FORMAT_PDF  : return _save_pdf(name);
   case FORMAT_PNG  : return _save_png(name);
@@ -313,31 +338,40 @@ typedef struct{
 static void file_save_as_cb(Fl_Widget *w, void *data)
 {
   static patXfunc formats[] = {
-    {"Guess from extension" TT "*.*", _save_auto},
-    {"Gmsh mesh" TT "*.msh", _save_msh},
-    {"Gmsh mesh statistics" TT "*.pos", _save_pos},
-    {"Gmsh options" TT "*.opt", _save_options},
-    {"Gmsh unrolled geometry" TT "*.geo", _save_geo},
+    {"Guess From Extension" TT "*.*", _save_auto},
+    SEPARATOR_OUT
+    {"Gmsh Mesh" TT "*.msh", _save_msh},
+    {"Gmsh Mesh Statistics" TT "*.pos", _save_pos},
+    {"Gmsh Options" TT "*.opt", _save_options},
+    {"Gmsh Unrolled Geometry" TT "*.geo", _save_geo},
+    SEPARATOR_OUT
+    {"Abaqus INP Mesh" TT "*.inp", _save_inp},
 #if defined(HAVE_LIBCGNS)
-    {"CGNS" TT "*.cgns", _save_cgns},
+    {"CGNS (Experimental)" TT "*.cgns", _save_cgns},
 #endif
-    {"I-deas universal mesh" TT "*.unv", _save_unv},
-    {"Diffpack 3D mesh" TT "*.diff", _save_diff},
-    {"VTK mesh" TT "*.vtk", _save_vtk},
+    {"Diffpack 3D Mesh" TT "*.diff", _save_diff},
+    {"I-deas Universal Mesh" TT "*.unv", _save_unv},
+    {"Iridum Mesh" TT "*.ir3", _save_ir3},
 #if defined(HAVE_MED)
-    {"MED file" TT "*.med", _save_med},
+    {"MED File" TT "*.med", _save_med},
 #endif
-    {"Medit mesh" TT "*.mesh", _save_mesh},
-    {"Nastran bulk data file" TT "*.bdf", _save_bdf},
-    {"Plot3D structured mesh" TT "*.p3d", _save_p3d},
-    {"STL surface mesh" TT "*.stl", _save_stl},
-    {"VRML surface mesh" TT "*.wrl", _save_vrml},
+    {"Medit INRIA Mesh" TT "*.mesh", _save_mesh},
+    {"Nastran Bulk Data File" TT "*.bdf", _save_bdf},
+    {"Plot3D Structured Mesh" TT "*.p3d", _save_p3d},
+    {"STL Surface Mesh" TT "*.stl", _save_stl},
+    {"VRML Surface Mesh" TT "*.wrl", _save_vrml},
+    {"VTK Mesh" TT "*.vtk", _save_vtk},
+    {"PLY2 Mesh" TT "*.ply2", _save_ply2},
+    SEPARATOR_OUT
     {"Encapsulated PostScript" TT "*.eps", _save_eps},
     {"GIF" TT "*.gif", _save_gif},
 #if defined(HAVE_LIBJPEG)
     {"JPEG" TT "*.jpg", _save_jpeg},
 #endif
     {"LaTeX" TT "*.tex", _save_tex},
+#if defined(HAVE_MPEG_ENCODE)
+    {"MPEG Movie" TT "*.mpg", _save_mpeg},
+#endif
     {"PDF" TT "*.pdf", _save_pdf},
 #if defined(HAVE_LIBPNG)
     {"PNG" TT "*.png", _save_png},
@@ -359,15 +393,15 @@ static void file_save_as_cb(Fl_Widget *w, void *data)
   }
 
  test:
-  if(file_chooser(0, 1, "Save As", pat)) {
-    std::string name = file_chooser_get_name(1);
+  if(fileChooser(FILE_CHOOSER_CREATE, "Save As", pat)) {
+    std::string name = fileChooserGetName(1);
     if(CTX::instance()->confirmOverwrite) {
       if(!StatFile(name))
         if(!fl_choice("File '%s' already exists.\n\nDo you want to replace it?", 
                       "Cancel", "Replace", 0, name.c_str()))
           goto test;
     }
-    int i = file_chooser_get_filter();
+    int i = fileChooserGetFilter();
     if(i >= 0 && i < nbformats){
       if(!formats[i].func(name.c_str())) goto test;
     }
@@ -379,20 +413,30 @@ static void file_save_as_cb(Fl_Widget *w, void *data)
 
 #undef TT
 #undef NN
+#undef SEPARATOR_IN
+#undef SEPARATOR_OUT
 
 static void file_options_save_cb(Fl_Widget *w, void *data)
 {
-  std::string fileName = GModel::current()->getFileName() + ".opt";
-  Msg::StatusBar(2, true, "Writing '%s'", fileName.c_str());
-  PrintOptions(0, GMSH_FULLRC, 1, 0, fileName.c_str());
-  Msg::StatusBar(2, true, "Wrote '%s'", fileName.c_str());
+  std::string str((const char*)data), fileName;
+  if(str == "file")
+    fileName = GModel::current()->getFileName() + ".opt";
+  else
+    fileName = CTX::instance()->homeDir + CTX::instance()->optionsFileName;
+  Msg::StatusBar(2, true, "Writing '%s'...", fileName.c_str());
+  if(str == "file")
+    PrintOptions(0, GMSH_FULLRC, 1, 0, fileName.c_str());
+  else
+    PrintOptions(0, GMSH_OPTIONSRC, 1, 1, fileName.c_str());
+  Msg::StatusBar(2, true, "Done writing '%s'", fileName.c_str());
 }
 
 static void file_rename_cb(Fl_Widget *w, void *data)
 {
  test:
-  if(file_chooser(0, 1, "Rename", "*", GModel::current()->getFileName().c_str())) {
-    std::string name = file_chooser_get_name(1);
+  if(fileChooser(FILE_CHOOSER_CREATE, "Rename", "*",
+                 GModel::current()->getFileName().c_str())) {
+    std::string name = fileChooserGetName(1);
     if(CTX::instance()->confirmOverwrite) {
       if(!StatFile(name))
         if(!fl_choice("File '%s' already exists.\n\nDo you want to replace it?", 
@@ -401,6 +445,7 @@ static void file_rename_cb(Fl_Widget *w, void *data)
     }
     rename(GModel::current()->getFileName().c_str(), name.c_str());
     GModel::current()->setFileName(name);
+    GModel::current()->setName(SplitFileName(name)[1]);
     FlGui::instance()->setGraphicTitle(GModel::current()->getFileName());
     drawContext::global()->draw();
   }
@@ -409,6 +454,45 @@ static void file_rename_cb(Fl_Widget *w, void *data)
 void file_quit_cb(Fl_Widget *w, void *data)
 {
   Msg::Exit(0);
+}
+
+void file_watch_cb(Fl_Widget *w, void *data)
+{
+  if(w) CTX::instance()->watchFilePattern = patternChooser();
+
+  if(CTX::instance()->watchFilePattern.empty()) return;
+
+  std::string pattern = FixRelativePath
+    (GModel::current()->getFileName(), CTX::instance()->watchFilePattern);
+  std::string directory = SplitFileName(pattern)[0];
+  if(directory.empty()) directory = "./";
+  
+  dirent **files = 0;
+  int num = fl_filename_list(directory.c_str(), &files, fl_numericsort);
+  if(num <= 0) return;
+  std::vector<std::string> matches;
+  for (int i = 0; i < num; i++) {
+    std::string name = directory + files[i]->d_name;
+    if(fl_filename_match(name.c_str(), pattern.c_str()))
+      matches.push_back(name);
+    free((void*)files[i]);
+  }
+  if(files) free((void*)files);
+
+  Msg::Info("%d match%s for pattern '%s'", (int)matches.size(), 
+            (matches.size() > 1) ? "es" : "", pattern.c_str());
+  
+  std::set<std::string> allFiles;
+  for(unsigned int i = 0; i < GModel::list.size(); i++)
+    allFiles.insert(GetFileNameWithoutPath(GModel::list[i]->getFileName()));
+  for(unsigned int i = 0; i < PView::list.size(); i++)
+    for(int j = 0; j < PView::list[i]->getData()->getNumTimeSteps(); j++)
+      allFiles.insert(GetFileNameWithoutPath(PView::list[i]->getData()->getFileName(j)));
+
+  for(unsigned int i = 0; i < matches.size(); i++)
+    if(allFiles.find(GetFileNameWithoutPath(matches[i])) == allFiles.end())
+      MergeFile(matches[i]);
+  drawContext::global()->draw();
 }
 
 #if defined(__APPLE__)
@@ -546,7 +630,7 @@ static void help_command_line_cb(Fl_Widget *w, void *data)
 static void help_online_cb(Fl_Widget *w, void *data)
 {
   std::string prog = FixWindowsPath(CTX::instance()->webBrowser);
-  SystemCall(ReplacePercentS(prog, "http://geuz.org/gmsh/doc/texinfo/"));
+  SystemCall(ReplaceSubString("%s", "http://geuz.org/gmsh/doc/texinfo/", prog));
 }
 
 static void help_about_cb(Fl_Widget *w, void *data)
@@ -598,7 +682,7 @@ static void geometry_edit_cb(Fl_Widget *w, void *data)
 {
   std::string prog = FixWindowsPath(CTX::instance()->editor);
   std::string file = FixWindowsPath(GModel::current()->getFileName());
-  SystemCall(ReplacePercentS(prog, file));
+  SystemCall(ReplaceSubString("%s", file, prog));
 }
 
 void geometry_reload_cb(Fl_Widget *w, void *data)
@@ -1342,7 +1426,9 @@ static void action_point_line_surface_volume(int action, int mode, const char *w
         case 9:
           add_recosurf(List1, GModel::current()->getFileName());
           break;
-
+        case 10:
+          add_compound(what, List1, GModel::current()->getFileName());
+          break;
         default:
           Msg::Error("Unknown action on selected entities");
           break;
@@ -1511,14 +1597,19 @@ static void geometry_physical_add_cb(Fl_Widget *w, void *data)
 static void mesh_save_cb(Fl_Widget *w, void *data)
 {
   std::string name = CTX::instance()->outputFileName;
-  if(name.empty()) name = GetDefaultFileName(CTX::instance()->mesh.format);
+  if(name.empty()){
+    if(CTX::instance()->mesh.fileFormat == FORMAT_AUTO)
+      name = GetDefaultFileName(FORMAT_MSH);
+    else
+      name = GetDefaultFileName(CTX::instance()->mesh.fileFormat);
+  }
   if(CTX::instance()->confirmOverwrite) {
     if(!StatFile(name))
       if(!fl_choice("File '%s' already exists.\n\nDo you want to replace it?",
                     "Cancel", "Replace", 0, name.c_str()))
         return;
   }
-  CreateOutputFile(name, CTX::instance()->mesh.format);
+  CreateOutputFile(name, CTX::instance()->mesh.fileFormat);
 }
 
 static void mesh_define_cb(Fl_Widget *w, void *data)
@@ -1530,21 +1621,18 @@ void mesh_1d_cb(Fl_Widget *w, void *data)
 {
   GModel::current()->mesh(1);
   drawContext::global()->draw();
-  Msg::StatusBar(2, false, " ");
 }
 
 void mesh_2d_cb(Fl_Widget *w, void *data)
 {
   GModel::current()->mesh(2);
   drawContext::global()->draw();
-  Msg::StatusBar(2, false, " ");
 }
 
 void mesh_3d_cb(Fl_Widget *w, void *data)
 {
   GModel::current()->mesh(3);
   drawContext::global()->draw();
-  Msg::StatusBar(2, false, " ");
 }
 
 static void mesh_delete_cb(Fl_Widget *w, void *data)
@@ -1727,16 +1815,24 @@ static void mesh_inspect_cb(Fl_Widget *w, void *data)
   Msg::StatusBar(3, false, "");
 }
 
+static void mesh_change_order_cb(Fl_Widget *w, void *data)
+{
+  FlGui::instance()->menu->setContext(menu_mesh_degree, 0);
+}
+
+
 static void mesh_degree_cb(Fl_Widget *w, void *data)
 {
   if((long)data == 2)
     SetOrderN(GModel::current(), 2, CTX::instance()->mesh.secondOrderLinear, 
               CTX::instance()->mesh.secondOrderIncomplete);
-  else
+  else if ((long)data == 1)
     SetOrder1(GModel::current());
+  else // For now, use the same options as for second order meshes
+    SetOrderN(GModel::current(), (long)data, CTX::instance()->mesh.secondOrderLinear, 
+              CTX::instance()->mesh.secondOrderIncomplete);
   CTX::instance()->mesh.changed |= (ENT_LINE | ENT_SURFACE | ENT_VOLUME);
   drawContext::global()->draw();
-  Msg::StatusBar(2, false, " ");
 }
 
 static void mesh_optimize_cb(Fl_Widget *w, void *data)
@@ -1750,7 +1846,6 @@ static void mesh_optimize_cb(Fl_Widget *w, void *data)
   CTX::instance()->lock = 0;
   CTX::instance()->mesh.changed |= (ENT_LINE | ENT_SURFACE | ENT_VOLUME);
   drawContext::global()->draw();
-  Msg::StatusBar(2, false, " ");
 }
 
 static void mesh_refine_cb(Fl_Widget *w, void *data)
@@ -1758,7 +1853,6 @@ static void mesh_refine_cb(Fl_Widget *w, void *data)
   RefineMesh(GModel::current(), CTX::instance()->mesh.secondOrderLinear);
   CTX::instance()->mesh.changed |= (ENT_LINE | ENT_SURFACE | ENT_VOLUME);
   drawContext::global()->draw();
-  Msg::StatusBar(2, false, " ");
 }
 
 static void mesh_optimize_netgen_cb(Fl_Widget *w, void *data)
@@ -1772,7 +1866,6 @@ static void mesh_optimize_netgen_cb(Fl_Widget *w, void *data)
   CTX::instance()->lock = 0;
   CTX::instance()->mesh.changed |= (ENT_LINE | ENT_SURFACE | ENT_VOLUME);
   drawContext::global()->draw();
-  Msg::StatusBar(2, false, " ");
 }
 
 static void mesh_partition_cb(Fl_Widget *w, void *data)
@@ -1795,7 +1888,7 @@ static void mesh_define_transfinite_cb(Fl_Widget *w, void *data)
   FlGui::instance()->menu->setContext(menu_mesh_define_transfinite, 0);
 }
 
-static void add_transfinite(int dim)
+static void add_transfinite_embedded(int dim, bool embed)
 {
   opt_geometry_points(0, GMSH_SET | GMSH_GUI, 1);
   switch (dim) {
@@ -1886,17 +1979,22 @@ static void add_transfinite(int dim)
         }
         while(1) {
           if(p.size() == 1)
-            Msg::StatusBar(3, false, "Select (ordered) boundary points\n"
-                           "[Press 'e' to end selection or 'q' to abort]");
+            Msg::StatusBar(3, false, "Select %s points\n"
+                           "[Press 'e' to end selection or 'q' to abort]",
+                           embed ? "embedded" : "(ordered) boundary");
           else
-            Msg::StatusBar(3, false, "Select (ordered) boundary points\n"
+            Msg::StatusBar(3, false, "Select %s points\n"
                            "[Press 'e' to end selection, 'u' to undo last selection "
-                           "or 'q' to abort]");
+                           "or 'q' to abort]",
+                           embed ? "embedded" : "(ordered) boundary");
           ib = FlGui::instance()->selectEntity(ENT_POINT);
           if(ib == 'l') {
-            FlGui::instance()->selectedVertices[0]->setSelection(1);
+            for(unsigned int i = 0; i < FlGui::instance()->selectedVertices.size(); i++){
+              FlGui::instance()->selectedVertices[i]->setSelection(1);
+              p.push_back(FlGui::instance()->selectedVertices[i]->tag());
+              if(!embed) break;
+            }
             drawContext::global()->draw();
-            p.push_back(FlGui::instance()->selectedVertices[0]->tag());
           }
           if(ib == 'u') {
             if(p.size() > 1){
@@ -1913,11 +2011,14 @@ static void add_transfinite(int dim)
           if(ib == 'e') {
             switch (dim) {
             case 2:
-              if(p.size() == 0 + 1 || p.size() == 3 + 1 || p.size() == 4 + 1)
+              if(embed && p.size())
+                add_embedded("Point", p, GModel::current()->getFileName());
+              else if(!embed && 
+                      (p.size() == 0 + 1 || p.size() == 3 + 1 || p.size() == 4 + 1))
                 add_trsfsurf(p, GModel::current()->getFileName(),
                              FlGui::instance()->meshContext->choice[1]->text());
               else
-                Msg::Error("Wrong number of points for transfinite surface");
+                Msg::Error("Wrong number of points for mesh constraint");
               break;
             case 3:
               if(p.size() == 6 + 1 || p.size() == 8 + 1)
@@ -1949,18 +2050,33 @@ static void add_transfinite(int dim)
 static void mesh_define_transfinite_line_cb(Fl_Widget *w, void *data)
 {
   FlGui::instance()->meshContext->show(1);
-  add_transfinite(1);
+  add_transfinite_embedded(1, false);
 }
 
 static void mesh_define_transfinite_surface_cb(Fl_Widget *w, void *data)
 {
   FlGui::instance()->meshContext->show(2);
-  add_transfinite(2);
+  add_transfinite_embedded(2, false);
 }
 
 static void mesh_define_transfinite_volume_cb(Fl_Widget *w, void *data)
 {
-  add_transfinite(3);
+  add_transfinite_embedded(3, false);
+}
+
+static void mesh_define_embedded_cb(Fl_Widget *w, void *data)
+{
+  add_transfinite_embedded(2, true);
+}
+
+static void mesh_define_compound_cb(Fl_Widget *w, void *data)
+{
+  FlGui::instance()->menu->setContext(menu_mesh_define_compound, 0);
+}
+
+static void mesh_define_compound_entity_cb(Fl_Widget *w, void *data)
+{
+  action_point_line_surface_volume(10, 0, (const char *)data);
 }
 
 static void view_toggle_cb(Fl_Widget *w, void *data)
@@ -2079,8 +2195,9 @@ static void view_save_as(int index, const char *title, int format)
   PView *view = PView::list[index];
   
  test:
-  if(file_chooser(0, 1, title, "*", view->getData()->getFileName().c_str())){
-    std::string name = file_chooser_get_name(1);
+  if(fileChooser(FILE_CHOOSER_CREATE, title, "*", 
+                 view->getData()->getFileName().c_str())){
+    std::string name = fileChooserGetName(1);
     if(CTX::instance()->confirmOverwrite) {
       if(!StatFile(name))
         if(!fl_choice("File '%s' already exists.\n\nDo you want to replace it?",
@@ -2199,36 +2316,41 @@ static void view_applybgmesh_cb(Fl_Widget *w, void *data)
   }
 }
 
-//#define TEST_SERVER
-
 // The static menus (we cannot use the 'g', 'm' 's' and 'p' mnemonics
 // since they are already defined as global shortcuts)
 static Fl_Menu_Item bar_table[] = {
   {"&File", 0, 0, 0, FL_SUBMENU},
     {"&New...",     FL_CTRL+'n', (Fl_Callback *)file_new_cb, 0},
     {"&Open...",    FL_CTRL+'o', (Fl_Callback *)file_open_cb, 0},
+    {"Open Recent", 0, 0, 0, FL_SUBMENU},
+      {"History1", 0, 0, 0, FL_MENU_INVISIBLE},
+      {"History2", 0, 0, 0, FL_MENU_INVISIBLE},
+      {"History3", 0, 0, 0, FL_MENU_INVISIBLE},
+      {"History4", 0, 0, 0, FL_MENU_INVISIBLE},
+      {"History5", 0, 0, 0, FL_MENU_INVISIBLE},
+      {0},
     {"M&erge...",   FL_CTRL+FL_SHIFT+'o', (Fl_Callback *)file_merge_cb, 0},
+    {"Watch Pattern...",    0, (Fl_Callback *)file_watch_cb, 0},
     {"&Clear",      0, (Fl_Callback *)file_clear_cb, 0, FL_MENU_DIVIDER},
+    {"Remote", 0, 0, 0, FL_MENU_DIVIDER | FL_SUBMENU},
+      {"Start...",  0, (Fl_Callback *)file_remote_cb, (void*)"start"},
+      {"Merge...",  0, (Fl_Callback *)file_remote_cb, (void*)"merge"},
+      {"Clear",     0, (Fl_Callback *)file_remote_cb, (void*)"clear"},
+      {"Stop",      0, (Fl_Callback *)file_remote_cb, (void*)"stop"},
+      {0},
     {"New Window", 0, (Fl_Callback *)file_window_cb, (void*)"new"},
     {"Split Window", 0, 0, 0, FL_MENU_DIVIDER | FL_SUBMENU},
       {"Horizontally", 0, (Fl_Callback *)file_window_cb, (void*)"split_h"},
       {"Vertically",   0, (Fl_Callback *)file_window_cb, (void*)"split_v"},
       {"Clear",        0, (Fl_Callback *)file_window_cb, (void*)"split_u"},
       {0},
-#if defined(TEST_SERVER)
-    {"Start server...",  0, (Fl_Callback *)file_remote_cb, (void*)"start"},
-    {"Test server",  0, 0, 0, FL_SUBMENU},
-      {"Send small parsed view",  0, (Fl_Callback *)file_remote_cb, (void*)"test1"},
-      {"Send large dummy data",  0, (Fl_Callback *)file_remote_cb, (void*)"test2"},
-      {"Send a vertex array",  0, (Fl_Callback *)file_remote_cb, (void*)"test3"},
-      {0},
-    {"Stop server",  0, (Fl_Callback *)file_remote_cb, (void*)"stop", FL_MENU_DIVIDER},
-#endif
     {"&Rename...",  FL_CTRL+'r', (Fl_Callback *)file_rename_cb, 0},
     {"Save &As...", FL_CTRL+'s', (Fl_Callback *)file_save_as_cb, 0},
     {"Sa&ve Mesh",  FL_CTRL+FL_SHIFT+'s', (Fl_Callback *)mesh_save_cb, 0},
-    {"Save Options", 0, (Fl_Callback *)file_options_save_cb, 0},
-    {"Save Default Options", 0, (Fl_Callback *)options_save_cb, 0, FL_MENU_DIVIDER},
+    {"Save Options", 0, 0, 0, FL_SUBMENU | FL_MENU_DIVIDER},
+      {"For Current File", 0, (Fl_Callback *)file_options_save_cb, (void*)"file"},
+      {"As Default", 0, (Fl_Callback *)file_options_save_cb, (void*)"default"},
+      {0},
     {"&Quit",       FL_CTRL+'q', (Fl_Callback *)file_quit_cb, 0},
     {0},
   {"&Tools", 0, 0, 0, FL_SUBMENU},
@@ -2260,28 +2382,37 @@ static Fl_Menu_Item sysbar_table[] = {
   {"File", 0, 0, 0, FL_SUBMENU},
     {"New...",     FL_META+'n', (Fl_Callback *)file_new_cb, 0},
     {"Open...",    FL_META+'o', (Fl_Callback *)file_open_cb, 0},
+  /* system menu bar is not dynamic in fltk 1.1; it will be in fltk 1.3
+    {"Open Recent", 0, 0, 0, FL_SUBMENU},
+      {"History1", 0, 0, 0, FL_MENU_INVISIBLE},
+      {"History2", 0, 0, 0, FL_MENU_INVISIBLE},
+      {"History3", 0, 0, 0, FL_MENU_INVISIBLE},
+      {"History4", 0, 0, 0, FL_MENU_INVISIBLE},
+      {"History5", 0, 0, 0, FL_MENU_INVISIBLE},
+      {0},
+  */
     {"Merge...",   FL_META+FL_SHIFT+'o', (Fl_Callback *)file_merge_cb, 0},
+    {"Watch Pattern...",   0, (Fl_Callback *)file_watch_cb, 0},
     {"Clear",      0, (Fl_Callback *)file_clear_cb, 0, FL_MENU_DIVIDER},
+    {"Remote", 0, 0, 0, FL_MENU_DIVIDER | FL_SUBMENU},
+      {"Start...",  0, (Fl_Callback *)file_remote_cb, (void*)"start"},
+      {"Merge...",  0, (Fl_Callback *)file_remote_cb, (void*)"merge"},
+      {"Clear",     0, (Fl_Callback *)file_remote_cb, (void*)"clear"},
+      {"Stop",      0, (Fl_Callback *)file_remote_cb, (void*)"stop"},
+      {0},
     {"New Window", 0, (Fl_Callback *)file_window_cb, (void*)"new"},
     {"Split Window", 0, 0, 0, FL_MENU_DIVIDER | FL_SUBMENU},
       {"Horizontally", 0, (Fl_Callback *)file_window_cb, (void*)"split_h"},
       {"Vertically",   0, (Fl_Callback *)file_window_cb, (void*)"split_v"},
       {"Clear",        0, (Fl_Callback *)file_window_cb, (void*)"split_u"},
       {0},
-#if defined(TEST_SERVER)
-    {"Start server...",  0, (Fl_Callback *)file_remote_cb, (void*)"start"},
-    {"Test server",  0, 0, 0, FL_SUBMENU},
-      {"Send small parsed view",  0, (Fl_Callback *)file_remote_cb, (void*)"test1"},
-      {"Send large dummy data",  0, (Fl_Callback *)file_remote_cb, (void*)"test2"},
-      {"Send a vertex array",  0, (Fl_Callback *)file_remote_cb, (void*)"test3"},
-      {0},
-    {"Stop server",  0, (Fl_Callback *)file_remote_cb, (void*)"stop", FL_MENU_DIVIDER},
-#endif
     {"Rename...",  FL_META+'r', (Fl_Callback *)file_rename_cb, 0},
     {"Save As...", FL_META+'s', (Fl_Callback *)file_save_as_cb, 0},
     {"Save Mesh",  FL_META+FL_SHIFT+'s', (Fl_Callback *)mesh_save_cb, 0},
-    {"Save Options", 0, (Fl_Callback *)file_options_save_cb, 0},
-    {"Save Default Options", 0, (Fl_Callback *)options_save_cb, 0},
+    {"Save Options", 0, 0, 0, FL_SUBMENU},
+      {"For Current File", 0, (Fl_Callback *)file_options_save_cb, (void*)"file"},
+      {"As Default", 0, (Fl_Callback *)file_options_save_cb, (void*)"default"},
+      {0},
     {0},
   {"Tools", 0, 0, 0, FL_SUBMENU},
     {"Options",         FL_META+FL_SHIFT+'n', (Fl_Callback *)options_cb, 0},
@@ -2477,35 +2608,35 @@ contextItem menu_geometry[] = {
 contextItem menu_mesh[] = {
   {"1Mesh"} ,
   {"Define",       (Fl_Callback *)mesh_define_cb} ,
-  {"Inspect",      (Fl_Callback *)mesh_inspect_cb} , 
-  {"Delete",       (Fl_Callback *)mesh_delete_cb} , 
   {"1D",           (Fl_Callback *)mesh_1d_cb} ,
   {"2D",           (Fl_Callback *)mesh_2d_cb} , 
   {"3D",           (Fl_Callback *)mesh_3d_cb} , 
-  {"First order",  (Fl_Callback *)mesh_degree_cb, (void*)1 } , 
-  {"Second order", (Fl_Callback *)mesh_degree_cb, (void*)2 } , 
-  {"Refine by splitting", (Fl_Callback *)mesh_refine_cb} ,
-  {"Optimize",     (Fl_Callback *)mesh_optimize_cb} , 
+  {"Optimize 3D",  (Fl_Callback *)mesh_optimize_cb} , 
 #if defined(HAVE_NETGEN)
-  {"Optimize (Netgen)", (Fl_Callback *)mesh_optimize_netgen_cb} , 
+  {"Optimize 3D (Netgen)", (Fl_Callback *)mesh_optimize_netgen_cb} , 
 #endif
+  {"Set order",    (Fl_Callback *)mesh_change_order_cb} , 
+  {"Inspect",      (Fl_Callback *)mesh_inspect_cb} , 
+  {"Refine by splitting", (Fl_Callback *)mesh_refine_cb} ,
 #if defined(HAVE_METIS) || defined(HAVE_CHACO)
-  {"Partition", (Fl_Callback *)mesh_partition_cb} ,
+  {"Partition",    (Fl_Callback *)mesh_partition_cb} ,
 #endif
+  {"Reclassify 2D", (Fl_Callback *)mesh_classify_cb} , 
 #if defined(HAVE_FOURIER_MODEL)
-  {"Reparameterize",   (Fl_Callback *)mesh_parameterize_cb} , 
+  {"Reparameterize 2D", (Fl_Callback *)mesh_parameterize_cb} , 
 #endif
-  //not polished enough for public release
-  {"Reclassify",   (Fl_Callback *)mesh_classify_cb} , 
+  {"Delete",       (Fl_Callback *)mesh_delete_cb} , 
   {"Save",         (Fl_Callback *)mesh_save_cb} ,
   {""} 
 };  
   contextItem menu_mesh_define[] = {
     {"1Mesh>Define"} ,
     {"Fields",      (Fl_Callback *)field_cb},
-    {"Characteristic length", (Fl_Callback *)mesh_define_length_cb  } ,
+    {"Element size at points", (Fl_Callback *)mesh_define_length_cb  } ,
+    {"Embedded points", (Fl_Callback *)mesh_define_embedded_cb, (void*)"point" } ,
     {"Recombine",   (Fl_Callback *)mesh_define_recombine_cb  } ,
     {"Transfinite", (Fl_Callback *)mesh_define_transfinite_cb  } , 
+    {"Compound",    (Fl_Callback *)mesh_define_compound_cb  } , 
     {""} 
   };  
     contextItem menu_mesh_define_transfinite[] = {
@@ -2515,12 +2646,28 @@ contextItem menu_mesh[] = {
       {"Volume",  (Fl_Callback *)mesh_define_transfinite_volume_cb} , 
       {""} 
     };  
+    contextItem menu_mesh_define_compound[] = {
+      {"1Mesh>Define>Compound"} ,
+      {"Line",    (Fl_Callback *)mesh_define_compound_entity_cb, (void*)"Line"} ,
+      {"Surface", (Fl_Callback *)mesh_define_compound_entity_cb, (void*)"Surface"} ,
+      {"Volume",  (Fl_Callback *)mesh_define_compound_entity_cb, (void*)"Volume"} , 
+      {""} 
+    };  
   contextItem menu_mesh_delete[] = {
     {"1Mesh>Edit>Delete"} ,
     {"Elements", (Fl_Callback *)mesh_delete_parts_cb, (void*)"elements"} ,
     {"Lines",    (Fl_Callback *)mesh_delete_parts_cb, (void*)"lines"} ,
     {"Surfaces", (Fl_Callback *)mesh_delete_parts_cb, (void*)"surfaces"} ,
     {"Volumes",  (Fl_Callback *)mesh_delete_parts_cb, (void*)"volumes"} ,
+    {""} 
+  };  
+  contextItem menu_mesh_degree[] = {
+    {"1Mesh> Set order"} ,
+    {"1",  (Fl_Callback *)mesh_degree_cb, (void*)1},
+    {"2",  (Fl_Callback *)mesh_degree_cb, (void*)2},
+    {"3",  (Fl_Callback *)mesh_degree_cb, (void*)3},
+    {"4",  (Fl_Callback *)mesh_degree_cb, (void*)4},
+    {"5",  (Fl_Callback *)mesh_degree_cb, (void*)5},
     {""} 
   };  
 
@@ -2581,6 +2728,10 @@ menuWindow::menuWindow()
     bar->menu(bar_table);
     bar->box(FL_UP_BOX);
     bar->global();
+    
+    // create recent history menu
+    fillRecentHistoryMenu();
+    
     Fl_Box *o = new Fl_Box(0, BH, width, BH + 6);
     o->box(FL_UP_BOX);
     y = BH + 3;
@@ -2854,4 +3005,19 @@ void menuWindow::setContext(contextItem *menu_asked, int flag)
     win->size(width, _MH + nb * BH);
   else
     win->size(width, _MH + NB_BUTT_SCROLL * BH);
+}
+
+void menuWindow::fillRecentHistoryMenu()
+{
+  int last = 0;
+  for(unsigned int i = 0; i < CTX::instance()->recentFiles.size(); i++)
+    if(CTX::instance()->recentFiles[i].size()) last = i + 1;
+  for(int i = 0; i < last; i++){
+    bar_table[4 + i].text = CTX::instance()->recentFiles[i].c_str();
+    bar_table[4 + i].callback_ = (Fl_Callback *)file_open_recent_cb;
+    bar_table[4 + i].user_data_ = (void*)CTX::instance()->recentFiles[i].c_str();
+    bar_table[4 + i].show();
+  }
+  for (unsigned int i = last; i < 5; i++)
+    bar_table[4 + i].hide();
 }

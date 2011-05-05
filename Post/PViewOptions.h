@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -72,8 +72,8 @@ class PViewOptions {
   int vectorType, tensorType, glyphLocation, centerGlyphs;
   int timeStep;
   int drawStrings;
-  int drawPoints, drawLines, drawTriangles, drawQuadrangles;
-  int drawTetrahedra, drawHexahedra, drawPrisms, drawPyramids;
+  int drawPoints, drawLines, drawTriangles, drawQuadrangles, drawPolygons;
+  int drawTetrahedra, drawHexahedra, drawPrisms, drawPyramids, drawPolyhedra;
   int drawScalars, drawVectors, drawTensors;
   int boundary, pointType, lineType, drawSkinOnly;
   double pointSize, lineWidth;
@@ -88,6 +88,8 @@ class PViewOptions {
   int adaptVisualizationGrid, maxRecursionLevel;
   double targetError;
   int clip; // status of clip planes (bit array)
+  int forceNumComponents, componentMap[9];
+  int sampling;
   struct{
     unsigned int point, line, triangle, quadrangle;
     unsigned int tetrahedron, hexahedron, prism, pyramid;

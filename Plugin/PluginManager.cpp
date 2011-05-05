@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -10,23 +10,27 @@
 #include "Context.h"
 #include "Plugin.h"
 #include "PluginManager.h"
-#include "CutMap.h"
+#include "Isosurface.h"
 #include "CutGrid.h"
 #include "StreamLines.h"
+#include "Particles.h"
 #include "CutPlane.h"
 #include "CutParametric.h"
 #include "CutSphere.h"
 #include "Skin.h"
-#include "Extract.h"
+#include "AnalyseCurvedMesh.h"
+#include "MathEval.h"
 #include "ExtractElements.h"
-#include "ExtractEdges.h"
 #include "HarmonicToTime.h"
 #include "ModulusPhase.h"
 #include "Integrate.h"
+#include "MinMax.h"
 #include "Gradient.h"
 #include "Curl.h"
 #include "Divergence.h"
 #include "Annotate.h"
+#include "Distance.h"
+#include "NearestNeighbor.h"
 #include "Remove.h"
 #include "MakeSimplex.h"
 #include "Smooth.h"
@@ -39,11 +43,11 @@
 #include "Eigenvectors.h"
 #include "Eigenvalues.h"
 #include "Lambda2.h"
-#include "Evaluate.h"
+#include "ModifyComponent.h"
 #include "Probe.h"
-#include "FieldView.h"
 #include "GSHHS.h"
 #include "HomologyComputation.h"
+#include "ExtractEdges.h"
 
 // for testing purposes only :-)
 #undef HAVE_DLOPEN
@@ -148,9 +152,11 @@ void PluginManager::registerDefaultPlugins()
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("StreamLines", GMSH_RegisterStreamLinesPlugin()));
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
+                      ("Particles", GMSH_RegisterParticlesPlugin()));
+    allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("CutGrid", GMSH_RegisterCutGridPlugin()));
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
-                      ("CutMap", GMSH_RegisterCutMapPlugin()));
+                      ("Isosurface", GMSH_RegisterIsosurfacePlugin()));
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("CutPlane", GMSH_RegisterCutPlanePlugin()));
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
@@ -158,13 +164,17 @@ void PluginManager::registerDefaultPlugins()
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("Skin", GMSH_RegisterSkinPlugin()));
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
-                      ("Extract", GMSH_RegisterExtractPlugin()));
+                      ("MathEval", GMSH_RegisterMathEvalPlugin()));
+# if 0 // experimental (Amaury)
+    allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
+                      ("AnalyseCurvedMesh", GMSH_RegisterAnalyseCurvedMeshPlugin()));
+#endif
+    allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
+                      ("ModifyComponent", GMSH_RegisterModifyComponentPlugin()));
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("ExtractElements", GMSH_RegisterExtractElementsPlugin()));
-#if 0 // waiting for BDS rewrite
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
-                      ("ExtractEdges", GMSH_RegisterExtractEdgesPlugin()));
-#endif
+                      ("CutParametric", GMSH_RegisterCutParametricPlugin()));
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("MakeSimplex", GMSH_RegisterMakeSimplexPlugin()));
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
@@ -184,6 +194,8 @@ void PluginManager::registerDefaultPlugins()
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("Integrate", GMSH_RegisterIntegratePlugin()));
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
+                      ("MinMax", GMSH_RegisterMinMaxPlugin()));
+    allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("Gradient", GMSH_RegisterGradientPlugin()));
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("Curl", GMSH_RegisterCurlPlugin()));
@@ -202,22 +214,26 @@ void PluginManager::registerDefaultPlugins()
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("Probe", GMSH_RegisterProbePlugin()));
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
-                      ("FieldView", GMSH_RegisterFieldViewPlugin()));
-    allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("Triangulate", GMSH_RegisterTriangulatePlugin()));
+    allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
+                      ("GSHHS", GMSH_RegisterGSHHSPlugin()));
+    allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
+                      ("ExtractEdges", GMSH_RegisterExtractEdgesPlugin()));
 #if defined(HAVE_TETGEN)
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("Tetrahedralize", GMSH_RegisterTetrahedralizePlugin()));
 #endif
-    allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
-                      ("GSHHS", GMSH_RegisterGSHHSPlugin()));
-    allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
-                      ("Evaluate", GMSH_RegisterEvaluatePlugin()));
-    allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
-                      ("CutParametric", GMSH_RegisterCutParametricPlugin()));
 #if defined(HAVE_KBIPACK)
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
-                      ("HomologyComputation", GMSH_RegisterHomologyComputationPlugin()));
+                      ("Homology", GMSH_RegisterHomologyComputationPlugin()));
+#endif
+#if defined(HAVE_SOLVER)
+    allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
+                      ("Distance", GMSH_RegisterDistancePlugin()));
+#endif
+#if defined(HAVE_ANN)
+    allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
+                      ("NearestNeighbor", GMSH_RegisterNearestNeighborPlugin()));
 #endif
   }
 

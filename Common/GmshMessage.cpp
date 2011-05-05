@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -9,6 +9,7 @@
 #include <time.h>
 #include "GmshConfig.h"
 #include "GmshMessage.h"
+#include "GmshSocket.h"
 #include "Gmsh.h"
 #include "Options.h"
 #include "Context.h"
@@ -16,6 +17,14 @@
 
 #if defined(HAVE_MPI)
 #include <mpi.h>
+#endif
+
+#if defined(HAVE_PETSC)
+#include <petsc.h>
+#endif
+
+#if defined(HAVE_SLEPC)
+#include <slepc.h>
 #endif
 
 #if defined(HAVE_FLTK)
@@ -36,6 +45,7 @@ int Msg::_errorCount = 0;
 GmshMessage *Msg::_callback = 0;
 std::string Msg::_commandLine;
 std::string Msg::_launchDate;
+GmshClient *Msg::_client = 0;
 
 #if defined(HAVE_NO_VSNPRINTF)
 static int vsnprintf(char *str, size_t size, const char *fmt, va_list ap)
@@ -61,6 +71,12 @@ void Msg::Init(int argc, char **argv)
   MPI_Comm_size(MPI_COMM_WORLD, &_commSize);
   MPI_Errhandler_set(MPI_COMM_WORLD, MPI_ERRORS_RETURN);
 #endif
+#if defined(HAVE_PETSC)
+  PetscInitialize(&argc, &argv, PETSC_NULL, PETSC_NULL);
+#endif
+#if defined(HAVE_SLEPC)
+  SlepcInitialize(&argc, &argv, PETSC_NULL, PETSC_NULL);
+#endif
   time_t now;
   time(&now);
   _launchDate = ctime(&now);
@@ -82,25 +98,37 @@ void Msg::Exit(int level)
   // this calls the annoying "report this crash to the mothership"
   // window... so just exit!
   if(level){
+#if defined(HAVE_SLEPC)
+    SlepcFinalize();
+#endif
+#if defined(HAVE_PETSC)
+    PetscFinalize();
+#endif
 #if defined(HAVE_MPI)
     MPI_Finalize();
 #endif
     exit(level);
   }
-  
+
 #if defined(HAVE_FLTK)
   // if we exit cleanly (level==0) and we are in full GUI mode, save
   // the persistent info to disk
   if(FlGui::available() && !_commRank) {
     if(CTX::instance()->sessionSave)
-      PrintOptions(0, GMSH_SESSIONRC, 0, 0, 
+      PrintOptions(0, GMSH_SESSIONRC, 0, 0,
                    (CTX::instance()->homeDir + CTX::instance()->sessionFileName).c_str());
     if(CTX::instance()->optionsSave)
-      PrintOptions(0, GMSH_OPTIONSRC, 1, 0, 
+      PrintOptions(0, GMSH_OPTIONSRC, 1, 0,
                    (CTX::instance()->homeDir + CTX::instance()->optionsFileName).c_str());
   }
 #endif
 
+#if defined(HAVE_SLEPC)
+  SlepcFinalize();
+#endif
+#if defined(HAVE_PETSC)
+  PetscFinalize();
+#endif
 #if defined(HAVE_MPI)
   MPI_Finalize();
 #endif
@@ -118,6 +146,7 @@ void Msg::Fatal(const char *fmt, ...)
   va_end(args);
 
   if(_callback) (*_callback)("Fatal", str);
+  if(_client) _client->Error(str);
 
 #if defined(HAVE_FLTK)
   if(FlGui::available()){
@@ -158,6 +187,7 @@ void Msg::Error(const char *fmt, ...)
   va_end(args);
 
   if(_callback) (*_callback)("Error", str);
+  if(_client) _client->Error(str);
 
 #if defined(HAVE_FLTK)
   if(FlGui::available()){
@@ -169,7 +199,7 @@ void Msg::Error(const char *fmt, ...)
 #endif
 
   if(CTX::instance()->terminal){
-    if(_commSize > 1) 
+    if(_commSize > 1)
       fprintf(stderr, "Error   : [On processor %d] %s\n", _commRank, str);
     else
       fprintf(stderr, "Error   : %s\n", str);
@@ -190,6 +220,7 @@ void Msg::Warning(const char *fmt, ...)
   va_end(args);
 
   if(_callback) (*_callback)("Warning", str);
+  if(_client) _client->Warning(str);
 
 #if defined(HAVE_FLTK)
   if(FlGui::available()){
@@ -216,6 +247,7 @@ void Msg::Info(const char *fmt, ...)
   va_end(args);
 
   if(_callback) (*_callback)("Info", str);
+  if(_client) _client->Info(str);
 
 #if defined(HAVE_FLTK)
   if(FlGui::available()){
@@ -255,6 +287,7 @@ void Msg::Direct(int level, const char *fmt, ...)
   va_end(args);
 
   if(_callback) (*_callback)("Direct", str);
+  if(_client) _client->Info(str);
 
 #if defined(HAVE_FLTK)
   if(FlGui::available()){
@@ -269,7 +302,7 @@ void Msg::Direct(int level, const char *fmt, ...)
       FlGui::instance()->messages->show();
   }
 #endif
-  
+
   if(CTX::instance()->terminal){
     fprintf(stdout, "%s\n", str);
     fflush(stdout);
@@ -288,11 +321,12 @@ void Msg::StatusBar(int num, bool log, const char *fmt, ...)
   va_end(args);
 
   if(_callback && log) (*_callback)("Info", str);
+  if(_client && log) _client->Info(str);
 
 #if defined(HAVE_FLTK)
   if(FlGui::available()){
     if(log) FlGui::instance()->check();
-    if(!log || num != 2 || _verbosity > 3) 
+    if(!log || num != 2 || _verbosity > 3)
       FlGui::instance()->setStatus(str, num - 1);
     if(log){
       std::string tmp = std::string("Info    : ") + str;
@@ -318,6 +352,7 @@ void Msg::Debug(const char *fmt, ...)
   va_end(args);
 
   if(_callback) (*_callback)("Debug", str);
+  if(_client) _client->Info(str);
 
 #if defined(HAVE_FLTK)
   if(FlGui::available()){
@@ -327,7 +362,7 @@ void Msg::Debug(const char *fmt, ...)
 #endif
 
   if(CTX::instance()->terminal){
-    if(_commSize > 1) 
+    if(_commSize > 1)
       fprintf(stdout, "Debug   : [On processor %d] %s\n", _commRank, str);
     else
       fprintf(stdout, "Debug   : %s\n", str);
@@ -354,12 +389,15 @@ void Msg::ProgressMeter(int n, int N, const char *fmt, ...)
     sprintf(str2, "(%d %%)", _progressMeterCurrent);
     strcat(str, str2);
 
+    if(_client) _client->Progress(str);
+
 #if defined(HAVE_FLTK)
     if(FlGui::available()){
       if(_verbosity > 3) FlGui::instance()->setStatus(str, 1);
       FlGui::instance()->check();
     }
 #endif
+
     if(CTX::instance()->terminal){
       fprintf(stdout, "%s                     \r", str);
       fflush(stdout);
@@ -370,11 +408,14 @@ void Msg::ProgressMeter(int n, int N, const char *fmt, ...)
   }
 
   if(n > N - 1){
+    if(_client) _client->Progress("Done!");
+
 #if defined(HAVE_FLTK)
     if(FlGui::available()){
       if(_verbosity > 3) FlGui::instance()->setStatus("", 1);
     }
 #endif
+
     if(CTX::instance()->terminal){
       fprintf(stdout, "Done!                                              \r");
       fflush(stdout);
@@ -386,7 +427,7 @@ void Msg::PrintTimers()
 {
   // do a single stdio call!
   std::string str;
-  for(std::map<std::string, double>::iterator it = _timers.begin(); 
+  for(std::map<std::string, double>::iterator it = _timers.begin();
       it != _timers.end(); it++){
     if(it != _timers.begin()) str += ", ";
     char tmp[256];
@@ -396,7 +437,7 @@ void Msg::PrintTimers()
   if(!str.size()) return;
 
   if(CTX::instance()->terminal){
-    if(_commSize > 1) 
+    if(_commSize > 1)
       fprintf(stdout, "Timers  : [On processor %d] %s\n", _commRank, str.c_str());
     else
       fprintf(stdout, "Timers  : %s\n", str.c_str());
@@ -433,9 +474,9 @@ void Msg::PrintErrorCounter(const char *title)
 #endif
 
   if(CTX::instance()->terminal){
-    fprintf(stderr, "%s\n%s\n%s\n%s\n%s\n%s\n", (prefix + line).c_str(), 
+    fprintf(stderr, "%s\n%s\n%s\n%s\n%s\n%s\n", (prefix + line).c_str(),
             (prefix + title).c_str(), (prefix + warn).c_str(),
-            (prefix + err).c_str(), (prefix + help).c_str(), 
+            (prefix + err).c_str(), (prefix + help).c_str(),
             (prefix + line).c_str());
     fflush(stderr);
   }
@@ -451,7 +492,7 @@ double Msg::GetValue(const char *text, double defaultval)
   if(FlGui::available()){
     char defaultstr[256];
     sprintf(defaultstr, "%.16g", defaultval);
-    const char *ret = fl_input(text, "%s", defaultstr);
+    const char *ret = fl_input(text, defaultstr, "");
     if(!ret)
       return defaultval;
     else
@@ -459,7 +500,7 @@ double Msg::GetValue(const char *text, double defaultval)
   }
 #endif
 
-  printf("%s (default=%.16g) ", text, defaultval);
+  printf("%s (default=%.16g): ", text, defaultval);
   char str[256];
   char *ret = fgets(str, sizeof(str), stdin);
   if(!ret || !strlen(str) || !strcmp(str, "\n"))
@@ -468,8 +509,7 @@ double Msg::GetValue(const char *text, double defaultval)
     return atof(str);
 }
 
-bool Msg::GetBinaryAnswer(const char *question, const char *yes, 
-                          const char *no, bool defaultval)
+std::string Msg::GetString(const char *text, std::string defaultval)
 {
   // if a callback is given let's assume we don't want to be bothered
   // with interactive stuff
@@ -477,25 +517,70 @@ bool Msg::GetBinaryAnswer(const char *question, const char *yes,
 
 #if defined(HAVE_FLTK)
   if(FlGui::available()){
-    if(fl_choice(question, no, yes, NULL, ""))
-      return true;
+    const char *ret = fl_input(text, defaultval.c_str(), "");
+    if(!ret)
+      return defaultval;
     else
-      return false;
+      return std::string(ret);
   }
 #endif
 
-  while(1){
-    printf("%s\n\n[%s] or [%s]? (default=%s) ", question, yes, no, 
-           defaultval ? yes : no);
-    char str[256];
-    char *ret = fgets(str, sizeof(str), stdin);
-    if(!ret || !strlen(str) || !strcmp(str, "\n"))
-      return defaultval;
-    else if(!strcmp(str, yes))
-      return true;
-    else if(!strcmp(str, no))
-      return false;
+  printf("%s (default=%s): ", text, defaultval.c_str());
+  char str[256];
+  char *ret = fgets(str, sizeof(str), stdin);
+  if(!ret || !strlen(str) || !strcmp(str, "\n"))
+    return defaultval;
+  else
+    return std::string(str);
+}
+
+int Msg::GetAnswer(const char *question, int defaultval, const char *zero,
+                   const char *one, const char *two)
+{
+  // if a callback is given let's assume we don't want to be bothered
+  // with interactive stuff
+  if(CTX::instance()->noPopup || _callback) return defaultval;
+
+#if defined(HAVE_FLTK)
+  if(FlGui::available())
+    return fl_choice(question, zero, one, two, "");
+#endif
+
+  if(two)
+    printf("%s\n\n0=[%s] 1=[%s] 2=[%s] (default=%d): ", question,
+           zero, one, two, defaultval);
+  else
+    printf("%s\n\n0=[%s] 1=[%s] (default=%d): ", question,
+           zero, one, defaultval);
+  char str[256];
+  char *ret = fgets(str, sizeof(str), stdin);
+  if(!ret || !strlen(str) || !strcmp(str, "\n"))
+    return defaultval;
+  else
+    return atoi(ret);
+}
+
+void Msg::InitClient(std::string sockname)
+{
+  if(_client) delete _client;
+  _client = new GmshClient();
+  if(_client->Connect(sockname.c_str()) < 0){
+    Msg::Error("Unable to connect to server on %s", sockname.c_str());
+    delete _client;
+    _client = 0;
   }
+  else
+    _client->Start();
+}
+
+void Msg::FinalizeClient()
+{
+  if(_client){
+    _client->Stop();
+    _client->Disconnect();
+    delete _client;
+  }
+  _client = 0;
 }
 
 void Msg::Barrier()
@@ -520,3 +605,22 @@ int Msg::GetMaxThreads(){ return 1; }
 int Msg::GetThreadNum(){ return 0; }
 
 #endif
+
+#include "Bindings.h"
+void Msg::registerBindings (binding *b)
+{
+  classBinding *cb = b->addClass<Msg>("Msg");
+  cb->setDescription("a class to manage messages, intialisations of libraries "
+                     "(like MPI) and mpi rank and size.");
+  methodBinding *mb;
+  mb = cb->setConstructor<Msg>();
+  mb->setDescription("Msg is full static class, instances do not contain anything "
+                     "but they are needed to call the static functions from lua");
+  mb = cb->addMethod("getCommRank", &Msg::GetCommRank);
+  mb->setDescription("return the id of this mpi process");
+  mb = cb->addMethod("getCommSize", &Msg::GetCommSize);
+  mb->setDescription("return the number of mpi processes");
+  mb = cb->addMethod("barrier", &Msg::Barrier);
+  mb->setDescription("an MPI barrier : all processes wait untill they all reach "
+                     "this points");
+}

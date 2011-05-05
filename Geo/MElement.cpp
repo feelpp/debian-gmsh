@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -27,9 +27,8 @@
 
 int MElement::_globalNum = 0;
 double MElement::_isInsideTolerance = 1.e-6;
-double MElementLessThanLexicographic::tolerance = 1.e-6;
 
-MElement::MElement(int num, int part) : _visible(1) 
+MElement::MElement(int num, int part) : _visible(1)
 {
 #pragma omp critical
   {
@@ -40,12 +39,12 @@ MElement::MElement(int num, int part) : _visible(1)
     else{
       _num = ++_globalNum;
     }
-    _partition = (short)part; 
+    _partition = (short)part;
   }
 }
 
-void MElement::_getEdgeRep(MVertex *v0, MVertex *v1, 
-                           double *x, double *y, double *z, SVector3 *n, 
+void MElement::_getEdgeRep(MVertex *v0, MVertex *v1,
+                           double *x, double *y, double *z, SVector3 *n,
                            int faceIndex)
 {
   x[0] = v0->x(); y[0] = v0->y(); z[0] = v0->z();
@@ -59,10 +58,10 @@ void MElement::_getEdgeRep(MVertex *v0, MVertex *v1,
   }
 }
 
-void MElement::_getFaceRep(MVertex *v0, MVertex *v1, MVertex *v2, 
+void MElement::_getFaceRep(MVertex *v0, MVertex *v1, MVertex *v2,
                            double *x, double *y, double *z, SVector3 *n)
 {
-  x[0] = v0->x(); x[1] = v1->x(); x[2] = v2->x(); 
+  x[0] = v0->x(); x[1] = v1->x(); x[2] = v2->x();
   y[0] = v0->y(); y[1] = v1->y(); y[2] = v2->y();
   z[0] = v0->z(); z[1] = v1->z(); z[2] = v2->z();
   SVector3 t1(x[1] - x[0], y[1] - y[0], z[1] - z[0]);
@@ -72,10 +71,10 @@ void MElement::_getFaceRep(MVertex *v0, MVertex *v1, MVertex *v2,
   for(int i = 0; i < 3; i++) n[i] = normal;
 }
 
-char MElement::getVisibility()
+char MElement::getVisibility() const
 {
   if(CTX::instance()->hideUnselected && _visible < 2) return false;
-  return _visible; 
+  return _visible;
 }
 
 double MElement::minEdge()
@@ -110,16 +109,24 @@ double MElement::rhoShapeMeasure()
 
 void MElement::getShapeFunctions(double u, double v, double w, double s[], int o)
 {
-  const functionSpace* fs = getFunctionSpace(o);
+  const polynomialBasis* fs = getFunctionSpace(o);
   if(fs) fs->f(u, v, w, s);
   else Msg::Error("Function space not implemented for this type of element");
 }
 
-void MElement::getGradShapeFunctions(double u, double v, double w, double s[][3], 
+void MElement::getGradShapeFunctions(double u, double v, double w, double s[][3],
                                      int o)
 {
-  const functionSpace* fs = getFunctionSpace(o);
+  const polynomialBasis* fs = getFunctionSpace(o);
   if(fs) fs->df(u, v, w, s);
+  else Msg::Error("Function space not implemented for this type of element");
+}
+
+void MElement::getHessShapeFunctions(double u, double v, double w, double s[][3][3],
+                                     int o)
+{
+  const polynomialBasis* fs = getFunctionSpace(o);
+  if(fs) fs->ddf(u, v, w, s);
   else Msg::Error("Function space not implemented for this type of element");
 }
 
@@ -139,6 +146,22 @@ SPoint3 MElement::barycenter()
   return p;
 }
 
+int MElement::getVolumeSign()
+{
+  double v = getVolume();
+  if(v < 0.) return -1;
+  else if(v > 0.) return 1;
+  else return 0;
+}
+
+bool MElement::setVolumePositive()
+{
+  int s = getVolumeSign();
+  if(s < 0) revert();
+  if(!s) return false;
+  return true;
+}
+
 std::string MElement::getInfoString()
 {
   char tmp[256];
@@ -149,25 +172,26 @@ std::string MElement::getInfoString()
 static double _computeDeterminantAndRegularize(MElement *ele, double jac[3][3])
 {
   double dJ = 0;
-  
+
   switch (ele->getDim()) {
 
   case 0:
     {
+      dJ = 1.0;
       jac[0][0] = jac[1][1] = jac[2][2] = 1.0;
       jac[0][1] = jac[1][0] = jac[2][0] = 0.0;
-      jac[0][2] = jac[1][2] = jac[2][1] = 0.0;    
+      jac[0][2] = jac[1][2] = jac[2][1] = 0.0;
       break;
-    } 
-  case 1: 
+    }
+  case 1:
     {
       dJ = sqrt(SQU(jac[0][0]) + SQU(jac[0][1]) + SQU(jac[0][2]));
 
       // regularize matrix
       double a[3], b[3], c[3];
-      a[0] = ele->getVertex(1)->x() - ele->getVertex(0)->x(); 
-      a[1] = ele->getVertex(1)->y() - ele->getVertex(0)->y();
-      a[2] = ele->getVertex(1)->z() - ele->getVertex(0)->z();     
+      a[0] = jac[0][0];
+      a[1] = jac[0][1];
+      a[2] = jac[0][2];
       if((fabs(a[0]) >= fabs(a[1]) && fabs(a[0]) >= fabs(a[2])) ||
          (fabs(a[1]) >= fabs(a[0]) && fabs(a[1]) >= fabs(a[2]))) {
         b[0] = a[1]; b[1] = -a[0]; b[2] = 0.;
@@ -175,9 +199,11 @@ static double _computeDeterminantAndRegularize(MElement *ele, double jac[3][3])
       else {
         b[0] = 0.; b[1] = a[2]; b[2] = -a[1];
       }
+      norme(b);
       prodve(a, b, c);
-      jac[0][1] = b[0]; jac[1][1] = b[1]; jac[2][1] = b[2]; 
-      jac[0][2] = c[0]; jac[1][2] = c[1]; jac[2][2] = c[2]; 
+      norme(c);
+      jac[0][1] = b[0]; jac[1][1] = b[1]; jac[2][1] = b[2];
+      jac[0][2] = c[0]; jac[1][2] = c[1]; jac[2][2] = c[2];
       break;
     }
   case 2:
@@ -207,7 +233,7 @@ static double _computeDeterminantAndRegularize(MElement *ele, double jac[3][3])
       break;
     }
   }
-  return dJ; 
+  return dJ;
 }
 
 double MElement::getJacobian(double u, double v, double w, double jac[3][3])
@@ -225,6 +251,30 @@ double MElement::getJacobian(double u, double v, double w, double jac[3][3])
       jac[j][0] += v->x() * gg[j];
       jac[j][1] += v->y() * gg[j];
       jac[j][2] += v->z() * gg[j];
+    }
+  }
+
+  return _computeDeterminantAndRegularize(this, jac);
+}
+
+//binded
+double MElement::getJacobianDeterminant(double u, double v, double w) {
+  double jac[3][3];
+  return getJacobian(u,v,w,jac);
+}
+
+double MElement::getJacobian(const fullMatrix<double> &gsf, double jac[3][3])
+{
+  jac[0][0] = jac[0][1] = jac[0][2] = 0.;
+  jac[1][0] = jac[1][1] = jac[1][2] = 0.;
+  jac[2][0] = jac[2][1] = jac[2][2] = 0.;
+
+  for (int i = 0; i < getNumVertices(); i++) {
+    const MVertex* v = getVertex(i);
+    for (int j = 0; j < 3; j++) {
+      jac[j][0] += v->x() * gsf(i, j);
+      jac[j][1] += v->y() * gsf(i, j);
+      jac[j][2] += v->z() * gsf(i, j);
     }
   }
 
@@ -262,7 +312,7 @@ void MElement::pnt(double u, double v, double w, SPoint3 &p)
     x += sf[j] * v->x();
     y += sf[j] * v->y();
     z += sf[j] * v->z();
-  } 
+  }
   p = SPoint3(x, y, z);
 }
 
@@ -303,7 +353,7 @@ void MElement::xyz2uvw(double xyz[3], double uvw[3])
     }
     double inv[3][3];
     inv3x3(jac, inv);
-    double un = uvw[0] + inv[0][0] * (xyz[0] - xn) + 
+    double un = uvw[0] + inv[0][0] * (xyz[0] - xn) +
       inv[1][0] * (xyz[1] - yn) + inv[2][0] * (xyz[2] - zn);
     double vn = uvw[1] + inv[0][1] * (xyz[0] - xn) +
       inv[1][1] * (xyz[1] - yn) + inv[2][1] * (xyz[2] - zn);
@@ -315,6 +365,28 @@ void MElement::xyz2uvw(double xyz[3], double uvw[3])
     uvw[2] = wn;
     iter++ ;
   }
+}
+
+void MElement::movePointFromParentSpaceToElementSpace(double &u, double &v, double &w)
+{
+  if(!getParent()) return;
+  SPoint3 p;
+  getParent()->pnt(u, v, w, p);
+  double xyz[3] = {p.x(), p.y(), p.z()};
+  double uvwE[3];
+  xyz2uvw(xyz, uvwE);
+  u = uvwE[0]; v = uvwE[1]; w = uvwE[2];
+}
+
+void MElement::movePointFromElementSpaceToParentSpace(double &u, double &v, double &w)
+{
+  if(!getParent()) return;
+  SPoint3 p;
+  pnt(u, v, w, p);
+  double xyz[3] = {p.x(), p.y(), p.z()};
+  double uvwP[3];
+  getParent()->xyz2uvw(xyz, uvwP);
+  u = uvwP[0]; v = uvwP[1]; w = uvwP[2];
 }
 
 double MElement::interpolate(double val[], double u, double v, double w, int stride,
@@ -369,8 +441,8 @@ void MElement::interpolateCurl(double val[], double u, double v, double w, doubl
   f[2] = fy[0] - fx[1];
 }
 
-double MElement::interpolateDiv(double val[], double u, double v, double w, int stride,
-                                int order)
+double MElement::interpolateDiv(double val[], double u, double v, double w,
+                                int stride, int order)
 {
   double fx[3], fy[3], fz[3], jac[3][3], inv[3][3];
   getJacobian(u, v, w, jac);
@@ -381,8 +453,9 @@ double MElement::interpolateDiv(double val[], double u, double v, double w, int 
   return fx[0] + fy[1] + fz[2];
 }
 
-void MElement::writeMSH(FILE *fp, double version, bool binary, int num, 
-                        int elementary, int physical, int parentNum)
+void MElement::writeMSH(FILE *fp, double version, bool binary, int num,
+                        int elementary, int physical, int parentNum,
+                        int dom1Num, int dom2Num, std::vector<short> *ghosts)
 {
   int type = getTypeForMSH();
 
@@ -391,25 +464,61 @@ void MElement::writeMSH(FILE *fp, double version, bool binary, int num,
   // if necessary, change the ordering of the vertices to get positive
   // volume
   setVolumePositive();
-  int n = getNumVertices();
+  int n = getNumVerticesForMSH();
+  int par = (parentNum) ? 1 : 0;
+  int dom = (dom1Num) ? 2 : 0;
+  bool poly = (type == MSH_POLYG_ || type == MSH_POLYH_ || type == MSH_POLYG_B);
 
   if(!binary){
     fprintf(fp, "%d %d", num ? num : _num, type);
     if(version < 2.0)
       fprintf(fp, " %d %d %d", abs(physical), elementary, n);
-    else
-      fprintf(fp, " 3 %d %d %d", abs(physical), elementary, _partition);
+    else if (version < 2.2)
+      fprintf(fp, " %d %d %d", abs(physical), elementary, _partition);
+    else if(!_partition && !par && !dom)
+      fprintf(fp, " %d %d %d", 2 + par + dom, abs(physical), elementary);
+    else if(!ghosts)
+      fprintf(fp, " %d %d %d 1 %d", 4 + par + dom, abs(physical), elementary, _partition);
+    else{
+      int numGhosts = ghosts->size();
+      fprintf(fp, " %d %d %d %d %d", 4 + numGhosts + par + dom, abs(physical),
+              elementary, 1 + numGhosts, _partition);
+      for(unsigned int i = 0; i < ghosts->size(); i++)
+        fprintf(fp, " %d", -(*ghosts)[i]);
+    }
+    if(version >= 2.0 && par)
+      fprintf(fp, " %d", parentNum);
+    if(version >= 2.0 && dom)
+      fprintf(fp, " %d %d", dom1Num, dom2Num);
+    if(version >= 2.0 && poly)
+      fprintf(fp, " %d", n);
   }
   else{
-    int tags[4] = {num ? num : _num, abs(physical), elementary, _partition};
-    fwrite(tags, sizeof(int), 4, fp);
+    int numTags, numGhosts = 0;
+    if(!_partition) numTags = 2;
+    else if(!ghosts) numTags = 4;
+    else{
+      numGhosts = ghosts->size();
+      numTags = 4 + numGhosts;
+    }
+    numTags += par;
+    // we write elements in blobs of single elements; this will lead
+    // to suboptimal reads, but it's much simpler when the number of
+    // tags change from element to element (third-party codes can
+    // still write MSH file optimized for reading speed, by grouping
+    // elements with the same number of tags in blobs)
+    int blob[60] = {type, 1, numTags, num ? num : _num, abs(physical), elementary,
+                    1 + numGhosts, _partition};
+    if(ghosts)
+      for(int i = 0; i < numGhosts; i++) blob[8 + i] = -(*ghosts)[i];
+    if(par) blob[8 + numGhosts] = parentNum;
+    if(poly) Msg::Error("Unable to write polygons/polyhedra in binary files.");
+    fwrite(blob, sizeof(int), 4 + numTags, fp);
   }
 
   if(physical < 0) revert();
 
-  int verts[60];
-  for(int i = 0; i < n; i++)
-    verts[i] = getVertex(i)->getIndex();
+  int *verts = getVerticesIdForMSH();
 
   if(!binary){
     for(int i = 0; i < n; i++)
@@ -421,10 +530,12 @@ void MElement::writeMSH(FILE *fp, double version, bool binary, int num,
   }
 
   if(physical < 0) revert();
+
+  delete [] verts;
 }
 
-void MElement::writePOS(FILE *fp, bool printElementary, bool printElementNumber, 
-                        bool printGamma, bool printEta, bool printRho, 
+void MElement::writePOS(FILE *fp, bool printElementary, bool printElementNumber,
+                        bool printGamma, bool printEta, bool printRho,
                         bool printDisto, double scalingFactor, int elementary)
 {
   const char *str = getStringForPOS();
@@ -435,7 +546,7 @@ void MElement::writePOS(FILE *fp, bool printElementary, bool printElementNumber,
   fprintf(fp, "%s(", str);
   for(int i = 0; i < n; i++){
     if(i) fprintf(fp, ",");
-    fprintf(fp, "%g,%g,%g", getVertex(i)->x() * scalingFactor, 
+    fprintf(fp, "%g,%g,%g", getVertex(i)->x() * scalingFactor,
             getVertex(i)->y() * scalingFactor, getVertex(i)->z() * scalingFactor);
   }
   fprintf(fp, "){");
@@ -492,9 +603,9 @@ void MElement::writeSTL(FILE *fp, bool binary, double scalingFactor)
     fprintf(fp, "facet normal %g %g %g\n", n[0], n[1], n[2]);
     fprintf(fp, "  outer loop\n");
     for(int j = 0; j < 3; j++)
-      fprintf(fp, "    vertex %g %g %g\n", 
-              getVertex(j)->x() * scalingFactor, 
-              getVertex(j)->y() * scalingFactor, 
+      fprintf(fp, "    vertex %g %g %g\n",
+              getVertex(j)->x() * scalingFactor,
+              getVertex(j)->y() * scalingFactor,
               getVertex(j)->z() * scalingFactor);
     fprintf(fp, "  endloop\n");
     fprintf(fp, "endfacet\n");
@@ -502,9 +613,9 @@ void MElement::writeSTL(FILE *fp, bool binary, double scalingFactor)
       fprintf(fp, "facet normal %g %g %g\n", n[0], n[1], n[2]);
       fprintf(fp, "  outer loop\n");
       for(int j = 0; j < 3; j++)
-        fprintf(fp, "    vertex %g %g %g\n", 
-                getVertex(qid[j])->x() * scalingFactor, 
-                getVertex(qid[j])->y() * scalingFactor, 
+        fprintf(fp, "    vertex %g %g %g\n",
+                getVertex(qid[j])->x() * scalingFactor,
+                getVertex(qid[j])->y() * scalingFactor,
                 getVertex(qid[j])->z() * scalingFactor);
       fprintf(fp, "  endloop\n");
       fprintf(fp, "endfacet\n");
@@ -532,6 +643,14 @@ void MElement::writeSTL(FILE *fp, bool binary, double scalingFactor)
       fwrite(data, sizeof(char), 50, fp);
     }
   }
+}
+void MElement::writePLY2(FILE *fp)
+{
+  setVolumePositive();
+  fprintf(fp, "3 ");
+  for(int i = 0; i < getNumVertices(); i++)
+    fprintf(fp, " %d", getVertex(i)->getIndex() - 1);
+  fprintf(fp, "\n");
 }
 
 void MElement::writeVRML(FILE *fp)
@@ -594,14 +713,27 @@ void MElement::writeUNV(FILE *fp, int num, int elementary, int physical)
   if(physical < 0) revert();
 }
 
-void MElement::writeMESH(FILE *fp, int elementTagType, int elementary, 
+void MElement::writeMESH(FILE *fp, int elementTagType, int elementary,
                          int physical)
 {
   setVolumePositive();
   for(int i = 0; i < getNumVertices(); i++)
     fprintf(fp, " %d", getVertex(i)->getIndex());
-  fprintf(fp, " %d\n", (elementTagType == 3) ? _partition : 
+  fprintf(fp, " %d\n", (elementTagType == 3) ? _partition :
           (elementTagType == 2) ? physical : elementary);
+}
+
+void MElement::writeIR3(FILE *fp, int elementTagType, int num, int elementary,
+                        int physical)
+{
+  int numVert = getNumVertices();
+  bool ok = setVolumePositive();
+  if(getDim() == 3 && !ok) Msg::Error("Element %d has zero volume", num);
+  fprintf(fp, "%d %d %d", num, (elementTagType == 3) ? _partition :
+          (elementTagType == 2) ? physical : elementary, numVert);
+  for(int i = 0; i < numVert; i++)
+    fprintf(fp, " %d", getVertex(i)->getIndex());
+  fprintf(fp, "\n");
 }
 
 void MElement::writeBDF(FILE *fp, int format, int elementTagType, int elementary,
@@ -614,8 +746,8 @@ void MElement::writeBDF(FILE *fp, int format, int elementTagType, int elementary
   int n = getNumVertices();
   const char *cont[4] = {"E", "F", "G", "H"};
   int ncont = 0;
-  
-  int tag =  (elementTagType == 3) ? _partition : (elementTagType == 2) ? 
+
+  int tag =  (elementTagType == 3) ? _partition : (elementTagType == 2) ?
     physical : elementary;
 
   if(format == 0){ // free field format
@@ -665,6 +797,15 @@ void MElement::writeDIFF(FILE *fp, int num, bool binary, int physical_property)
   }
 }
 
+void MElement::writeINP(FILE *fp, int num)
+{
+  setVolumePositive();
+  fprintf(fp, "%d", num);
+  for(int i = 0; i < getNumVertices(); i++)
+    fprintf(fp, ", %d", getVertexINP(i)->getIndex());
+  fprintf(fp, "\n");
+}
+
 int MElement::getInfoMSH(const int typeMSH, const char **const name)
 {
   switch(typeMSH){
@@ -674,6 +815,13 @@ int MElement::getInfoMSH(const int typeMSH, const char **const name)
   case MSH_LIN_4  : if(name) *name = "Line 4";          return 2 + 2;
   case MSH_LIN_5  : if(name) *name = "Line 5";          return 2 + 3;
   case MSH_LIN_6  : if(name) *name = "Line 6";          return 2 + 4;
+  case MSH_LIN_7  : if(name) *name = "Line 7";          return 2 + 5;
+  case MSH_LIN_8  : if(name) *name = "Line 8";          return 2 + 6;
+  case MSH_LIN_9  : if(name) *name = "Line 9";          return 2 + 7;
+  case MSH_LIN_10 : if(name) *name = "Line 10";         return 2 + 8;
+  case MSH_LIN_11 : if(name) *name = "Line 11";         return 2 + 9;
+  case MSH_LIN_B  : if(name) *name = "Line Border";     return 2;
+  case MSH_LIN_C  : if(name) *name = "Line Child";      return 2;
   case MSH_TRI_3  : if(name) *name = "Triangle 3";      return 3;
   case MSH_TRI_6  : if(name) *name = "Triangle 6";      return 3 + 3;
   case MSH_TRI_9  : if(name) *name = "Triangle 9";      return 3 + 6;
@@ -682,10 +830,33 @@ int MElement::getInfoMSH(const int typeMSH, const char **const name)
   case MSH_TRI_15 : if(name) *name = "Triangle 15";     return 3 + 9 + 3;
   case MSH_TRI_15I: if(name) *name = "Triangle 15I";    return 3 + 12;
   case MSH_TRI_21 : if(name) *name = "Triangle 21";     return 3 + 12 + 6;
+  case MSH_TRI_28 : if(name) *name = "Triangle 28";     return 3 + 15 + 10;
+  case MSH_TRI_36 : if(name) *name = "Triangle 36";     return 3 + 18 + 15;
+  case MSH_TRI_45 : if(name) *name = "Triangle 45";     return 3 + 21 + 21;
+  case MSH_TRI_55 : if(name) *name = "Triangle 55";     return 3 + 24 + 28;
+  case MSH_TRI_66 : if(name) *name = "Triangle 66";     return 3 + 27 + 36;
+  case MSH_TRI_18 : if(name) *name = "Triangle 18";     return 3 + 15;
+  case MSH_TRI_21I: if(name) *name = "Triangle 21I";    return 3 + 18;
+  case MSH_TRI_24 : if(name) *name = "Triangle 24";     return 3 + 21;
+  case MSH_TRI_27 : if(name) *name = "Triangle 27";     return 3 + 24;
+  case MSH_TRI_30 : if(name) *name = "Triangle 30";     return 3 + 27;
+  case MSH_TRI_B  : if(name) *name = "Triangle Border"; return 3;
   case MSH_QUA_4  : if(name) *name = "Quadrilateral 4"; return 4;
   case MSH_QUA_8  : if(name) *name = "Quadrilateral 8"; return 4 + 4;
-  case MSH_QUA_9  : if(name) *name = "Quadrilateral 9"; return 4 + 4 + 1;
+  case MSH_QUA_9  : if(name) *name = "Quadrilateral 9"; return 9;
+  case MSH_QUA_16 : if(name) *name = "Quadrilateral 16"; return 16;
+  case MSH_QUA_25 : if(name) *name = "Quadrilateral 25"; return 25;
+  case MSH_QUA_36 : if(name) *name = "Quadrilateral 36"; return 36;
+  case MSH_QUA_49 : if(name) *name = "Quadrilateral 49"; return 49;
+  case MSH_QUA_64 : if(name) *name = "Quadrilateral 64"; return 64;
+  case MSH_QUA_81 : if(name) *name = "Quadrilateral 81"; return 81;
+  case MSH_QUA_100: if(name) *name = "Quadrilateral 100"; return 100;
+  case MSH_QUA_121: if(name) *name = "Quadrilateral 121"; return 121;
+  case MSH_QUA_12 : if(name) *name = "Quadrilateral 12"; return 12;
+  case MSH_QUA_16I: if(name) *name = "Quadrilateral 16I"; return 16;
+  case MSH_QUA_20 : if(name) *name = "Quadrilateral 20"; return 20;
   case MSH_POLYG_ : if(name) *name = "Polygon";         return 0;
+  case MSH_POLYG_B: if(name) *name = "Polygon Border";  return 0;
   case MSH_TET_4  : if(name) *name = "Tetrahedron 4";   return 4;
   case MSH_TET_10 : if(name) *name = "Tetrahedron 10";  return 4 + 6;
   case MSH_TET_20 : if(name) *name = "Tetrahedron 20";  return 4 + 12 + 4;
@@ -693,6 +864,11 @@ int MElement::getInfoMSH(const int typeMSH, const char **const name)
   case MSH_TET_35 : if(name) *name = "Tetrahedron 35";  return 4 + 18 + 12 + 1;
   case MSH_TET_52 : if(name) *name = "Tetrahedron 52";  return 4 + 24 + 24 + 0;
   case MSH_TET_56 : if(name) *name = "Tetrahedron 56";  return 4 + 24 + 24 + 4;
+  case MSH_TET_84 : if(name) *name = "Tetrahedron 84";  return (7*8*9)/6;
+  case MSH_TET_120 : if(name) *name = "Tetrahedron 120";  return (8*9*10)/6;
+  case MSH_TET_165 : if(name) *name = "Tetrahedron 165";  return (9*10*11)/6;
+  case MSH_TET_220 : if(name) *name = "Tetrahedron 220";  return (10*11*12)/6;
+  case MSH_TET_286 : if(name) *name = "Tetrahedron 286";  return (11*12*13)/6;
   case MSH_HEX_8  : if(name) *name = "Hexahedron 8";    return 8;
   case MSH_HEX_20 : if(name) *name = "Hexahedron 20";   return 8 + 12;
   case MSH_HEX_27 : if(name) *name = "Hexahedron 27";   return 8 + 12 + 6 + 1;
@@ -703,15 +879,95 @@ int MElement::getInfoMSH(const int typeMSH, const char **const name)
   case MSH_PYR_13 : if(name) *name = "Pyramid 13";      return 5 + 8;
   case MSH_PYR_14 : if(name) *name = "Pyramid 14";      return 5 + 8 + 1;
   case MSH_POLYH_ : if(name) *name = "Polyhedron";      return 0;
-  default: 
-    Msg::Error("Unknown type of element %d", typeMSH); 
-    if(name) *name = "Unknown"; 
+  default:
+    Msg::Error("Unknown type of element %d", typeMSH);
+    if(name) *name = "Unknown";
     return 0;
-  }               
+  }
 }
 
-MElement *MElementFactory::create(int type, std::vector<MVertex*> &v, 
-                                  int num, int part)
+int *MElement::getVerticesIdForMSH()
+{
+  int n = getNumVerticesForMSH();
+  int *verts = new int[n];
+  for(int i = 0; i < n; i++)
+    verts[i] = getVertex(i)->getIndex();
+  return verts;
+}
+
+MElement *MElement::copy(int &num, std::map<int, MVertex*> &vertexMap,
+                         std::map<MElement*, MElement*> &newParents,
+                         std::map<MElement*, MElement*> &newDomains)
+{
+  if(newDomains.count(this))
+    return newDomains.find(this)->second;
+  std::vector<MVertex*> vmv;
+  int eType = getTypeForMSH();
+  MElement *eParent = getParent();
+  if(getNumChildren() == 0) {
+    for(int i = 0; i < getNumVertices(); i++) {
+      MVertex *v = getVertex(i);
+      int numV = v->getNum();
+      if(vertexMap.count(numV))
+        vmv.push_back(vertexMap[numV]);
+      else {
+        MVertex *mv = new MVertex(v->x(), v->y(), v->z(), 0, numV);
+        vmv.push_back(mv);
+        vertexMap[numV] = mv;
+      }
+    }
+  }
+  else {
+    for(int i = 0; i < getNumChildren(); i++) {
+      for(int j = 0; j < getChild(i)->getNumVertices(); j++) {
+        MVertex *v = getChild(i)->getVertex(j);
+        int numV = v->getNum();
+        if(vertexMap.count(numV))
+          vmv.push_back(vertexMap[numV]);
+        else {
+          MVertex *mv = new MVertex(v->x(), v->y(), v->z(), 0, numV);
+          vmv.push_back(mv);
+          vertexMap[numV] = mv;
+        }
+      }
+    }
+  }
+
+  MElement *parent=0;
+  if(eParent && !getDomain(0) && !getDomain(1)) {
+    std::map<MElement*, MElement*>::iterator it = newParents.find(eParent);
+    MElement *newParent;
+    if(it == newParents.end()) {
+      newParent = eParent->copy(++num, vertexMap, newParents, newDomains);
+      newParents[eParent] = newParent;
+    }
+    else
+      newParent = it->second;
+    parent = newParent;
+  }
+  
+  MElementFactory factory;
+  MElement *newEl = factory.create(eType, vmv, getNum(), _partition, ownsParent(), parent);
+
+  for(int i = 0; i < 2; i++) {
+    MElement *dom = getDomain(i);
+    if(!dom) continue;
+    std::map<MElement*, MElement*>::iterator it = newDomains.find(dom);
+    MElement *newDom;
+    if(it == newDomains.end()) {
+      newDom = dom->copy(++num, vertexMap, newParents, newDomains);
+      newDomains[dom] = newDom;
+    }
+    else
+      newDom = newDomains.find(dom)->second;
+    newEl->setDomain(newDom, i);
+  }
+  return newEl;
+}
+
+MElement *MElementFactory::create(int type, std::vector<MVertex*> &v,
+                                  int num, int part, bool owner, MElement *parent,
+                                  MElement *d1, MElement *d2)
 {
   switch (type) {
   case MSH_PNT:    return new MPoint(v, num, part);
@@ -720,6 +976,13 @@ MElement *MElementFactory::create(int type, std::vector<MVertex*> &v,
   case MSH_LIN_4:  return new MLineN(v, num, part);
   case MSH_LIN_5:  return new MLineN(v, num, part);
   case MSH_LIN_6:  return new MLineN(v, num, part);
+  case MSH_LIN_7:  return new MLineN(v, num, part);
+  case MSH_LIN_8:  return new MLineN(v, num, part);
+  case MSH_LIN_9:  return new MLineN(v, num, part);
+  case MSH_LIN_10: return new MLineN(v, num, part);
+  case MSH_LIN_11: return new MLineN(v, num, part);
+  case MSH_LIN_B:  return new MLineBorder(v, num, part, d1, d2);
+  case MSH_LIN_C:  return new MLineChild(v, num, part, owner, parent);
   case MSH_TRI_3:  return new MTriangle(v, num, part);
   case MSH_TRI_6:  return new MTriangle6(v, num, part);
   case MSH_TRI_9:  return new MTriangleN(v, 3, num, part);
@@ -728,10 +991,26 @@ MElement *MElementFactory::create(int type, std::vector<MVertex*> &v,
   case MSH_TRI_15: return new MTriangleN(v, 4, num, part);
   case MSH_TRI_15I:return new MTriangleN(v, 5, num, part);
   case MSH_TRI_21: return new MTriangleN(v, 5, num, part);
+  case MSH_TRI_28: return new MTriangleN(v, 6, num, part);
+  case MSH_TRI_36: return new MTriangleN(v, 7, num, part);
+  case MSH_TRI_45: return new MTriangleN(v, 8, num, part);
+  case MSH_TRI_55: return new MTriangleN(v, 9, num, part);
+  case MSH_TRI_66: return new MTriangleN(v,10, num, part);
+  case MSH_TRI_B:  return new MTriangleBorder(v, num, part, d1, d2);
   case MSH_QUA_4:  return new MQuadrangle(v, num, part);
   case MSH_QUA_8:  return new MQuadrangle8(v, num, part);
   case MSH_QUA_9:  return new MQuadrangle9(v, num, part);
-  case MSH_POLYG_: return new MPolygon(v, num, part);
+  case MSH_QUA_12: return new MQuadrangleN(v, 3, num, part);
+  case MSH_QUA_16: return new MQuadrangleN(v, 3, num, part);
+  case MSH_QUA_25: return new MQuadrangleN(v, 4, num, part);
+  case MSH_QUA_36: return new MQuadrangleN(v, 5, num, part);
+  case MSH_QUA_49: return new MQuadrangleN(v, 6, num, part);
+  case MSH_QUA_64: return new MQuadrangleN(v, 7, num, part);
+  case MSH_QUA_81: return new MQuadrangleN(v, 8, num, part);
+  case MSH_QUA_100:return new MQuadrangleN(v, 9, num, part);
+  case MSH_QUA_121:return new MQuadrangleN(v, 10, num, part);
+  case MSH_POLYG_: return new MPolygon(v, num, part, owner, parent);
+  case MSH_POLYG_B:return new MPolygonBorder(v, num, part, d1, d2);
   case MSH_TET_4:  return new MTetrahedron(v, num, part);
   case MSH_TET_10: return new MTetrahedron10(v, num, part);
   case MSH_HEX_8:  return new MHexahedron(v, num, part);
@@ -748,7 +1027,102 @@ MElement *MElementFactory::create(int type, std::vector<MVertex*> &v,
   case MSH_TET_35: return new MTetrahedronN(v, 4, num, part);
   case MSH_TET_52: return new MTetrahedronN(v, 5, num, part);
   case MSH_TET_56: return new MTetrahedronN(v, 5, num, part);
-  case MSH_POLYH_: return new MPolyhedron(v, num, part);
+  case MSH_TET_84: return new MTetrahedronN(v, 6, num, part);
+  case MSH_TET_120: return new MTetrahedronN(v, 7, num, part);
+  case MSH_TET_165: return new MTetrahedronN(v, 8, num, part);
+  case MSH_TET_220: return new MTetrahedronN(v, 9, num, part);
+  case MSH_TET_286: return new MTetrahedronN(v, 10, num, part);
+  case MSH_POLYH_: return new MPolyhedron(v, num, part, owner, parent);
   default:         return 0;
   }
+}
+
+/*const fullMatrix<double> &MElement::getShapeFunctionsAtIntegrationPoints (int integrationOrder, int functionSpaceOrder) {
+  static std::map <std::pair<int,int>, fullMatrix<double> > F;
+  const polynomialBasis *fs = getFunctionSpace (functionSpaceOrder);
+  fullMatrix<double> &mat = F [std::make_pair(fs->type, integrationOrder)];
+  if (mat.size1()!=0) return mat;
+  int npts;
+  IntPt *pts;
+  getIntegrationPoints (integrationOrder, &npts, &pts);
+  mat.resize (fs->points.size1(), npts);
+  double f[512];
+  for (int i = 0; i < npts; i++) {
+    fs->f (pts[i].pt[0], pts[i].pt[1], pts[i].pt[2], f);
+    for (int j = 0; j < fs->points.size1(); j++) {
+      mat (i, j) = f[j];
+    }
+  }
+  return mat;
+}*/
+
+const fullMatrix<double> &MElement::getGradShapeFunctionsAtIntegrationPoints (int integrationOrder, int functionSpaceOrder) {
+  static std::map <std::pair<int,int>, fullMatrix<double> > DF;
+  const polynomialBasis *fs = getFunctionSpace (functionSpaceOrder);
+  fullMatrix<double> &mat = DF [std::make_pair(fs->type, integrationOrder)];
+  if (mat.size1()!=0) return mat;
+  int npts;
+  IntPt *pts;
+  getIntegrationPoints (integrationOrder, &npts, &pts);
+  mat.resize (fs->points.size1(), npts*3);
+  double df[512][3];
+  for (int i = 0; i < npts; i++) {
+    fs->df (pts[i].pt[0], pts[i].pt[1], pts[i].pt[2], df);
+    for (int j = 0; j < fs->points.size1(); j++) {
+      mat (j, i*3+0) = df[j][0];
+      mat (j, i*3+1) = df[j][1];
+      mat (j, i*3+2) = df[j][2];
+    }
+  }
+  return mat;
+}
+const fullMatrix<double> &MElement::getGradShapeFunctionsAtNodes (int functionSpaceOrder) {
+  static std::map <int, fullMatrix<double> > DF;
+  const polynomialBasis *fs = getFunctionSpace (functionSpaceOrder);
+  fullMatrix<double> &mat = DF [fs->type];
+  if (mat.size1()!=0) return mat;
+  const fullMatrix<double> &points = fs->points;
+  mat.resize (points.size1(), points.size1()*3);
+  double df[512][3];
+  for (int i = 0; i < points.size1(); i++) {
+    fs->df (points(i,0), points(i,1), points(i,2), df);
+    for (int j = 0; j < points.size1(); j++) {
+      mat (j, i*3+0) = df[j][0];
+      mat (j, i*3+1) = df[j][1];
+      mat (j, i*3+2) = df[j][2];
+    }
+  }
+  return mat;
+}
+
+#include "Bindings.h"
+
+void MElement::registerBindings(binding *b)
+{
+  classBinding *cb = b->addClass<MElement>("MElement");
+  cb->setDescription("A mesh element.");
+  methodBinding *cm;
+  cm = cb->addMethod("getNum",&MElement::getNum);
+  cm->setDescription("return the tag of the element");
+  cm = cb->addMethod("getNumVertices", &MElement::getNumVertices);
+  cm->setDescription("get the number of vertices of this element");
+  cm = cb->addMethod("getVertex", &MElement::getVertex);
+  cm->setDescription("return the i-th vertex of this element");
+  cm->setArgNames("i",NULL);
+  cm = cb->addMethod("getType", &MElement::getType);
+  cm->setDescription("get the type of the element");
+  cm = cb->addMethod("getTypeForMSH", &MElement::getTypeForMSH);
+  cm->setDescription("get the gmsh type of the element");
+  cm = cb->addMethod("getPartition", &MElement::getPartition);
+  cm->setDescription("get the partition to which the element belongs");
+  cm = cb->addMethod("setPartition", &MElement::setPartition);
+  cm->setDescription("set the partition to which the element belongs");
+  cm->setArgNames("iPartition",NULL);
+  cm = cb->addMethod("getPolynomialOrder", &MElement::getPolynomialOrder);
+  cm->setDescription("return the polynomial order the element");
+  cm = cb->addMethod("getDim", &MElement::getDim);
+  cm->setDescription("return the geometrical dimension of the element");
+  cm = cb->addMethod("getJacobianDeterminant", &MElement::getJacobianDeterminant);
+  cm->setDescription("return the jacobian of the determinant of the transformation");
+  cm->setArgNames("u","v","w",NULL);
 }

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -14,7 +14,10 @@ struct meshPartitionOptions
                                         // 2 - METIS
   int num_partitions;
 
+  int renumber;
+
   bool createPartitionBoundaries;
+  bool createGhostCells;
 
 //--Chaco
 
@@ -57,6 +60,7 @@ struct meshPartitionOptions
   int algorithm;
                                         // 1 - Recursive
                                         // 2 - K-way
+                                        // 3 - Nodal weight
   int edge_matching;                    // 1 - Random matching
                                         // 2 - Heavy-edge matching
                                         // 3 - Sorted heavy-edge matching
@@ -65,20 +69,35 @@ struct meshPartitionOptions
                                         // 3 - Random boundary refinement (with
                                         //     minimization of connectivity
                                         //     along sub-domains)
+  int partitionByExtrusion;            // if true, all extruded elements belong
+                                       // to the same partition as the source element
+
+  // element weights for load-balancing (currently used in METIS algorithm 3) 
+  
+  int triWeight;  
+  int quaWeight;
+  int tetWeight;
+  int priWeight;
+  int pyrWeight;
+  int hexWeight;
+
+//--NODAL WEIGHT
+  std::vector<int> nodalWeights;
 
 //--Constructor
 
   meshPartitionOptions()
-     :
-     goal(0)
-  { }
+  {
+    setDefaults();
+  }
 
 //--Default values
 
   void setDefaults()
   {
     partitioner = 2;
-    num_partitions = 4;
+    num_partitions = 1;
+    renumber = 0;
     global_method = 1;
     architecture = 1;
     ndims_tot = 2;
@@ -100,6 +119,15 @@ struct meshPartitionOptions
     edge_matching = 3;
     refine_algorithm = 3;
     createPartitionBoundaries = true;
+    createGhostCells = true;
+    partitionByExtrusion =false;
+    triWeight = 1;
+    quaWeight = 1;
+    tetWeight = 1;
+    priWeight = 1;
+    pyrWeight = 1;
+    hexWeight = 1;
+    
   }
 
 };

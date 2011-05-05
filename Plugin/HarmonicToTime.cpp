@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -9,8 +9,8 @@
 StringXNumber HarmonicToTimeOptions_Number[] = {
   {GMSH_FULLRC, "RealPart", NULL, 0.},
   {GMSH_FULLRC, "ImaginaryPart", NULL, 1.},
-  {GMSH_FULLRC, "nSteps", NULL, 20.},
-  {GMSH_FULLRC, "iView", NULL, -1.}
+  {GMSH_FULLRC, "NumSteps", NULL, 20.},
+  {GMSH_FULLRC, "View", NULL, -1.}
 };
 
 extern "C"
@@ -23,16 +23,14 @@ extern "C"
 
 std::string GMSH_HarmonicToTimePlugin::getHelp() const
 {
-  return "Plugin(HarmonicToTime) takes the values in the\n"
-         "time steps `RealPart' and `ImaginaryPart' of\n"
-         "the view `iView', and creates a new view\n"
-         "containing (`iView'[`RealPart'] * cos(p) -\n"
-         "`iView'[`ImaginaryPart'] * sin(p)), with\n"
-         "p = 2*Pi*k/`nSteps', k = 0, ..., `nSteps'-1.\n"
-         "If `iView' < 0, the plugin is run on the\n"
-         "current view.\n"
-         "\n"
-         "Plugin(HarmonicToTime) creates one new view.\n";
+  return "Plugin(HarmonicToTime) takes the values in the "
+    "time steps `RealPart' and `ImaginaryPart' of "
+    "the view `View', and creates a new view "
+    "containing\n\n"
+    "`View'[`RealPart'] * cos(p) - `View'[`ImaginaryPart'] * sin(p)\n\n"
+    "with p = 2*Pi*k/`NumSteps', k = 0, ..., `NumSteps'-1.\n\n"
+    "If `View' < 0, the plugin is run on the current view.\n\n"
+    "Plugin(HarmonicToTime) creates one new view.";
 }
 
 int GMSH_HarmonicToTimePlugin::getNbOptions() const
@@ -43,54 +41,6 @@ int GMSH_HarmonicToTimePlugin::getNbOptions() const
 StringXNumber *GMSH_HarmonicToTimePlugin::getOption(int iopt)
 {
   return &HarmonicToTimeOptions_Number[iopt];
-}
-
-static std::vector<double> *incrementList(PViewDataList *data, int numComp, 
-                                          int type)
-{
-  switch(type){
-  case TYPE_PNT:
-    if     (numComp == 1){ data->NbSP++; return &data->SP; }
-    else if(numComp == 3){ data->NbVP++; return &data->VP; }
-    else if(numComp == 9){ data->NbTP++; return &data->TP; }
-    break;
-  case TYPE_LIN:
-    if     (numComp == 1){ data->NbSL++; return &data->SL; }
-    else if(numComp == 3){ data->NbVL++; return &data->VL; }
-    else if(numComp == 9){ data->NbTL++; return &data->TL; }
-    break;
-  case TYPE_TRI:
-    if     (numComp == 1){ data->NbST++; return &data->ST; }
-    else if(numComp == 3){ data->NbVT++; return &data->VT; }
-    else if(numComp == 9){ data->NbTT++; return &data->TT; }
-    break;
-  case TYPE_QUA:
-    if     (numComp == 1){ data->NbSQ++; return &data->SQ; }
-    else if(numComp == 3){ data->NbVQ++; return &data->VQ; }
-    else if(numComp == 9){ data->NbTQ++; return &data->TQ; }
-    break;
-  case TYPE_TET:
-    if     (numComp == 1){ data->NbSS++; return &data->SS; }
-    else if(numComp == 3){ data->NbVS++; return &data->VS; }
-    else if(numComp == 9){ data->NbTS++; return &data->TS; }
-    break;
-  case TYPE_HEX:
-    if     (numComp == 1){ data->NbSH++; return &data->SH; }
-    else if(numComp == 3){ data->NbVH++; return &data->VH; }
-    else if(numComp == 9){ data->NbTH++; return &data->TH; }
-    break;
-  case TYPE_PRI:
-    if     (numComp == 1){ data->NbSI++; return &data->SI; }
-    else if(numComp == 3){ data->NbVI++; return &data->VI; }
-    else if(numComp == 9){ data->NbTI++; return &data->TI; }
-    break;
-  case TYPE_PYR:
-    if     (numComp == 1){ data->NbSY++; return &data->SY; }
-    else if(numComp == 3){ data->NbVY++; return &data->VY; }
-    else if(numComp == 9){ data->NbTY++; return &data->TY; }
-    break;
-  }
-  return 0;
 }
 
 PView *GMSH_HarmonicToTimePlugin::execute(PView * v)
@@ -129,7 +79,7 @@ PView *GMSH_HarmonicToTimePlugin::execute(PView * v)
       int numNodes = data1->getNumNodes(0, ent, ele);
       int type = data1->getType(0, ent, ele);
       int numComp = data1->getNumComponents(0, ent, ele);
-      std::vector<double> *out = incrementList(data2, numComp, type);
+      std::vector<double> *out = data2->incrementList(numComp, type);
       std::vector<double> x(numNodes), y(numNodes), z(numNodes);
       std::vector<double> vr(numNodes * numComp), vi(numNodes * numComp);
       for(int nod = 0; nod < numNodes; nod++){

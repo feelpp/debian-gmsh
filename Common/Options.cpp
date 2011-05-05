@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -8,25 +8,31 @@
 #include "GmshConfig.h"
 #include "GmshDefines.h"
 #include "GmshMessage.h"
-#include "GmshRemote.h"
+#include "ConnectionManager.h"
 #include "StringUtils.h"
 #include "GModel.h"
-#include "Generator.h"
 #include "Context.h"
 #include "Options.h"
 #include "DefaultOptions.h"
+
+#if defined(HAVE_MESH)
+#include "Generator.h"
 #include "Field.h"
 #include "BackgroundMesh.h"
+#endif
 
-#if !defined(HAVE_NO_PARSER)
+#if defined(HAVE_PARSER)
 #include "Parser.h"
 #endif
 
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
 #include "PView.h"
 #include "PViewOptions.h"
 #include "PViewData.h"
 #include "adaptiveData.h"
+#endif
+
+#if defined(HAVE_PLUGINS)
 #include "PluginManager.h"
 #include "Plugin.h"
 #endif
@@ -420,10 +426,14 @@ void InitOptions(int num)
 void ReInitOptions(int num)
 {
   // horrible trick so that opt_view_XXX will act on the reference view
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   std::vector<PView*> tmp = PView::list;
   PView::list.clear(); 
+#endif
+
   InitOptions(num);
+
+#if defined(HAVE_POST)
   PView::list = tmp; 
   for(unsigned int i = 0; i < PView::list.size(); i++)
     PView::list[i]->setOptions();
@@ -473,7 +483,7 @@ static void PrintOptionCategory(int level, int diff, int help, const char *cat,
 
 GmshColorTable *GetColorTable(int num)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   PViewOptions *opt;
   if(PView::list.empty() || num < 0 || num > (int)PView::list.size() - 1)
     opt = &PViewOptions::reference;
@@ -490,7 +500,7 @@ GmshColorTable *GetColorTable(int num)
 
 static void PrintColorTable(int num, int diff, const char *prefix, FILE *file)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   PViewOptions *opt;
   if(PView::list.empty() || num < 0 || num > (int)PView::list.size() - 1)
     opt = &PViewOptions::reference;
@@ -611,16 +621,16 @@ void PrintOptions(int num, int level, int diff, int help, const char *filename)
 
   PrintOptionCategory(level, diff, help, "Post-processing options (strings)", file);
   PrintStringOptions(num, level, diff, help, PostProcessingOptions_String,
-                      "PostProcessing.", file);
+                     "PostProcessing.", file);
   PrintOptionCategory(level, diff, help, "Post-processing options (numbers)", file);
   PrintNumberOptions(num, level, diff, help, PostProcessingOptions_Number,
-                      "PostProcessing.", file);
+                     "PostProcessing.", file);
   PrintOptionCategory(level, diff, help, "Post-processing options (colors)", file);
   PrintColorOptions(num, level, diff, help, PostProcessingOptions_Color,
-                     "PostProcessing.", file);
+                    "PostProcessing.", file);
 
   if(level & GMSH_FULLRC) {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
     for(unsigned int i = 0; i < PView::list.size(); i++) {
       char tmp[256];
       sprintf(tmp, "View[%d].", i);
@@ -735,7 +745,7 @@ void PrintOptionsDoc()
   fprintf(file, "@end ftable\n");
   fclose(file);
 
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   file = fopen("opt_view.texi", "w");
   if(!file) {
     Msg::Error("Unable to open file 'opt_view.texi'");
@@ -751,7 +761,9 @@ void PrintOptionsDoc()
           GetOptionSaveLevel(GMSH_FULLRC|GMSH_OPTIONSRC));
   fprintf(file, "@end ftable\n");
   fclose(file);
+#endif
 
+#if defined(HAVE_PLUGINS)
   file = fopen("opt_plugin.texi", "w");
   if(!file) {
     Msg::Error("Unable to open file 'opt_plugin.texi'");
@@ -794,7 +806,9 @@ void PrintOptionsDoc()
   }
   fprintf(file, "@end ftable\n");
   fclose(file);
+#endif
 
+#if defined(HAVE_MESH)
   file = fopen("opt_fields.texi", "w");
   if(!file) {
     Msg::Error("Unable to open file 'opt_fields.texi'");
@@ -825,7 +839,6 @@ void PrintOptionsDoc()
   }
   fprintf(file, "@end ftable\n");
   fclose(file);
-  
 #endif
 }
 
@@ -978,6 +991,41 @@ std::string opt_general_options_filename(OPT_ARGS_STR)
   return CTX::instance()->optionsFileName;
 }
 
+std::string opt_general_recent_file1(OPT_ARGS_STR)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->recentFiles[0] = val;
+  return CTX::instance()->recentFiles[0];
+}
+
+std::string opt_general_recent_file2(OPT_ARGS_STR)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->recentFiles[1] = val;
+  return CTX::instance()->recentFiles[1];
+}
+
+std::string opt_general_recent_file3(OPT_ARGS_STR)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->recentFiles[2] = val;
+  return CTX::instance()->recentFiles[2];
+}
+
+std::string opt_general_recent_file4(OPT_ARGS_STR)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->recentFiles[3] = val;
+  return CTX::instance()->recentFiles[3];
+}
+
+std::string opt_general_recent_file5(OPT_ARGS_STR)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->recentFiles[4] = val;
+  return CTX::instance()->recentFiles[4];
+}
+
 std::string opt_general_editor(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
@@ -1000,6 +1048,13 @@ std::string opt_general_web_browser(OPT_ARGS_STR)
       (CTX::instance()->webBrowser.c_str());
 #endif
   return CTX::instance()->webBrowser;
+}
+
+std::string opt_general_watch_file_pattern(OPT_ARGS_STR)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->watchFilePattern = val;
+  return CTX::instance()->watchFilePattern;
 }
 
 std::string opt_general_gui_theme(OPT_ARGS_STR)
@@ -1026,6 +1081,23 @@ std::string opt_general_graphics_font(OPT_ARGS_STR)
   return CTX::instance()->glFont;
 }
 
+std::string opt_general_graphics_font_title(OPT_ARGS_STR)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->glFontTitle = val;
+#if defined(HAVE_FLTK)
+  int index = drawContext::global()->getFontIndex(CTX::instance()->glFontTitle.c_str());
+  if(action & GMSH_SET){
+    CTX::instance()->glFontTitle = drawContext::global()->getFontName(index);
+    CTX::instance()->glFontEnumTitle = drawContext::global()->getFontEnum(index);
+  }
+  if(FlGui::available() && (action & GMSH_GUI)){
+    FlGui::instance()->options->general.choice[6]->value(index);
+  }
+#endif
+  return CTX::instance()->glFontTitle;
+}
+
 std::string opt_solver_socket_name(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
@@ -1041,12 +1113,12 @@ std::string opt_solver_socket_name(OPT_ARGS_STR)
 std::string opt_solver_name(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->name = val;
+    ConnectionManager::get(num)->name = val;
 #if defined(HAVE_FLTK)
   if(FlGui::available() && (action & GMSH_GUI))
-    FlGui::instance()->solver[num]->win->label(GmshRemote::get(num)->name.c_str());
+    FlGui::instance()->solver[num]->win->label(ConnectionManager::get(num)->name.c_str());
 #endif
-  return GmshRemote::get(num)->name;
+  return ConnectionManager::get(num)->name;
 }
 
 std::string opt_solver_name0(OPT_ARGS_STR)
@@ -1077,13 +1149,13 @@ std::string opt_solver_name4(OPT_ARGS_STR)
 std::string opt_solver_executable(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->executable = val;
+    ConnectionManager::get(num)->executable = val;
 #if defined(HAVE_FLTK)
   if(FlGui::available() && (action & GMSH_GUI))
     FlGui::instance()->solver[num]->input[2]->value
-      (GmshRemote::get(num)->executable.c_str());
+      (ConnectionManager::get(num)->executable.c_str());
 #endif
-  return GmshRemote::get(num)->executable;
+  return ConnectionManager::get(num)->executable;
 }
 
 std::string opt_solver_executable0(OPT_ARGS_STR)
@@ -1111,11 +1183,48 @@ std::string opt_solver_executable4(OPT_ARGS_STR)
   return opt_solver_executable(4, action, val);
 }
 
+std::string opt_solver_extra_arguments(OPT_ARGS_STR)
+{
+  if(action & GMSH_SET)
+    ConnectionManager::get(num)->extraArguments = val;
+#if defined(HAVE_FLTK)
+  if(FlGui::available() && (action & GMSH_GUI))
+    FlGui::instance()->solver[num]->input[3]->value
+      (ConnectionManager::get(num)->extraArguments.c_str());
+#endif
+  return ConnectionManager::get(num)->extraArguments;
+}
+
+std::string opt_solver_extra_arguments0(OPT_ARGS_STR)
+{
+  return opt_solver_extra_arguments(0, action, val);
+}
+
+std::string opt_solver_extra_arguments1(OPT_ARGS_STR)
+{
+  return opt_solver_extra_arguments(1, action, val);
+}
+
+std::string opt_solver_extra_arguments2(OPT_ARGS_STR)
+{
+  return opt_solver_extra_arguments(2, action, val);
+}
+
+std::string opt_solver_extra_arguments3(OPT_ARGS_STR)
+{
+  return opt_solver_extra_arguments(3, action, val);
+}
+
+std::string opt_solver_extra_arguments4(OPT_ARGS_STR)
+{
+  return opt_solver_extra_arguments(4, action, val);
+}
+
 std::string opt_solver_help(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->help = val;
-  return GmshRemote::get(num)->help;
+    ConnectionManager::get(num)->help = val;
+  return ConnectionManager::get(num)->help;
 }
 
 std::string opt_solver_help0(OPT_ARGS_STR)
@@ -1146,18 +1255,18 @@ std::string opt_solver_help4(OPT_ARGS_STR)
 std::string opt_solver_input_name(OPT_ARGS_STR)
 {
   if(action & GMSH_SET){
-#if !defined(HAVE_NO_PARSER)
-    GmshRemote::get(num)->inputFileName = FixRelativePath(gmsh_yyname, val);
+#if defined(HAVE_PARSER)
+    ConnectionManager::get(num)->inputFileName = FixRelativePath(gmsh_yyname, val);
 #else
-    GmshRemote::get(num)->inputFileName = val;
+    ConnectionManager::get(num)->inputFileName = val;
 #endif
   }
 #if defined(HAVE_FLTK)
   if(FlGui::available() && (action & GMSH_GUI))
     FlGui::instance()->solver[num]->input[0]->value
-      (GmshRemote::get(num)->inputFileName.c_str());
+      (ConnectionManager::get(num)->inputFileName.c_str());
 #endif
-  return GmshRemote::get(num)->inputFileName;
+  return ConnectionManager::get(num)->inputFileName;
 }
 
 std::string opt_solver_input_name0(OPT_ARGS_STR)
@@ -1188,8 +1297,8 @@ std::string opt_solver_input_name4(OPT_ARGS_STR)
 std::string opt_solver_extension(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->inputFileExtension = val;
-  return GmshRemote::get(num)->inputFileExtension;
+    ConnectionManager::get(num)->inputFileExtension = val;
+  return ConnectionManager::get(num)->inputFileExtension;
 }
 
 std::string opt_solver_extension0(OPT_ARGS_STR)
@@ -1220,18 +1329,18 @@ std::string opt_solver_extension4(OPT_ARGS_STR)
 std::string opt_solver_mesh_name(OPT_ARGS_STR)
 {
   if(action & GMSH_SET){
-#if !defined(HAVE_NO_PARSER)
-    GmshRemote::get(num)->meshFileName = FixRelativePath(gmsh_yyname, val);
+#if defined(HAVE_PARSER)
+    ConnectionManager::get(num)->meshFileName = FixRelativePath(gmsh_yyname, val);
 #else
-    GmshRemote::get(num)->meshFileName = val;
+    ConnectionManager::get(num)->meshFileName = val;
 #endif
   }
 #if defined(HAVE_FLTK)
   if(FlGui::available() && (action & GMSH_GUI))
     FlGui::instance()->solver[num]->input[1]->value
-      (GmshRemote::get(num)->meshFileName.c_str());
+      (ConnectionManager::get(num)->meshFileName.c_str());
 #endif
-  return GmshRemote::get(num)->meshFileName;
+  return ConnectionManager::get(num)->meshFileName;
 }
 
 std::string opt_solver_mesh_name0(OPT_ARGS_STR)
@@ -1262,8 +1371,8 @@ std::string opt_solver_mesh_name4(OPT_ARGS_STR)
 std::string opt_solver_mesh_command(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->meshFileSwitch = val;
-  return GmshRemote::get(num)->meshFileSwitch;
+    ConnectionManager::get(num)->meshFileSwitch = val;
+  return ConnectionManager::get(num)->meshFileSwitch;
 }
 
 std::string opt_solver_mesh_command0(OPT_ARGS_STR)
@@ -1294,8 +1403,8 @@ std::string opt_solver_mesh_command4(OPT_ARGS_STR)
 std::string opt_solver_socket_command(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->socketSwitch = val;
-  return GmshRemote::get(num)->socketSwitch;
+    ConnectionManager::get(num)->socketSwitch = val;
+  return ConnectionManager::get(num)->socketSwitch;
 }
 
 std::string opt_solver_socket_command0(OPT_ARGS_STR)
@@ -1326,8 +1435,8 @@ std::string opt_solver_socket_command4(OPT_ARGS_STR)
 std::string opt_solver_name_command(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->inputFileSwitch = val;
-  return GmshRemote::get(num)->inputFileSwitch;
+    ConnectionManager::get(num)->inputFileSwitch = val;
+  return ConnectionManager::get(num)->inputFileSwitch;
 }
 
 std::string opt_solver_name_command0(OPT_ARGS_STR)
@@ -1358,8 +1467,8 @@ std::string opt_solver_name_command4(OPT_ARGS_STR)
 std::string opt_solver_option_command(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->optionSwitch = val;
-  return GmshRemote::get(num)->optionSwitch;
+    ConnectionManager::get(num)->optionSwitch = val;
+  return ConnectionManager::get(num)->optionSwitch;
 }
 
 std::string opt_solver_option_command0(OPT_ARGS_STR)
@@ -1390,8 +1499,8 @@ std::string opt_solver_option_command4(OPT_ARGS_STR)
 std::string opt_solver_first_option(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->optionName[0] = val;
-  return GmshRemote::get(num)->optionName[0];
+    ConnectionManager::get(num)->optionName[0] = val;
+  return ConnectionManager::get(num)->optionName[0];
 }
 
 std::string opt_solver_first_option0(OPT_ARGS_STR)
@@ -1422,8 +1531,8 @@ std::string opt_solver_first_option4(OPT_ARGS_STR)
 std::string opt_solver_second_option(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->optionName[1] = val;
-  return GmshRemote::get(num)->optionName[1];
+    ConnectionManager::get(num)->optionName[1] = val;
+  return ConnectionManager::get(num)->optionName[1];
 }
 
 std::string opt_solver_second_option0(OPT_ARGS_STR)
@@ -1454,8 +1563,8 @@ std::string opt_solver_second_option4(OPT_ARGS_STR)
 std::string opt_solver_third_option(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->optionName[2] = val;
-  return GmshRemote::get(num)->optionName[2];
+    ConnectionManager::get(num)->optionName[2] = val;
+  return ConnectionManager::get(num)->optionName[2];
 }
 
 std::string opt_solver_third_option0(OPT_ARGS_STR)
@@ -1486,8 +1595,8 @@ std::string opt_solver_third_option4(OPT_ARGS_STR)
 std::string opt_solver_fourth_option(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->optionName[3] = val;
-  return GmshRemote::get(num)->optionName[3];
+    ConnectionManager::get(num)->optionName[3] = val;
+  return ConnectionManager::get(num)->optionName[3];
 }
 
 std::string opt_solver_fourth_option0(OPT_ARGS_STR)
@@ -1518,8 +1627,8 @@ std::string opt_solver_fourth_option4(OPT_ARGS_STR)
 std::string opt_solver_fifth_option(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->optionName[4] = val;
-  return GmshRemote::get(num)->optionName[4];
+    ConnectionManager::get(num)->optionName[4] = val;
+  return ConnectionManager::get(num)->optionName[4];
 }
 
 std::string opt_solver_fifth_option0(OPT_ARGS_STR)
@@ -1550,8 +1659,8 @@ std::string opt_solver_fifth_option4(OPT_ARGS_STR)
 std::string opt_solver_first_button(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->buttonName[0] = val;
-  return GmshRemote::get(num)->buttonName[0];
+    ConnectionManager::get(num)->buttonName[0] = val;
+  return ConnectionManager::get(num)->buttonName[0];
 }
 
 std::string opt_solver_first_button0(OPT_ARGS_STR)
@@ -1582,8 +1691,8 @@ std::string opt_solver_first_button4(OPT_ARGS_STR)
 std::string opt_solver_first_button_command(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->buttonSwitch[0] = val;
-  return GmshRemote::get(num)->buttonSwitch[0];
+    ConnectionManager::get(num)->buttonSwitch[0] = val;
+  return ConnectionManager::get(num)->buttonSwitch[0];
 }
 
 std::string opt_solver_first_button_command0(OPT_ARGS_STR)
@@ -1614,8 +1723,8 @@ std::string opt_solver_first_button_command4(OPT_ARGS_STR)
 std::string opt_solver_second_button(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->buttonName[1] = val;
-  return GmshRemote::get(num)->buttonName[1];
+    ConnectionManager::get(num)->buttonName[1] = val;
+  return ConnectionManager::get(num)->buttonName[1];
 }
 
 std::string opt_solver_second_button0(OPT_ARGS_STR)
@@ -1646,8 +1755,8 @@ std::string opt_solver_second_button4(OPT_ARGS_STR)
 std::string opt_solver_second_button_command(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->buttonSwitch[1] = val;
-  return GmshRemote::get(num)->buttonSwitch[1];
+    ConnectionManager::get(num)->buttonSwitch[1] = val;
+  return ConnectionManager::get(num)->buttonSwitch[1];
 }
 
 std::string opt_solver_second_button_command0(OPT_ARGS_STR)
@@ -1678,8 +1787,8 @@ std::string opt_solver_second_button_command4(OPT_ARGS_STR)
 std::string opt_solver_third_button(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->buttonName[2] = val;
-  return GmshRemote::get(num)->buttonName[2];
+    ConnectionManager::get(num)->buttonName[2] = val;
+  return ConnectionManager::get(num)->buttonName[2];
 }
 
 std::string opt_solver_third_button0(OPT_ARGS_STR)
@@ -1710,8 +1819,8 @@ std::string opt_solver_third_button4(OPT_ARGS_STR)
 std::string opt_solver_third_button_command(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->buttonSwitch[2] = val;
-  return GmshRemote::get(num)->buttonSwitch[2];
+    ConnectionManager::get(num)->buttonSwitch[2] = val;
+  return ConnectionManager::get(num)->buttonSwitch[2];
 }
 
 std::string opt_solver_third_button_command0(OPT_ARGS_STR)
@@ -1742,8 +1851,8 @@ std::string opt_solver_third_button_command4(OPT_ARGS_STR)
 std::string opt_solver_fourth_button(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->buttonName[3] = val;
-  return GmshRemote::get(num)->buttonName[3];
+    ConnectionManager::get(num)->buttonName[3] = val;
+  return ConnectionManager::get(num)->buttonName[3];
 }
 
 std::string opt_solver_fourth_button0(OPT_ARGS_STR)
@@ -1774,8 +1883,8 @@ std::string opt_solver_fourth_button4(OPT_ARGS_STR)
 std::string opt_solver_fourth_button_command(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->buttonSwitch[3] = val;
-  return GmshRemote::get(num)->buttonSwitch[3];
+    ConnectionManager::get(num)->buttonSwitch[3] = val;
+  return ConnectionManager::get(num)->buttonSwitch[3];
 }
 
 std::string opt_solver_fourth_button_command0(OPT_ARGS_STR)
@@ -1806,8 +1915,8 @@ std::string opt_solver_fourth_button_command4(OPT_ARGS_STR)
 std::string opt_solver_fifth_button(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->buttonName[4] = val;
-  return GmshRemote::get(num)->buttonName[4];
+    ConnectionManager::get(num)->buttonName[4] = val;
+  return ConnectionManager::get(num)->buttonName[4];
 }
 
 std::string opt_solver_fifth_button0(OPT_ARGS_STR)
@@ -1838,8 +1947,8 @@ std::string opt_solver_fifth_button4(OPT_ARGS_STR)
 std::string opt_solver_fifth_button_command(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->buttonSwitch[4] = val;
-  return GmshRemote::get(num)->buttonSwitch[4];
+    ConnectionManager::get(num)->buttonSwitch[4] = val;
+  return ConnectionManager::get(num)->buttonSwitch[4];
 }
 
 std::string opt_solver_fifth_button_command0(OPT_ARGS_STR)
@@ -1877,7 +1986,7 @@ int _gui_action_valid(int action, int num)
 
 std::string opt_view_name(OPT_ARGS_STR)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(""); 
   if(!data) return "";
   if(action & GMSH_SET) {
@@ -1910,7 +2019,7 @@ std::string opt_view_name(OPT_ARGS_STR)
 
 std::string opt_view_format(OPT_ARGS_STR)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW("");
   if(action & GMSH_SET) {
     opt->format = val;
@@ -1927,7 +2036,7 @@ std::string opt_view_format(OPT_ARGS_STR)
 
 std::string opt_view_filename(OPT_ARGS_STR)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW("");
   if(!data) return "";
   return data->getFileName();
@@ -1938,7 +2047,7 @@ std::string opt_view_filename(OPT_ARGS_STR)
 
 std::string opt_view_axes_label0(OPT_ARGS_STR)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW("");
   if(action & GMSH_SET) {
     opt->axesLabel[0] = val;
@@ -1955,7 +2064,7 @@ std::string opt_view_axes_label0(OPT_ARGS_STR)
 
 std::string opt_view_axes_label1(OPT_ARGS_STR)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW("");
   if(action & GMSH_SET) {
     opt->axesLabel[1] = val;
@@ -1972,7 +2081,7 @@ std::string opt_view_axes_label1(OPT_ARGS_STR)
 
 std::string opt_view_axes_label2(OPT_ARGS_STR)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW("");
   if(action & GMSH_SET) {
     opt->axesLabel[2] = val;
@@ -1989,7 +2098,7 @@ std::string opt_view_axes_label2(OPT_ARGS_STR)
 
 std::string opt_view_axes_format0(OPT_ARGS_STR)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW("");
   if(action & GMSH_SET) {
     opt->axesFormat[0] = val;
@@ -2006,7 +2115,7 @@ std::string opt_view_axes_format0(OPT_ARGS_STR)
 
 std::string opt_view_axes_format1(OPT_ARGS_STR)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW("");
   if(action & GMSH_SET) {
     opt->axesFormat[1] = val;
@@ -2023,7 +2132,7 @@ std::string opt_view_axes_format1(OPT_ARGS_STR)
 
 std::string opt_view_axes_format2(OPT_ARGS_STR)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW("");
   if(action & GMSH_SET) {
     opt->axesFormat[2] = val;
@@ -2040,7 +2149,7 @@ std::string opt_view_axes_format2(OPT_ARGS_STR)
 
 std::string opt_view_gen_raise0(OPT_ARGS_STR)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW("");
   if(action & GMSH_SET) {
     opt->genRaiseX = val;
@@ -2058,7 +2167,7 @@ std::string opt_view_gen_raise0(OPT_ARGS_STR)
 
 std::string opt_view_gen_raise1(OPT_ARGS_STR)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW("");
   if(action & GMSH_SET) {
     opt->genRaiseY = val;
@@ -2076,7 +2185,7 @@ std::string opt_view_gen_raise1(OPT_ARGS_STR)
 
 std::string opt_view_gen_raise2(OPT_ARGS_STR)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW("");
   if(action & GMSH_SET) {
     opt->genRaiseZ = val;
@@ -2130,7 +2239,7 @@ void _string2stipple(std::string str, int &repeat, int &pattern)
 
 std::string opt_view_stipple0(OPT_ARGS_STR)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW("");
   if(action & GMSH_SET) {
     opt->stippleString[0] = val;
@@ -2144,7 +2253,7 @@ std::string opt_view_stipple0(OPT_ARGS_STR)
 
 std::string opt_view_stipple1(OPT_ARGS_STR)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW("");
   if(action & GMSH_SET) {
     opt->stippleString[1] = val;
@@ -2158,7 +2267,7 @@ std::string opt_view_stipple1(OPT_ARGS_STR)
 
 std::string opt_view_stipple2(OPT_ARGS_STR)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW("");
   if(action & GMSH_SET) {
     opt->stippleString[2] = val;
@@ -2172,7 +2281,7 @@ std::string opt_view_stipple2(OPT_ARGS_STR)
 
 std::string opt_view_stipple3(OPT_ARGS_STR)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW("");
   if(action & GMSH_SET) {
     opt->stippleString[3] = val;
@@ -2186,7 +2295,7 @@ std::string opt_view_stipple3(OPT_ARGS_STR)
 
 std::string opt_view_stipple4(OPT_ARGS_STR)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW("");
   if(action & GMSH_SET) {
     opt->stippleString[4] = val;
@@ -2200,7 +2309,7 @@ std::string opt_view_stipple4(OPT_ARGS_STR)
 
 std::string opt_view_stipple5(OPT_ARGS_STR)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW("");
   if(action & GMSH_SET) {
     opt->stippleString[5] = val;
@@ -2214,7 +2323,7 @@ std::string opt_view_stipple5(OPT_ARGS_STR)
 
 std::string opt_view_stipple6(OPT_ARGS_STR)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW("");
   if(action & GMSH_SET) {
     opt->stippleString[6] = val;
@@ -2228,7 +2337,7 @@ std::string opt_view_stipple6(OPT_ARGS_STR)
 
 std::string opt_view_stipple7(OPT_ARGS_STR)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW("");
   if(action & GMSH_SET) {
     opt->stippleString[7] = val;
@@ -2242,7 +2351,7 @@ std::string opt_view_stipple7(OPT_ARGS_STR)
 
 std::string opt_view_stipple8(OPT_ARGS_STR)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW("");
   if(action & GMSH_SET) {
     opt->stippleString[8] = val;
@@ -2256,7 +2365,7 @@ std::string opt_view_stipple8(OPT_ARGS_STR)
 
 std::string opt_view_stipple9(OPT_ARGS_STR)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW("");
   if(action & GMSH_SET) {
     opt->stippleString[9] = val;
@@ -2294,6 +2403,18 @@ double opt_general_graphics_fontsize(OPT_ARGS_NUM)
       (CTX::instance()->glFontSize);
 #endif
   return CTX::instance()->glFontSize;
+}
+
+double opt_general_graphics_fontsize_title(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->glFontSizeTitle = (int)val;
+#if defined(HAVE_FLTK)
+  if(FlGui::available() && (action & GMSH_GUI))
+    FlGui::instance()->options->general.value[28]->value
+      (CTX::instance()->glFontSizeTitle);
+#endif
+  return CTX::instance()->glFontSizeTitle;
 }
 
 double opt_general_polygon_offset_always(OPT_ARGS_NUM)
@@ -3384,6 +3505,14 @@ double opt_general_antialiasing(OPT_ARGS_NUM)
   return CTX::instance()->antialiasing;
 }
 
+double opt_general_stereo(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET) {
+    CTX::instance()->stereo = (int)val;
+  }
+  return CTX::instance()->stereo;
+}
+
 double opt_general_alpha_blending(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
@@ -3448,7 +3577,7 @@ double opt_general_color_scheme(OPT_ARGS_NUM)
     SetDefaultColorOptions(0, MeshOptions_Color);
     SetDefaultColorOptions(0, SolverOptions_Color);
     SetDefaultColorOptions(0, PostProcessingOptions_Color);
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
     for(unsigned int i = 0; i < PView::list.size(); i++)
       SetDefaultColorOptions(i, ViewOptions_Color);
 #endif
@@ -3459,13 +3588,13 @@ double opt_general_color_scheme(OPT_ARGS_NUM)
     SetColorOptionsGUI(0, MeshOptions_Color);
     SetColorOptionsGUI(0, SolverOptions_Color);
     SetColorOptionsGUI(0, PostProcessingOptions_Color);
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
     for(unsigned int i = 0; i < PView::list.size(); i++)
       SetColorOptionsGUI(i, ViewOptions_Color);
 #endif
     SetColorOptionsGUI(0, PrintOptions_Color);
 
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
     // horrible trick so that opt_view_XXX will act on the reference view
     std::vector<PView*> tmp = PView::list;
     PView::list.clear();
@@ -5245,17 +5374,17 @@ double opt_mesh_line_width(OPT_ARGS_NUM)
   return CTX::instance()->mesh.lineWidth;
 }
 
-double opt_mesh_label_frequency(OPT_ARGS_NUM)
+double opt_mesh_label_sampling(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET) {
-    CTX::instance()->mesh.labelFrequency = val;
+    CTX::instance()->mesh.labelSampling = (int)val;
   }
 #if defined(HAVE_FLTK)
   if(FlGui::available() && (action & GMSH_GUI))
     FlGui::instance()->options->mesh.value[12]->value
-      (CTX::instance()->mesh.labelFrequency);
+      (CTX::instance()->mesh.labelSampling);
 #endif
-  return CTX::instance()->mesh.labelFrequency;
+  return CTX::instance()->mesh.labelSampling;
 }
 
 double opt_mesh_reverse_all_normals(OPT_ARGS_NUM)
@@ -5287,6 +5416,22 @@ double opt_mesh_smooth_normals(OPT_ARGS_NUM)
 #endif
   return CTX::instance()->mesh.smoothNormals;
 }
+
+double opt_mesh_smooth_ratio(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET) 
+    CTX::instance()->mesh.smoothRatio = val;
+  return CTX::instance()->mesh.smoothRatio;
+}
+
+double opt_mesh_aniso_max(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET) 
+    CTX::instance()->mesh.anisoMax = val;
+  return CTX::instance()->mesh.anisoMax;
+}
+
+
 
 double opt_mesh_angle_smooth_normals(OPT_ARGS_NUM)
 {
@@ -5341,11 +5486,11 @@ double opt_mesh_light_two_side(OPT_ARGS_NUM)
   return CTX::instance()->mesh.lightTwoSide;
 }
 
-double opt_mesh_format(OPT_ARGS_NUM)
+double opt_mesh_file_format(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
-    CTX::instance()->mesh.format = (int)val;
-  return CTX::instance()->mesh.format;
+    CTX::instance()->mesh.fileFormat = (int)val;
+  return CTX::instance()->mesh.fileFormat;
 }
 
 double opt_mesh_msh_file_version(OPT_ARGS_NUM)
@@ -5353,6 +5498,55 @@ double opt_mesh_msh_file_version(OPT_ARGS_NUM)
   if(action & GMSH_SET)
     CTX::instance()->mesh.mshFileVersion = val;
   return CTX::instance()->mesh.mshFileVersion;
+}
+
+double opt_mesh_msh_file_partitioned(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->mesh.mshFilePartitioned = val;
+  return CTX::instance()->mesh.mshFilePartitioned;
+}
+
+double opt_mesh_partition_hex_weight(OPT_ARGS_NUM) 
+{
+  if (action & GMSH_SET) 
+    CTX::instance()->partitionOptions.hexWeight = (int) val;
+  return CTX::instance()->partitionOptions.hexWeight;
+}
+
+double opt_mesh_partition_pri_weight(OPT_ARGS_NUM) 
+{
+  if (action & GMSH_SET) 
+    CTX::instance()->partitionOptions.priWeight = (int) val;
+  return CTX::instance()->partitionOptions.priWeight;
+}
+
+double opt_mesh_partition_pyr_weight(OPT_ARGS_NUM) 
+{
+  if (action & GMSH_SET) 
+    CTX::instance()->partitionOptions.pyrWeight = (int) val;
+  return CTX::instance()->partitionOptions.pyrWeight;
+}
+
+double opt_mesh_partition_qua_weight(OPT_ARGS_NUM) 
+{
+  if (action & GMSH_SET) 
+    CTX::instance()->partitionOptions.quaWeight = (int) val;
+  return CTX::instance()->partitionOptions.quaWeight;
+}
+
+double opt_mesh_partition_tet_weight(OPT_ARGS_NUM) 
+{
+  if (action & GMSH_SET) 
+    CTX::instance()->partitionOptions.tetWeight = (int) val;
+  return CTX::instance()->partitionOptions.tetWeight;
+}
+
+double opt_mesh_partition_tri_weight(OPT_ARGS_NUM) 
+{
+  if (action & GMSH_SET) 
+    CTX::instance()->partitionOptions.triWeight = (int) val;
+  return CTX::instance()->partitionOptions.triWeight;
 }
 
 double opt_mesh_binary(OPT_ARGS_NUM)
@@ -5408,6 +5602,70 @@ double opt_mesh_algo2d(OPT_ARGS_NUM)
   }
 #endif
   return CTX::instance()->mesh.algo2d;
+}
+
+double opt_mesh_algo_recombine(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET){
+    CTX::instance()->mesh.algoRecombine = (int)val;
+    if(CTX::instance()->mesh.algoRecombine < 0 && 
+       CTX::instance()->mesh.algoRecombine > 1)
+      CTX::instance()->mesh.algoRecombine = 0;
+  }
+#if defined(HAVE_FLTK)
+  if(FlGui::available() && (action & GMSH_GUI)) {
+    FlGui::instance()->options->mesh.choice[1]->value
+      (CTX::instance()->mesh.algoRecombine);
+  }
+#endif
+  return CTX::instance()->mesh.algoRecombine;
+}
+
+double opt_mesh_recombine_all(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET){
+    CTX::instance()->mesh.recombineAll = (int)val;
+  }
+#if defined(HAVE_FLTK)
+  if(FlGui::available() && (action & GMSH_GUI))
+    FlGui::instance()->options->mesh.butt[21]->value
+      (CTX::instance()->mesh.recombineAll);
+#endif
+  return CTX::instance()->mesh.recombineAll;
+}
+
+double opt_mesh_remesh_algo(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET){
+    CTX::instance()->mesh.remeshAlgo = (int)val;
+    if(CTX::instance()->mesh.remeshAlgo < 0 && 
+       CTX::instance()->mesh.remeshAlgo > 2)
+      CTX::instance()->mesh.remeshAlgo = 0;
+  }
+#if defined(HAVE_FLTK)
+  if(FlGui::available() && (action & GMSH_GUI)) {
+    FlGui::instance()->options->mesh.choice[8]->value
+      (CTX::instance()->mesh.remeshAlgo);
+  }
+#endif
+  return CTX::instance()->mesh.remeshAlgo;
+}
+
+double opt_mesh_remesh_param(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET){
+    CTX::instance()->mesh.remeshParam = (int)val;
+    if(CTX::instance()->mesh.remeshParam < 0 && 
+       CTX::instance()->mesh.remeshParam > 1)
+      CTX::instance()->mesh.remeshParam = 0;
+  }
+#if defined(HAVE_FLTK)
+   if(FlGui::available() && (action & GMSH_GUI)) {
+     FlGui::instance()->options->mesh.choice[9]->value
+       (CTX::instance()->mesh.remeshParam);
+   }
+#endif
+  return CTX::instance()->mesh.remeshParam;
 }
 
 double opt_mesh_algo_subdivide(OPT_ARGS_NUM)
@@ -5615,6 +5873,13 @@ double opt_mesh_zone_definition(OPT_ARGS_NUM)
   return CTX::instance()->mesh.zoneDefinition;
 }
 
+#if !defined(HAVE_MESH)
+static void GetStatistics(double stat[50])
+{
+  for(int i = 0; i < 50; i++) stat[i] = 0;
+}
+#endif
+
 double opt_mesh_nb_nodes(OPT_ARGS_NUM)
 {
   double s[50];
@@ -5679,6 +5944,14 @@ double opt_mesh_partition_partitioner(OPT_ARGS_NUM)
       (ival < 1 || ival > 2) ? 1 : ival;
   }
   return CTX::instance()->partitionOptions.partitioner;
+}
+double opt_mesh_partition_by_extrusion(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET) {
+    const int ival = (int)val;
+    CTX::instance()->partitionOptions.partitionByExtrusion = ival;
+  }
+  return CTX::instance()->partitionOptions.partitionByExtrusion;
 }
 
 double opt_mesh_partition_num(OPT_ARGS_NUM)
@@ -5921,16 +6194,16 @@ double opt_solver_plugins(OPT_ARGS_NUM)
 double opt_solver_client_server(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->clientServer = (bool)val;
+    ConnectionManager::get(num)->clientServer = (bool)val;
 #if defined(HAVE_FLTK)
   if(FlGui::available() && (action & GMSH_GUI)){
-    if(GmshRemote::get(num)->clientServer)
+    if(ConnectionManager::get(num)->clientServer)
       ((Fl_Menu_Item*)FlGui::instance()->solver[num]->menu->menu())[0].set();
     else
       ((Fl_Menu_Item*)FlGui::instance()->solver[num]->menu->menu())[0].clear();
   }
 #endif
-  return GmshRemote::get(num)->clientServer ? 1 : 0;
+  return ConnectionManager::get(num)->clientServer ? 1 : 0;
 }
 
 double opt_solver_client_server0(OPT_ARGS_NUM)
@@ -5961,16 +6234,16 @@ double opt_solver_client_server4(OPT_ARGS_NUM)
 double opt_solver_popup_messages(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->popupMessages = (bool)val;
+    ConnectionManager::get(num)->popupMessages = (bool)val;
 #if defined(HAVE_FLTK)
   if(FlGui::available() && (action & GMSH_GUI)){
-    if(GmshRemote::get(num)->popupMessages)
+    if(ConnectionManager::get(num)->popupMessages)
       ((Fl_Menu_Item*)FlGui::instance()->solver[num]->menu->menu())[1].set();
     else
       ((Fl_Menu_Item*)FlGui::instance()->solver[num]->menu->menu())[1].clear();
   }
 #endif
-  return GmshRemote::get(num)->popupMessages ? 1 : 0;
+  return ConnectionManager::get(num)->popupMessages ? 1 : 0;
 }
 
 double opt_solver_popup_messages0(OPT_ARGS_NUM)
@@ -6001,16 +6274,16 @@ double opt_solver_popup_messages4(OPT_ARGS_NUM)
 double opt_solver_merge_views(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
-    GmshRemote::get(num)->mergeViews = (bool)val;
+    ConnectionManager::get(num)->mergeViews = (bool)val;
 #if defined(HAVE_FLTK)
   if(FlGui::available() && (action & GMSH_GUI)){
-    if(GmshRemote::get(num)->mergeViews)
+    if(ConnectionManager::get(num)->mergeViews)
       ((Fl_Menu_Item*)FlGui::instance()->solver[num]->menu->menu())[2].set();
     else
       ((Fl_Menu_Item*)FlGui::instance()->solver[num]->menu->menu())[2].clear();
   }
 #endif
-  return GmshRemote::get(num)->mergeViews ? 1 : 0;
+  return ConnectionManager::get(num)->mergeViews ? 1 : 0;
 }
 
 double opt_solver_merge_views0(OPT_ARGS_NUM)
@@ -6121,7 +6394,7 @@ double opt_post_plugins(OPT_ARGS_NUM)
 
 double opt_post_nb_views(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   return PView::list.size();
 #else
   return 0;
@@ -6137,7 +6410,7 @@ double opt_post_file_format(OPT_ARGS_NUM)
 
 double opt_view_nb_timestep(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(!data) return 1;
 #if defined(HAVE_FLTK)
@@ -6155,7 +6428,7 @@ double opt_view_nb_timestep(OPT_ARGS_NUM)
 
 double opt_view_timestep(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(!data) return 0;
   if(action & GMSH_SET) {
@@ -6181,7 +6454,7 @@ double opt_view_timestep(OPT_ARGS_NUM)
 
 double opt_view_min(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(!data) return 0.;
   // use adaptive data if available
@@ -6193,7 +6466,7 @@ double opt_view_min(OPT_ARGS_NUM)
 
 double opt_view_max(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(!data) return 0.;
   // use adaptive data if available
@@ -6205,7 +6478,7 @@ double opt_view_max(OPT_ARGS_NUM)
 
 double opt_view_custom_min(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->customMin = val;
@@ -6224,7 +6497,7 @@ double opt_view_custom_min(OPT_ARGS_NUM)
 
 double opt_view_custom_max(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->customMax = val;
@@ -6242,7 +6515,7 @@ double opt_view_custom_max(OPT_ARGS_NUM)
 
 double opt_view_xmin(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(!data) return 0.;
   return data->getBoundingBox().min().x();
@@ -6253,7 +6526,7 @@ double opt_view_xmin(OPT_ARGS_NUM)
 
 double opt_view_xmax(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(!data) return 0.;
   return data->getBoundingBox().max().x();
@@ -6264,7 +6537,7 @@ double opt_view_xmax(OPT_ARGS_NUM)
 
 double opt_view_ymin(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(!data) return 0.;
   return data->getBoundingBox().min().y();
@@ -6275,7 +6548,7 @@ double opt_view_ymin(OPT_ARGS_NUM)
 
 double opt_view_ymax(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(!data) return 0.;
   return data->getBoundingBox().max().y();
@@ -6286,7 +6559,7 @@ double opt_view_ymax(OPT_ARGS_NUM)
 
 double opt_view_zmin(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(!data) return 0.;
   return data->getBoundingBox().min().z();
@@ -6297,7 +6570,7 @@ double opt_view_zmin(OPT_ARGS_NUM)
 
 double opt_view_zmax(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(!data) return 0.;
   return data->getBoundingBox().max().z();
@@ -6308,7 +6581,7 @@ double opt_view_zmax(OPT_ARGS_NUM)
 
 double opt_view_offset0(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->offset[0] = val;
@@ -6326,7 +6599,7 @@ double opt_view_offset0(OPT_ARGS_NUM)
 
 double opt_view_offset1(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->offset[1] = val;
@@ -6344,7 +6617,7 @@ double opt_view_offset1(OPT_ARGS_NUM)
 
 double opt_view_offset2(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->offset[2] = val;
@@ -6362,7 +6635,7 @@ double opt_view_offset2(OPT_ARGS_NUM)
 
 double opt_view_raise0(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->raise[0] = val;
@@ -6380,7 +6653,7 @@ double opt_view_raise0(OPT_ARGS_NUM)
 
 double opt_view_raise1(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->raise[1] = val;
@@ -6398,7 +6671,7 @@ double opt_view_raise1(OPT_ARGS_NUM)
 
 double opt_view_raise2(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->raise[2] = val;
@@ -6416,7 +6689,7 @@ double opt_view_raise2(OPT_ARGS_NUM)
 
 double opt_view_normal_raise(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->normalRaise = val;
@@ -6434,7 +6707,7 @@ double opt_view_normal_raise(OPT_ARGS_NUM)
 
 double opt_view_transform00(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->transform[0][0] = val;
@@ -6452,7 +6725,7 @@ double opt_view_transform00(OPT_ARGS_NUM)
 
 double opt_view_transform01(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->transform[0][1] = val;
@@ -6470,7 +6743,7 @@ double opt_view_transform01(OPT_ARGS_NUM)
 
 double opt_view_transform02(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->transform[0][2] = val;
@@ -6488,7 +6761,7 @@ double opt_view_transform02(OPT_ARGS_NUM)
 
 double opt_view_transform10(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->transform[1][0] = val;
@@ -6506,7 +6779,7 @@ double opt_view_transform10(OPT_ARGS_NUM)
 
 double opt_view_transform11(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->transform[1][1] = val;
@@ -6524,7 +6797,7 @@ double opt_view_transform11(OPT_ARGS_NUM)
 
 double opt_view_transform12(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->transform[1][2] = val;
@@ -6542,7 +6815,7 @@ double opt_view_transform12(OPT_ARGS_NUM)
 
 double opt_view_transform20(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->transform[2][0] = val;
@@ -6560,7 +6833,7 @@ double opt_view_transform20(OPT_ARGS_NUM)
 
 double opt_view_transform21(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->transform[2][1] = val;
@@ -6578,7 +6851,7 @@ double opt_view_transform21(OPT_ARGS_NUM)
 
 double opt_view_transform22(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->transform[2][2] = val;
@@ -6596,7 +6869,7 @@ double opt_view_transform22(OPT_ARGS_NUM)
 
 double opt_view_arrow_size_min(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->arrowSizeMin = val;
@@ -6613,7 +6886,7 @@ double opt_view_arrow_size_min(OPT_ARGS_NUM)
 
 double opt_view_arrow_size_max(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->arrowSizeMax = val;
@@ -6630,7 +6903,7 @@ double opt_view_arrow_size_max(OPT_ARGS_NUM)
 
 double opt_view_normals(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->normals = val;
@@ -6647,7 +6920,7 @@ double opt_view_normals(OPT_ARGS_NUM)
 
 double opt_view_tangents(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->tangents = val;
@@ -6664,7 +6937,7 @@ double opt_view_tangents(OPT_ARGS_NUM)
 
 double opt_view_displacement_factor(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->displacementFactor = val;
@@ -6682,7 +6955,7 @@ double opt_view_displacement_factor(OPT_ARGS_NUM)
 
 double opt_view_fake_transparency(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->fakeTransparency = (int)val;
@@ -6700,7 +6973,7 @@ double opt_view_fake_transparency(OPT_ARGS_NUM)
 
 double opt_view_explode(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->explode = val;
@@ -6718,7 +6991,7 @@ double opt_view_explode(OPT_ARGS_NUM)
 
 double opt_view_visible(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->visible = (int)val;
@@ -6736,7 +7009,7 @@ double opt_view_visible(OPT_ARGS_NUM)
 
 double opt_view_intervals_type(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->intervalsType = (int)val;
@@ -6757,7 +7030,7 @@ double opt_view_intervals_type(OPT_ARGS_NUM)
 
 double opt_view_saturate_values(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->saturateValues = (int)val;
@@ -6776,7 +7049,7 @@ double opt_view_saturate_values(OPT_ARGS_NUM)
 
 double opt_view_adapt_visualization_grid(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->adaptVisualizationGrid = (int)val;
@@ -6803,7 +7076,7 @@ double opt_view_adapt_visualization_grid(OPT_ARGS_NUM)
 
 double opt_view_max_recursion_level(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->maxRecursionLevel = (int)val;
@@ -6826,7 +7099,7 @@ double opt_view_max_recursion_level(OPT_ARGS_NUM)
 
 double opt_view_target_error(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->targetError = val;
@@ -6849,7 +7122,7 @@ double opt_view_target_error(OPT_ARGS_NUM)
 
 double opt_view_type(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->type = (int)val;
@@ -6870,7 +7143,7 @@ double opt_view_type(OPT_ARGS_NUM)
 
 double opt_view_auto_position(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->autoPosition = (int)val;
@@ -6889,7 +7162,7 @@ double opt_view_auto_position(OPT_ARGS_NUM)
 
 double opt_view_position0(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->position[0] = (int)val;
@@ -6906,7 +7179,7 @@ double opt_view_position0(OPT_ARGS_NUM)
 
 double opt_view_position1(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->position[1] = (int)val;
@@ -6921,9 +7194,27 @@ double opt_view_position1(OPT_ARGS_NUM)
 #endif
 }
 
+double opt_view_sampling(OPT_ARGS_NUM)
+{
+#if defined(HAVE_POST)
+  GET_VIEW(0.);
+  if(action & GMSH_SET) {
+    opt->sampling = (int)val;
+    if(view) view->setChanged(true);
+  }
+#if defined(HAVE_FLTK)
+  if(_gui_action_valid(action, num))
+    FlGui::instance()->options->view.value[6]->value(opt->sampling);
+#endif
+  return opt->sampling;
+#else
+  return 1.;
+#endif
+}
+
 double opt_view_size0(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->size[0] = (int)val;
@@ -6940,7 +7231,7 @@ double opt_view_size0(OPT_ARGS_NUM)
 
 double opt_view_size1(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->size[1] = (int)val;
@@ -6957,7 +7248,7 @@ double opt_view_size1(OPT_ARGS_NUM)
 
 double opt_view_axes(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->axes = (int)val;
@@ -6978,7 +7269,7 @@ double opt_view_axes(OPT_ARGS_NUM)
 
 double opt_view_axes_mikado(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->axesMikado = (int)val;
@@ -6996,7 +7287,7 @@ double opt_view_axes_mikado(OPT_ARGS_NUM)
 
 double opt_view_axes_auto_position(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->axesAutoPosition = (int)val;
@@ -7015,7 +7306,7 @@ double opt_view_axes_auto_position(OPT_ARGS_NUM)
 
 double opt_view_axes_xmin(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->axesPosition[0] = val;
@@ -7033,7 +7324,7 @@ double opt_view_axes_xmin(OPT_ARGS_NUM)
 
 double opt_view_axes_xmax(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->axesPosition[1] = val;
@@ -7051,7 +7342,7 @@ double opt_view_axes_xmax(OPT_ARGS_NUM)
 
 double opt_view_axes_ymin(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->axesPosition[2] = val;
@@ -7069,7 +7360,7 @@ double opt_view_axes_ymin(OPT_ARGS_NUM)
 
 double opt_view_axes_ymax(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->axesPosition[3] = val;
@@ -7087,7 +7378,7 @@ double opt_view_axes_ymax(OPT_ARGS_NUM)
 
 double opt_view_axes_zmin(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->axesPosition[4] = val;
@@ -7105,7 +7396,7 @@ double opt_view_axes_zmin(OPT_ARGS_NUM)
 
 double opt_view_axes_zmax(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->axesPosition[5] = val;
@@ -7123,7 +7414,7 @@ double opt_view_axes_zmax(OPT_ARGS_NUM)
 
 double opt_view_axes_tics0(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->axesTics[0] = (int)val;
@@ -7141,7 +7432,7 @@ double opt_view_axes_tics0(OPT_ARGS_NUM)
 
 double opt_view_axes_tics1(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->axesTics[1] = (int)val;
@@ -7159,7 +7450,7 @@ double opt_view_axes_tics1(OPT_ARGS_NUM)
 
 double opt_view_axes_tics2(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->axesTics[2] = (int)val;
@@ -7177,7 +7468,7 @@ double opt_view_axes_tics2(OPT_ARGS_NUM)
 
 double opt_view_nb_iso(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->nbIso = (int)val;
@@ -7195,7 +7486,7 @@ double opt_view_nb_iso(OPT_ARGS_NUM)
 
 double opt_view_boundary(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->boundary = (int)val;
@@ -7216,7 +7507,7 @@ double opt_view_boundary(OPT_ARGS_NUM)
 
 double opt_view_light(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->light = (int)val;
@@ -7236,7 +7527,7 @@ double opt_view_light(OPT_ARGS_NUM)
 
 double opt_view_light_two_side(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->lightTwoSide = (int)val;
@@ -7253,7 +7544,7 @@ double opt_view_light_two_side(OPT_ARGS_NUM)
 
 double opt_view_light_lines(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->lightLines = (int)val;
@@ -7270,7 +7561,7 @@ double opt_view_light_lines(OPT_ARGS_NUM)
 
 double opt_view_smooth_normals(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->smoothNormals = (int)val;
@@ -7288,7 +7579,7 @@ double opt_view_smooth_normals(OPT_ARGS_NUM)
 
 double opt_view_angle_smooth_normals(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->angleSmoothNormals = val;
@@ -7306,7 +7597,7 @@ double opt_view_angle_smooth_normals(OPT_ARGS_NUM)
 
 double opt_view_show_element(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->showElement = (int)val;
@@ -7324,7 +7615,7 @@ double opt_view_show_element(OPT_ARGS_NUM)
 
 double opt_view_show_time(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->showTime = (int)val;
@@ -7343,7 +7634,7 @@ double opt_view_show_time(OPT_ARGS_NUM)
 
 double opt_view_show_scale(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->showScale = (int)val;
@@ -7360,7 +7651,7 @@ double opt_view_show_scale(OPT_ARGS_NUM)
 
 double opt_view_draw_strings(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->drawStrings = (int)val;
@@ -7377,7 +7668,7 @@ double opt_view_draw_strings(OPT_ARGS_NUM)
 
 double opt_view_draw_points(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->drawPoints = (int)val;
@@ -7399,7 +7690,7 @@ double opt_view_draw_points(OPT_ARGS_NUM)
 
 double opt_view_draw_lines(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->drawLines = (int)val;
@@ -7421,7 +7712,7 @@ double opt_view_draw_lines(OPT_ARGS_NUM)
 
 double opt_view_draw_triangles(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->drawTriangles = (int)val;
@@ -7443,7 +7734,7 @@ double opt_view_draw_triangles(OPT_ARGS_NUM)
 
 double opt_view_draw_quadrangles(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->drawQuadrangles = (int)val;
@@ -7465,7 +7756,7 @@ double opt_view_draw_quadrangles(OPT_ARGS_NUM)
 
 double opt_view_draw_tetrahedra(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->drawTetrahedra = (int)val;
@@ -7487,7 +7778,7 @@ double opt_view_draw_tetrahedra(OPT_ARGS_NUM)
 
 double opt_view_draw_hexahedra(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->drawHexahedra = (int)val;
@@ -7509,7 +7800,7 @@ double opt_view_draw_hexahedra(OPT_ARGS_NUM)
 
 double opt_view_draw_prisms(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->drawPrisms = (int)val;
@@ -7531,7 +7822,7 @@ double opt_view_draw_prisms(OPT_ARGS_NUM)
 
 double opt_view_draw_pyramids(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->drawPyramids = (int)val;
@@ -7553,7 +7844,7 @@ double opt_view_draw_pyramids(OPT_ARGS_NUM)
 
 double opt_view_draw_scalars(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->drawScalars = (int)val;
@@ -7575,7 +7866,7 @@ double opt_view_draw_scalars(OPT_ARGS_NUM)
 
 double opt_view_draw_vectors(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->drawVectors = (int)val;
@@ -7597,7 +7888,7 @@ double opt_view_draw_vectors(OPT_ARGS_NUM)
 
 double opt_view_draw_tensors(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->drawTensors = (int)val;
@@ -7619,7 +7910,7 @@ double opt_view_draw_tensors(OPT_ARGS_NUM)
 
 double opt_view_draw_skin_only(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->drawSkinOnly = (int)val;
@@ -7637,7 +7928,7 @@ double opt_view_draw_skin_only(OPT_ARGS_NUM)
 
 double opt_view_scale_type(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->scaleType = (int)val;
@@ -7658,7 +7949,7 @@ double opt_view_scale_type(OPT_ARGS_NUM)
 
 double opt_view_range_type(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->rangeType = (int)val;
@@ -7680,7 +7971,7 @@ double opt_view_range_type(OPT_ARGS_NUM)
 
 double opt_view_tensor_type(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->tensorType = (int)val;
@@ -7701,7 +7992,7 @@ double opt_view_tensor_type(OPT_ARGS_NUM)
 
 double opt_view_vector_type(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->vectorType = (int)val;
@@ -7722,7 +8013,7 @@ double opt_view_vector_type(OPT_ARGS_NUM)
 
 double opt_view_glyph_location(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->glyphLocation = (int)val;
@@ -7743,15 +8034,17 @@ double opt_view_glyph_location(OPT_ARGS_NUM)
 
 double opt_view_center_glyphs(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
-    opt->centerGlyphs = val ? 1 : 0;
+    opt->centerGlyphs = (int)val;
+    if(opt->centerGlyphs < 0 || opt->centerGlyphs > 2)
+      opt->glyphLocation = 0;
     if(view) view->setChanged(true);
   }
 #if defined(HAVE_FLTK)
   if(_gui_action_valid(action, num)) {
-    FlGui::instance()->options->view.butt[1]->value(opt->centerGlyphs);
+    FlGui::instance()->options->view.choice[15]->value(opt->centerGlyphs);
   }
 #endif
   return opt->centerGlyphs;
@@ -7762,7 +8055,7 @@ double opt_view_center_glyphs(OPT_ARGS_NUM)
 
 double opt_view_point_size(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->pointSize = val;
@@ -7779,7 +8072,7 @@ double opt_view_point_size(OPT_ARGS_NUM)
 
 double opt_view_line_width(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->lineWidth = val;
@@ -7796,7 +8089,7 @@ double opt_view_line_width(OPT_ARGS_NUM)
 
 double opt_view_point_type(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->pointType = (int)val;
@@ -7817,7 +8110,7 @@ double opt_view_point_type(OPT_ARGS_NUM)
 
 double opt_view_line_type(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->lineType = (int)val;
@@ -7838,7 +8131,7 @@ double opt_view_line_type(OPT_ARGS_NUM)
 
 double opt_view_colormap_alpha(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->colorTable.dpar[COLORTABLE_ALPHA] = val;
@@ -7858,7 +8151,7 @@ double opt_view_colormap_alpha(OPT_ARGS_NUM)
 
 double opt_view_colormap_alpha_power(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->colorTable.dpar[COLORTABLE_ALPHAPOW] = val;
@@ -7878,7 +8171,7 @@ double opt_view_colormap_alpha_power(OPT_ARGS_NUM)
 
 double opt_view_colormap_beta(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->colorTable.dpar[COLORTABLE_BETA] = val;
@@ -7898,7 +8191,7 @@ double opt_view_colormap_beta(OPT_ARGS_NUM)
 
 double opt_view_colormap_bias(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->colorTable.dpar[COLORTABLE_BIAS] = val;
@@ -7918,7 +8211,7 @@ double opt_view_colormap_bias(OPT_ARGS_NUM)
 
 double opt_view_colormap_curvature(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->colorTable.dpar[COLORTABLE_CURVATURE] = val;
@@ -7938,7 +8231,7 @@ double opt_view_colormap_curvature(OPT_ARGS_NUM)
 
 double opt_view_colormap_invert(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->colorTable.ipar[COLORTABLE_INVERT] = (int)val;
@@ -7958,7 +8251,7 @@ double opt_view_colormap_invert(OPT_ARGS_NUM)
 
 double opt_view_colormap_number(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->colorTable.ipar[COLORTABLE_NUMBER] = (int)val;
@@ -7978,7 +8271,7 @@ double opt_view_colormap_number(OPT_ARGS_NUM)
 
 double opt_view_colormap_rotation(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->colorTable.ipar[COLORTABLE_ROTATION] = (int)val;
@@ -7998,7 +8291,7 @@ double opt_view_colormap_rotation(OPT_ARGS_NUM)
 
 double opt_view_colormap_swap(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->colorTable.ipar[COLORTABLE_SWAP] = (int)val;
@@ -8018,7 +8311,7 @@ double opt_view_colormap_swap(OPT_ARGS_NUM)
 
 double opt_view_external_view(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->externalViewIndex = (int)val;
@@ -8042,7 +8335,7 @@ double opt_view_external_view(OPT_ARGS_NUM)
 
 double opt_view_gen_raise_view(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->viewIndexForGenRaise = (int)val;
@@ -8066,7 +8359,7 @@ double opt_view_gen_raise_view(OPT_ARGS_NUM)
 
 double opt_view_gen_raise_factor(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->genRaiseFactor = val;
@@ -8084,7 +8377,7 @@ double opt_view_gen_raise_factor(OPT_ARGS_NUM)
 
 double opt_view_use_gen_raise(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->useGenRaise = (int)val;
@@ -8104,7 +8397,7 @@ double opt_view_use_gen_raise(OPT_ARGS_NUM)
 
 double opt_view_use_stipple(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->useStipple = (int)val;
@@ -8122,7 +8415,7 @@ double opt_view_use_stipple(OPT_ARGS_NUM)
 
 double opt_view_clip(OPT_ARGS_NUM)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->clip = (int)val;
@@ -8138,11 +8431,67 @@ double opt_view_clip(OPT_ARGS_NUM)
 #endif
 }
 
-double opt_print_format(OPT_ARGS_NUM)
+double opt_view_force_num_components(OPT_ARGS_NUM)
+{
+#if defined(HAVE_POST)
+  GET_VIEW(0.);
+  if(action & GMSH_SET) {
+    opt->forceNumComponents = (int)val;
+    if(view) view->setChanged(true);
+  }
+#if defined(HAVE_FLTK)
+  if(_gui_action_valid(action, num)){
+    if(opt->forceNumComponents == 1)
+      FlGui::instance()->options->view.choice[14]->value(1);
+    else if(opt->forceNumComponents == 3)
+      FlGui::instance()->options->view.choice[14]->value(2);
+    else if(opt->forceNumComponents == 9)
+      FlGui::instance()->options->view.choice[14]->value(3);
+    else
+      FlGui::instance()->options->view.choice[14]->value(0);
+  }
+#endif
+  return opt->forceNumComponents;
+#else
+  return 0.;
+#endif
+}
+
+static double ovcm(OPT_ARGS_NUM, int nn)
+{
+#if defined(HAVE_POST)
+  GET_VIEW(0.);
+  if(action & GMSH_SET) {
+    opt->componentMap[nn] = (int)val;
+    if(view) view->setChanged(true);
+  }
+#if defined(HAVE_FLTK)
+  if(_gui_action_valid(action, num)){
+    FlGui::instance()->options->view.value[70 + nn]->value
+      (opt->componentMap[nn]);
+  }
+#endif
+  return opt->componentMap[nn];
+#else
+  return 0.;
+#endif
+}
+
+double opt_view_component_map0(OPT_ARGS_NUM){ return ovcm(num, action, val, 0); }
+double opt_view_component_map1(OPT_ARGS_NUM){ return ovcm(num, action, val, 1); }
+double opt_view_component_map2(OPT_ARGS_NUM){ return ovcm(num, action, val, 2); }
+double opt_view_component_map3(OPT_ARGS_NUM){ return ovcm(num, action, val, 3); }
+double opt_view_component_map4(OPT_ARGS_NUM){ return ovcm(num, action, val, 4); }
+double opt_view_component_map5(OPT_ARGS_NUM){ return ovcm(num, action, val, 5); }
+double opt_view_component_map6(OPT_ARGS_NUM){ return ovcm(num, action, val, 6); }
+double opt_view_component_map7(OPT_ARGS_NUM){ return ovcm(num, action, val, 7); }
+double opt_view_component_map8(OPT_ARGS_NUM){ return ovcm(num, action, val, 8); }
+
+double opt_print_file_format(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
-    CTX::instance()->print.format = (int)val;
-  return CTX::instance()->print.format;
+    CTX::instance()->print.fileFormat = (int)val;
+  return CTX::instance()->print.fileFormat;
 }
 
 double opt_print_eps_compress(OPT_ARGS_NUM)
@@ -8311,6 +8660,13 @@ double opt_print_composite_windows(OPT_ARGS_NUM)
   if(action & GMSH_SET)
     CTX::instance()->print.compositeWindows = (int)val;
   return CTX::instance()->print.compositeWindows;
+}
+
+double opt_print_delete_tmp_files(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->print.deleteTmpFiles = (int)val;
+  return CTX::instance()->print.deleteTmpFiles;
 }
 
 // Color option routines
@@ -8736,7 +9092,7 @@ unsigned int opt_mesh_color_19(OPT_ARGS_COL){ return opt_mesh_color_(19, num, ac
 
 unsigned int opt_view_color_points(OPT_ARGS_COL)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0);
   if(action & GMSH_SET) {
     opt->color.point = val;
@@ -8755,7 +9111,7 @@ unsigned int opt_view_color_points(OPT_ARGS_COL)
 
 unsigned int opt_view_color_lines(OPT_ARGS_COL)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0);
   if(action & GMSH_SET) {
     opt->color.line = val;
@@ -8774,7 +9130,7 @@ unsigned int opt_view_color_lines(OPT_ARGS_COL)
 
 unsigned int opt_view_color_triangles(OPT_ARGS_COL)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0);
   if(action & GMSH_SET) {
     opt->color.triangle = val;
@@ -8793,7 +9149,7 @@ unsigned int opt_view_color_triangles(OPT_ARGS_COL)
 
 unsigned int opt_view_color_quadrangles(OPT_ARGS_COL)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0);
   if(action & GMSH_SET) {
     opt->color.quadrangle = val;
@@ -8812,7 +9168,7 @@ unsigned int opt_view_color_quadrangles(OPT_ARGS_COL)
 
 unsigned int opt_view_color_tetrahedra(OPT_ARGS_COL)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0);
   if(action & GMSH_SET) {
     opt->color.tetrahedron = val;
@@ -8831,7 +9187,7 @@ unsigned int opt_view_color_tetrahedra(OPT_ARGS_COL)
 
 unsigned int opt_view_color_hexahedra(OPT_ARGS_COL)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0);
   if(action & GMSH_SET) {
     opt->color.hexahedron = val;
@@ -8850,7 +9206,7 @@ unsigned int opt_view_color_hexahedra(OPT_ARGS_COL)
 
 unsigned int opt_view_color_prisms(OPT_ARGS_COL)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0);
   if(action & GMSH_SET) {
     opt->color.prism = val;
@@ -8869,7 +9225,7 @@ unsigned int opt_view_color_prisms(OPT_ARGS_COL)
 
 unsigned int opt_view_color_pyramids(OPT_ARGS_COL)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0);
   if(action & GMSH_SET) {
     opt->color.pyramid = val;
@@ -8888,7 +9244,7 @@ unsigned int opt_view_color_pyramids(OPT_ARGS_COL)
 
 unsigned int opt_view_color_tangents(OPT_ARGS_COL)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0);
   if(action & GMSH_SET) {
     opt->color.tangents = val;
@@ -8907,7 +9263,7 @@ unsigned int opt_view_color_tangents(OPT_ARGS_COL)
 
 unsigned int opt_view_color_normals(OPT_ARGS_COL)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0);
   if(action & GMSH_SET) {
     opt->color.normals = val;
@@ -8926,7 +9282,7 @@ unsigned int opt_view_color_normals(OPT_ARGS_COL)
 
 unsigned int opt_view_color_text2d(OPT_ARGS_COL)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0);
   if(action & GMSH_SET) {
     opt->color.text2d = val;
@@ -8944,7 +9300,7 @@ unsigned int opt_view_color_text2d(OPT_ARGS_COL)
 
 unsigned int opt_view_color_text3d(OPT_ARGS_COL)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0);
   if(action & GMSH_SET) {
     opt->color.text3d = val;
@@ -8962,7 +9318,7 @@ unsigned int opt_view_color_text3d(OPT_ARGS_COL)
 
 unsigned int opt_view_color_axes(OPT_ARGS_COL)
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   GET_VIEW(0);
   if(action & GMSH_SET) {
     opt->color.axes = val;

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -10,6 +10,7 @@
 #include "StringUtils.h"
 #include "Context.h"
 #include "Options.h"
+#include "OS.h"
 
 #if defined(HAVE_OPENGL)
 #include "drawContext.h"
@@ -38,16 +39,21 @@ int GuessFileFormatFromFileName(std::string fileName)
   else if(ext == ".stl")  return FORMAT_STL;
   else if(ext == ".cgns") return FORMAT_CGNS;
   else if(ext == ".med")  return FORMAT_MED;
+  else if(ext == ".ir3")  return FORMAT_IR3;
   else if(ext == ".mesh") return FORMAT_MESH;
   else if(ext == ".bdf")  return FORMAT_BDF;
   else if(ext == ".diff") return FORMAT_DIFF;
+  else if(ext == ".inp")  return FORMAT_INP;
   else if(ext == ".nas")  return FORMAT_BDF;
   else if(ext == ".p3d")  return FORMAT_P3D;
   else if(ext == ".wrl")  return FORMAT_VRML;
   else if(ext == ".vrml") return FORMAT_VRML;
+  else if(ext == ".ply2") return FORMAT_PLY2;
   else if(ext == ".gif")  return FORMAT_GIF;
   else if(ext == ".jpg")  return FORMAT_JPEG;
   else if(ext == ".jpeg") return FORMAT_JPEG;
+  else if(ext == ".mpg")  return FORMAT_MPEG;
+  else if(ext == ".mpeg") return FORMAT_MPEG;
   else if(ext == ".png")  return FORMAT_PNG;
   else if(ext == ".ps")   return FORMAT_PS;
   else if(ext == ".eps")  return FORMAT_EPS;
@@ -78,13 +84,17 @@ std::string GetDefaultFileName(int format)
   case FORMAT_STL:  name += ".stl"; break;
   case FORMAT_CGNS: name += ".cgns"; break;
   case FORMAT_MED:  name += ".med"; break;
+  case FORMAT_IR3:  name += ".ir3"; break;
   case FORMAT_MESH: name += ".mesh"; break;
   case FORMAT_BDF:  name += ".bdf"; break;
   case FORMAT_DIFF: name += ".diff"; break;
+  case FORMAT_INP:  name += ".inp"; break;
   case FORMAT_P3D:  name += ".p3d"; break;
   case FORMAT_VRML: name += ".wrl"; break;
+  case FORMAT_PLY2: name += ".ply2"; break;
   case FORMAT_GIF:  name += ".gif"; break;
   case FORMAT_JPEG: name += ".jpg"; break;
+  case FORMAT_MPEG: name += ".mpg"; break;
   case FORMAT_PNG:  name += ".png"; break;
   case FORMAT_PS:   name += ".ps"; break;
   case FORMAT_EPS:  name += ".eps"; break;
@@ -93,9 +103,9 @@ std::string GetDefaultFileName(int format)
   case FORMAT_SVG:  name += ".svg"; break;
   case FORMAT_PPM:  name += ".ppm"; break;
   case FORMAT_YUV:  name += ".yuv"; break;
-  case FORMAT_BREP:  name += ".brep"; break;
-  case FORMAT_IGES:  name += ".iges"; break;
-  case FORMAT_STEP:  name += ".step"; break;
+  case FORMAT_BREP: name += ".brep"; break;
+  case FORMAT_IGES: name += ".iges"; break;
+  case FORMAT_STEP: name += ".step"; break;
   default: break;
   }
   return name;
@@ -148,13 +158,14 @@ void CreateOutputFile(std::string fileName, int format)
   if(fileName.empty())
     fileName = GetDefaultFileName(format);
 
-  int oldformat = CTX::instance()->print.format;
-  CTX::instance()->print.format = format;
+  int oldFormat = CTX::instance()->print.fileFormat;
+  CTX::instance()->print.fileFormat = format;
   CTX::instance()->printing = 1;
 
-  bool printEndMessage = true;
   if(format != FORMAT_AUTO) 
-    Msg::StatusBar(2, true, "Writing '%s'", fileName.c_str());
+    Msg::StatusBar(2, true, "Writing '%s'...", fileName.c_str());
+
+  bool printEndMessage = true;
 
   switch (format) {
 
@@ -168,10 +179,18 @@ void CreateOutputFile(std::string fileName, int format)
     break;
 
   case FORMAT_MSH:
-    GModel::current()->writeMSH
-      (fileName, CTX::instance()->mesh.mshFileVersion,
-       CTX::instance()->mesh.binary, CTX::instance()->mesh.saveAll,
-       CTX::instance()->mesh.saveParametric, CTX::instance()->mesh.scalingFactor);
+    if(GModel::current()->getMeshPartitions().size() && 
+       CTX::instance()->mesh.mshFilePartitioned){
+      GModel::current()->writePartitionedMSH
+        (fileName, CTX::instance()->mesh.binary, CTX::instance()->mesh.saveAll,
+         CTX::instance()->mesh.saveParametric, CTX::instance()->mesh.scalingFactor);
+    }
+    else{
+      GModel::current()->writeMSH
+        (fileName, CTX::instance()->mesh.mshFileVersion,
+         CTX::instance()->mesh.binary, CTX::instance()->mesh.saveAll,
+         CTX::instance()->mesh.saveParametric, CTX::instance()->mesh.scalingFactor);
+    }
     break;
 
   case FORMAT_STL:
@@ -183,6 +202,10 @@ void CreateOutputFile(std::string fileName, int format)
   case FORMAT_VRML:
     GModel::current()->writeVRML
       (fileName, CTX::instance()->mesh.saveAll, CTX::instance()->mesh.scalingFactor);
+    break;
+
+  case FORMAT_PLY2:
+    GModel::current()->writePLY2(fileName);
     break;
 
   case FORMAT_UNV:
@@ -204,6 +227,12 @@ void CreateOutputFile(std::string fileName, int format)
        CTX::instance()->mesh.saveAll, CTX::instance()->mesh.scalingFactor);
     break;
 
+  case FORMAT_IR3:
+    GModel::current()->writeIR3
+      (fileName, CTX::instance()->mesh.saveElementTagType, 
+       CTX::instance()->mesh.saveAll, CTX::instance()->mesh.scalingFactor);
+    break;
+
   case FORMAT_BDF:
     GModel::current()->writeBDF
       (fileName, CTX::instance()->mesh.bdfFieldFormat, 
@@ -215,6 +244,11 @@ void CreateOutputFile(std::string fileName, int format)
     GModel::current()->writeDIFF
       (fileName, CTX::instance()->mesh.binary, CTX::instance()->mesh.saveAll, 
        CTX::instance()->mesh.scalingFactor);
+    break;
+
+  case FORMAT_INP:
+    GModel::current()->writeINP
+      (fileName, CTX::instance()->mesh.saveAll, CTX::instance()->mesh.scalingFactor);
     break;
 
   case FORMAT_P3D:
@@ -245,14 +279,14 @@ void CreateOutputFile(std::string fileName, int format)
   case FORMAT_GEO:
     GModel::current()->writeGEO(fileName, CTX::instance()->print.geoLabels);
     break;
-#if defined(HAVE_OCC)
+
   case FORMAT_BREP:
     GModel::current()->writeOCCBREP(fileName);
     break;
+
   case FORMAT_STEP:
     GModel::current()->writeOCCSTEP(fileName);
     break;
-#endif
 
 #if defined(HAVE_FLTK)
   case FORMAT_PPM:
@@ -269,13 +303,13 @@ void CreateOutputFile(std::string fileName, int format)
         break;
       }
 
-      int old_gradient = CTX::instance()->bgGradient;
+      int oldGradient = CTX::instance()->bgGradient;
       if(format == FORMAT_GIF && CTX::instance()->print.gifTransparent)
         CTX::instance()->bgGradient = 0;
 
       PixelBuffer *buffer = GetCompositePixelBuffer(GL_RGB, GL_UNSIGNED_BYTE);
 
-      CTX::instance()->bgGradient = old_gradient;
+      CTX::instance()->bgGradient = oldGradient;
 
       if(format == FORMAT_PPM)
         create_ppm(fp, buffer);
@@ -318,7 +352,7 @@ void CreateOutputFile(std::string fileName, int format)
       GLint height = FlGui::instance()->getCurrentOpenglWindow()->h();
       GLint viewport[4] = {0, 0, width, height};
 
-      int old_gradient = CTX::instance()->bgGradient;
+      int oldGradient = CTX::instance()->bgGradient;
       if(!CTX::instance()->print.epsBackground) CTX::instance()->bgGradient = 0;
       
       PixelBuffer buffer(width, height, GL_RGB, GL_FLOAT);
@@ -373,7 +407,7 @@ void CreateOutputFile(std::string fileName, int format)
         res = gl2psEndPage();
       }
 
-      CTX::instance()->bgGradient = old_gradient;
+      CTX::instance()->bgGradient = oldGradient;
       fclose(fp);
     }
     break;
@@ -408,17 +442,80 @@ void CreateOutputFile(std::string fileName, int format)
       fclose(fp);
     }
     break;
+
+#if defined(HAVE_MPEG_ENCODE)
+  case FORMAT_MPEG:
+    {
+      std::string parFileName = CTX::instance()->homeDir + ".gmsh-mpeg_encode.par";
+      FILE *fp = fopen(parFileName.c_str(), "w");
+      if(!fp){
+        Msg::Error("Unable to open file '%s'", parFileName.c_str());
+        break;
+      }
+      int numViews = (int)opt_post_nb_views(0, GMSH_GET, 0), numSteps = 0;
+      for(int i = 0; i < numViews; i++){
+        if(opt_view_visible(i, GMSH_GET, 0))
+          numSteps = std::max(numSteps, (int)opt_view_nb_timestep(i, GMSH_GET, 0));
+      }
+      std::vector<std::string> frames;
+      for(int i = 0; i < (CTX::instance()->post.animCycle ? numViews : numSteps); i++){
+        char tmp[256];
+        sprintf(tmp, ".gmsh-%03d.ppm", i);
+        frames.push_back(tmp);
+      }
+      status_play_manual(!CTX::instance()->post.animCycle, 0);
+      for(unsigned int i = 0; i < frames.size(); i++){
+        CreateOutputFile(CTX::instance()->homeDir + frames[i], FORMAT_PPM);
+        status_play_manual(!CTX::instance()->post.animCycle, 1);
+      }
+      int repeat = (int)(CTX::instance()->post.animDelay * 24);
+      if(repeat < 1) repeat = 1;
+      std::string pattern("I");
+      // including P frames would lead to smaller files, but the
+      // quality degradation is perceptible:
+      // for(int i = 1; i < repeat; i++) pattern += "P";
+      fprintf(fp, "PATTERN %s\nBASE_FILE_FORMAT PPM\nGOP_SIZE %d\n"
+              "SLICES_PER_FRAME 1\nPIXEL FULL\nRANGE 10\n"
+              "PSEARCH_ALG EXHAUSTIVE\nBSEARCH_ALG CROSS2\n"
+              "IQSCALE 1\nPQSCALE 1\nBQSCALE 25\nREFERENCE_FRAME DECODED\n"
+              "OUTPUT %s\nINPUT_CONVERT *\nINPUT_DIR %s\nINPUT\n",
+              pattern.c_str(), repeat, fileName.c_str(), 
+              CTX::instance()->homeDir.c_str());
+      for(unsigned int i = 0; i < frames.size(); i++){
+        fprintf(fp, "%s", frames[i].c_str());
+        if(repeat > 1) fprintf(fp, " [1-%d]", repeat);
+        fprintf(fp, "\n");
+      }
+      fprintf(fp, "END_INPUT\n");
+      fclose(fp);
+      extern int mpeg_encode_main(int, char**);
+      char *args[] = {(char*)"gmsh", (char*)parFileName.c_str()};
+      try{
+        mpeg_encode_main(2, args);
+      }
+      catch (const char *error){
+        Msg::Error("mpeg_encode: %s", error);
+      }
+      if(opt_print_delete_tmp_files(0, GMSH_GET, 0)){
+        UnlinkFile(parFileName);
+        for(unsigned int i = 0; i < frames.size(); i++)
+          UnlinkFile(CTX::instance()->homeDir + frames[i]);
+      }
+    }
+    break;
+#endif
+
 #endif
 
   default:
-    Msg::Error("Unknown output file format");
+    Msg::Error("Unknown output file format %d", format);
     printEndMessage = false;
     break;
   }
 
-  if(printEndMessage) Msg::StatusBar(2, true, "Wrote '%s'", fileName.c_str());
+  if(printEndMessage) Msg::StatusBar(2, true, "Done writing '%s'", fileName.c_str());
 
-  CTX::instance()->print.format = oldformat;
+  CTX::instance()->print.fileFormat = oldFormat;
   CTX::instance()->printing = 0;
 
 #if defined(HAVE_OPENGL)

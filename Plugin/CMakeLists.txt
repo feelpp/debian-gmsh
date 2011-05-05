@@ -1,4 +1,4 @@
-# Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+# Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 #
 # See the LICENSE.txt file for license information. Please report all
 # bugs and problems to <gmsh@geuz.org>.
@@ -6,25 +6,26 @@
 set(SRC
   Plugin.cpp PluginManager.cpp
   Levelset.cpp
-    CutPlane.cpp CutSphere.cpp CutMap.cpp 
+    CutPlane.cpp CutSphere.cpp Isosurface.cpp 
   Smooth.cpp CutParametric.cpp
   Lambda2.cpp
   Eigenvectors.cpp Eigenvalues.cpp
-  StreamLines.cpp CutGrid.cpp
+  StreamLines.cpp Particles.cpp CutGrid.cpp
   Transform.cpp
     LongitudeLatitude.cpp
   Triangulate.cpp Tetrahedralize.cpp
   Warp.cpp SphericalRaise.cpp
   Skin.cpp GSHHS.cpp 
-  Extract.cpp ExtractElements.cpp ExtractEdges.cpp
+  MathEval.cpp ModifyComponent.cpp ExtractElements.cpp
   MakeSimplex.cpp
-  Evaluate.cpp FieldView.cpp 
   Integrate.cpp Gradient.cpp Curl.cpp Divergence.cpp
   Annotate.cpp Remove.cpp
-  Probe.cpp
+  Probe.cpp MinMax.cpp
   HarmonicToTime.cpp ModulusPhase.cpp
   HomologyComputation.cpp
+  Distance.cpp ExtractEdges.cpp NearestNeighbor.cpp
+  AnalyseCurvedMesh.cpp
 )
 
-file(GLOB HDR RELATIVE ${CMAKE_SOURCE_DIR}/Plugin *.h) 
+file(GLOB HDR RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.h) 
 append_gmsh_src(Plugin "${SRC};${HDR}")

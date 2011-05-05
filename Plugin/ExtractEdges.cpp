@@ -1,13 +1,15 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
+#include "GModel.h"
+#include "meshGFaceOptimize.h"
 #include "ExtractEdges.h"
 
 StringXNumber ExtractEdgesOptions_Number[] = {
-  {GMSH_FULLRC, "Angle", NULL, 22.},
-  {GMSH_FULLRC, "iView", NULL, -1.}
+  {GMSH_FULLRC, "Angle", NULL, 40.},
+  {GMSH_FULLRC, "IncludeBoundary", NULL, 1.},
 };
 
 extern "C"
@@ -20,12 +22,9 @@ extern "C"
 
 std::string GMSH_ExtractEdgesPlugin::getHelp() const
 {
-  return "Plugin(ExtractEdges) extracts the geometry edges\n"
-         "from the surface view `iView', using `Angle' as\n"
-         "the dihedral angle tolerance. If `iView' < 0, then\n"
-         "plugin is run on the current view.\n"
-         "\n"
-         "Plugin(ExtractEdges) creates one new view.\n";
+  return "Plugin(ExtractEdges) extracts sharp edges "
+    "from a triangular mesh.\n\n"
+    "Plugin(ExtractEdges) creates one new view.";
 }
 
 int GMSH_ExtractEdgesPlugin::getNbOptions() const
@@ -38,27 +37,54 @@ StringXNumber *GMSH_ExtractEdgesPlugin::getOption(int iopt)
   return &ExtractEdgesOptions_Number[iopt];
 }
 
+static void add_edge(edge_angle &ea, PViewDataList *data)
+{
+  data->SL.push_back(ea.v1->x());
+  data->SL.push_back(ea.v2->x());
+  data->SL.push_back(ea.v1->y());
+  data->SL.push_back(ea.v2->y());
+  data->SL.push_back(ea.v1->z());
+  data->SL.push_back(ea.v2->z());
+  data->SL.push_back(1.);
+  data->SL.push_back(1.);
+  data->NbSL++;
+}
+
 PView *GMSH_ExtractEdgesPlugin::execute(PView *v)
 {
-  int iView = (int)ExtractEdgesOptions_Number[1].def;
-  //double angle = ExtractEdgesOptions_Number[0].def;
-
-  PView *v1 = getView(iView, v);
-  if(!v1) return v;
-
-  PViewData *data1 = v1->getData();
+  std::vector<MTriangle*> elements;
+  for(GModel::fiter it = GModel::current()->firstFace(); 
+      it != GModel::current()->lastFace(); ++it)
+    elements.insert(elements.end(), (*it)->triangles.begin(), 
+                    (*it)->triangles.end());
+  
+  if(elements.empty()){
+    Msg::Error("No triangles in mesh to extract edges from");
+    return 0;
+  }
 
   PView *v2 = new PView();
   PViewDataList *data2 = getDataList(v2);
 
-  //BDS_Mesh bds;
-  //bds.import_view(v1, CTX::instance()->lc * 1.e-12);
-  //bds.classify(angle * M_PI / 180.);
+  e2t_cont adj;
+  buildEdgeToTriangle(elements, adj);
+  std::vector<edge_angle> edges_detected, edges_lonly;
+  buildListOfEdgeAngle(adj, edges_detected, edges_lonly);
 
-  Msg::Error("classify(angle, edge_prolongation) must be reinterfaced");
+  double threshold = ExtractEdgesOptions_Number[0].def / 180. * M_PI;
+  for(unsigned int i = 0; i < edges_detected.size(); i++){
+    if(edges_detected[i].angle <= threshold) break;
+    add_edge(edges_detected[i], data2);
+  } 
 
-  data2->setName(data1->getName() + "_ExtractEdges");
-  data2->setFileName(data1->getName() + "_ExtractEdges.pos");
+  if(ExtractEdgesOptions_Number[1].def){
+    for(unsigned int i = 0; i < edges_lonly.size(); i++){
+      add_edge(edges_lonly[i], data2);
+    } 
+  }
+
+  data2->setName("ExtractEdges");
+  data2->setFileName("ExtractEdges.pos");
   data2->finalize();
 
   return v2;

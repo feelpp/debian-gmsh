@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -10,6 +10,7 @@
 #include <vector>
 #include "MElement.h"
 #include "GmshMessage.h"
+#include "Context.h"
 
 
 /*******************************************************************************
@@ -29,6 +30,7 @@ class GrVertex
  public:
   const int index;                      // This is the creation index, *not* the
                                         // index in 'adjncy'
+  int dualWeight;
  private:
   unsigned short size;
   unsigned short sizeC;                 // Complete size (all possible 'grEdge')
@@ -86,6 +88,8 @@ class Graph
   std::vector<int> adjncy;              // Connectivity between graph vertex
                                         // xadj[i] and its neighbour graph
                                         // vertices.
+  std::vector<int> vwgts;               // Weights assigned for each 
+                                        // vertex
   std::vector<int> section;             // For separate partitioning of
                                         // different parts of the mesh
   std::vector<int> partition;           // The partitions output from the
@@ -128,6 +132,7 @@ class Graph
     totalGrVert = _totalGrVert;
     xadj.resize(_totalGrVert + 1);
     adjncy.reserve(2*totalGrEdge);
+    vwgts.resize(_totalGrVert);
     partition.resize(_totalGrVert);
     element.resize(_totalGrVert);
     c2w = new int[_totalGrVert];
@@ -137,11 +142,55 @@ class Graph
   {
     const int i = numGrVert++;
     xadj[i] = adjncy.size();
+    vwgts[i] = 1;
     grVertMapIt->second.write(adjncy);
     element[i] = grVertMapIt->first;
     // Translated vertex numbers start from 1
     c2w[grVertMapIt->second.index] = i + 1;
   }
+  void fillWeights(std::vector<int> wgts)
+  {
+    int num = 0;
+    for(std::vector<int>::iterator it = wgts.begin(); it != wgts.end(); it++){
+      vwgts[num]= 1; //*it;
+       num++;
+    }
+  }
+
+  // Add weights per element, as defined in options 
+  void fillDefaultWeights() 
+  {
+    std::vector<MElement*>::iterator eIt = element.begin();
+    vwgts.resize(element.size());
+    std::vector<int>::iterator wIt = vwgts.begin();
+    for ( ; eIt != element.end() ; eIt++ , wIt++) {
+      
+      switch ((*eIt)->getType()) {
+      case TYPE_TRI:
+        *wIt = CTX::instance()->partitionOptions.triWeight;
+        break;
+      case TYPE_QUA:
+        *wIt = CTX::instance()->partitionOptions.quaWeight;
+        break;
+      case TYPE_TET:
+        *wIt = CTX::instance()->partitionOptions.tetWeight;
+        break;
+      case TYPE_PYR:
+        *wIt = CTX::instance()->partitionOptions.pyrWeight;
+        break;
+      case TYPE_PRI:
+        *wIt = CTX::instance()->partitionOptions.priWeight;
+        break;
+      case TYPE_HEX:
+        *wIt = CTX::instance()->partitionOptions.hexWeight;
+        break;
+      default:
+        *wIt = 1;
+        break;
+      }
+    }
+  }
+
   void markSection() { section.push_back(numGrVert); }
   // Returns the next index for a graph vertex
   int getNextIndex() { return cIndex++; }
@@ -154,6 +203,7 @@ class Graph
       Msg::Warning("Internal error - Graph vertices are missing");
     }
     xadj[numGrVert] = adjncy.size();
+    vwgts[numGrVert-1]=(int)(1.0);
     const int nAdj = adjncy.size();
     for(int i = 0; i != nAdj; ++i) adjncy[i] = c2w[adjncy[i]];
     delete[] c2w;

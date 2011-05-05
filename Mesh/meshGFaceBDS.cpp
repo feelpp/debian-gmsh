@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -450,74 +450,53 @@ void delaunayizeBDS(GFace *gf, BDS_Mesh &m, int &nb_swap)
   }
 }
 
-void splitEdgePassUnsorted(GFace *gf, BDS_Mesh &m, double MAXE_, int &nb_split)
-{
-  int NN1 = m.edges.size();
-  int NN2 = 0;
-  std::list<BDS_Edge*>::iterator it = m.edges.begin();
-  while (1){
-    if (NN2++ >= NN1) break;
-    if (!(*it)->deleted){
-      double lone = NewGetLc(*it, gf, m.scalingU, m.scalingV);
-      if ((*it)->numfaces() == 2 && (lone > MAXE_)){
-        const double coord = 0.5;
-        //const double coord = computeEdgeMiddleCoord((*it)->p1, (*it)->p2, gf,
-        //                                                    m.scalingU, m.scalingV);
-        BDS_Point *mid;
-
-        GPoint gpp = gf->point
-          (m.scalingU*(coord * (*it)->p1->u + (1 - coord) * (*it)->p2->u),
-           m.scalingV*(coord * (*it)->p1->v + (1 - coord) * (*it)->p2->v));
-        if (gpp.succeeded()){  
-          mid  = m.add_point
-            (++m.MAXPOINTNUMBER,
-             coord * (*it)->p1->u + (1 - coord) * (*it)->p2->u,
-             coord * (*it)->p1->v + (1 - coord) * (*it)->p2->v, gf);
-          mid->lcBGM() = BGM_MeshSize
-            (gf,
-             (coord * (*it)->p1->u + (1 - coord) * (*it)->p2->u)*m.scalingU,
-             (coord * (*it)->p1->v + (1 - coord) * (*it)->p2->v)*m.scalingV,
-             mid->X,mid->Y,mid->Z);
-          mid->lc() = 0.5 * ((*it)->p1->lc() +  (*it)->p2->lc());
-          if(!m.split_edge(*it, mid)) m.del_point(mid);
-          else nb_split++;
-        }
-      }
-    }
-    ++it;
-  }
-}
-
 // A test for spheres
-static void midpointsphere(GFace *gf, double u1, double v1, double u2, 
-                           double v2, double &u12, double &v12, double r)
+static void midpointsphere(GFace *gf, 
+			   double u1, 
+			   double v1, 
+			   double u2, 
+                           double v2, 
+			   double &u12, 
+			   double &v12, 
+			   SPoint3 &center,
+			   double r)
 {
   GPoint p1 = gf->point(u1, v1);
   GPoint p2 = gf->point(u2, v2);
+  
+  SVector3 DIR ((p1.x()+p2.x())/2.0 - center.x(),
+		(p1.y()+p2.y())/2.0 - center.y(),
+		(p1.z()+p2.z())/2.0 - center.z());
+  DIR.normalize();
+  
+  double X,Y,Z;
+
   double guess [2] = {0.5 * (u1 + u2), 0.5 * (v1 + v2)};
   u12 = guess[0];
   v12 = guess[1];
-
-  double d = sqrt((p1.x() - p2.x()) * (p1.x() - p2.x()) +
-                  (p1.y() - p2.y()) * (p1.y() - p2.y()) +
-                  (p1.z() - p2.z()) * (p1.z() - p2.z()));
-  
-  if (d > r/3){
-    return;
+  if ( (v1 > 0.7*M_PI/2 && v2  > 0.7*M_PI/2) ||
+       (v1 < -0.7*M_PI/2 && v2 < -0.7*M_PI/2) ){
+    //    printf("coucou\n");
+    X = center.x() + DIR.x() * r;
+    Y = center.y() + DIR.y() * r;
+    Z = center.z() + DIR.z() * r;
   }
-  const double X = 0.5 * (p1.x() + p2.x());
-  const double Y = 0.5 * (p1.y() + p2.y());
-  const double Z = 0.5 * (p1.z() + p2.z());
-  
+  else{
+    return;
+    X = center.x() - DIR.x() * r;
+    Y = center.y() - DIR.y() * r;
+    Z = center.z() - DIR.z() * r;
+  }
+
   GPoint proj = gf->closestPoint(SPoint3(X, Y, Z), guess);
   if (proj.succeeded()){
     u12 = proj.u();
     v12 = proj.v();
   }
-
+  //  printf("%g %g %g -- %g\n",center.x(),center.y(),center.z(),r);
+  //  printf("%g %g -- %g %g -- %g %g -- %g %g\n",
+  //         u1, v1, u2, v2, u12, v12, 0.5 * (u1 + u2), 0.5 * (v1 + v2));
   return;
-  printf("%g %g -- %g %g -- %g %g -- %g %g\n",
-         u1, v1, u2, v2, u12, v12, 0.5 * (u1 + u2), 0.5 * (v1 + v2));
 }
 
 void splitEdgePass(GFace *gf, BDS_Mesh &m, double MAXE_, int &nb_split)
@@ -537,6 +516,10 @@ void splitEdgePass(GFace *gf, BDS_Mesh &m, double MAXE_, int &nb_split)
 
   std::sort(edges.begin(), edges.end());
 
+  double RADIUS;
+  SPoint3 CENTER;
+  bool isSphere = gf->isSphere(RADIUS,CENTER);
+
   for (unsigned int i = 0; i < edges.size(); ++i){
     BDS_Edge *e = edges[i].second;
     if (!e->deleted){
@@ -546,9 +529,9 @@ void splitEdgePass(GFace *gf, BDS_Mesh &m, double MAXE_, int &nb_split)
       BDS_Point *mid ;
 
       double U, V;
-      if (0 && gf->geomType() == GEntity::Sphere){
+      if (0 && isSphere){	
         midpointsphere(gf,e->p1->u,e->p1->v,e->p2->u,e->p2->v,U,V,
-                       gf-> getSurfaceParams().radius);
+                       CENTER,RADIUS);
       }
       else{
         U = coord * e->p1->u + (1 - coord) * e->p2->u;
@@ -560,12 +543,21 @@ void splitEdgePass(GFace *gf, BDS_Mesh &m, double MAXE_, int &nb_split)
         mid  = m.add_point(++m.MAXPOINTNUMBER, gpp.x(),gpp.y(),gpp.z());
         mid->u = U;
         mid->v = V;
-        mid->lcBGM() = BGM_MeshSize
-          (gf,
-           (coord * e->p1->u + (1 - coord) * e->p2->u)*m.scalingU,
-           (coord * e->p1->v + (1 - coord) * e->p2->v)*m.scalingV,
-           mid->X,mid->Y,mid->Z);
-        mid->lc() = 0.5 * (e->p1->lc() +  e->p2->lc());
+        if (backgroundMesh::current()){
+          mid->lc() = mid->lcBGM() = 
+            backgroundMesh::current()->operator()
+            ((coord * e->p1->u + (1 - coord) * e->p2->u)*m.scalingU,
+             (coord * e->p1->v + (1 - coord) * e->p2->v)*m.scalingV,
+             0.0);
+        }
+        else {
+          mid->lcBGM() = BGM_MeshSize
+            (gf,
+             (coord * e->p1->u + (1 - coord) * e->p2->u)*m.scalingU,
+             (coord * e->p1->v + (1 - coord) * e->p2->v)*m.scalingV,
+             mid->X,mid->Y,mid->Z);
+          mid->lc() = 0.5 * (e->p1->lc() +  e->p2->lc());
+        }
         if(!m.split_edge(e, mid)) m.del_point(mid);
         else nb_split++;
       }
@@ -632,6 +624,7 @@ void collapseEdgePassUnSorted(GFace *gf, BDS_Mesh &m, double MINE_, int MAXNP,
 
 void smoothVertexPass(GFace *gf, BDS_Mesh &m, int &nb_smooth, bool q)
 {
+  //  return;
   std::set<BDS_Point*,PointLessThan>::iterator itp = m.points.begin();
   while(itp != m.points.end()){      
     if(m.smooth_point_centroid(*itp, gf,q))
@@ -697,6 +690,7 @@ void refineMeshBDS(GFace *gf, BDS_Mesh &m, const int NIT,
   const double MINE_ = 0.67, MAXE_ = 1.4;
 
   while (1){
+    
     // we count the number of local mesh modifs.
     int nb_split = 0;
     int nb_smooth = 0;
@@ -726,18 +720,29 @@ void refineMeshBDS(GFace *gf, BDS_Mesh &m, const int NIT,
     double minE = MINE_;
     double t1 = Cpu();
     splitEdgePass(gf, m, maxE, nb_split);
+
     double t2 = Cpu();
     swapEdgePass(gf, m, nb_swap);
     swapEdgePass(gf, m, nb_swap);
     swapEdgePass(gf, m, nb_swap);
+
+    //    if (computeNodalSizeField){
+    //      char name[256]; sprintf(name,"iter%d_SPLIT.pos",IT);
+    //      outputScalarField(m.triangles, name, 0);
+    //    }
     double t3 = Cpu();
     collapseEdgePass(gf, m, minE, MAXNP, nb_collaps);
+
     double t4 = Cpu();
     double t5 = Cpu();
     smoothVertexPass(gf, m, nb_smooth, false);
     double t6 = Cpu();
     swapEdgePass ( gf, m, nb_swap);
     double t7 = Cpu();
+    //    if (computeNodalSizeField){
+    //      char name[256]; sprintf(name,"iter%d_COLLAPSE.pos",IT);
+    //      outputScalarField(m.triangles, name, 0);
+    //    }
     // clean up the mesh
     t_spl += t2 - t1;
     t_sw  += t3 - t2;

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -142,12 +142,24 @@ class VertexArray{
   // range check 2) calling this if _vertices.size() == 0 will cause
   // some compilers to throw an exception)
   float *getVertexArray(int i=0){ return &_vertices[i]; }
+  std::vector<float>::iterator firstVertex(){return _vertices.begin();}
+  std::vector<float>::iterator lastVertex(){return _vertices.end();}
+
   // return a pointer to the raw normal array
   char *getNormalArray(int i=0){ return &_normals[i]; }
+  std::vector<char>::iterator firstNormal(){return _normals.begin();}
+  std::vector<char>::iterator lastNormal(){return _normals.end();}
+
   // return a pointer to the raw color array
   unsigned char *getColorArray(int i=0){ return &_colors[i]; }
+  std::vector<unsigned char>::iterator firstColor(){return _colors.begin();}
+  std::vector<unsigned char>::iterator lastColor(){return _colors.end();}
+
   // return a pointer to the raw element array
   MElement **getElementPointerArray(int i=0){ return &_elements[i]; }
+  std::vector<MElement*>::iterator firstElementPointer(){return _elements.begin();}
+  std::vector<MElement*>::iterator lastElementPointer(){return _elements.end();}
+  
   // add element data in the arrays (if unique is set, only add the
   // element if another one with the same barycenter is not already
   // present)
@@ -161,12 +173,19 @@ class VertexArray{
   // sort the arrays with elements back to front wrt the eye position
   void sort(double x, double y, double z);
   // estimate the size of the vertex array in megabytes
-  int getMemoryUsage();
+  double getMemoryInMb();
   // serialize the vertex array into a string (for sending over the
   // network)
-  char *toChar(int num, int type, double min, double max, double time,
-               SBoundingBox3d bbox, int &len);
-  void fromChar(const char *bytes);
+  char *toChar(int num, std::string name, int type, double min, double max, 
+               int numsteps, double time, SBoundingBox3d bbox, int &len);
+  void fromChar(int length, const char *bytes, int swap);
+  static int decodeHeader(int length, const char *bytes, int swap,
+                          std::string &name, int &num, int &type,
+                          double &min, double &max, int &numSteps, double &time,
+                          double &xmin, double &ymin, double &zmin, 
+                          double &xmax, double &ymax, double &zmax);
+  // merge another vertex array into this one
+  void merge(VertexArray *va);
 };
 
 #endif

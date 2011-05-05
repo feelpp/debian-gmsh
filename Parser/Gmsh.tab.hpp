@@ -101,10 +101,10 @@
      tComplex = 317,
      tPhysical = 318,
      tCompound = 319,
-     tUsing = 320,
-     tPlugin = 321,
-     tDegenerated = 322,
-     tOCCShape = 323,
+     tPeriodic = 320,
+     tUsing = 321,
+     tPlugin = 322,
+     tDegenerated = 323,
      tRotate = 324,
      tTranslate = 325,
      tSymmetry = 326,
@@ -147,22 +147,28 @@
      tShow = 363,
      tHide = 364,
      tGetValue = 365,
-     tGMSH_MAJOR_VERSION = 366,
-     tGMSH_MINOR_VERSION = 367,
-     tGMSH_PATCH_VERSION = 368,
-     tAFFECTDIVIDE = 369,
-     tAFFECTTIMES = 370,
-     tAFFECTMINUS = 371,
-     tAFFECTPLUS = 372,
-     tOR = 373,
-     tAND = 374,
-     tNOTEQUAL = 375,
-     tEQUAL = 376,
-     tGREATEROREQUAL = 377,
-     tLESSOREQUAL = 378,
-     UNARYPREC = 379,
-     tMINUSMINUS = 380,
-     tPLUSPLUS = 381
+     tGetEnv = 366,
+     tGetString = 367,
+     tGMSH_MAJOR_VERSION = 368,
+     tGMSH_MINOR_VERSION = 369,
+     tGMSH_PATCH_VERSION = 370,
+     tHomRank = 371,
+     tHomGen = 372,
+     tHomCut = 373,
+     tHomSeq = 374,
+     tAFFECTDIVIDE = 375,
+     tAFFECTTIMES = 376,
+     tAFFECTMINUS = 377,
+     tAFFECTPLUS = 378,
+     tOR = 379,
+     tAND = 380,
+     tNOTEQUAL = 381,
+     tEQUAL = 382,
+     tGREATEROREQUAL = 383,
+     tLESSOREQUAL = 384,
+     UNARYPREC = 385,
+     tMINUSMINUS = 386,
+     tPLUSPLUS = 387
    };
 #endif
 /* Tokens.  */
@@ -228,10 +234,10 @@
 #define tComplex 317
 #define tPhysical 318
 #define tCompound 319
-#define tUsing 320
-#define tPlugin 321
-#define tDegenerated 322
-#define tOCCShape 323
+#define tPeriodic 320
+#define tUsing 321
+#define tPlugin 322
+#define tDegenerated 323
 #define tRotate 324
 #define tTranslate 325
 #define tSymmetry 326
@@ -274,29 +280,35 @@
 #define tShow 363
 #define tHide 364
 #define tGetValue 365
-#define tGMSH_MAJOR_VERSION 366
-#define tGMSH_MINOR_VERSION 367
-#define tGMSH_PATCH_VERSION 368
-#define tAFFECTDIVIDE 369
-#define tAFFECTTIMES 370
-#define tAFFECTMINUS 371
-#define tAFFECTPLUS 372
-#define tOR 373
-#define tAND 374
-#define tNOTEQUAL 375
-#define tEQUAL 376
-#define tGREATEROREQUAL 377
-#define tLESSOREQUAL 378
-#define UNARYPREC 379
-#define tMINUSMINUS 380
-#define tPLUSPLUS 381
+#define tGetEnv 366
+#define tGetString 367
+#define tGMSH_MAJOR_VERSION 368
+#define tGMSH_MINOR_VERSION 369
+#define tGMSH_PATCH_VERSION 370
+#define tHomRank 371
+#define tHomGen 372
+#define tHomCut 373
+#define tHomSeq 374
+#define tAFFECTDIVIDE 375
+#define tAFFECTTIMES 376
+#define tAFFECTMINUS 377
+#define tAFFECTPLUS 378
+#define tOR 379
+#define tAND 380
+#define tNOTEQUAL 381
+#define tEQUAL 382
+#define tGREATEROREQUAL 383
+#define tLESSOREQUAL 384
+#define UNARYPREC 385
+#define tMINUSMINUS 386
+#define tPLUSPLUS 387
 
 
 
 
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 typedef union YYSTYPE
-#line 78 "Gmsh.y"
+#line 88 "Gmsh.y"
 {
   char *c;
   int i;
@@ -307,7 +319,7 @@ typedef union YYSTYPE
   List_T *l;
 }
 /* Line 1529 of yacc.c.  */
-#line 311 "Gmsh.tab.hpp"
+#line 323 "Gmsh.tab.hpp"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1

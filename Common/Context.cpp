@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -7,25 +7,11 @@
 #include <string.h>
 #include "GmshConfig.h"
 #include "Context.h"
+#include "OS.h"
 
 #if defined(HAVE_FLTK)
 #include <FL/Fl.H>
 #endif
-
-static const char *getEnvironmentVariable(const char *var)
-{
-#if !defined(WIN32)
-  return getenv(var);
-#else
-  const char *tmp = getenv(var);
-  // Don't accept top dir or anything partially expanded like
-  // c:\Documents and Settings\%USERPROFILE%, etc.
-  if(!tmp || !strcmp(tmp, "/") || strstr(tmp, "%") || strstr(tmp, "$"))
-    return 0;
-  else
-    return tmp;
-#endif
-}
 
 CTX::CTX()
 {
@@ -37,13 +23,13 @@ CTX::CTX()
   bigEndian = (byte[0] ? 0 : 1);
 
   const char *tmp;
-  if((tmp = getEnvironmentVariable("GMSH_HOME")))
+  if((tmp = GetEnvironmentVar("GMSH_HOME")))
     homeDir = tmp;
-  else if((tmp = getEnvironmentVariable("HOME")))
+  else if((tmp = GetEnvironmentVar("HOME")))
     homeDir = tmp;
-  else if((tmp = getEnvironmentVariable("TMP")))
+  else if((tmp = GetEnvironmentVar("TMP")))
     homeDir = tmp;
-  else if((tmp = getEnvironmentVariable("TEMP")))
+  else if((tmp = GetEnvironmentVar("TEMP")))
     homeDir = tmp;
   else
     homeDir = "";
@@ -79,6 +65,8 @@ CTX::CTX()
   hideUnselected = 0;
   numWindows = numTiles = 1;
   deltaFontSize = 0;
+  recentFiles.resize(5);
+  mesh.optimizeLloyd = 0;
 }
 
 CTX *CTX::_instance = 0;
@@ -128,3 +116,4 @@ int CTX::unpackAlpha(unsigned int X)
   else
     return ( ( (X) >> 24 ) & 0xff );
 }
+

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -28,17 +28,21 @@
 #include "Options.h"
 #include "Context.h"
 
-#if !defined(HAVE_NO_PARSER)
+#if defined(HAVE_PARSER)
 #include "Parser.h"
 #endif
 
 class Vis {
+ private:
+  std::string _name;
  public:
-  Vis(){}
+  Vis() {}
+  Vis(std::string &name) : _name(name) {}
   virtual ~Vis(){}
   virtual int getTag() const = 0;
   virtual int getDim() const { return -1; }
-  virtual std::string getName() const = 0;
+  virtual std::string getName() const { return _name; }
+  virtual std::string getType() const = 0;
   virtual char getVisibility() const = 0;
   virtual void setVisibility(char val, bool recursive=false) = 0;
 };
@@ -48,10 +52,11 @@ class VisModel : public Vis {
   GModel *_model;
   int _tag;
  public:
-  VisModel(GModel *model, int tag) : _model(model), _tag(tag) {}
+  VisModel(GModel *model, int tag, std::string &name)
+    : Vis(name), _model(model), _tag(tag) {}
   ~VisModel(){}
   int getTag() const { return _tag; }
-  std::string getName() const { return "Model"; }
+  std::string getType() const { return "Model"; }
   char getVisibility() const { return _model->getVisibility(); }
   void setVisibility(char val, bool recursive=false){ _model->setVisibility(val); }
 };
@@ -59,20 +64,16 @@ class VisModel : public Vis {
 class VisElementary : public Vis {
  private:
   GEntity *_e;
-  int _dim;
  public:
-  VisElementary(GVertex *e) : _e(e), _dim(0) {}
-  VisElementary(GEdge *e) : _e(e), _dim(1) {}
-  VisElementary(GFace *e) : _e(e), _dim(2) {}
-  VisElementary(GRegion *e) : _e(e), _dim(3) {}
+  VisElementary(GEntity *e, std::string &name) : Vis(name), _e(e) {}
   ~VisElementary(){}
   int getTag() const { return _e->tag(); }
-  int getDim() const { return _dim; }
-  std::string getName() const
+  int getDim() const { return _e->dim(); }
+  std::string getType() const
   {
-    if(_dim == 0) return "Point";
-    else if(_dim == 1) return "Line";
-    else if(_dim == 2) return "Surface";
+    if(_e->dim() == 0) return "Point";
+    else if(_e->dim() == 1) return "Line";
+    else if(_e->dim() == 2) return "Surface";
     else return "Volume";
   }
   char getVisibility() const { return _e->getVisibility(); }
@@ -88,12 +89,12 @@ class VisPhysical : public Vis {
   char _visible;
   std::vector<GEntity*> _list;
  public:
-  VisPhysical(int tag, int dim, std::vector<GEntity*> list) 
-    : _tag(tag), _dim(dim), _visible(1), _list(list)  {}
+  VisPhysical(int tag, int dim, std::vector<GEntity*> list, std::string &name) 
+    : Vis(name), _tag(tag), _dim(dim), _visible(1), _list(list)  {}
   ~VisPhysical(){}
   int getTag() const { return _tag; }
   int getDim() const { return _dim; }
-  std::string getName() const
+  std::string getType() const
   {
     if(_dim == 0) return "Point";
     else if(_dim == 1) return "Line";
@@ -117,7 +118,7 @@ class VisPartition : public Vis {
   VisPartition(int tag) : _tag(tag), _visible(1) {}
   ~VisPartition(){}
   int getTag() const { return _tag; }
-  std::string getName() const { return "Partition"; }
+  std::string getType() const { return "Partition"; }
   char getVisibility() const { return _visible; }
   void setVisibility(char val, bool recursive=false)
   {
@@ -134,7 +135,6 @@ class VisPartition : public Vis {
 
 class VisibilityList { // singleton
  private:
-  std::map<int, std::pair<std::string, int> > _labels;
   std::vector<Vis*> _entities;
   int _sortMode;
   static VisibilityList *_instance;
@@ -152,7 +152,7 @@ class VisibilityList { // singleton
     return _instance;
   }
   class VisLessThan {
-  public:
+   public:
     bool operator()(const Vis *v1, const Vis *v2) const
     {
       switch(instance()->getSortMode()){
@@ -160,13 +160,9 @@ class VisibilityList { // singleton
       case -1: return v1->getDim() > v2->getDim() ? true : false;
       case  2: return v1->getTag() < v2->getTag() ? true : false;
       case -2: return v1->getTag() > v2->getTag() ? true : false;
-      case  3: 
-        return strcmp(instance()->getLabel(v1->getTag()).c_str(), 
-                      instance()->getLabel(v2->getTag()).c_str()) < 0 ? 
+      case  3: return strcmp(v1->getName().c_str(), v2->getName().c_str()) < 0 ?
           true : false;
-      default: 
-        return strcmp(instance()->getLabel(v1->getTag()).c_str(), 
-                      instance()->getLabel(v2->getTag()).c_str()) > 0 ? 
+      default: return strcmp(v1->getName().c_str(), v2->getName().c_str()) > 0 ?
           true : false;
       }
     }
@@ -174,46 +170,45 @@ class VisibilityList { // singleton
   // repopulate the list with current data of the given type
   void update(VisibilityType type)
   {
-    _labels.clear();
+    std::map<int, std::string> oldLabels;
+#if defined(HAVE_PARSER)
+    for(std::map<std::string, std::vector<double> >::iterator it = gmsh_yysymbols.begin();
+        it != gmsh_yysymbols.end(); ++it)
+      if(it->first.size())
+        for(unsigned int i = 0; i < it->second.size(); i++)
+          oldLabels[(int)it->second[i]] = std::string("(") + it->first + ")";
+#endif
     for(unsigned int i = 0; i < _entities.size(); i++)
       delete _entities[i];
     _entities.clear();
     GModel *m = GModel::current();
-#if !defined(HAVE_NO_PARSER)
-    for(std::map<std::string, std::vector<double> >::iterator it = gmsh_yysymbols.begin();
-        it != gmsh_yysymbols.end(); ++it)
-      for(unsigned int i = 0; i < it->second.size(); i++)
-        instance()->setLabel((int)it->second[i], it->first, 0);
-#endif
     if(type == Models){
       for(unsigned int i = 0; i < GModel::list.size(); i++){
-        _entities.push_back(new VisModel(GModel::list[i], i));
         std::string name = GModel::list[i]->getName();
         if(GModel::list[i] == GModel::current()) name += " (Active)";
-        setLabel(i, name, 1);
+        _entities.push_back(new VisModel(GModel::list[i], i, name));
       }
     }
     else if(type == ElementaryEntities){
-      for(GModel::piter it = m->firstElementaryName(); it != m->lastElementaryName(); ++it)
-        setLabel(it->first.second, it->second, 1);
-      for(GModel::viter it = m->firstVertex(); it != m->lastVertex(); it++)
-        _entities.push_back(new VisElementary(*it));
-      for(GModel::eiter it = m->firstEdge(); it != m->lastEdge(); it++)
-        _entities.push_back(new VisElementary(*it));
-      for(GModel::fiter it = m->firstFace(); it != m->lastFace(); it++)
-        _entities.push_back(new VisElementary(*it));
-      for(GModel::riter it = m->firstRegion(); it != m->lastRegion(); it++)
-        _entities.push_back(new VisElementary(*it));
+      std::vector<GEntity*> entities;
+      m->getEntities(entities);
+      for(unsigned int i = 0; i < entities.size(); i++){
+        GEntity *ge = entities[i];
+        std::string name = m->getElementaryName(ge->dim(), ge->tag());
+        if(name.empty()) name = oldLabels[ge->tag()];
+        _entities.push_back(new VisElementary(ge, name));
+      }
     }
     else if(type == PhysicalEntities){
-      for(GModel::piter it = m->firstPhysicalName(); it != m->lastPhysicalName(); ++it)
-        setLabel(it->first.second, it->second, 1);
       std::map<int, std::vector<GEntity*> > groups[4];
       m->getPhysicalGroups(groups);
       for(int i = 0; i < 4; i++){
         std::map<int, std::vector<GEntity*> >::const_iterator it = groups[i].begin();
-        for(; it != groups[i].end(); ++it)
-          _entities.push_back(new VisPhysical(it->first, i, it->second));
+        for(; it != groups[i].end(); ++it){
+          std::string name = m->getPhysicalName(i, it->first);
+          if(name.empty()) name = oldLabels[it->first];
+          _entities.push_back(new VisPhysical(it->first, i, it->second, name));
+        }
       }
     }
     else if(type == MeshPartitions){
@@ -242,16 +237,11 @@ class VisibilityList { // singleton
         GModel::list[i]->setVisibility(0);
     }
     else if(type == ElementaryEntities || type == PhysicalEntities){
-      GModel *m = GModel::current();
       // elementary or physical mode: set all entities in the model invisible
-      for(GModel::viter it = m->firstVertex(); it != m->lastVertex(); it++)
-        (*it)->setVisibility(0);
-      for(GModel::eiter it = m->firstEdge(); it != m->lastEdge(); it++)
-        (*it)->setVisibility(0);
-      for(GModel::fiter it = m->firstFace(); it != m->lastFace(); it++)
-        (*it)->setVisibility(0);
-      for(GModel::riter it = m->firstRegion(); it != m->lastRegion(); it++)
-        (*it)->setVisibility(0);
+      std::vector<GEntity*> entities;
+      GModel::current()->getEntities(entities);
+      for(unsigned int i = 0; i < entities.size(); i++)
+        entities[i]->setVisibility(0);
     }
     // this is superfluous in elementary mode, but we don't care
     for(int i = 0; i < getNumEntities(); i++) setVisibility(i, 0);
@@ -261,27 +251,16 @@ class VisibilityList { // singleton
   // get the browser line for the nth entity in the list
   std::string getBrowserLine(int n)
   {
-    int tag = _entities[n]->getTag();
     std::ostringstream sstream;
-    sstream << "\t" << _entities[n]->getName() << "\t" << tag << "\t";
-    if(_labels.count(tag)){
-      if(_labels[tag].second)
-        sstream << "@b";
-      sstream << _labels[tag].first;
-    }
+    sstream << "\t" << _entities[n]->getType() 
+            << "\t" << _entities[n]->getTag() 
+            << "\t" << _entities[n]->getName();
     return sstream.str();
   }
   // set the sort mode
   void setSortMode(int mode){ _sortMode = (_sortMode != mode) ? mode : -mode; }
   // get the sort mode
   int getSortMode(){ return _sortMode; }
-  // associate a label with a tag (quality=0 for "old-style" unreliable labels)
-  void setLabel(int tag, std::string label, int quality)
-  { 
-    if(label.size()) _labels[tag] = std::pair<std::string, int>(label, quality); 
-  }
-  // get the label associated with a tag
-  std::string getLabel(int tag){ return _labels[tag].first; }
 };
 
 VisibilityList *VisibilityList::_instance = 0;
@@ -451,7 +430,7 @@ static void _add_vertex(GVertex *gv, Fl_Tree *tree, std::string path)
   vertex << path << "Point " << gv->tag() << "/";
   Fl_Tree_Item *n = tree->add(vertex.str().c_str());
   if(gv->getVisibility()) n->select(1);
-  n->userdata((void*)gv);
+  n->user_data((void*)gv);
   n->close();
 }
 
@@ -461,7 +440,7 @@ static void _add_edge(GEdge *ge, Fl_Tree *tree, std::string path)
   edge << path << "Line " << ge->tag() << "/";
   Fl_Tree_Item *n = tree->add(edge.str().c_str());
   if(ge->getVisibility()) n->select(1);
-  n->userdata((void*)ge);
+  n->user_data((void*)ge);
   n->close();
   if(ge->getBeginVertex())
     _add_vertex(ge->getBeginVertex(), tree, edge.str());
@@ -475,7 +454,7 @@ static void _add_face(GFace *gf, Fl_Tree *tree, std::string path)
   face << path << "Surface " << gf->tag() << "/";
   Fl_Tree_Item *n = tree->add(face.str().c_str());
   if(gf->getVisibility()) n->select(1);
-  n->userdata((void*)gf);
+  n->user_data((void*)gf);
   n->close();
   std::list<GEdge*> edges = gf->edges();
   for(std::list<GEdge*>::iterator it = edges.begin(); it != edges.end(); it++)
@@ -488,7 +467,7 @@ static void _add_region(GRegion *gr, Fl_Tree *tree, std::string path)
   region << path << "Volume " << gr->tag() << "/";
   Fl_Tree_Item *n = tree->add(region.str().c_str());
   if(gr->getVisibility()) n->select(1);
-  n->userdata((void*)gr);
+  n->user_data((void*)gr);
   n->close();
   std::list<GFace*> faces = gr->faces();
   for(std::list<GFace*>::iterator it = faces.begin(); it != faces.end(); it++)
@@ -496,12 +475,12 @@ static void _add_region(GRegion *gr, Fl_Tree *tree, std::string path)
 }
 
 static void _add_physical_group(int dim, int num, std::vector<GEntity*> &ge,
-				std::map<int, std::string> &oldLabels, 
+                                std::map<int, std::string> &oldLabels, 
                                 Fl_Tree *tree, std::string path)
 {
   if(ge.empty()) return;
   std::string name = ge[0]->model()->getPhysicalName(dim, num);
-  if(name.empty() && oldLabels.count(num)) name = oldLabels[num];
+  if(name.empty()) name = oldLabels[num];
   if(name.size()) name = std::string(" <<") + name + ">>";
 
   Fl_Tree_Item *n;
@@ -594,11 +573,12 @@ static void _rebuild_tree_browser(bool force)
     std::map<int, std::vector<GEntity*> > groups[4];
     m->getPhysicalGroups(groups);
     std::map<int, std::string> oldLabels;
-#if !defined(HAVE_NO_PARSER)
+#if defined(HAVE_PARSER)
     for(std::map<std::string, std::vector<double> >::iterator it = gmsh_yysymbols.begin();
         it != gmsh_yysymbols.end(); ++it)
-      for(unsigned int i = 0; i < it->second.size(); i++)
-        oldLabels[(int)it->second[i]] = it->first;
+      if(it->first.size())
+        for(unsigned int i = 0; i < it->second.size(); i++)
+          oldLabels[(int)it->second[i]] = std::string("(") + it->first + ")";
 #endif
     for(int i = 3; i >= 0; i--)
       for(std::map<int, std::vector<GEntity*> >::iterator it = groups[i].begin();
@@ -625,8 +605,8 @@ static void _recur_select(Fl_Tree_Item *n)
 
 static void _recur_set_visible(Fl_Tree_Item *n)
 {
-  if(n->userdata() && n->is_selected()){
-    GEntity *ge = (GEntity*)n->userdata();
+  if(n->user_data() && n->is_selected()){
+    GEntity *ge = (GEntity*)n->user_data();
     bool recursive = FlGui::instance()->visibility->butt[0]->value() ? true : false;
     ge->setVisibility(1, recursive);
     // force this: if we ask to see an entity, let's assume that we
@@ -639,8 +619,8 @@ static void _recur_set_visible(Fl_Tree_Item *n)
 
 static void _recur_update_selected(Fl_Tree_Item *n)
 {
-  if(n->userdata()){
-    GEntity *ge = (GEntity*)n->userdata();
+  if(n->user_data()){
+    GEntity *ge = (GEntity*)n->user_data();
     n->select(ge->getVisibility() ? 1 : 0);
   }
   for(int i = 0; i < n->children(); i++)
@@ -727,6 +707,8 @@ void visibility_cb(Fl_Widget *w, void *data)
 
 static void visibility_save_cb(Fl_Widget *w, void *data)
 {
+  Msg::StatusBar(2, true, "Appending visibility info to '%s'...", 
+                 GModel::current()->getFileName().c_str());
   // get the whole visibility information in geo format
   std::vector<int> state[4][2];
   GModel *m = GModel::current();
@@ -777,6 +759,7 @@ static void visibility_save_cb(Fl_Widget *w, void *data)
   }
   str += "}\n";
   add_infile(str, GModel::current()->getFileName());
+  Msg::StatusBar(2, true, "Done appending visibility info");
 }
 
 static void _set_visibility_by_number(int what, int num, char val, bool recursive)

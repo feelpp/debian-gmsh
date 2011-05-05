@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -36,7 +36,7 @@ GPoint fourierFace::point(double par1, double par2) const
   return GPoint(x, y, z, this, pp);
 }
 
-SPoint2 fourierFace::parFromPoint(const SPoint3 &p) const
+SPoint2 fourierFace::parFromPoint(const SPoint3 &p, bool onSurface) const
 {
   double u, v, x, y, z;
   x = p.x(); y = p.y(); z = p.z();

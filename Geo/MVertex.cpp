@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -24,6 +24,16 @@ bool MVertexLessThanLexicographic::operator()(const MVertex *v1, const MVertex *
   if(v1->y() - v2->y() < -tolerance) return false;
   if(v1->z() - v2->z() >  tolerance) return true;
   return false;
+}
+
+double angle3Vertices(MVertex *p1, MVertex *p2, MVertex *p3)
+{
+  SVector3 a(p1->x() - p2->x(), p1->y() - p2->y(), p1->z() - p2->z());
+  SVector3 b(p3->x() - p2->x(), p3->y() - p2->y(), p3->z() - p2->z());
+  SVector3 c = crossprod(a, b);
+  double sinA = c.norm();
+  double cosA = dot(a, b);
+  return atan2 (sinA, cosA);  
 }
 
 MVertex::MVertex(double x, double y, double z, GEntity *ge, int num)
@@ -109,6 +119,13 @@ void MVertex::writeMSH(FILE *fp, bool binary, bool saveParametric, double scalin
   }
 }
 
+void MVertex::writePLY2(FILE *fp)
+{
+  if(_index < 0) return; // negative index vertices are never saved
+
+  fprintf(fp, "%.16g %.16g %.16g\n", x(), y(), z());
+}
+
 void MVertex::writeVRML(FILE *fp, double scalingFactor)
 {
   if(_index < 0) return; // negative index vertices are never saved
@@ -154,7 +171,8 @@ void MVertex::writeMESH(FILE *fp, double scalingFactor)
   if(_index < 0) return; // negative index vertices are never saved
 
   fprintf(fp, " %20.14G      %20.14G      %20.14G      %d\n", 
-          x() * scalingFactor, y() * scalingFactor, z() * scalingFactor, 0);
+          x() * scalingFactor, y() * scalingFactor, z() * scalingFactor, 
+          _ge ? _ge->tag() : 0);
 }
 
 static void double_to_char8(double val, char *str)
@@ -220,11 +238,9 @@ void MVertex::writeDIFF(FILE *fp, bool binary, double scalingFactor)
 std::set<MVertex*, MVertexLessThanLexicographic>::iterator 
 MVertex::linearSearch(std::set<MVertex*, MVertexLessThanLexicographic> &pos)
 {
-  double tol = MVertexLessThanLexicographic::tolerance;
   for(std::set<MVertex*, MVertexLessThanLexicographic>::iterator it = pos.begin();
-      it != pos.end(); ++it){
-    if(distance(*it) < tol) return it;
-  }
+      it != pos.end(); ++it)
+    if(distance(*it) < MVertexLessThanLexicographic::tolerance) return it;
   return pos.end();
 }
 
@@ -267,6 +283,8 @@ static void getAllParameters(MVertex *v, GFace *gf, std::vector<SPoint2> &params
     GEdge *ge = (GEdge*)v->onWhat();
     double UU;
     v->getParameter(0, UU);
+    if (UU == 0.0)
+      UU = ge->parFromPoint(v->point());
     params.push_back(ge->reparamOnFace(gf, UU, 1));
     if(ge->isSeam(gf))
       params.push_back(ge->reparamOnFace(gf, UU, -1));
@@ -325,7 +343,8 @@ bool reparamMeshEdgeOnFace(MVertex *v1, MVertex *v2, GFace *gf,
   }
 }
 
-bool reparamMeshVertexOnFace(const MVertex *v, const GFace *gf, SPoint2 &param)
+bool reparamMeshVertexOnFace(const MVertex *v, const GFace *gf, SPoint2 &param,
+                             bool onSurface)
 {
   if (gf->geomType() == GEntity::CompoundSurface &&
       v->onWhat()->dim() < 2){
@@ -336,7 +355,7 @@ bool reparamMeshVertexOnFace(const MVertex *v, const GFace *gf, SPoint2 &param)
 
   if(v->onWhat()->geomType() == GEntity::DiscreteCurve ||        
      v->onWhat()->geomType() == GEntity::BoundaryLayerCurve){    
-    param = gf->parFromPoint(SPoint3(v->x(), v->y(), v->z()));
+    param = gf->parFromPoint(SPoint3(v->x(), v->y(), v->z()), onSurface);
     return true;
   }
 
@@ -344,7 +363,7 @@ bool reparamMeshVertexOnFace(const MVertex *v, const GFace *gf, SPoint2 &param)
     GVertex *gv = (GVertex*)v->onWhat();
     // hack for bug in periodic curves
     if (gv->getNativeType() == GEntity::GmshModel && gf->geomType() == GEntity::Plane)
-      param = gf->parFromPoint(SPoint3(v->x(), v->y(), v->z()));
+      param = gf->parFromPoint(SPoint3(v->x(), v->y(), v->z()), onSurface);
     else
       param = gv->reparamOnFace(gf, 1);
     // shout, we could be on a seam
@@ -369,7 +388,7 @@ bool reparamMeshVertexOnFace(const MVertex *v, const GFace *gf, SPoint2 &param)
     }
     else {
       // brute force!
-      param = gf->parFromPoint(SPoint3(v->x(), v->y(), v->z()));
+      param = gf->parFromPoint(SPoint3(v->x(), v->y(), v->z()), onSurface);
     }
   }
   return true;
@@ -392,4 +411,35 @@ bool reparamMeshVertexOnEdge(const MVertex *v, const GEdge *ge, double &param)
   
   if(param < 1.e6) return true;
   return false;
+}
+
+#include "Bindings.h"
+
+void MVertex::registerBindings(binding *b)
+{
+  classBinding *cb = b->addClass<MVertex>("MVertex");
+  cb->setDescription("A mesh vertex.");
+  methodBinding *cm;
+  cm = cb->addMethod("getNum",&MVertex::getNum);
+  cm->setDescription("Return the immutable vertex number.");
+  //the cast is epxlicitely given because there are 2 MVertex::x function
+  cm = cb->addMethod("x", (double (MVertex::*)() const) &MVertex::x);
+  cm->setDescription("Return the x-coordinate.");
+  cm = cb->addMethod("y", (double (MVertex::*)() const) &MVertex::y);
+  cm->setDescription("Return the y-coordinate.");
+  cm = cb->addMethod("z", (double (MVertex::*)() const) &MVertex::z);
+  cm->setDescription("Return the z-coordinate.");
+  cm = cb->addMethod("setXYZ", &MVertex::setXYZ);
+  cm->setDescription("set the coordinates");
+  cm->setArgNames("x", "y", "z",NULL);
+  cm = cb->setConstructor<MVertex,double,double,double>();
+  cm->setArgNames("x", "y", "z", NULL);
+  cm->setDescription("Create a new mesh vertex at (x,y,z).");
+  cm = cb->addMethod("getNum", &MVertex::getNum);
+  cm->setDescription("return the invariant vertex id");
+  cm = cb->addMethod("getPolynomialOrder", &MVertex::getPolynomialOrder);
+  cm->setDescription("return the polynomial order of vertex");
+  cm = cb->addMethod("setPolynomialOrder", &MVertex::setPolynomialOrder);
+  cm->setDescription("assign the polynomial order of vertex");
+  cm->setArgNames("order",NULL);
 }

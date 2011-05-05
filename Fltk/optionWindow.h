@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -69,7 +69,7 @@ class optionWindow{
   } post;
   struct{
     int index;
-    Fl_Group *group, *range, *vector;
+    Fl_Group *group, *range;
     Fl_Check_Button *butt[100];
     Fl_Value_Input *value[100];
     Fl_Input *input[100];
@@ -92,7 +92,6 @@ class optionWindow{
 };
 
 void options_cb(Fl_Widget *w, void *data);
-void options_save_cb(Fl_Widget *w, void *data);
 void general_options_cb(Fl_Widget *w, void *data);
 void geometry_options_cb(Fl_Widget *w, void *data);
 void mesh_options_cb(Fl_Widget *w, void *data);

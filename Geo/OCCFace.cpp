@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -11,7 +11,6 @@
 #include "OCCEdge.h"
 #include "OCCFace.h"
 #include "Numeric.h"
-#include "VertexArray.h"
 #include "Context.h"
 
 #if defined(HAVE_OCC)
@@ -25,21 +24,31 @@
 #include "Geom_Plane.hxx"
 #include "gp_Pln.hxx"
 #include "BRepMesh_FastDiscret.hxx"
+#include "IntTools_Context.hxx"
+#include "BOPTools_Tools2D.hxx"
+#include "BOPTools_Tools3D.hxx"
 
-OCCFace::OCCFace(GModel *m, TopoDS_Face _s, int num, TopTools_IndexedMapOfShape &emap)
+OCCFace::OCCFace(GModel *m, TopoDS_Face _s, int num)
   : GFace(m, num), s(_s)
 {
+  setup();
+}
+
+void OCCFace::setup()
+{
+  edgeLoops.clear();
+  l_edges.clear();
+  l_dirs.clear();
   TopExp_Explorer exp2, exp3;
   for(exp2.Init(s, TopAbs_WIRE); exp2.More(); exp2.Next()){
     TopoDS_Wire wire = TopoDS::Wire(exp2.Current());
-    Msg::Debug("OCC Face %d - New Wire", num);
+    Msg::Debug("OCC Face %d - New Wire", tag());
     std::list<GEdge*> l_wire;
     for(exp3.Init(wire, TopAbs_EDGE); exp3.More(); exp3.Next()){          
       TopoDS_Edge edge = TopoDS::Edge(exp3.Current());
-      int index = emap.FindIndex(edge);
-      GEdge *e = m->getEdgeByTag(index);
+      GEdge *e = getOCCEdgeByNativePtr(model(), edge);
       if(!e){
-        Msg::Error("Unknown edge %d in face %d", index, num);
+	Msg::Error("Unknown edge in face %d", tag());
       }
       else{
         l_wire.push_back(e);
@@ -51,8 +60,9 @@ OCCFace::OCCFace(GModel *m, TopoDS_Face _s, int num, TopTools_IndexedMapOfShape 
         }
       }
     }
-    
+
     GEdgeLoop el(l_wire);
+    //    printf("l_wire of size %d %d\n",l_wire.size(),el.count());
     for(GEdgeLoop::citer it = el.begin(); it != el.end(); ++it){
       l_edges.push_back(it->ge);
       l_dirs.push_back(it->_sign);
@@ -72,9 +82,9 @@ OCCFace::OCCFace(GModel *m, TopoDS_Face _s, int num, TopTools_IndexedMapOfShape 
   _periodic[0] = surface.IsUPeriodic();
   _periodic[1] = surface.IsVPeriodic();
 
-  ShapeAnalysis::GetFaceUVBounds(_s, umin, umax, vmin, vmax);
-  Msg::Debug("OCC Face %d with %d edges bounds (%g,%g)(%g,%g)", 
-             num, l_edges.size(), umin, umax, vmin, vmax);
+  ShapeAnalysis::GetFaceUVBounds(s, umin, umax, vmin, vmax);
+  Msg::Debug("OCC Face %d with %d parameter bounds (%g,%g)(%g,%g)", 
+             tag(), l_edges.size(), umin, umax, vmin, vmax);
   // we do that for the projections to converge on the borders of the
   // surface
   const double du = umax - umin;
@@ -84,7 +94,17 @@ OCCFace::OCCFace(GModel *m, TopoDS_Face _s, int num, TopTools_IndexedMapOfShape 
   umax += fabs(du) / 100.0;
   vmax += fabs(dv) / 100.0;
   occface = BRep_Tool::Surface(s);
-  if(!CTX::instance()->batch) buildSTLTriangulation();
+  // specific parametrization for a sphere.
+  _isSphere = isSphere(_radius,_center);
+  if (_isSphere){
+    for (std::list<GEdge*>::iterator it = l_edges.begin();
+	 it != l_edges.end(); ++it){
+      GEdge *ge = *it;
+      if (ge->isSeam(this)){
+	
+      }
+    }    
+  }
 }
 
 Range<double> OCCFace::parBounds(int i) const
@@ -165,7 +185,7 @@ GPoint OCCFace::closestPoint(const SPoint3 &qp, const double initialGuess[2]) co
   return GPoint(pnt.X(), pnt.Y(), pnt.Z(), this, pp);
 }
 
-SPoint2 OCCFace::parFromPoint(const SPoint3 &qp) const
+SPoint2 OCCFace::parFromPoint(const SPoint3 &qp, bool onSurface) const
 {
   gp_Pnt pnt(qp.x(), qp.y(), qp.z());
   GeomAPI_ProjectPointOnSurf proj(pnt, occface, umin, umax, vmin, vmax);
@@ -227,12 +247,13 @@ double OCCFace::curvatures(const SPoint2 &param,
     return -1.;
   }
 
-  *curvMax = std::max(fabs(prop.MinCurvature()), fabs(prop.MaxCurvature()));
-  *curvMin = std::min(fabs(prop.MinCurvature()), fabs(prop.MaxCurvature()));
+  *curvMax = prop.MaxCurvature();
+  *curvMin = prop.MinCurvature();
 
   gp_Dir dMax = gp_Dir();
   gp_Dir dMin = gp_Dir();
   prop.CurvatureDirections(dMax,dMin);
+
   (*dirMax)[0] = dMax.X();
   (*dirMax)[1] = dMax.Y();
   (*dirMax)[2] = dMax.Z();
@@ -303,71 +324,217 @@ surface_params OCCFace::getSurfaceParams() const
   return p;
 }
 
-bool OCCFace::buildSTLTriangulation()
+bool OCCFace::buildSTLTriangulation(bool force)
 {
-  if(va_geom_triangles){
-    delete va_geom_triangles;
-    va_geom_triangles = 0;
-  }
-  
-  TopLoc_Location loc;
-  int p1, p2, p3;
-  Bnd_Box aBox;
-  Standard_Boolean bWithShare = Standard_False;
-  Standard_Real aDiscret, aXmin, aYmin, aZmin, aXmax, aYmax, aZmax;
-  Standard_Real dX, dY, dZ, dMax, aCoeff;     
-  BRepBndLib::Add(s, aBox);
-  aBox.Get(aXmin, aYmin, aZmin, aXmax, aYmax, aZmax);
-   
-  dX = aXmax-aXmin;
-  dY = aYmax-aYmin;
-  dZ = aZmax-aZmin;
-  dMax = dX;
-  if(dY > dMax) {
-    dMax = dY;
-  }
-  if(dZ > dMax) {
-    dMax = dZ;
+  if(stl_triangles.size()){
+    if(force){
+      stl_vertices.clear();
+      stl_triangles.clear();
+    }
+    else
+      return true;
   }
 
-  aCoeff = 0.01;
-  aDiscret = aCoeff * dMax;
-  BRepMesh_FastDiscret aMesher(aDiscret, 0.5, aBox, bWithShare, Standard_True,
+  Bnd_Box aBox;
+  BRepBndLib::Add(s, aBox);
+  Standard_Real aXmin, aYmin, aZmin, aXmax, aYmax, aZmax;
+  aBox.Get(aXmin, aYmin, aZmin, aXmax, aYmax, aZmax);
+  Standard_Real dX = aXmax - aXmin;
+  Standard_Real dY = aYmax - aYmin;
+  Standard_Real dZ = aZmax - aZmin;
+  Standard_Real dMax = dX;
+  if(dY > dMax) dMax = dY;
+  if(dZ > dMax) dMax = dZ;
+  Standard_Real aCoeff = 0.01;
+  Standard_Real aDiscret = aCoeff * dMax;
+  BRepMesh_FastDiscret aMesher(aDiscret, 0.5, aBox, Standard_False, Standard_True,
                                Standard_False, Standard_True);
   aMesher.Add(s);
+  TopLoc_Location loc;
   Handle(Poly_Triangulation) triangulation = BRep_Tool::Triangulation(s, loc);
-  if (triangulation.IsNull()){
+  if(triangulation.IsNull()){
     Msg::Warning("OCC STL triangulation failed");
     return false;
   }
-  
-  int ntriangles = triangulation->NbTriangles();
-  if(!triangulation->HasUVNodes()) return false;
+  if(!triangulation->HasUVNodes()){
+    Msg::Warning("OCC STL triangulation has no u,v coordinates");
+    return false;
+  }
 
-  va_geom_triangles = new VertexArray(3, ntriangles);
-  
-  unsigned int c = CTX::instance()->color.geom.surface;
-  unsigned int col[4] = {c, c, c, c};
-  for (int j = 1; j <= ntriangles; j++){
-    Poly_Triangle triangle = (triangulation->Triangles())(j);
+  for(int i = 1; i <= triangulation->NbNodes(); i++){
+    gp_Pnt2d p = (triangulation->UVNodes())(i);
+    stl_vertices.push_back(SPoint2(p.X(), p.Y()));
+  }
+
+  bool revert = false;
+  for(int i = 1; i <= triangulation->NbTriangles(); i++){
+    Poly_Triangle triangle = (triangulation->Triangles())(i);
+    int p1, p2, p3;
     triangle.Get(p1, p2, p3);
-    gp_Pnt2d x1 = (triangulation->UVNodes())(p1);
-    gp_Pnt2d x2 = (triangulation->UVNodes())(p2);
-    gp_Pnt2d x3 = (triangulation->UVNodes())(p3);
-    GPoint gp1 = point(x1.X(), x1.Y());
-    GPoint gp2 = point(x2.X(), x2.Y());
-    GPoint gp3 = point(x3.X(), x3.Y());
-    SVector3 n[3];
-    n[0] = normal(SPoint2(x1.X(), x1.Y()));
-    n[1] = normal(SPoint2(x2.X(), x2.Y()));
-    n[2] = normal(SPoint2(x3.X(), x3.Y()));
-    double x[3] = {gp1.x(), gp2.x(), gp3.x()};
-    double y[3] = {gp1.y(), gp2.y(), gp3.y()};
-    double z[3] = {gp1.z(), gp2.z(), gp3.z()};
-    va_geom_triangles->add(x, y, z, n, col);
-  }  
-  va_geom_triangles->finalize();
+    
+    // orient STL mesh to get normal right
+    if(i == 1){
+      gp_Pnt2d gp1 = (triangulation->UVNodes())(p1);
+      gp_Pnt2d gp2 = (triangulation->UVNodes())(p2);
+      gp_Pnt2d gp3 = (triangulation->UVNodes())(p3);
+      SPoint2 b = SPoint2(gp1.X(), gp1.Y()) + SPoint2(gp2.X(), gp2.Y()) +
+        SPoint2(gp3.X(), gp3.Y());
+      b *= 1. / 3.;
+      SVector3 nf = normal(b); 
+      GPoint sp1 = point(gp1.X(), gp1.Y());
+      GPoint sp2 = point(gp2.X(), gp2.Y());
+      GPoint sp3 = point(gp3.X(), gp3.Y());
+      double n[3];
+      normal3points(sp1.x(), sp1.y(), sp1.z(),
+                    sp2.x(), sp2.y(), sp2.z(),
+                    sp3.x(), sp3.y(), sp3.z(), n);
+      SVector3 ne(n[0], n[1], n[2]);
+      if(dot(ne, nf) < 0){
+        Msg::Debug("Reverting orientation of STL mesh in face %d", tag());
+        revert = true;
+      }
+    }
+
+    if(!revert){
+      stl_triangles.push_back(p1 - 1);
+      stl_triangles.push_back(p2 - 1);
+      stl_triangles.push_back(p3 - 1);
+    }
+    else{
+      stl_triangles.push_back(p1 - 1);
+      stl_triangles.push_back(p3 - 1);
+      stl_triangles.push_back(p2 - 1);
+    }
+  }
+
   return true;
 }
+
+GFace *getOCCFaceByNativePtr(GModel *model, TopoDS_Face toFind)
+{
+  GModel::fiter it =model->firstFace();
+  for (; it !=model->lastFace(); ++it){
+    OCCFace *gf = dynamic_cast<OCCFace*>(*it);
+    if (gf){
+      if(toFind.IsSame(gf->getTopoDS_Face())) return *it;
+      if(toFind.IsSame(gf->getTopoDS_FaceOld())) return *it;
+    }
+  }
+  return 0;
+}
+
+void OCCFace::replaceEdgesInternal(std::list<GEdge*> &new_edges)
+{
+  IntTools_Context myContext;
+  // we simply replace old edges by new edges in the structure
+  
+  // make a copy of s
+  TopoDS_Face copy_of_s_forward = s;
+  copy_of_s_forward.Orientation(TopAbs_FORWARD);
+  // make a copy of occface
+  TopLoc_Location location;
+  Handle(Geom_Surface) copy_of_occface = BRep_Tool::Surface(copy_of_s_forward, location);
+  // check periodicity
+  bool bIsUPeriodic = _periodic[0];
+  // get tolerance 
+  double tolerance = BRep_Tool::Tolerance(copy_of_s_forward);
+
+  BRep_Builder aBB;
+  TopoDS_Face newFace;
+  aBB.MakeFace(newFace, copy_of_occface, location, tolerance);
+  // expolore the face
+  TopExp_Explorer aExpW, aExpE;
+  aExpW.Init(copy_of_s_forward, TopAbs_WIRE);
+  for (; aExpW.More(); aExpW.Next()) {
+    TopoDS_Wire newWire;
+    aBB.MakeWire(newWire);
+    const TopoDS_Wire& aW=TopoDS::Wire(aExpW.Current());
+    aExpE.Init(aW, TopAbs_EDGE);
+    for (; aExpE.More(); aExpE.Next()) {
+      const TopoDS_Edge& aE=TopoDS::Edge(aExpE.Current());
+      std::list<GEdge*>::iterator it  = l_edges.begin();
+      std::list<GEdge*>::iterator it2 = new_edges.begin();
+      TopoDS_Edge aER;
+      Msg::Debug("trying to replace %d by %d",(*it)->tag(),(*it2)->tag());
+      for ( ; it != l_edges.end(); ++it, ++it2){
+	OCCEdge *occEd = dynamic_cast<OCCEdge*>(*it);
+	TopoDS_Edge olde = occEd->getTopoDS_Edge();
+	if (olde.IsSame(aE)){
+	  aER = *((TopoDS_Edge*)(*it2)->getNativePtr());		  
+	}
+	else {
+	  olde = occEd->getTopoDS_EdgeOld();
+	  if (olde.IsSame(aE)){
+	    aER = *((TopoDS_Edge*)(*it2)->getNativePtr());		  
+	  }
+	}
+      }
+      if (aER.IsNull()){
+	Msg::Error("cannot find an edge for gluing a face");
+      }
+      aER.Orientation(TopAbs_FORWARD);
+      if (!BRep_Tool::Degenerated(aER)) {
+	if (bIsUPeriodic) {
+	  Standard_Real aT1, aT2, aTx, aUx;
+	  BRep_Builder aBB_;
+	  Handle(Geom2d_Curve) aC2D =
+            BRep_Tool::CurveOnSurface(aER, copy_of_s_forward, aT1, aT2);
+	  if (!aC2D.IsNull()) {
+	    if (BRep_Tool::IsClosed(aER, copy_of_s_forward)) {
+	      continue;
+	    }
+	    else{
+	      aTx=BOPTools_Tools2D::IntermediatePoint(aT1, aT2);
+	      gp_Pnt2d aP2D;
+	      aC2D->D0(aTx, aP2D);
+	      aUx=aP2D.X();
+	      if (aUx < umin || aUx > umax) {
+		// need to rebuild
+		Handle(Geom2d_Curve) aC2Dx;
+		aBB_.UpdateEdge(aER, aC2Dx, copy_of_s_forward , BRep_Tool::Tolerance(aE)); 
+	      }
+	    }	  
+	  }
+	}
+	BOPTools_Tools2D::BuildPCurveForEdgeOnFace(aER, copy_of_s_forward);
+	
+	// orient image 
+	Standard_Boolean bIsToReverse = 
+          BOPTools_Tools3D::IsSplitToReverse1(aER, aE, myContext);
+	if (bIsToReverse) {
+	  aER.Reverse();
+	}
+      }
+      else {
+	aER.Orientation(aE.Orientation());
+      }
+      //
+      aBB.Add(newWire, aER);
+    }
+    aBB.Add(newFace, newWire);
+  }
+  _replaced = s;
+  s = newFace;
+
+  setup();
+}
+
+bool OCCFace::isSphere (double &radius, SPoint3 &center) const{
+  switch(geomType()){
+  case GEntity::Sphere:
+    {
+      radius = Handle(Geom_SphericalSurface)::DownCast(occface)->Radius();
+      gp_Ax3 pos  = Handle(Geom_SphericalSurface)::DownCast(occface)->Position();
+      gp_Ax1 axis = pos.Axis();
+      gp_Pnt loc = axis.Location();
+      center = SPoint3(loc.X(),loc.Y(),loc.Z());
+    }
+    return true;
+  default:
+    return false;
+  }
+  
+}
+
 
 #endif

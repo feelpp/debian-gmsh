@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -52,8 +52,8 @@ static void message_clear_cb(Fl_Widget *w, void *data)
 static void message_save_cb(Fl_Widget *w, void *data)
 {
  test:
-  if(file_chooser(0, 1, "Save", "*")) {
-    std::string name = file_chooser_get_name(1);
+  if(fileChooser(FILE_CHOOSER_CREATE, "Save", "*")) {
+    std::string name = fileChooserGetName(1);
     if(CTX::instance()->confirmOverwrite) {
       if(!StatFile(name))
         if(!fl_choice("File '%s' already exists.\n\nDo you want to replace it?", 
@@ -111,7 +111,7 @@ messageWindow::messageWindow(int deltaFontSize)
 void messageWindow::add(const char *msg)
 {
   browser->add(msg, 0);
-  if(CTX::instance()->msgAutoScroll)
+  if(win->shown() && CTX::instance()->msgAutoScroll)
     browser->bottomline(browser->size());
 }
 
@@ -124,7 +124,7 @@ void messageWindow::save(const char *filename)
     return;
   }
 
-  Msg::StatusBar(2, true, "Writing '%s'", filename);
+  Msg::StatusBar(2, true, "Writing '%s'...", filename);
   for(int i = 1; i <= browser->size(); i++) {
     const char *c = browser->text(i);
     if(c[0] == '@')
@@ -132,12 +132,15 @@ void messageWindow::save(const char *filename)
     else
       fprintf(fp, "%s\n", c);
   }
-  Msg::StatusBar(2, true, "Wrote '%s'", filename);
+  Msg::StatusBar(2, true, "Done writing '%s'", filename);
   fclose(fp);
 }
 
 void messageWindow::show(bool redrawOnly)
 {
+  if(CTX::instance()->msgAutoScroll)
+    browser->bottomline(browser->size());
+
   if(win->shown() && redrawOnly)
     win->redraw();
   else

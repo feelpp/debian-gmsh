@@ -1,4 +1,5 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -53,16 +54,19 @@ class PViewDataList : public PViewData {
                 std::vector<double> &list, int nblist);
   void _getString(int dim, int i, int timestep, std::string &str, 
                   double &x, double &y, double &z, double &style);
-  void _splitCurvedElements();
+  void _getRawData(int idxtype, std::vector<double> **l, int **ne, int *nc, int *nn);
  public:
   PViewDataList();
   ~PViewDataList(){}
-  bool finalize();
+  bool finalize(bool computeMinMax=true);
   int getNumTimeSteps(){ return NbTimeStep; }
   double getTime(int step);
-  double getMin(int step=-1);
-  double getMax(int step=-1);
+  double getMin(int step=-1, bool onlyVisible=false);
+  double getMax(int step=-1, bool onlyVisible=false);
+  void setMin(double min) {Min = min;}
+  void setMax(double max) {Max = max;}
   SBoundingBox3d getBoundingBox(int step=-1){ return BBox; }
+  void setBoundingBox(SBoundingBox3d& box) {BBox = box;}
   int getNumScalars(int step=-1);
   int getNumVectors(int step=-1);
   int getNumTensors(int step=-1);
@@ -99,8 +103,8 @@ class PViewDataList : public PViewData {
   bool combineSpace(nameData &nd);
 
   // specific to list-based data sets
-  void getRawData(int type, std::vector<double> **l, int **ne, int *nc, int *nn);
   void setOrder2(int type);
+  std::vector<double> *incrementList(int numComp, int type);
 
   // I/O routines
   bool readPOS(FILE *fp, double version, bool binary);

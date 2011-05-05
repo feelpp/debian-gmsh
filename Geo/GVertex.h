@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -13,6 +13,7 @@
 #include "GEntity.h"
 #include "GPoint.h"
 #include "SPoint2.h"
+#include "SPoint3.h"
 
 #define MAX_LC 1.e22
 
@@ -37,6 +38,7 @@ class GVertex : public GEntity
   virtual double x() const = 0;
   virtual double y() const = 0;
   virtual double z() const = 0;
+  virtual SPoint3 xyz() const { return SPoint3(x(), y(), z()); }
   virtual void setPosition(GPoint &p);
 
   // add/delete an edge bounded by this vertex
@@ -66,7 +68,7 @@ class GVertex : public GEntity
   virtual std::string getAdditionalInfoString();
 
   // export in GEO format
-  virtual void writeGEO(FILE *fp);
+  virtual void writeGEO(FILE *fp, const std::string &meshSizeParameter="");
 
   // get number of elements in the mesh
   unsigned int getNumMeshElements();
@@ -78,6 +80,8 @@ class GVertex : public GEntity
   bool isOnSeam(const GFace *gf) const;
 
   std::vector<MPoint*> points;
+
+  static void registerBindings(binding *b);
 };
 
 #endif

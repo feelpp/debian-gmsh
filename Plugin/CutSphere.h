@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -21,6 +21,10 @@ class GMSH_CutSpherePlugin : public GMSH_LevelsetPlugin
  public:
   GMSH_CutSpherePlugin(){}
   std::string getName() const { return "CutSphere"; }
+  std::string getShortHelp() const
+  {
+    return "Cut with a sphere centered at (Xc, Yc, Zc)";
+  }
   std::string getHelp() const;
   int getNbOptions() const;
   StringXNumber *getOption(int iopt);  
@@ -32,6 +36,7 @@ class GMSH_CutSpherePlugin : public GMSH_LevelsetPlugin
   static double callbackR(int, int, double);
   static double callbackVol(int, int, double);
   static double callbackRecur(int, int, double);
+  static double callbackTarget(int, int, double);
   static void draw(void *context);
 };
 

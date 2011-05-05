@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -22,6 +22,7 @@ class GRegion;
 class MVertex;
 class MElement;
 class VertexArray;
+class binding;
 
 // A geometric model entity.
 class GEntity {
@@ -31,6 +32,10 @@ class GEntity {
 
   // the tag (the number) of this entity
   int _tag;
+
+  // gives the number of the master entity in periodic mesh, gives 0
+  // if non-periodic
+  int _meshMaster;
 
   // the visibility and the selection flag
   char _visible, _selection;
@@ -60,7 +65,8 @@ class GEntity {
     UnknownModel,
     GmshModel,
     FourierModel,
-    OpenCascadeModel
+    OpenCascadeModel,
+    AcisModel
   };
 
   // all known entity types
@@ -98,7 +104,7 @@ class GEntity {
     DiscreteSurface,
     CompoundSurface,
     Volume,
-    DiscreteVolume, 
+    DiscreteVolume,
     CompoundVolume,
     PartitionVertex,
     PartitionCurve,
@@ -142,7 +148,7 @@ class GEntity {
       "Discrete surface",
       "Compound surface",
       "Volume",
-      "Discrete volume", 
+      "Discrete volume",
       "Compound Volume",
       "Partition vertex",
       "Partition curve",
@@ -157,7 +163,7 @@ class GEntity {
 
   GEntity(GModel *m, int t);
 
-  virtual ~GEntity();
+  virtual ~GEntity(){}
 
   // delete the mesh data
   virtual void deleteMesh(){}
@@ -188,6 +194,7 @@ class GEntity {
 
   // true if entity is periodic in the "dim" direction.
   virtual bool periodic(int dim) const { return false; }
+  virtual double period(int dim) const { return 0.0; }
 
   // true if there are parametric degeneracies in the "dim" direction.
   virtual bool degenerate(int dim) const { return false; }
@@ -214,16 +221,30 @@ class GEntity {
   int tag() const { return _tag; }
   void setTag(int tag) { _tag = tag; }
 
+  // get/set physical entities
+  virtual void addPhysicalEntity(int physicalTag)
+  {
+    physicals.push_back(physicalTag);
+  }
+  virtual std::vector<int> getPhysicalEntities()
+  {
+    return physicals;
+  }
+
+  // returns the tag of the entity that its master entity (for mesh) 
+  int meshMaster() const { return _meshMaster; }
+  void setMeshMaster(int m) { _meshMaster = m; }
+
   // get the bounding box
   virtual SBoundingBox3d bounds() const { return SBoundingBox3d(); }
 
   //  get the oriented bounding box
   virtual SOrientedBoundingBox getOBB() {return SOrientedBoundingBox(); }
-  
+
   // get/set the visibility flag
   virtual char getVisibility();
   virtual void setVisibility(char val, bool recursive=false){ _visible = val; }
-
+  
   // get/set the selection flag
   virtual char getSelection(){ return _selection; }
   virtual void setSelection(char val){ _selection = val; }
@@ -266,6 +287,18 @@ class GEntity {
 
   // get the mesh vertex at the given index
   MVertex *getMeshVertex(unsigned int index) { return mesh_vertices[index]; }
+
+  //add a MeshVertex
+  void addMeshVertex(MVertex *v) { mesh_vertices.push_back(v);}
+
+  // clean downcasts
+  GVertex *cast2Vertex();
+  GEdge   *cast2Edge();
+  GFace   *cast2Face();
+  GRegion *cast2Region();
+
+  // bindings
+  static void registerBindings(binding *b);
 };
 
 class GEntityLessThan {

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -14,13 +14,15 @@
 #include "MVertex.h"
 #include "MEdge.h"
 #include "MFace.h"
-#include "functionSpace.h"
+#include "polynomialBasis.h"
+#include "JacobianBasis.h"
 #include "Gauss.h"
 
 class GFace;
+class binding;
 
 // A mesh element.
-class MElement 
+class MElement
 {
  private:
   // the maximum element id number in the mesh
@@ -36,10 +38,10 @@ class MElement
   // the tolerance used to determine if a point is inside an element,
   // in parametric coordinates
   static double _isInsideTolerance;
-  void _getEdgeRep(MVertex *v0, MVertex *v1, 
+  void _getEdgeRep(MVertex *v0, MVertex *v1,
                    double *x, double *y, double *z, SVector3 *n,
                    int faceIndex=-1);
-  void _getFaceRep(MVertex *v0, MVertex *v1, MVertex *v2, 
+  void _getFaceRep(MVertex *v0, MVertex *v1, MVertex *v2,
                    double *x, double *y, double *z, SVector3 *n);
  public :
   MElement(int num=0, int part=0);
@@ -50,29 +52,36 @@ class MElement
   static void resetGlobalNumber(){ _globalNum = 0; }
 
   // set/get the tolerance for isInside() test
-  static void setTolerance (const double tol){ _isInsideTolerance = tol; }
-  static double getTolerance () { return _isInsideTolerance; }
+  static void setTolerance(const double tol){ _isInsideTolerance = tol; }
+  static double getTolerance() { return _isInsideTolerance; }
 
   // return the tag of the element
-  virtual int getNum(){ return _num; }
+  virtual int getNum() const { return _num; }
 
   // return the geometrical dimension of the element
-  virtual int getDim() = 0;
+  virtual int getDim() const = 0;
 
   // return the polynomial order the element
   virtual int getPolynomialOrder() const { return 1; }
 
   // get/set the partition to which the element belongs
-  virtual int getPartition(){ return _partition; }
+  virtual int getPartition() const { return _partition; }
   virtual void setPartition(int num){ _partition = (short)num; }
 
   // get/set the visibility flag
-  virtual char getVisibility();
+  virtual char getVisibility() const;
   virtual void setVisibility(char val){ _visible = val; }
 
-  // get the vertices
+  // get & set the vertices
   virtual int getNumVertices() const = 0;
   virtual MVertex *getVertex(int num) = 0;
+  virtual void setVertex(int num, MVertex *v) {throw;}
+
+  // give an MVertex as input and get its local number
+  virtual void getVertexInfo(const MVertex * vertex, int &ithVertex) const 
+  {
+    Msg::Error("Vertex information not available for this element");
+  }
 
   // get the vertex using the I-deas UNV ordering
   virtual MVertex *getVertexUNV(int num){ return getVertex(num); }
@@ -88,6 +97,9 @@ class MElement
 
   // get the vertex using DIFF ordering
   virtual MVertex *getVertexDIFF(int num){ return getVertex(num); }
+
+  // get the vertex using INP ordering
+  virtual MVertex *getVertexINP(int num){ return getVertex(num); }
 
   // get the number of vertices associated with edges, faces and
   // volumes (nonzero only for higher order elements, polygons or
@@ -107,6 +119,12 @@ class MElement
   virtual int getNumEdges() = 0;
   virtual MEdge getEdge(int num) = 0;
 
+  // give an MEdge as input and get its local number and sign
+  virtual void getEdgeInfo(const MEdge & edge, int &ithEdge, int &sign) const 
+  {
+    Msg::Error("Edge information not available for this element");
+  }
+
   // get an edge representation for drawing
   virtual int getNumEdgesRep() = 0;
   virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n) = 0;
@@ -121,6 +139,12 @@ class MElement
   virtual int getNumFaces() = 0;
   virtual MFace getFace(int num) = 0;
 
+  // give an MFace as input and get its local number, sign and rotation
+  virtual void getFaceInfo(const MFace & face, int &ithFace, int &sign, int &rot) const
+  {
+    Msg::Error("Face information not available for this element");
+  }
+
   // get a face representation for drawing
   virtual int getNumFacesRep() = 0;
   virtual void getFaceRep(int num, double *x, double *y, double *z, SVector3 *n) = 0;
@@ -131,14 +155,17 @@ class MElement
     v.resize(0);
   }
 
-  // get parent and children for hierarchial grids
+  // get and set parent and children for hierarchial grids
   virtual MElement *getParent() const { return NULL; }
-  virtual void setParent(MElement *p) {}
+  virtual void setParent(MElement *p, bool owner = false) {}
   virtual int getNumChildren() const { return 0; }
   virtual MElement *getChild(int i) const { return NULL; }
   virtual bool ownsParent() const { return false; }
+  // get and set domain for borders
+  virtual MElement *getDomain(int i) const { return NULL; }
+  virtual void setDomain (MElement *e, int i) { }
 
-  //get the type of the element
+  // get the type of the element
   virtual int getType() const = 0;
 
   // get the max/min edge length
@@ -150,6 +177,12 @@ class MElement
   virtual double gammaShapeMeasure(){ return 0.; }
   virtual double etaShapeMeasure(){ return 0.; }
   virtual double distoShapeMeasure(){ return 1.0; }
+  virtual double angleShapeMeasure() { return 1.0; }
+  
+  // get the radius of the inscribed circle/sphere if it exists,
+  // otherwise get the minimum radius of all the circles/spheres
+  // tangent to the most boundaries of the element.
+  virtual double getInnerRadius(){ return 0.; }
 
   // compute the barycenter
   virtual SPoint3 barycenter();
@@ -157,18 +190,26 @@ class MElement
   // revert the orientation of the element
   virtual void revert(){}
 
-  // compute and change the orientation of 3D elements to get
-  // positive volume
+  // get volume of element
   virtual double getVolume(){ return 0.; }
-  virtual int getVolumeSign(){ return 1; }
-  virtual void setVolumePositive(){ if(getVolumeSign() < 0) revert(); }
-  
+
+  // return sign of volume (+1 or -1) for 3D elements (or 0 if element
+  // has zero volume)
+  virtual int getVolumeSign();
+
+  // compute and change the orientation of 3D elements to get positive
+  // volume (return false if element has zero volume)
+  virtual bool setVolumePositive();
+
   // return an information string for the element
   virtual std::string getInfoString();
 
   // get the function space for the element
-  virtual const functionSpace* getFunctionSpace(int order=-1) const { return 0; }
-  
+  virtual const polynomialBasis* getFunctionSpace(int order=-1) const { return 0; }
+
+  // get the function space for the jacobian of the element
+  virtual const JacobianBasis* getJacobianFuncSpace(int o=-1) const { return 0; }
+
   // return the interpolating nodal shape functions evaluated at point
   // (u,v,w) in parametric coordinates (if order == -1, use the
   // polynomial order of the element)
@@ -180,19 +221,30 @@ class MElement
   // polynomial order of the element)
   virtual void getGradShapeFunctions(double u, double v, double w, double s[][3],
                                      int order=-1);
-  
+  virtual void getHessShapeFunctions(double u, double v, double w, double s[][3][3],
+                                     int order=-1);
+  const fullMatrix<double> &getGradShapeFunctionsAtIntegrationPoints
+    (int integrationOrder, int functionSpaceOrder=-1);
+  const fullMatrix<double> &getGradShapeFunctionsAtNodes (int functionSpaceOrder=-1);
+
   // return the Jacobian of the element evaluated at point (u,v,w) in
   // parametric coordinates
+  double getJacobian(const fullMatrix<double> &gsf, double jac[3][3]);
   double getJacobian(double u, double v, double w, double jac[3][3]);
   double getPrimaryJacobian(double u, double v, double w, double jac[3][3]);
-  
+  double getJacobianDeterminant(double u, double v, double w);
+
   // get the point in cartesian coordinates corresponding to the point
   // (u,v,w) in parametric coordinates
   virtual void pnt(double u, double v, double w, SPoint3 &p);
   virtual void primaryPnt(double u, double v, double w, SPoint3 &p);
-  
+
   // invert the parametrisation
   virtual void xyz2uvw(double xyz[3], double uvw[3]);
+
+  // move point between parent and element parametric spaces
+  virtual void movePointFromParentSpaceToElementSpace(double &u, double &v, double &w);
+  virtual void movePointFromElementSpaceToParentSpace(double &u, double &v, double &w);
 
   // test if a point, given in parametric coordinates, belongs to the
   // element
@@ -200,7 +252,7 @@ class MElement
 
   // interpolate the given nodal data (resp. its gradient, curl and
   // divergence) at point (u,v,w) in parametric coordinates
-  double interpolate(double val[], double u, double v, double w, int stride=1, 
+  double interpolate(double val[], double u, double v, double w, int stride=1,
                      int order=-1);
   void interpolateGrad(double val[], double u, double v, double w, double f[3],
                        int stride=1, double invjac[3][3]=0, int order=-1);
@@ -210,29 +262,36 @@ class MElement
                         int order=-1);
 
   // integration routines
-  virtual int getNumIntegrationPointsToAllocate(int pOrder) const { return 0; }
-  virtual void getIntegrationPoints(int pOrder, int *npts, IntPt **pts) const
+  virtual void getIntegrationPoints(int pOrder, int *npts, IntPt **pts)
   {
-    Msg::Error("No integration points defined for this type of element");
+    Msg::Error("No integration points defined for this type of element: %d",
+               this->getType());
   }
 
   // IO routines
-  virtual void writeMSH(FILE *fp, double version=1.0, bool binary=false, 
-                        int num=0, int elementary=1, int physical=1, int parentNum=0);
-  virtual void writePOS(FILE *fp, bool printElementary, bool printElementNumber, 
-                        bool printGamma, bool printEta, bool printRho, 
+  virtual void writeMSH(FILE *fp, double version=1.0, bool binary=false,
+                        int num=0, int elementary=1, int physical=1,
+                        int parentNum=0, int dom1Num = 0, int dom2Num = 0,
+                        std::vector<short> *ghosts=0);
+
+  virtual void writePOS(FILE *fp, bool printElementary, bool printElementNumber,
+                        bool printGamma, bool printEta, bool printRho,
                         bool printDisto,double scalingFactor=1.0, int elementary=1);
   virtual void writeSTL(FILE *fp, bool binary=false, double scalingFactor=1.0);
   virtual void writeVRML(FILE *fp);
+  virtual void writePLY2(FILE *fp);
   virtual void writeUNV(FILE *fp, int num=0, int elementary=1, int physical=1);
   virtual void writeVTK(FILE *fp, bool binary=false, bool bigEndian=false);
-  virtual void writeMESH(FILE *fp, int elementTagType=1, int elementary=1, 
+  virtual void writeMESH(FILE *fp, int elementTagType=1, int elementary=1,
                          int physical=0);
-  virtual void writeBDF(FILE *fp, int format=0, int elementTagType=1, 
+  virtual void writeIR3(FILE *fp, int elementTagType, int num, int elementary,
+                        int physical);
+  virtual void writeBDF(FILE *fp, int format=0, int elementTagType=1,
                         int elementary=1, int physical=0);
-  virtual void writeDIFF(FILE *fp, int num, bool binary=false, 
+  virtual void writeDIFF(FILE *fp, int num, bool binary=false,
                          int physical_property=1);
- 
+  virtual void writeINP(FILE *fp, int num);
+
   // info for specific IO formats (returning 0 means that the element
   // is not implemented in that format)
   virtual int getTypeForMSH() const { return 0; }
@@ -241,31 +300,25 @@ class MElement
   virtual const char *getStringForPOS() const { return 0; }
   virtual const char *getStringForBDF() const { return 0; }
   virtual const char *getStringForDIFF() const { return 0; }
+  virtual const char *getStringForINP() const { return 0; }
 
   // return the number of vertices, as well as the element name if
   // 'name' != 0
   static int getInfoMSH(const int typeMSH, const char **const name=0);
-};
+  virtual int getNumVerticesForMSH() { return getNumVertices(); }
+  virtual int *getVerticesIdForMSH();
+  static void registerBindings(binding *b);
 
-class MElementLessThanLexicographic{
- public:
-  static double tolerance;
-  bool operator()(MElement *e1, MElement *e2) const
-  {
-    SPoint3 b1 = e1->barycenter();
-    SPoint3 b2 = e2->barycenter();
-    if(b1.x() - b2.x() >  tolerance) return true;
-    if(b1.x() - b2.x() < -tolerance) return false;
-    if(b1.y() - b2.y() >  tolerance) return true;
-    if(b1.y() - b2.y() < -tolerance) return false;
-    if(b1.z() - b2.z() >  tolerance) return true;
-    return false;
-  }
+  // copy element and parent if any, vertexMap contains the new vertices
+  virtual MElement *copy(int &num, std::map<int, MVertex*> &vertexMap,
+                         std::map<MElement*, MElement*> &newParents,
+                         std::map<MElement*, MElement*> &newDomains);
 };
 
 class MElementFactory{
  public:
-  MElement *create(int type, std::vector<MVertex*> &v, int num=0, int part=0);
+  MElement *create(int type, std::vector<MVertex*> &v, int num=0, int part=0,
+                   bool owner=false, MElement *parent=0, MElement *d1=0, MElement *d2=0);
 };
 
 // Traits of various elements based on the dimension.  These generally define

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -253,8 +253,7 @@ BDS_Edge *BDS_Mesh::recover_edge_fast(BDS_Point *p1, BDS_Point *p2){
         BDS_Point *p2b = f->oppositeVertex(e);
         if (p2 == p2b){
           if (swap_edge(e, BDS_SwapEdgeTestQuality(false,false))){
-            printf("coucou\n");
-            return find_edge (p1,p2->iD);
+             return find_edge (p1,p2->iD);
           }
         }
       }
@@ -1157,6 +1156,7 @@ bool BDS_Mesh::collapse_edge_parametric(BDS_Edge *e, BDS_Point *p)
 
 bool BDS_Mesh::smooth_point_centroid(BDS_Point *p, GFace *gf, bool test_quality)
 {
+
   if(!p->config_modified) return false;
   if(p->g && p->g->classif_degree <= 1) return false;
   if(p->g && p->g->classif_tag < 0) {
@@ -1168,6 +1168,10 @@ bool BDS_Mesh::smooth_point_centroid(BDS_Point *p, GFace *gf, bool test_quality)
     if((*eit)->numfaces() == 1) return false;
     eit++;
   }
+
+  /*    TEST    */
+  double R; SPoint3 c; bool isSphere = gf->isSphere(R,c);
+  double XX=0,YY=0,ZZ=0;
 
   double U = 0;
   double V = 0;
@@ -1188,14 +1192,27 @@ bool BDS_Mesh::smooth_point_centroid(BDS_Point *p, GFace *gf, bool test_quality)
     sTot += fact;
     U  += n->u * fact;
     V  += n->v * fact;
+    XX += n->X;
+    YY += n->Y;
+    ZZ += n->Z;
     LC += n->lc() * fact;
     ++ited;
   }
   U /= (sTot); 
   V /= (sTot);
   LC /= (sTot);
+  XX/= (sTot);
+  YY/= (sTot);
+  ZZ/= (sTot);
 
-  GPoint gp = gf->point(U * scalingU, V * scalingV);
+  GPoint gp;double uv[2];
+  if (isSphere){      
+    gp = gf->closestPoint(SPoint3(XX, YY, ZZ), uv);
+    U = gp.u();
+    V = gp.v();
+  }
+  else
+    gp = gf->point(U * scalingU, V * scalingV);
   
   if (!gp.succeeded()){
     return false;

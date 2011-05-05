@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -46,6 +46,7 @@ class GMSH_Plugin
   // return plugin type, name and info
   virtual GMSH_PLUGIN_TYPE getType() const = 0;
   virtual std::string getName() const = 0;
+  virtual std::string getShortHelp() const = 0;
   virtual std::string getHelp() const = 0;
   virtual std::string getAuthor() const { return "C. Geuzaine, J.-F. Remacle"; }
   virtual std::string getCopyright() const { return "C. Geuzaine, J.-F. Remacle"; }
@@ -55,12 +56,15 @@ class GMSH_Plugin
   virtual void catchErrorMessage(char *errorMessage) const;
 
   // gmsh-style numeric options
-  virtual int getNbOptions() const = 0;
-  virtual StringXNumber *getOption(int iopt) = 0;
+  virtual int getNbOptions() const { return 0; }
+  virtual StringXNumber *getOption(int iopt) { return 0; };
 
   // gmsh-style string options
-  virtual int getNbOptionsStr() const = 0;
-  virtual StringXString *getOptionStr(int iopt) = 0;
+  virtual int getNbOptionsStr() const { return 0; }
+  virtual StringXString *getOptionStr(int iopt) { return NULL; }
+
+  // serialize plugin options into a string
+  std::string serialize();
 
   // run the plugin
   virtual void run() = 0;
@@ -76,14 +80,17 @@ class GMSH_PostPlugin : public GMSH_Plugin
 {
  public:
   inline GMSH_PLUGIN_TYPE getType() const { return GMSH_Plugin::GMSH_POST_PLUGIN; }
-  virtual int getNbOptionsStr() const { return 0; }
-  virtual StringXString *getOptionStr(int iopt) { return NULL; }
+  // run the plugin
   virtual void run(){ execute(0); }
   // if the returned pointer is the same as the argument, then the
   // view is simply modified, else, a new view is added in the view
   // list
   virtual PView *execute(PView *) = 0;
-  // get the view given an index and a default value
+  // excute on a remote dataset
+  virtual PView *executeRemote(PView *);
+  // get the view given an index and a default value (if index < 0 use
+  // the default view if available; otherwise use the last view in the
+  // list)
   virtual PView *getView(int index, PView *view);
   // get the data in list format
   virtual PViewDataList *getDataList(PView *view, bool showError=true);
@@ -98,12 +105,8 @@ class GMSH_PostPlugin : public GMSH_Plugin
 class GMSH_SolverPlugin : public GMSH_Plugin
 {
  public:
-  virtual int getNbOptionsStr() const { return 0; }
-  virtual StringXString *getOptionStr(int iopt) { return 0; }
-  virtual int getNbOptions() const { return 0; }
-  virtual StringXNumber *getOption(int iopt) { return 0; };
   inline GMSH_PLUGIN_TYPE getType() const { return GMSH_Plugin::GMSH_SOLVER_PLUGIN; }
-  virtual void run() {} // do nothing
+  virtual void run() {}
   // popup dialog box
   virtual void popupPropertiesForPhysicalEntity(int dim) = 0;
   // add the given group to the solver data

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -136,7 +136,7 @@ int MeshTransfiniteSurface(GFace *gf)
 {
   if(gf->meshAttributes.Method != MESH_TRANSFINITE) return 0;
 
-  Msg::StatusBar(2, true, "Meshing surface %d (transfinite)", gf->tag());
+  Msg::Info("Meshing surface %d (transfinite)", gf->tag());
 
   std::vector<MVertex*> corners;
   findTransfiniteCorners(gf, corners);
@@ -420,7 +420,7 @@ int MeshTransfiniteSurface(GFace *gf)
         MVertex *v2 = tab[i + 1][j];
         MVertex *v3 = tab[i + 1][j + 1];
         MVertex *v4 = tab[i][j + 1];
-        if(gf->meshAttributes.recombine)
+        if(CTX::instance()->mesh.recombineAll || gf->meshAttributes.recombine)
           gf->quadrangles.push_back(new MQuadrangle(v1, v2, v3, v4));
         else if(gf->meshAttributes.transfiniteArrangement == 1 ||
                 (gf->meshAttributes.transfiniteArrangement == 0 && 
@@ -449,7 +449,7 @@ int MeshTransfiniteSurface(GFace *gf)
         MVertex *v2 = tab[i + 1][j];
         MVertex *v3 = tab[i + 1][j + 1];
         MVertex *v4 = tab[i][j + 1];
-        if(gf->meshAttributes.recombine)
+        if(CTX::instance()->mesh.recombineAll || gf->meshAttributes.recombine)
           gf->quadrangles.push_back(new MQuadrangle(v1, v2, v3, v4));
         else if(gf->meshAttributes.transfiniteArrangement == 1 ||
                 (gf->meshAttributes.transfiniteArrangement == 0 && 

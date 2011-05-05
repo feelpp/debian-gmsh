@@ -1,5 +1,5 @@
 %{
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -19,7 +19,6 @@
 #include "GModel.h"
 #include "Geo.h"
 #include "GeoInterpolation.h"
-#include "Generator.h"
 #include "Options.h"
 #include "Colors.h"
 #include "Parser.h"
@@ -31,17 +30,28 @@
 #include "CreateFile.h"
 #include "gmshSurface.h"
 #include "gmshLevelset.h"
+
+#if defined(HAVE_MESH)
+#include "Generator.h"
 #include "Field.h"
 #include "BackgroundMesh.h"
+#endif
 
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
 #include "PView.h"
 #include "PViewDataList.h"
+#endif
+
+#if defined(HAVE_PLUGINS)
 #include "PluginManager.h"
 #endif
 
 #if defined(HAVE_OPENGL)
 #include "drawContext.h"
+#endif
+
+#if defined(HAVE_KBIPACK)
+#include "Homology.h"
 #endif
 
 // Global parser variables
@@ -52,7 +62,7 @@ std::map<std::string, std::vector<double> > gmsh_yysymbols;
 
 // Static parser variables (accessible only in this file)
 static std::map<std::string, std::string > gmsh_yystringsymbols;
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
 static PViewDataList *ViewData;
 #endif
 static std::vector<double> ViewCoord;
@@ -66,7 +76,7 @@ static int ImbricatedLoop = 0;
 static fpos_t yyposImbricatedLoopsTab[MAX_RECUR_LOOPS];
 static int yylinenoImbricatedLoopsTab[MAX_RECUR_LOOPS];
 static double LoopControlVariablesTab[MAX_RECUR_LOOPS][3];
-static char *LoopControlVariablesNameTab[MAX_RECUR_LOOPS];
+static const char *LoopControlVariablesNameTab[MAX_RECUR_LOOPS];
 
 void yyerror(const char *s);
 void yymsg(int level, const char *fmt, ...);
@@ -96,16 +106,18 @@ fullMatrix<double> ListOfListOfDouble2Matrix(List_T *list);
 %token tBoundingBox tDraw tToday tSyncModel tCreateTopology tDistanceFunction
 %token tPoint tCircle tEllipse tLine tSphere tPolarSphere tSurface tSpline tVolume
 %token tCharacteristic tLength tParametric tElliptic
-%token tPlane tRuled tTransfinite tComplex tPhysical tCompound
-%token tUsing tPlugin tDegenerated tOCCShape
+%token tPlane tRuled tTransfinite tComplex tPhysical tCompound tPeriodic
+%token tUsing tPlugin tDegenerated
 %token tRotate tTranslate tSymmetry tDilate tExtrude tLevelset
 %token tLoop tRecombine tSmoother tSplit tDelete tCoherence tIntersect
 %token tLayers tHole tAlias tAliasWithOptions
 %token tText2D tText3D tInterpolationScheme  tTime tCombine
 %token tBSpline tBezier tNurbs tNurbsOrder tNurbsKnots
 %token tColor tColorTable tFor tIn tEndFor tIf tEndIf tExit
-%token tField tReturn tCall tFunction tShow tHide tGetValue
+%token tField tReturn tCall tFunction tShow tHide tGetValue tGetEnv tGetString
 %token tGMSH_MAJOR_VERSION tGMSH_MINOR_VERSION tGMSH_PATCH_VERSION
+%token tHomRank tHomGen tHomCut tHomSeq
+
 
 %type <d> FExpr FExpr_Single 
 %type <v> VExpr VExpr_Single CircleOptions TransfiniteType
@@ -165,11 +177,13 @@ GeoFormatItem :
   | Visibility  { return 1; }
   | Extrude     { List_Delete($1); return 1; }
   | Transfinite { return 1; }
+  | Periodic    { return 1; }
   | Embedding   { return 1; }
   | Coherence   { return 1; }
   | Loop        { return 1; }
   | Command     { return 1; }
   | LevelSet    { return 1; }
+  | Homology    { return 1; }
 ;
 
 SendToFile :
@@ -246,7 +260,7 @@ Printf :
 View :
     tSTRING tBIGSTR '{' Views '}' tEND
     { 
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
       if(!strcmp($1, "View") && ViewData->finalize()){
 	ViewData->setName($2);
 	ViewData->setFileName(gmsh_yyname);
@@ -260,7 +274,7 @@ View :
     }
   | tAlias tSTRING '[' FExpr ']' tEND
     {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
       if(!strcmp($2, "View")){
 	int index = (int)$4;
 	if(index >= 0 && index < (int)PView::list.size())
@@ -271,7 +285,7 @@ View :
     }
   | tAliasWithOptions tSTRING '[' FExpr ']' tEND
     {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
       if(!strcmp($2, "View")){
 	int index = (int)$4;
 	if(index >= 0 && index < (int)PView::list.size())
@@ -285,7 +299,7 @@ View :
 Views :
     // nothing
     {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
       ViewData = new PViewDataList(); 
 #endif
     }
@@ -313,7 +327,7 @@ ElementValues :
 Element : 
     tSTRING 
     {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
       if(!strncmp($1, "SP", 2)){
 	ViewValueList = &ViewData->SP; ViewNumList = &ViewData->NbSP;
       }
@@ -417,7 +431,7 @@ Element :
     }
     '(' ElementCoords ')'
     {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
       if(ViewValueList){
 	for(int i = 0; i < 3; i++)
 	  for(unsigned int j = 0; j < ViewCoord.size() / 3; j++) 
@@ -427,7 +441,7 @@ Element :
     }
     '{' ElementValues '}' tEND
     {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
       if(ViewValueList) (*ViewNumList)++;
 #endif
     }
@@ -436,14 +450,14 @@ Element :
 Text2DValues :
     StringExprVar
     { 
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
       for(int i = 0; i < (int)strlen($1) + 1; i++) ViewData->T2C.push_back($1[i]);
 #endif
       Free($1);
     }
   | Text2DValues ',' StringExprVar
     { 
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
       for(int i = 0; i < (int)strlen($3) + 1; i++) ViewData->T2C.push_back($3[i]);
 #endif
       Free($3);
@@ -453,7 +467,7 @@ Text2DValues :
 Text2D : 
     tText2D '(' FExpr ',' FExpr ',' FExpr ')'
     { 
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
       ViewData->T2D.push_back($3); 
       ViewData->T2D.push_back($5);
       ViewData->T2D.push_back($7); 
@@ -462,7 +476,7 @@ Text2D :
     }
     '{' Text2DValues '}' tEND
     {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
       ViewData->NbT2++;
 #endif
     }
@@ -471,14 +485,14 @@ Text2D :
 Text3DValues :
     StringExprVar
     { 
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
       for(int i = 0; i < (int)strlen($1) + 1; i++) ViewData->T3C.push_back($1[i]);
 #endif
       Free($1);
     }
   | Text3DValues ',' StringExprVar
     { 
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
       for(int i = 0; i < (int)strlen($3) + 1; i++) ViewData->T3C.push_back($3[i]);
 #endif
       Free($3);
@@ -488,7 +502,7 @@ Text3DValues :
 Text3D : 
     tText3D '(' FExpr ',' FExpr ',' FExpr ',' FExpr ')'
     { 
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
       ViewData->T3D.push_back($3); ViewData->T3D.push_back($5);
       ViewData->T3D.push_back($7); ViewData->T3D.push_back($9);
       ViewData->T3D.push_back(ViewData->T3C.size()); 
@@ -496,7 +510,7 @@ Text3D :
     }
     '{' Text3DValues '}' tEND
     {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
       ViewData->NbT3++;
 #endif
     }
@@ -506,7 +520,7 @@ InterpolationMatrix :
     tInterpolationScheme '{' RecursiveListOfListOfDouble '}' 
                          '{' RecursiveListOfListOfDouble '}'  tEND
     {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
       int type = 
 	(ViewData->NbSL || ViewData->NbVL) ? TYPE_LIN : 
 	(ViewData->NbST || ViewData->NbVT) ? TYPE_TRI : 
@@ -525,7 +539,7 @@ InterpolationMatrix :
                          '{' RecursiveListOfListOfDouble '}'  
                          '{' RecursiveListOfListOfDouble '}'  tEND
     {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
       int type = 
 	(ViewData->NbSL || ViewData->NbVL) ? TYPE_LIN : 
 	(ViewData->NbST || ViewData->NbVT) ? TYPE_TRI : 
@@ -544,7 +558,7 @@ InterpolationMatrix :
 Time :
     tTime 
     {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
       ViewValueList = &ViewData->Time;
 #endif
     }
@@ -581,6 +595,10 @@ Affectation :
 	  yymsg(0, "Unknown variable '%s'", $1);
       }
       else{
+        if(gmsh_yysymbols[$1].empty()){
+          if($2) yymsg(0, "Uninitialized variable '%s'", $1);
+          gmsh_yysymbols[$1].resize(1, 0.);
+        }
 	switch($2){
 	case 0 : gmsh_yysymbols[$1][0] = $3; break;
 	case 1 : gmsh_yysymbols[$1][0] += $3; break;
@@ -683,8 +701,12 @@ Affectation :
     {
       if(!gmsh_yysymbols.count($1))
 	yymsg(0, "Unknown variable '%s'", $1); 
-      else
-	gmsh_yysymbols[$1][0] += $2;
+      else{
+        if(gmsh_yysymbols[$1].empty())
+          yymsg(0, "Uninitialized variable '%s'", $1);
+        else
+          gmsh_yysymbols[$1][0] += $2;
+      }
       Free($1);
     }
   | tSTRING '[' FExpr ']' NumericIncrement tEND
@@ -838,19 +860,24 @@ Affectation :
 
   | tSTRING tField tAFFECT FExpr tEND
     {
+#if defined(HAVE_MESH)
       if(!strcmp($1,"Background"))
 	GModel::current()->getFields()->background_field = (int)$4;
       else
 	yymsg(0, "Unknown command %s Field", $1);
+#endif
     }
   | tField '[' FExpr ']' tAFFECT tSTRING tEND
     {
+#if defined(HAVE_MESH)
       if(!GModel::current()->getFields()->newField((int)$3, $6))
 	yymsg(0, "Cannot create field %i of type '%s'", (int)$3, $6);
+#endif
       Free($6);
     }
   | tField '[' FExpr ']' '.' tSTRING  tAFFECT FExpr tEND
     {
+#if defined(HAVE_MESH)
       Field *field = GModel::current()->getFields()->get((int)$3);
       if(field){
 	FieldOption *option = field->options[$6];
@@ -867,10 +894,12 @@ Affectation :
       }
       else
 	yymsg(0, "No field with id %i", (int)$3);
+#endif
       Free($6);
     }
   | tField '[' FExpr ']' '.' tSTRING  tAFFECT StringExpr tEND
     {
+#if defined(HAVE_MESH)
       Field *field = GModel::current()->getFields()->get((int)$3);
       if(field){
 	FieldOption *option = field->options[$6];
@@ -887,11 +916,13 @@ Affectation :
       }
       else 
 	yymsg(0, "No field with id %i", (int)$3);
+#endif
       Free($6);
       Free($8);
     }
   | tField '[' FExpr ']' '.' tSTRING  tAFFECT '{' RecursiveListOfDouble '}' tEND
     {
+#if defined(HAVE_MESH)
       Field *field = GModel::current()->getFields()->get((int)$3);
       if(field){
 	FieldOption *option = field->options[$6];
@@ -910,6 +941,7 @@ Affectation :
       }
       else 
 	yymsg(0, "No field with id %i", (int)$3);
+#endif
       Free($6);
       List_Delete($9);
     }
@@ -918,7 +950,7 @@ Affectation :
 
   | tPlugin '(' tSTRING ')' '.' tSTRING tAFFECT FExpr tEND 
     {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_PLUGINS)
       try {
 	PluginManager::instance()->setPluginOption($3, $6, $8); 
       }
@@ -930,7 +962,7 @@ Affectation :
     }
   | tPlugin '(' tSTRING ')' '.' tSTRING tAFFECT StringExpr tEND 
     {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_PLUGINS)
       try {
 	PluginManager::instance()->setPluginOption($3, $6, $8); 
       }
@@ -1093,7 +1125,6 @@ Shape :
 	}
       }
     }
-
   | tSpline '(' FExpr ')' tAFFECT ListOfDouble tEND
     {
       int num = (int)$3;
@@ -1112,7 +1143,7 @@ Shape :
       $$.Type = MSH_SEGM_SPLN;
       $$.Num = num;
     }
-  | tCircle '(' FExpr ')'  tAFFECT ListOfDouble CircleOptions tEND
+  | tCircle '(' FExpr ')' tAFFECT ListOfDouble CircleOptions tEND
     {
       int num = (int)$3;
       if(FindCurve(num)){
@@ -1142,7 +1173,7 @@ Shape :
       $$.Type = MSH_SEGM_CIRC;
       $$.Num = num;
     }
-  | tEllipse '(' FExpr ')'  tAFFECT ListOfDouble CircleOptions tEND
+  | tEllipse '(' FExpr ')' tAFFECT ListOfDouble CircleOptions tEND
     {
       int num = (int)$3;
       if(FindCurve(num)){
@@ -1249,6 +1280,24 @@ Shape :
       }
       List_Delete($7);
       $$.Type = MSH_SEGM_LOOP;
+      $$.Num = num;
+    }
+  | tCompound tLine '(' FExpr ')' tAFFECT ListOfDouble tEND
+    {
+      int num = (int)$4;
+      if(FindCurve(num)){
+	yymsg(0, "Curve %d already exists", num);
+      }
+      else{
+        Curve *c = Create_Curve(num, MSH_SEGM_COMPOUND, 1, NULL, NULL, -1, -1, 0., 1.);
+        for(int i = 0; i < List_Nbr($7); i++)
+          c->compound.push_back((int)*(double*)List_Pointer($7, i));
+	End_Curve(c);
+	Tree_Add(GModel::current()->getGEOInternals()->Curves, &c);
+	CreateReversedCurve(c);
+      }
+      List_Delete($7);
+      $$.Type = MSH_SEGM_COMPOUND;
       $$.Num = num;
     }
   | tPhysical tLine 
@@ -1416,6 +1465,54 @@ Shape :
       $$.Type = MSH_SURF_LOOP;
       $$.Num = num;
     }
+  | tCompound tSurface '(' FExpr ')' tAFFECT ListOfDouble tEND
+    {
+      int num = (int)$4;
+      if(FindSurface(num)){
+	yymsg(0, "Surface %d already exists", num);
+      }
+      else{
+	Surface *s = Create_Surface(num, MSH_SURF_COMPOUND);
+        for(int i = 0; i < List_Nbr($7); i++){
+          s->compound.push_back((int)*(double*)List_Pointer($7, i));
+	}
+	Tree_Add(GModel::current()->getGEOInternals()->Surfaces, &s);
+      }
+      List_Delete($7);
+      $$.Type = MSH_SURF_COMPOUND;
+      $$.Num = num;
+    }
+  | tCompound tSurface '(' FExpr ')' tAFFECT ListOfDouble tSTRING 
+      '{' RecursiveListOfListOfDouble '}' tEND
+    {
+      int num = (int)$4;
+      if(FindSurface(num)){
+	yymsg(0, "Surface %d already exists", num);
+      }
+      else{
+        Surface *s = Create_Surface(num, MSH_SURF_COMPOUND);
+        for(int i = 0; i < List_Nbr($7); i++)
+          s->compound.push_back((int)*(double*)List_Pointer($7, i));
+	for (int i = 0; i < List_Nbr($10); i++){
+          if(i > 3){
+            yymsg(0, "Too many boundary specifiers in compound surface");
+            break;
+          }
+	  List_T *l = *(List_T**)List_Pointer($10, i);
+          for (int j = 0; j < List_Nbr(l); j++){
+            s->compoundBoundary[i].push_back((int)*(double*)List_Pointer(l, j));
+	  }
+	}
+	Tree_Add(GModel::current()->getGEOInternals()->Surfaces, &s);
+      }
+      List_Delete($7);
+      for (int i = 0; i < List_Nbr($10); i++)
+        List_Delete(*(List_T**)List_Pointer($10, i));
+      List_Delete($10);
+      Free($8);
+      $$.Type = MSH_SURF_COMPOUND;
+      $$.Num = num;
+    }
   | tPhysical tSurface 
     {
       curPhysDim = 2;
@@ -1436,85 +1533,7 @@ Shape :
       $$.Type = MSH_PHYSICAL_SURFACE;
       $$.Num = num;
     }
-  | tCompound tVolume '(' FExpr ')' tAFFECT ListOfDouble tEND
-    {
-      int num = (int)$4;
-      if(FindPhysicalGroup(num, MSH_PHYSICAL_VOLUME)){
-	yymsg(0, "Physical volume %d already exists", num);
-      }
-      else{
-	List_T *temp = ListOfDouble2ListOfInt($7);
-	List_T *S[4] = {temp, 0, 0, 0};
-	PhysicalGroup *p = Create_PhysicalGroup(num, MSH_PHYSICAL_VOLUME, temp, S);
-	List_Delete(temp);
-        List_Add(GModel::current()->getGEOInternals()->PhysicalGroups, &p);
-      }
-      List_Delete($7);
-      $$.Type = MSH_PHYSICAL_VOLUME;
-      $$.Num = num;
-    }
-  | tCompound tSurface '(' FExpr ')' tAFFECT ListOfDouble tSTRING 
-      '{' RecursiveListOfListOfDouble '}' tEND
-    {
-      int num = (int)$4;
-      if(FindPhysicalGroup(num, MSH_PHYSICAL_SURFACE)){
-	yymsg(0, "Physical surface %d already exists", num);
-      }
-      else{
-	List_T *temp = ListOfDouble2ListOfInt($7);
-	List_T *S[4] = {0, 0, 0, 0};
-	for (int i = 0; i < List_Nbr($10); i++){
-	  List_T *ll;
-	  List_Read($10, i, &ll);
-	  S[i] = ListOfDouble2ListOfInt(ll);
-          List_Delete(ll);
-	}
-	PhysicalGroup *p = Create_PhysicalGroup(num, MSH_PHYSICAL_SURFACE, temp, S);
-	List_Delete(temp);
-	for (int i = 0; i < List_Nbr($10); i++)
-	  List_Delete(S[i]);
-        List_Add(GModel::current()->getGEOInternals()->PhysicalGroups, &p);
-      }
-      List_Delete($7);
-      List_Delete($10);
-      Free($8);
-      $$.Type = MSH_PHYSICAL_SURFACE;
-      $$.Num = num;
-    }
-  | tCompound tSurface '(' FExpr ')' tAFFECT ListOfDouble tEND
-    {
-      int num = (int)$4;
-      if(FindPhysicalGroup(num, MSH_PHYSICAL_SURFACE)){
-	yymsg(0, "Physical surface %d already exists", num);
-      }
-      else{
-	List_T *temp = ListOfDouble2ListOfInt($7);
-	List_T *S[4] = {0, 0, 0, 0};
-	PhysicalGroup *p = Create_PhysicalGroup(num, MSH_PHYSICAL_SURFACE, temp, S);
-	List_Delete(temp);
-        List_Add(GModel::current()->getGEOInternals()->PhysicalGroups, &p);
-      }
-      List_Delete($7);
-      $$.Type = MSH_PHYSICAL_SURFACE;
-      $$.Num = num;
-    }
-  | tCompound tLine '(' FExpr ')' tAFFECT ListOfDouble tEND
-    {
-      int num = (int)$4;
-      if(FindPhysicalGroup(num, MSH_PHYSICAL_LINE)){
-	yymsg(0, "Physical line %d already exists", num);
-      }
-      else{
-	List_T *temp = ListOfDouble2ListOfInt($7);
-	List_T *S[4] = {temp, 0, 0, 0};
-	PhysicalGroup *p = Create_PhysicalGroup(num, MSH_PHYSICAL_LINE, temp, S);
-	List_Delete(temp);
-        List_Add(GModel::current()->getGEOInternals()->PhysicalGroups, &p);
-      }
-      List_Delete($7);
-      $$.Type = MSH_PHYSICAL_LINE;
-      $$.Num = num;
-    }
+
   // Volumes
 
   // for backward compatibility:
@@ -1553,21 +1572,22 @@ Shape :
       $$.Type = MSH_VOLUME;
       $$.Num = num;
     }
-
-  | tOCCShape '(' tBIGSTR ',' ListOfDouble ',' tBIGSTR ')' tEND
+  | tCompound tVolume '(' FExpr ')' tAFFECT ListOfDouble tEND
     {
-#if defined(HAVE_OCC)
-      std::vector<double> data;
-      for (int i = 0 ; i < List_Nbr($5); i++){
-        double d; List_Read($5, i, &d);
-        data.push_back(d);
+      int num = (int)$4;
+      if(FindVolume(num)){
+	yymsg(0, "Volume %d already exists", num);
       }
-      GModel::current()->addShape($3, data, $7);
-      Free($3); Free($7);
-      List_Delete($5);
-#endif
+      else{
+	Volume *v = Create_Volume(num, MSH_VOLUME_COMPOUND);
+        for(int i = 0; i < List_Nbr($7); i++)
+          v->compound.push_back((int)*(double*)List_Pointer($7, i));
+	Tree_Add(GModel::current()->getGEOInternals()->Volumes, &v);
+      }
+      List_Delete($7);
+      $$.Type = MSH_VOLUME_COMPOUND;
+      $$.Num = num;
     }
-
   | tPhysical tVolume 
     {
       curPhysDim = 3;
@@ -1626,7 +1646,10 @@ Transform :
         }
       }
       else if(!strcmp($1, "Boundary")){
-        BoundaryShapes($3, $$);
+        BoundaryShapes($3, $$, false);
+      }
+      else if(!strcmp($1, "CombinedBoundary")){
+        BoundaryShapes($3, $$, true);
       }
       else{
         yymsg(0, "Unknown command on multiple shapes: '%s'", $1);
@@ -1936,7 +1959,7 @@ LevelSet :
           Tree_Add(GModel::current()->getGEOInternals()->LevelSets, &l);
         }
       }
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
       else if(!strcmp($2, "PostView")){
         int t = (int)$4;
         if(FindLevelSet(t)){
@@ -1983,6 +2006,12 @@ LevelSet :
         int t = (int)$4;
         GModel *GM = GModel::current();
         GM->buildCutGModel(FindLevelSet(t)->ls);
+        GM->setVisibility(0);
+      }
+      else if(!strcmp($2, "SplitMesh")){
+        int t = (int)$4;
+        GModel *GM = GModel::current();
+        GM->buildCutGModel(FindLevelSet(t)->ls, false);
         GM->setVisibility(0);
       }
       else
@@ -2110,11 +2139,13 @@ Delete :
     }
   | tDelete tField '[' FExpr ']' tEND
     {
+#if defined(HAVE_MESH)
       GModel::current()->getFields()->deleteField((int)$4);
+#endif
     }
   | tDelete tSTRING '[' FExpr ']' tEND
     {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
       if(!strcmp($2, "View")){
 	int index = (int)$4;
 	if(index >= 0 && index < (int)PView::list.size())
@@ -2130,10 +2161,7 @@ Delete :
   | tDelete tSTRING tEND
     {
       if(!strcmp($2, "Meshes") || !strcmp($2, "All")){
-        for(unsigned int i = 0; i < GModel::list.size(); i++){
-          GModel::list[i]->destroy();
-          GModel::list[i]->getGEOInternals()->destroy();
-        }
+        ClearProject();
       }
       else if(!strcmp($2, "Model")){
 	GModel::current()->destroy();
@@ -2146,6 +2174,10 @@ Delete :
       else if(!strcmp($2, "Variables")){
 	gmsh_yysymbols.clear();
       }
+      else if(!strcmp($2, "Options")){
+        ReInitOptions(0);
+        InitOptionsGUI(0);
+      }
       else{
 	if(gmsh_yysymbols.count($2))
 	  gmsh_yysymbols.erase($2);
@@ -2156,7 +2188,7 @@ Delete :
     }
   | tDelete tSTRING tSTRING tEND
     {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
       if(!strcmp($2, "Empty") && !strcmp($3, "Views")){
 	for(int i = PView::list.size() - 1; i >= 0; i--)
 	  if(PView::list[i]->getData()->empty()) delete PView::list[i];
@@ -2231,10 +2263,10 @@ Command :
 	// open simultaneously. The right solution would be of course
 	// to modify FunctionManager to reopen the files instead of
 	// using the FILE pointer, but hey, I'm lazy...
-	Msg::StatusBar(2, true, "Reading '%s'", tmp.c_str());
+	Msg::StatusBar(2, true, "Reading '%s'...", tmp.c_str());
 	ParseFile(tmp, false, true);
 	SetBoundingBox();
-	Msg::StatusBar(2, true, "Read '%s'", tmp.c_str());
+	Msg::StatusBar(2, true, "Done reading '%s'", tmp.c_str());
       }
       else if(!strcmp($1, "Print")){
 	// make sure we have the latest data from GEO_Internals in GModel
@@ -2242,12 +2274,12 @@ Command :
 	// the print command is in the same file as the geometry)
 	GModel::current()->importGEOInternals();
         std::string tmp = FixRelativePath(gmsh_yyname, $2);
-	CreateOutputFile(tmp, CTX::instance()->print.format);
+	CreateOutputFile(tmp, CTX::instance()->print.fileFormat);
       }
       else if(!strcmp($1, "Save")){
 	GModel::current()->importGEOInternals();
         std::string tmp = FixRelativePath(gmsh_yyname, $2);
-	CreateOutputFile(tmp, CTX::instance()->mesh.format);
+	CreateOutputFile(tmp, CTX::instance()->mesh.fileFormat);
       }
       else if(!strcmp($1, "Merge") || !strcmp($1, "MergeWithBoundingBox")){
 	// MergeWithBoundingBox is deprecated
@@ -2256,13 +2288,15 @@ Command :
       }
       else if(!strcmp($1, "System"))
 	SystemCall($2);
+      else if(!strcmp($1, "SetName"))
+	GModel::current()->setName($2);
       else
 	yymsg(0, "Unknown command '%s'", $1);
       Free($1); Free($2);
     } 
   | tSTRING tSTRING '[' FExpr ']' StringExprVar tEND
     {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
       if(!strcmp($1, "Save") && !strcmp($2, "View")){
 	int index = (int)$4;
 	if(index >= 0 && index < (int)PView::list.size()){
@@ -2279,7 +2313,7 @@ Command :
     }
   | tSTRING tSTRING tSTRING '[' FExpr ']' tEND
     {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST) && defined(HAVE_MESH)
       if(!strcmp($1, "Background") && !strcmp($2, "Mesh")  && !strcmp($3, "View")){
 	int index = (int)$5;
 	if(index >= 0 && index < (int)PView::list.size())
@@ -2313,7 +2347,7 @@ Command :
     }
    | tPlugin '(' tSTRING ')' '.' tSTRING tEND
      {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_PLUGINS)
        try {
 	 PluginManager::instance()->action($3, $6, 0);
        }
@@ -2325,7 +2359,7 @@ Command :
      }
    | tCombine tSTRING tEND
     {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
       if(!strcmp($2, "ElementsFromAllViews"))
 	PView::combine(false, 1, CTX::instance()->post.combineRemoveOrig);
       else if(!strcmp($2, "ElementsFromVisibleViews"))
@@ -2464,20 +2498,22 @@ Loop :
 	ImbricatedLoop = 0;
       }
       else{
+	double step = LoopControlVariablesTab[ImbricatedLoop - 1][2];
+        const char *name = LoopControlVariablesNameTab[ImbricatedLoop - 1];
+        if(name){
+          if(!gmsh_yysymbols.count(name))
+            yymsg(0, "Unknown loop variable");
+          else{
+            gmsh_yysymbols[name][0] += step;
+            LoopControlVariablesTab[ImbricatedLoop - 1][0] = gmsh_yysymbols[name][0];
+          }
+        }
+        else{
+          LoopControlVariablesTab[ImbricatedLoop - 1][0] += step;
+        }
 	double x0 = LoopControlVariablesTab[ImbricatedLoop - 1][0];
 	double x1 = LoopControlVariablesTab[ImbricatedLoop - 1][1];
-	double step = LoopControlVariablesTab[ImbricatedLoop - 1][2];
-	int do_next = (step > 0.) ? (x0 + step <= x1) : (x0 + step >= x1);
-	if(do_next){
-	  LoopControlVariablesTab[ImbricatedLoop - 1][0] +=
-	    LoopControlVariablesTab[ImbricatedLoop - 1][2];
-	  if(LoopControlVariablesNameTab[ImbricatedLoop - 1]){
-	    if(!gmsh_yysymbols.count(LoopControlVariablesNameTab[ImbricatedLoop - 1]))
-	      yymsg(0, "Unknown loop variable");
-	    else
-	      gmsh_yysymbols[LoopControlVariablesNameTab[ImbricatedLoop - 1]][0] +=
-		LoopControlVariablesTab[ImbricatedLoop - 1][2];
-	  }
+        if((step > 0. && x0 <= x1) || (step < 0. && x0 >= x1)){
 	  fsetpos(gmsh_yyin, &yyposImbricatedLoopsTab[ImbricatedLoop - 1]);
 	  gmsh_yylineno = yylinenoImbricatedLoopsTab[ImbricatedLoop - 1];
 	}
@@ -3164,6 +3200,76 @@ Transfinite :
     }
 ;
 
+//  P E R I O D I C   M E S H I N G   C O N S T R A I N T S
+
+Periodic : 
+    tPeriodic tLine ListOfDouble tAFFECT ListOfDouble tEND
+    {
+      if(List_Nbr($5) != List_Nbr($3)){
+	yymsg(0, "Number of master (%d) different from number of slave (%d) lines",
+              List_Nbr($5), List_Nbr($3));
+      }
+      else{
+        for(int i = 0; i < List_Nbr($3); i++){
+          double d_master, d_slave;
+          List_Read($5, i, &d_master);
+          List_Read($3, i, &d_slave);
+          int j_master = (int)d_master;
+          int j_slave  = (int)d_slave;
+          Curve *c_slave = FindCurve(abs(j_slave));
+          if(c_slave){
+            c_slave->meshMaster = j_master;	  
+          }
+          else{
+            GEdge *ge = GModel::current()->getEdgeByTag(abs(j_slave));
+            if(ge) ge->setMeshMaster(j_master);
+            else yymsg(0, "Unknown line %d", j_slave);
+          }
+        }
+      }
+      List_Delete($3);
+      List_Delete($5);
+    }
+  | tPeriodic tSurface FExpr '{' RecursiveListOfDouble '}' tAFFECT FExpr 
+    '{' RecursiveListOfDouble '}'  tEND
+    {
+      if (List_Nbr($5) != List_Nbr($10)){
+	yymsg(0, "Number of master surface edges (%d) different from number of "
+              "slave (%d) edges", List_Nbr($10), List_Nbr($5));
+      }
+      else{
+        int j_master = (int)$8;
+        int j_slave = (int)$3;
+        Surface *s_slave = FindSurface(abs(j_slave));
+        if(s_slave){
+          s_slave->meshMaster = j_master;
+          for (int i = 0; i < List_Nbr($5); i++){
+            double dm, ds;
+            List_Read($5, i, &ds);
+            List_Read($10, i, &dm);	  
+            s_slave->edgeCounterparts[(int)ds] = (int)dm;
+          }
+        }
+        else{
+          GFace *gf = GModel::current()->getFaceByTag(abs(j_slave));
+          if(gf){
+            gf->setMeshMaster(j_master);
+            for (int i = 0; i < List_Nbr($5); i++){
+              double dm, ds;
+              List_Read($5, i, &ds);
+              List_Read($10, i, &dm);
+              gf->edgeCounterparts[(int)ds] = (int)dm;
+            }
+          }
+          else yymsg(0, "Unknown surface %d", j_slave);
+        }
+      }
+      List_Delete($5);
+      List_Delete($10);
+    }
+;
+
+
 //  E M B E D D I N G  C U R V E S   A N D  P O I N T S   I N T O   S U R F A C E S  
 //    A N D   V O L U M E S
 
@@ -3242,6 +3348,155 @@ Coherence :
     }
 ;
 
+
+//  H O M O L O G Y
+
+Homology : 
+
+    tHomRank '(' StringExprVar ')' tAFFECT '{' ListOfDouble ',' ListOfDouble '}' tEND
+    {
+    
+    List_T *temp = ListOfDouble2ListOfInt($7);
+    std::vector<int> domain;
+    
+    for (int i = 0; i < List_Nbr(temp); i++){
+      int item = 0;
+      List_Read(temp, i, &item);
+      domain.push_back(item);
+    }
+    List_Delete($7);
+    List_Delete(temp);
+    
+    List_T *temp2 = ListOfDouble2ListOfInt($9);
+    std::vector<int> subdomain;
+    for (int i = 0; i < List_Nbr(temp2); i++){
+      int item = 0;
+      List_Read(temp2, i, &item);
+      subdomain.push_back(item);
+    }
+    List_Delete($9);
+    List_Delete(temp2);
+    
+    std::string fileName = "";
+    fileName = $3;
+    
+    #if defined(HAVE_KBIPACK)
+    Homology* homology = new Homology(GModel::current(), domain, subdomain);
+    homology->setFileName(fileName);
+    homology->computeRanks();
+    delete homology;
+    #else
+    yymsg(0, "Gmsh needs to be configured with option Kbipack to use homology computation");
+    #endif
+    }      
+    
+  | tHomGen '(' StringExprVar ')' tAFFECT '{' ListOfDouble ',' ListOfDouble '}' tEND
+    {
+    List_T *temp = ListOfDouble2ListOfInt($7);
+    std::vector<int> domain;
+    
+    for (int i = 0; i < List_Nbr(temp); i++){
+      int item = 0;
+      List_Read(temp, i, &item);
+      domain.push_back(item);
+    }
+    List_Delete($7);
+    List_Delete(temp);
+    
+    List_T *temp2 = ListOfDouble2ListOfInt($9);
+    std::vector<int> subdomain;
+    for (int i = 0; i < List_Nbr(temp2); i++){
+      int item = 0;
+      List_Read(temp2, i, &item);
+      subdomain.push_back(item);
+    }
+    List_Delete($9);
+    List_Delete(temp2);
+    
+    std::string fileName = "";
+    fileName = $3;
+    
+    #if defined(HAVE_KBIPACK)
+    Homology* homology = new Homology(GModel::current(), domain, subdomain);
+    homology->setFileName(fileName);
+    homology->findGenerators();  
+    delete homology;
+    #else
+    yymsg(0, "Gmsh needs to be configured with option Kbipack to use homology computation");
+    #endif
+    }
+    
+  | tHomCut '(' StringExprVar ')' tAFFECT '{' ListOfDouble ',' ListOfDouble '}' tEND
+    {
+    List_T *temp = ListOfDouble2ListOfInt($7);
+    std::vector<int> domain;
+    
+    for (int i = 0; i < List_Nbr(temp); i++){
+      int item = 0;
+      List_Read(temp, i, &item);
+      domain.push_back(item);
+    }
+    List_Delete($7);
+    List_Delete(temp);
+    
+    List_T *temp2 = ListOfDouble2ListOfInt($9);
+    std::vector<int> subdomain;
+    for (int i = 0; i < List_Nbr(temp2); i++){
+      int item = 0;
+      List_Read(temp2, i, &item);
+      subdomain.push_back(item);
+    }
+    List_Delete($9);
+    List_Delete(temp2);
+    
+    std::string fileName = "";
+    fileName = $3;
+    
+    #if defined(HAVE_KBIPACK)
+    Homology* homology = new Homology(GModel::current(), domain, subdomain);
+    homology->setFileName(fileName);
+    homology->findDualGenerators();
+    delete homology;
+    #else
+    yymsg(0, "Gmsh needs to be configured with option Kbipack to use homology computation");
+    #endif
+    }
+    | tHomSeq '(' StringExprVar ')' tAFFECT '{' ListOfDouble ',' ListOfDouble '}' tEND
+    {
+    List_T *temp = ListOfDouble2ListOfInt($7);
+    std::vector<int> domain;
+    
+    for (int i = 0; i < List_Nbr(temp); i++){
+      int item = 0;
+      List_Read(temp, i, &item);
+      domain.push_back(item);
+    }
+    List_Delete($7);
+    List_Delete(temp);
+    
+    List_T *temp2 = ListOfDouble2ListOfInt($9);
+    std::vector<int> subdomain;
+    for (int i = 0; i < List_Nbr(temp2); i++){
+      int item = 0;
+      List_Read(temp2, i, &item);
+      subdomain.push_back(item);
+    }
+    List_Delete($9);
+    List_Delete(temp2);
+    
+    std::string fileName = "";
+    fileName = $3;
+    
+    #if defined(HAVE_KBIPACK)
+    Homology* homology = new Homology(GModel::current(), domain, subdomain);
+    homology->setFileName(fileName);
+    homology->findHomSequence();
+    delete homology;
+    #else
+    yymsg(0, "Gmsh needs to be configured with option Kbipack to use homology computation");
+    #endif
+    }
+;
 
 //  G E N E R A L
 
@@ -3339,8 +3594,14 @@ FExpr_Single :
 	yymsg(0, "Unknown variable '%s'", $1);
 	$$ = 0.;
       }
-      else
-	$$ = gmsh_yysymbols[$1][0];
+      else{
+        if(gmsh_yysymbols[$1].empty()){
+          yymsg(0, "Uninitialized variable '%s'", $1);
+          $$ = 0.;
+        }
+        else
+          $$ = gmsh_yysymbols[$1][0];
+      }
       Free($1);
     }
   // This is for GetDP compatibility (we should generalize it so
@@ -3354,8 +3615,14 @@ FExpr_Single :
 	yymsg(0, "Unknown variable '%s'", tmpstring);
 	$$ = 0.;
       }
-      else
-	$$ = gmsh_yysymbols[tmpstring][0];
+      else{
+        if(gmsh_yysymbols[tmpstring].empty()){
+          yymsg(0, "Uninitialized variable '%s'", tmpstring);
+          $$ = 0.;
+        }
+        else
+          $$ = gmsh_yysymbols[tmpstring][0];
+      }
       Free($1);
     }
   | tSTRING '[' FExpr ']'
@@ -3389,8 +3656,14 @@ FExpr_Single :
 	yymsg(0, "Unknown variable '%s'", $1);
 	$$ = 0.;
       }
-      else
-	$$ = (gmsh_yysymbols[$1][0] += $2);
+      else{
+        if(gmsh_yysymbols[$1].empty()){
+          yymsg(0, "Uninitialized variable '%s'", $1);
+          $$ = 0.;
+        }
+        else
+          $$ = (gmsh_yysymbols[$1][0] += $2);
+      }
       Free($1);
     }
   | tSTRING '[' FExpr ']' NumericIncrement
@@ -3441,7 +3714,7 @@ FExpr_Single :
       }
       Free($1); Free($6);
     }
-  | tGetValue '(' tBIGSTR ',' FExpr ')'
+  | tGetValue '(' StringExprVar ',' FExpr ')'
     { 
       $$ = Msg::GetValue($3, $5);
       Free($3);
@@ -3796,6 +4069,22 @@ StringExpr :
       time(&now);
       strcpy($$, ctime(&now));
       $$[strlen($$) - 1] = '\0';
+    }
+  | tGetEnv '(' StringExprVar ')'
+    { 
+      const char *env = GetEnvironmentVar($3);
+      if(!env) env = "";
+      $$ = (char *)Malloc((sizeof(env) + 1) * sizeof(char));
+      strcpy($$, env);
+      Free($3);
+    }
+  | tGetString '(' StringExprVar ',' StringExprVar ')'
+    { 
+      std::string s = Msg::GetString($3, $5);
+      $$ = (char *)Malloc((s.size() + 1) * sizeof(char));
+      strcpy($$, s.c_str());
+      Free($3);
+      Free($5);
     }
   | tStrCat '(' StringExprVar ',' StringExprVar ')'
     {

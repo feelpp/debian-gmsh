@@ -1,12 +1,15 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
+#include <limits>
 #include <stdlib.h>
 #include <string.h>
 #include <map>
 #include <string>
+#include <sstream>
+#include <iomanip>
 #include "GModel.h"
 #include "GmshDefines.h"
 #include "MPoint.h"
@@ -25,9 +28,14 @@
 #include "discreteEdge.h"
 #include "discreteFace.h"
 #include "discreteRegion.h"
-#include "MElement.h"
-#include "GEdgeCompound.h"
-#include "GFaceCompound.h"
+#include "MVertexPositionSet.h"
+#include "OS.h"
+
+#if defined(HAVE_POST)
+#include "PView.h"
+#include "PViewData.h"
+#include "PViewDataList.h"
+#endif
 
 void GModel::_storePhysicalTagsInEntities(int dim,
                                           std::map<int, std::map<int, std::string> > &map)
@@ -44,7 +52,7 @@ void GModel::_storePhysicalTagsInEntities(int dim,
     if(ge){
       std::map<int, std::string>::const_iterator it2 = it->second.begin();
       for(; it2 != it->second.end(); ++it2){
-        if(std::find(ge->physicals.begin(), ge->physicals.end(), it2->first) == 
+        if(std::find(ge->physicals.begin(), ge->physicals.end(), it2->first) ==
            ge->physicals.end())
           ge->physicals.push_back(it2->first);
       }
@@ -52,7 +60,15 @@ void GModel::_storePhysicalTagsInEntities(int dim,
   }
 }
 
-static bool getVertices(int num, int *indices, std::map<int, MVertex*> &map, 
+ static void replaceCommaByDot(const std::string name){
+   char myCommand[1000], myCommand2[1000];
+   sprintf(myCommand, "sed 's/,/./g' %s > temp.txt", name.c_str());
+   SystemCall(myCommand);
+   sprintf(myCommand2, "mv temp.txt %s ", name.c_str());
+   SystemCall(myCommand2);
+ }
+
+static bool getVertices(int num, int *indices, std::map<int, MVertex*> &map,
                         std::vector<MVertex*> &vertices)
 {
   for(int i = 0; i < num; i++){
@@ -79,14 +95,29 @@ static bool getVertices(int num, int *indices, std::vector<MVertex*> &vec,
   }
   return true;
 }
+static bool getProperties(int num, int *indices, std::vector<double> &vec,
+                        std::vector<double> &properties)
+{
+  for(int i = 0; i < num; i++){
+    if(indices[i] < 0 || indices[i] > (int)(vec.size() - 1)){
+      Msg::Error("Wrong vertex index %d", indices[i]);
+      return false;
+    }
+    else
+      properties.push_back(vec[indices[i]]);
+  }
+  return true;
+}
 
 static MElement *createElementMSH(GModel *m, int num, int typeMSH, int physical,
                                   int reg, int part, std::vector<MVertex*> &v,
                                   std::map<int, std::vector<MElement*> > elements[10],
-                                  std::map<int, std::map<int, std::string> > physicals[4])
+                                  std::map<int, std::map<int, std::string> > physicals[4],
+                                  bool owner=false, MElement *parent=0,
+                                  MElement *d1=0, MElement *d2=0)
 {
   MElementFactory factory;
-  MElement *e = factory.create(typeMSH, v, num, part);
+  MElement *e = factory.create(typeMSH, v, num, part, owner, parent, d1, d2);
 
   if(!e){
     Msg::Error("Unknown type of element %d", typeMSH);
@@ -116,52 +147,71 @@ static MElement *createElementMSH(GModel *m, int num, int typeMSH, int physical,
     elements[9][reg].push_back(e); break;
   default : Msg::Error("Wrong type of element"); return NULL;
   }
-  
+
   int dim = e->getDim();
   if(physical && (!physicals[dim].count(reg) || !physicals[dim][reg].count(physical)))
     physicals[dim][reg][physical] = "unnamed";
-  
+
   if(part) m->getMeshPartitions().insert(part);
   return e;
 }
 
-static MElement *getParent(int parentNum, std::map<int, std::vector<MElement*> > &elements)
+static bool getElementsByNum(int elemNum[], std::map<int, std::vector<MElement*> > &elements,
+                             bool erase, MElement *elems[], int nbElem = 1)
 {
+  int i = 0;
   std::map<int, std::vector<MElement*> >::iterator it = elements.begin();
   for(; it != elements.end(); ++it) {
     std::vector<MElement*>::iterator itE = it->second.begin();
-    for(; itE != it->second.end(); itE++)
-      if((*itE)->getNum() == parentNum) {
-        MElement *p = (*itE);
-        it->second.erase(itE);
-        return p;
+    for(; itE != it->second.end(); itE++) {
+      for(int j = 0; j < nbElem; j++) {
+        if((*itE)->getNum() == elemNum[j]) {
+          elems[i++] = (*itE);
+          if(erase) itE = it->second.erase(itE);
+          if(i == nbElem) return true;
+        }
       }
+    }
   }
-  return NULL;
+  return false;
 }
 
-static MElement *getParent(int parentNum, int dim,
+static MElement *getParent(int parentNum, int type,
                            std::map<int, std::vector<MElement*> > elements[10])
 {
   MElement *parent = NULL;
-  switch(dim){
-  case 0 :
-    return getParent(parentNum, elements[0]);
-  case 1 :
-    return getParent(parentNum, elements[1]);
-  case 2 :
-    if(parent = getParent(parentNum, elements[2])) return parent;
-    if(parent = getParent(parentNum, elements[3])) return parent;
-    if(parent = getParent(parentNum, elements[8])) return parent;
+  switch(type){
+  case MSH_LIN_C :
+    getElementsByNum(&parentNum, elements[1], true, &parent);
     return parent;
-  case 3 :
-    if(parent = getParent(parentNum, elements[4])) return parent;
-    if(parent = getParent(parentNum, elements[5])) return parent;
-    if(parent = getParent(parentNum, elements[6])) return parent;
-    if(parent = getParent(parentNum, elements[7])) return parent;
-    if(parent = getParent(parentNum, elements[9])) return parent;
+  case MSH_POLYG_ : case MSH_POLYG_B :
+    if(getElementsByNum(&parentNum, elements[2], true, &parent)) return parent;
+    if(getElementsByNum(&parentNum, elements[3], true, &parent)) return parent;
+    if(getElementsByNum(&parentNum, elements[8], true, &parent)) return parent;
+    return parent;
+  case MSH_POLYH_ :
+    if(getElementsByNum(&parentNum, elements[4], true, &parent)) return parent;
+    if(getElementsByNum(&parentNum, elements[5], true, &parent)) return parent;
+    if(getElementsByNum(&parentNum, elements[6], true, &parent)) return parent;
+    if(getElementsByNum(&parentNum, elements[7], true, &parent)) return parent;
+    if(getElementsByNum(&parentNum, elements[9], true, &parent)) return parent;
     return parent;
   default : return parent;
+  }
+}
+
+static void getDomains(int dom1Num, int dom2Num, int type,
+                      std::map<int, std::vector<MElement*> > elements[10],
+                      MElement *doms[])
+{
+  int domNums[2] = {dom1Num, dom2Num};
+  switch(type){
+  case MSH_LIN_B :
+    getElementsByNum(domNums, elements[8], false, doms, 2);
+    return;
+  case MSH_TRI_B : case MSH_POLYG_B :
+    getElementsByNum(domNums, elements[9], false, doms, 2);
+    return;
   }
 }
 
@@ -180,14 +230,14 @@ int GModel::readMSH(const std::string &name)
   std::map<int, std::map<int, std::string> > physicals[4];
   std::map<int, MVertex*> vertexMap;
   std::vector<MVertex*> vertexVector;
- 
+
   while(1) {
 
     while(str[0] != '$'){
       if(!fgets(str, sizeof(str), fp) || feof(fp))
         break;
     }
-    
+
     if(feof(fp))
       break;
 
@@ -227,7 +277,7 @@ int GModel::readMSH(const std::string &name)
     }
     else if(!strncmp(&str[1], "NO", 2) || !strncmp(&str[1], "Nodes", 5) ||
             !strncmp(&str[1], "ParametricNodes", 15)) {
-      
+
       const bool parametric = !strncmp(&str[1], "ParametricNodes", 15);
       if(!fgets(str, sizeof(str), fp)) return 0;
       int numVertices;
@@ -238,13 +288,13 @@ int GModel::readMSH(const std::string &name)
       vertexMap.clear();
       int minVertex = numVertices + 1, maxVertex = -1;
       for(int i = 0; i < numVertices; i++) {
-        int num;        
+        int num;
         double xyz[3], uv[2];
         MVertex *newVertex = 0;
         if (!parametric){
           if(!binary){
             if (fscanf(fp, "%d %lf %lf %lf", &num, &xyz[0], &xyz[1], &xyz[2]) != 4)
-              return 0;   
+              return 0;
           }
           else{
             if(fread(&num, sizeof(int), 1, fp) != 1) return 0;
@@ -256,7 +306,7 @@ int GModel::readMSH(const std::string &name)
         }
         else{
           int iClasDim, iClasTag;
-          if(!binary){      
+          if(!binary){
             if (fscanf(fp, "%d %lf %lf %lf %d %d", &num, &xyz[0], &xyz[1], &xyz[2],
                        &iClasDim, &iClasTag) != 6)
               return 0;
@@ -278,7 +328,7 @@ int GModel::readMSH(const std::string &name)
           }
           else if (iClasDim == 1){
             GEdge *ge = getEdgeByTag(iClasTag);
-            if(!binary){            
+            if(!binary){
               if (fscanf(fp, "%lf", &uv[0]) != 1) return 0;
             }
             else{
@@ -289,18 +339,18 @@ int GModel::readMSH(const std::string &name)
           }
           else if (iClasDim == 2){
             GFace *gf = getFaceByTag(iClasTag);
-            if(!binary){            
+            if(!binary){
               if (fscanf(fp, "%lf %lf", &uv[0], &uv[1]) != 2) return 0;
             }
             else{
               if(fread(uv, sizeof(double), 2, fp) != 2) return 0;
               if(swap) SwapBytes((char*)uv, sizeof(double), 2);
-            }       
+            }
             newVertex = new MFaceVertex(xyz[0], xyz[1], xyz[2], gf, uv[0], uv[1], num);
           }
           else if (iClasDim == 3){
             GRegion *gr = getRegionByTag(iClasTag);
-            newVertex = new MVertex(xyz[0], xyz[1], xyz[2], gr, num);         
+            newVertex = new MVertex(xyz[0], xyz[1], xyz[2], gr, num);
           }
         }
         minVertex = std::min(minVertex, num);
@@ -308,17 +358,17 @@ int GModel::readMSH(const std::string &name)
         if(vertexMap.count(num))
           Msg::Warning("Skipping duplicate vertex %d", num);
         vertexMap[num] = newVertex;
-        if(numVertices > 100000) 
+        if(numVertices > 100000)
           Msg::ProgressMeter(i + 1, numVertices, "Reading nodes");
       }
-      // If the vertex numbering is dense, tranfer the map into a
+      // If the vertex numbering is dense, transfer the map into a
       // vector to speed up element creation
-      if((int)vertexMap.size() == numVertices && 
+      if((int)vertexMap.size() == numVertices &&
          ((minVertex == 1 && maxVertex == numVertices) ||
           (minVertex == 0 && maxVertex == numVertices - 1))){
         Msg::Info("Vertex numbering is dense");
         vertexVector.resize(vertexMap.size() + 1);
-        if(minVertex == 1) 
+        if(minVertex == 1)
           vertexVector[0] = 0;
         else
           vertexVector[numVertices] = 0;
@@ -334,31 +384,44 @@ int GModel::readMSH(const std::string &name)
       if(!fgets(str, sizeof(str), fp)) return 0;
       int numElements;
       std::map<int, MElement*> parents;
+      std::set<MElement*> parentsOwned;
       sscanf(str, "%d", &numElements);
       Msg::Info("%d elements", numElements);
       Msg::ResetProgressMeter();
       if(!binary){
         for(int i = 0; i < numElements; i++) {
-          int num, type, physical = 0, elementary = 0, partition = 0, parentN = 0, numVertices;
+          int num, type, physical = 0, elementary = 0, partition = 0, parent = 0;
+          int dom1 = 0, dom2 = 0, numVertices;
+          std::vector<short> ghosts;
           if(version <= 1.0){
-            if(fscanf(fp, "%d %d %d %d %d", &num, &type, &physical, &elementary, &numVertices) != 5)
+            if(fscanf(fp, "%d %d %d %d %d", &num, &type, &physical, &elementary, 
+                      &numVertices) != 5)
               return 0;
             if(numVertices != MElement::getInfoMSH(type)) return 0;
           }
           else{
             int numTags;
             if(fscanf(fp, "%d %d %d", &num, &type, &numTags) != 3) return 0;
+            int numPartitions = 0;
             for(int j = 0; j < numTags; j++){
               int tag;
               if(fscanf(fp, "%d", &tag) != 1) return 0;
-              if(j == 0)      physical = tag;
+              if(j == 0) physical = tag;
               else if(j == 1) elementary = tag;
-              else if(j == 2) partition = tag;
-              else if(j == 3) parentN = tag;
-              // ignore any other tags for now
+              else if(version < 2.2 && j == 2) partition = tag;
+              else if(version >= 2.2 && j == 2 && numTags > 3) numPartitions = tag;
+              else if(version >= 2.2 && j == 3) partition = tag;
+              else if(j >= 4 && j < 4 + numPartitions - 1) ghosts.push_back(-tag);
+              else if(j == 3 + numPartitions && (numTags == 4 + numPartitions))
+                parent = tag;
+              else if(j == 3 + numPartitions && (numTags == 5 + numPartitions)) {
+                dom1 = tag; j++;
+                if(fscanf(fp, "%d", &dom2) != 1) return 0;
+              }
             }
             if(!(numVertices = MElement::getInfoMSH(type))) {
-              if(type != MSH_POLYG_ && type != MSH_POLYH_) return 0;
+              if(type != MSH_POLYG_ && type != MSH_POLYH_ && type != MSH_POLYG_B)
+                return 0;
               if(fscanf(fp, "%d", &numVertices) != 1) return 0;
             }
           }
@@ -372,19 +435,32 @@ int GModel::readMSH(const std::string &name)
           else{
             if(!getVertices(numVertices, indices, vertexMap, vertices)) return 0;
           }
-          MElement *e = createElementMSH(this, num, type, physical, elementary,
-                                         partition, vertices, elements, physicals);
-          if(parentN) {
-            MElement *parent = NULL;
-            if(parents.find(parentN) == parents.end()){
-              parent = getParent(parentN, e->getDim(), elements);
-              if(parent) parents[parentN] = parent;
-              else Msg::Error("Parent element %d not found!",parentN);
+          MElement *p = NULL;
+          bool own = false;
+          if(parent) {
+            if(parents.find(parent) == parents.end()){
+              p = getParent(parent, type, elements);
+              if(p) parents[parent] = p;
+              else Msg::Error("Parent element %d not found for element %d", parent, num);
             }
-            else parent = parents.find(parentN)->second;
-            e->setParent(parent);
+            else p = parents.find(parent)->second;
+            if(parentsOwned.find(p) == parentsOwned.end()) {
+              own = true;
+              parentsOwned.insert(p);
+            }
           }
-          if(numElements > 100000) 
+          MElement *doms[2] = {NULL, NULL};
+          if(dom1) {
+            getDomains(dom1, dom2, type, elements, doms);
+            if(!doms[0]) Msg::Error("Domain element %d not found for element %d", dom1, num);
+            if(!doms[1]) Msg::Error("Domain element %d not found for element %d", dom2, num);
+          }
+          MElement *e = createElementMSH(this, num, type, physical, elementary,
+                                         partition, vertices, elements, physicals,
+                                         own, p, doms[1], doms[0]);
+          for(unsigned int j = 0; j < ghosts.size(); j++)
+            _ghostCells.insert(std::pair<MElement*, short>(e, ghosts[j]));
+          if(numElements > 100000)
             Msg::ProgressMeter(i + 1, numElements, "Reading elements");
           delete [] indices;
         }
@@ -405,9 +481,15 @@ int GModel::readMSH(const std::string &name)
             if(fread(data, sizeof(int), n, fp) != n) return 0;
             if(swap) SwapBytes((char*)data, sizeof(int), n);
             int num = data[0];
-            int physical = (numTags > 0) ? data[4 - numTags] : 0;
-            int elementary = (numTags > 1) ? data[4 - numTags + 1] : 0;
-            int partition = (numTags > 2) ? data[4 - numTags + 2] : 0;
+            int physical = (numTags > 0) ? data[1] : 0;
+            int elementary = (numTags > 1) ? data[2] : 0;
+            int numPartitions = (version >= 2.2 && numTags > 3) ? data[3] : 0;
+            int partition = (version < 2.2 && numTags > 2) ? data[3] : 
+              (version >= 2.2 && numTags > 3) ? data[4] : 0;
+            int parent = (version < 2.2 && numTags > 3) || 
+              (version >= 2.2 && numPartitions && numTags > 3 + numPartitions) ||
+              (version >= 2.2 && !numPartitions && numTags > 2) ?
+              data[numTags] : 0;
             int *indices = &data[numTags + 1];
             std::vector<MVertex*> vertices;
             if(vertexVector.size()){
@@ -416,10 +498,28 @@ int GModel::readMSH(const std::string &name)
             else{
               if(!getVertices(numVertices, indices, vertexMap, vertices)) return 0;
             }
-            createElementMSH(this, num, type, physical, elementary, partition, 
-                             vertices, elements, physicals);
+            MElement *p = NULL;
+            bool own = false;
+            if(parent) {
+              if(parents.find(parent) == parents.end()){
+                p = getParent(parent, type, elements);
+                if(p) parents[parent] = p;
+                else Msg::Error("Parent element %d not found", parent);
+              }
+              else p = parents.find(parent)->second;
+              if(parentsOwned.find(p) == parentsOwned.end()) {
+                own = true;
+                parentsOwned.insert(p);
+              }
+            }
+            MElement *e = createElementMSH(this, num, type, physical, elementary,
+                                           partition, vertices, elements, physicals,
+                                           own, p);
+            if(numPartitions > 1)
+              for(int j = 0; j < numPartitions - 1; j++)
+                _ghostCells.insert(std::pair<MElement*, short>(e, -data[5 + j]));
             if(numElements > 100000)
-              Msg::ProgressMeter(numElementsPartial + i + 1, numElements, 
+              Msg::ProgressMeter(numElementsPartial + i + 1, numElements,
                                  "Reading elements");
           }
           delete [] data;
@@ -475,86 +575,95 @@ int GModel::readMSH(const std::string &name)
   return postpro ? 2 : 1;
 }
 
-static void writeElementHeaderMSH(bool binary, FILE *fp, std::map<int,int> &elements,
-                                  int t1, int t2=0, int t3=0, int t4=0, 
-                                  int t5=0, int t6=0, int t7=0, int t8=0)
-{
-  if(!binary) return;
-
-  int numTags = 3;
-  int data[3];
-  if(elements.count(t1)){
-    data[0] = t1;  data[1] = elements[t1];  data[2] = numTags;
-    fwrite(data, sizeof(int), 3, fp);
-  }
-  else if(t2 && elements.count(t2)){
-    data[0] = t2;  data[1] = elements[t2];  data[2] = numTags;
-    fwrite(data, sizeof(int), 3, fp);
-  }
-  else if(t3 && elements.count(t3)){
-    data[0] = t3;  data[1] = elements[t3];  data[2] = numTags;
-    fwrite(data, sizeof(int), 3, fp);
-  }
-  else if(t4 && elements.count(t4)){
-    data[0] = t4;  data[1] = elements[t4];  data[2] = numTags;
-    fwrite(data, sizeof(int), 3, fp);
-  }
-  else if(t5 && elements.count(t5)){
-    data[0] = t5;  data[1] = elements[t5];  data[2] = numTags;
-    fwrite(data, sizeof(int), 3, fp);
-  }
-  else if(t6 && elements.count(t6)){
-    data[0] = t6;  data[1] = elements[t6];  data[2] = numTags;
-    fwrite(data, sizeof(int), 3, fp);
-  }
-  else if(t7 && elements.count(t7)){
-    data[0] = t7;  data[1] = elements[t7];  data[2] = numTags;
-    fwrite(data, sizeof(int), 3, fp);
-  }
-  else if(t8 && elements.count(t8)){
-    data[0] = t8;  data[1] = elements[t8];  data[2] = numTags;
-    fwrite(data, sizeof(int), 3, fp);
-  }
-}
-
 template<class T>
-static void writeElementsMSH(FILE *fp, T *ele, bool saveAll, 
-                             double version, bool binary, int &num, int elementary, 
-                             std::vector<int> &physicals, int parentNum)
+static void writeElementMSH(FILE *fp, GModel *model, T *ele, bool saveAll, 
+                            double version, bool binary, int &num, int elementary, 
+                            std::vector<int> &physicals, int parentNum = 0,
+                            int dom1Num = 0, int dom2Num = 0)
 {
+  std::vector<short> ghosts;
+  if(model->getGhostCells().size()){
+    std::pair<std::multimap<MElement*, short>::iterator,
+              std::multimap<MElement*, short>::iterator> itp =
+      model->getGhostCells().equal_range(ele);
+    for(std::multimap<MElement*, short>::iterator it = itp.first;
+        it != itp.second; it++)
+      ghosts.push_back(it->second);
+  }
+
   if(saveAll)
-    ele->writeMSH(fp, version, binary, ++num, elementary, 0, parentNum);
+    ele->writeMSH(fp, version, binary, ++num, elementary, 0,
+                  parentNum, dom1Num, dom2Num, &ghosts);
   else
     for(unsigned int j = 0; j < physicals.size(); j++)
-      ele->writeMSH(fp, version, binary, ++num, elementary, physicals[j], parentNum);
+      ele->writeMSH(fp, version, binary, ++num, elementary, physicals[j],
+                    parentNum, dom1Num, dom2Num, &ghosts);
+
+  model->setMeshElementIndex(ele, num); // should really be a multimap...
 }
 
 template<class T>
-static void writeElementsMSH(FILE *fp, const std::vector<T*> &ele, bool saveAll,
-                             double version, bool binary, int &num, int elementary,
+static void writeElementsMSH(FILE *fp, GModel *model, std::vector<T*> &ele, 
+                             bool saveAll, int saveSinglePartition, double version,
+                             bool binary, int &num, int elementary,
                              std::vector<int> &physicals)
 {
-  for(unsigned int i = 0; i < ele.size(); i++)
-    writeElementsMSH(fp, ele[i], saveAll, version, binary, num,
-                     elementary, physicals, 0);
+  for(unsigned int i = 0; i < ele.size(); i++){
+    if(saveSinglePartition && ele[i]->getPartition() != saveSinglePartition)
+      continue;
+    if(ele[i]->getDomain(0))
+      continue;
+    int parentNum = 0;
+    MElement *parent = ele[i]->getParent();
+    if(parent)
+      parentNum = model->getMeshElementIndex(parent);
+
+    writeElementMSH(fp, model, ele[i], saveAll, version, binary, num,
+                    elementary, physicals, parentNum);
+  }
 }
 
-template<class T>
-static void writeElementsMSH(FILE *fp, const std::vector<T*> &ele, bool saveAll,
-                             double version, bool binary, int &num, int elementary,
-                             std::vector<int> &physicals, std::map<MElement *, int> &parentsNum)
+static int getNumElementsMSH(GEntity *ge, bool saveAll, int saveSinglePartition)
 {
-  for(unsigned int i = 0; i < ele.size(); i++) {
-    int parentNum = (ele[i]->getParent() != NULL &&
-                     parentsNum.find(ele[i]->getParent()) != parentsNum.end()) ?
-      parentsNum.find(ele[i]->getParent())->second : 0;
-    writeElementsMSH(fp, ele[i], saveAll, version, binary, num,
-                     elementary, physicals, parentNum);
+  int n = 0, p = saveAll ? 1 : ge->physicals.size();
+  if(!saveSinglePartition)
+    n = p * ge->getNumMeshElements();
+  else
+    for(unsigned int i = 0; i < ge->getNumMeshElements(); i++)
+      if(ge->getMeshElement(i)->getPartition() == saveSinglePartition)
+        n += p;
+  return n;
+}
+
+static int getNumElementsMSH(GModel *m, bool saveAll, int saveSinglePartition)
+{
+  int n = 0;
+  for(GModel::viter it = m->firstVertex(); it != m->lastVertex(); ++it)
+    n += getNumElementsMSH(*it, saveAll, saveSinglePartition);
+  for(GModel::eiter it = m->firstEdge(); it != m->lastEdge(); ++it){
+    n += getNumElementsMSH(*it, saveAll, saveSinglePartition);
+    for(unsigned int i = 0; i < (*it)->lines.size(); i++)
+      if((*it)->lines[i]->ownsParent())
+        n += (saveAll ? 1 : (*it)->physicals.size());
   }
+  for(GModel::fiter it = m->firstFace(); it != m->lastFace(); ++it){
+    n += getNumElementsMSH(*it, saveAll, saveSinglePartition);
+    for(unsigned int i = 0; i < (*it)->polygons.size(); i++)
+      if((*it)->polygons[i]->ownsParent())
+        n += (saveAll ? 1 : (*it)->physicals.size());
+  }
+  for(GModel::riter it = m->firstRegion(); it != m->lastRegion(); ++it){
+    n += getNumElementsMSH(*it, saveAll, saveSinglePartition);
+    for(unsigned int i = 0; i < (*it)->polyhedra.size(); i++)
+      if((*it)->polyhedra[i]->ownsParent())
+        n += (saveAll ? 1 : (*it)->physicals.size());
+  }
+  return n;
 }
 
 int GModel::writeMSH(const std::string &name, double version, bool binary,
-                     bool saveAll, bool saveParametric, double scalingFactor)
+                     bool saveAll, bool saveParametric, double scalingFactor,
+                     int elementStartNum, int saveSinglePartition)
 {
   FILE *fp = fopen(name.c_str(), binary ? "wb" : "w");
   if(!fp){
@@ -562,70 +671,21 @@ int GModel::writeMSH(const std::string &name, double version, bool binary,
     return 0;
   }
 
+  // binary format exists only in version 2
+  if(version > 1 || binary) 
+    version = 2.2;
+  else
+    version = 1.0;
+
   // if there are no physicals we save all the elements
   if(noPhysicalGroups()) saveAll = true;
 
   // get the number of vertices and index the vertices in a continuous
   // sequence
-  int numVertices = indexMeshVertices(saveAll);
-  
-  // binary format exists only in version 2
-  if(binary) version = 2.1;
+  int numVertices = indexMeshVertices(saveAll, saveSinglePartition);
 
-  // get the number of elements (we assume that all the elements in a
-  // list have the same type, i.e., they are all of the same
-  // polynomial order)
-  std::map<int, int> elements;
-  std::map<MElement *, GEntity *> parents[2];
-  int numParents = 0;
-  for(viter it = firstVertex(); it != lastVertex(); ++it){
-    int p = (saveAll ? 1 : (*it)->physicals.size());
-    int n = p * (*it)->points.size();
-    if(n) elements[(*it)->points[0]->getTypeForMSH()] += n;
-  }
-  for(eiter it = firstEdge(); it != lastEdge(); ++it){
-    int p = (saveAll ? 1 : (*it)->physicals.size());
-    int n = p * (*it)->lines.size();
-    if(n) elements[(*it)->lines[0]->getTypeForMSH()] += n;
-  }
-  for(fiter it = firstFace(); it != lastFace(); ++it){
-    int p = (saveAll ? 1 : (*it)->physicals.size());
-    int n = p * (*it)->triangles.size();
-    if(n) elements[(*it)->triangles[0]->getTypeForMSH()] += n;
-    n = p * (*it)->quadrangles.size();
-    if(n) elements[(*it)->quadrangles[0]->getTypeForMSH()] += n;
-    n = p * (*it)->polygons.size();
-    if(n) elements[(*it)->polygons[0]->getTypeForMSH()] += n;
-    for(unsigned int i = 0; i < (*it)->polygons.size(); i++)
-      if((*it)->polygons[i]->ownsParent()) {
-        parents[0][(*it)->polygons[i]->getParent()] = (*it);
-        numParents += p;
-      }
-  }
-  for(riter it = firstRegion(); it != lastRegion(); ++it){
-    int p = (saveAll ? 1 : (*it)->physicals.size());
-    int n = p * (*it)->tetrahedra.size();
-    if(n) elements[(*it)->tetrahedra[0]->getTypeForMSH()] += n;
-    n = p * (*it)->hexahedra.size();
-    if(n) elements[(*it)->hexahedra[0]->getTypeForMSH()] += n;
-    n = p * (*it)->prisms.size();
-    if(n) elements[(*it)->prisms[0]->getTypeForMSH()] += n;
-    n = p * (*it)->pyramids.size();
-    if(n) elements[(*it)->pyramids[0]->getTypeForMSH()] += n;
-    n = p * (*it)->polyhedra.size();
-    if(n) elements[(*it)->polyhedra[0]->getTypeForMSH()] += n;
-    for(unsigned int i = 0; i < (*it)->polyhedra.size(); i++)
-      if((*it)->polyhedra[i]->ownsParent()) {
-        parents[1][(*it)->polyhedra[i]->getParent()] = (*it);
-        numParents += p;
-      }
-  }
-
-  int numElements = 0;
-  std::map<int, int>::const_iterator it = elements.begin();
-  for(; it != elements.end(); ++it)
-    numElements += it->second;
-  numElements += numParents;
+  // get the number of elements we need to save
+  int numElements = getNumElementsMSH(this, saveAll, saveSinglePartition);
 
   if(version >= 2.0){
     fprintf(fp, "$MeshFormat\n");
@@ -641,7 +701,7 @@ int GModel::writeMSH(const std::string &name, double version, bool binary,
       fprintf(fp, "$PhysicalNames\n");
       fprintf(fp, "%d\n", numPhysicalNames());
       for(piter it = firstPhysicalName(); it != lastPhysicalName(); it++)
-        fprintf(fp, "%d %d \"%s\"\n", it->first.first, it->first.second, 
+        fprintf(fp, "%d %d \"%s\"\n", it->first.first, it->first.second,
                 it->second.c_str());
       fprintf(fp, "$EndPhysicalNames\n");
     }
@@ -660,11 +720,11 @@ int GModel::writeMSH(const std::string &name, double version, bool binary,
   getEntities(entities);
   for(unsigned int i = 0; i < entities.size(); i++)
     for(unsigned int j = 0; j < entities[i]->mesh_vertices.size(); j++)
-      entities[i]->mesh_vertices[j]->writeMSH(fp, binary, saveParametric, 
+      entities[i]->mesh_vertices[j]->writeMSH(fp, binary, saveParametric,
                                               scalingFactor);
-
+  
   if(binary) fprintf(fp, "\n");
-
+  
   if(version >= 2.0){
     if(saveParametric)
       fprintf(fp, "$EndParametricNodes\n");
@@ -678,105 +738,106 @@ int GModel::writeMSH(const std::string &name, double version, bool binary,
   }
 
   fprintf(fp, "%d\n", numElements);
-  int num = 0;
+  int num = elementStartNum;
 
-  std::map<MElement *, int> parentsNum;
-  std::map<MElement *, GEntity *>::const_iterator itP;
+  _elementIndexCache.clear();
 
-  writeElementHeaderMSH(binary, fp, elements, MSH_PNT);
-  for(viter it = firstVertex(); it != lastVertex(); ++it)
-    writeElementsMSH(fp, (*it)->points, saveAll, version, binary, num,
-                     (*it)->tag(), (*it)->physicals);
-
-  writeElementHeaderMSH(binary, fp, elements, MSH_LIN_2, MSH_LIN_3, MSH_LIN_4, MSH_LIN_5);
+  //parents
   for(eiter it = firstEdge(); it != lastEdge(); ++it)
-   writeElementsMSH(fp, (*it)->lines, saveAll, version, binary, num,
-                     (*it)->tag(), (*it)->physicals);
-
-  writeElementHeaderMSH(binary, fp, elements, MSH_TRI_3, MSH_TRI_6, MSH_TRI_9,
-                        MSH_TRI_10, MSH_TRI_12, MSH_TRI_15, MSH_TRI_15I, MSH_TRI_21);
-  for(itP = parents[0].begin(); itP != parents[0].end(); itP++)
-    if(itP->first->getType() == TYPE_TRI) {
-      writeElementsMSH(fp, itP->first, saveAll, version, binary, num,
-                       itP->second->tag(), itP->second->physicals, 0);
-      parentsNum[itP->first] = num;
-    }
+    for(unsigned int i = 0; i < (*it)->lines.size(); i++)
+      if((*it)->lines[i]->ownsParent())
+        writeElementMSH(fp, this, (*it)->lines[i]->getParent(),
+                        saveAll, version, binary, num, (*it)->tag(), (*it)->physicals);
   for(fiter it = firstFace(); it != lastFace(); ++it)
-    writeElementsMSH(fp, (*it)->triangles, saveAll, version, binary, num,
-                     (*it)->tag(), (*it)->physicals);
-  writeElementHeaderMSH(binary, fp, elements, MSH_QUA_4, MSH_QUA_9, MSH_QUA_8);
-  for(itP = parents[0].begin(); itP != parents[0].end(); itP++)
-    if(itP->first->getType() == TYPE_QUA) {
-      writeElementsMSH(fp, itP->first, saveAll, version, binary, num,
-                       itP->second->tag(), itP->second->physicals, 0);
-      parentsNum[itP->first] = num;
-    }
-  for(fiter it = firstFace(); it != lastFace(); ++it)
-    writeElementsMSH(fp, (*it)->quadrangles, saveAll, version, binary, num,
-                     (*it)->tag(), (*it)->physicals);
-  writeElementHeaderMSH(binary, fp, elements, MSH_POLYG_);
-  for(itP = parents[0].begin(); itP != parents[0].end(); itP++)
-    if(itP->first->getType() == TYPE_POLYG) {
-      writeElementsMSH(fp, itP->first, saveAll, version, binary, num,
-                       itP->second->tag(), itP->second->physicals, 0);
-      parentsNum[itP->first] = num;
-    }
-  for(fiter it = firstFace(); it != lastFace(); it++)
-    writeElementsMSH(fp, (*it)->polygons, saveAll, version, binary, num,
-                     (*it)->tag(), (*it)->physicals, parentsNum);
-
-  writeElementHeaderMSH(binary, fp, elements, MSH_TET_4, MSH_TET_10, MSH_TET_20, 
-                        MSH_TET_35, MSH_TET_56, MSH_TET_52);
-  for(itP = parents[1].begin(); itP != parents[1].end(); itP++)
-    if(itP->first->getType() == TYPE_TET) {
-      writeElementsMSH(fp, itP->first, saveAll, version, binary, num,
-                       itP->second->tag(), itP->second->physicals, 0);
-      parentsNum[itP->first] = num;
-    }
+    for(unsigned int i = 0; i < (*it)->polygons.size(); i++)
+      if((*it)->polygons[i]->ownsParent())
+        writeElementMSH(fp, this, (*it)->polygons[i]->getParent(),
+                        saveAll, version, binary, num, (*it)->tag(), (*it)->physicals);
   for(riter it = firstRegion(); it != lastRegion(); ++it)
-    writeElementsMSH(fp, (*it)->tetrahedra, saveAll, version, binary, num,
-                     (*it)->tag(), (*it)->physicals);
-  writeElementHeaderMSH(binary, fp, elements, MSH_HEX_8, MSH_HEX_27, MSH_HEX_20);
-  for(itP = parents[1].begin(); itP != parents[1].end(); itP++)
-    if(itP->first->getType() == TYPE_HEX) {
-      writeElementsMSH(fp, itP->first, saveAll, version, binary, num,
-                       itP->second->tag(), itP->second->physicals, 0);
-      parentsNum[itP->first] = num;
-    }
-  for(riter it = firstRegion(); it != lastRegion(); ++it)
-    writeElementsMSH(fp, (*it)->hexahedra, saveAll, version, binary, num,
-                     (*it)->tag(), (*it)->physicals);
-  writeElementHeaderMSH(binary, fp, elements, MSH_PRI_6, MSH_PRI_18, MSH_PRI_15);
-  for(itP = parents[1].begin(); itP != parents[1].end(); itP++)
-    if(itP->first->getType() == TYPE_PRI) {
-      writeElementsMSH(fp, itP->first, saveAll, version, binary, num,
-                       itP->second->tag(), itP->second->physicals, 0);
-      parentsNum[itP->first] = num;
-    }
-  for(riter it = firstRegion(); it != lastRegion(); ++it)
-    writeElementsMSH(fp, (*it)->prisms, saveAll, version, binary, num,
-                     (*it)->tag(), (*it)->physicals);
-  writeElementHeaderMSH(binary, fp, elements, MSH_PYR_5, MSH_PYR_14, MSH_PYR_13);
-  for(itP = parents[1].begin(); itP != parents[1].end(); itP++)
-    if(itP->first->getType() == TYPE_PYR) {
-      writeElementsMSH(fp, itP->first, saveAll, version, binary, num,
-                       itP->second->tag(), itP->second->physicals, 0);
-      parentsNum[itP->first] = num;
-    }
-  for(riter it = firstRegion(); it != lastRegion(); ++it)
-    writeElementsMSH(fp, (*it)->pyramids, saveAll, version, binary, num,
-                     (*it)->tag(), (*it)->physicals);
-  writeElementHeaderMSH(binary, fp, elements, MSH_POLYH_);
-  for(itP = parents[1].begin(); itP != parents[1].end(); itP++)
-    if(itP->first->getType() == TYPE_POLYH) {
-      writeElementsMSH(fp, itP->first, saveAll, version, binary, num,
-                       itP->second->tag(), itP->second->physicals, 0);
-      parentsNum[itP->first] = num;
-    }
-  for(riter it = firstRegion(); it != lastRegion(); ++it)
-    writeElementsMSH(fp, (*it)->polyhedra, saveAll, version, binary, num,
-                     (*it)->tag(), (*it)->physicals, parentsNum);
+    for(unsigned int i = 0; i < (*it)->polyhedra.size(); i++)
+      if((*it)->polyhedra[i]->ownsParent())
+        writeElementMSH(fp, this, (*it)->polyhedra[i]->getParent(),
+                        saveAll, version, binary, num, (*it)->tag(), (*it)->physicals);
   
+  // points
+  for(viter it = firstVertex(); it != lastVertex(); ++it)
+    writeElementsMSH(fp, this, (*it)->points, saveAll, saveSinglePartition,
+                     version, binary, num, (*it)->tag(), (*it)->physicals);
+
+  // lines
+  for(eiter it = firstEdge(); it != lastEdge(); ++it)
+    writeElementsMSH(fp, this, (*it)->lines, saveAll, saveSinglePartition,
+                     version, binary, num, (*it)->tag(), (*it)->physicals);
+
+  // triangles
+  for(fiter it = firstFace(); it != lastFace(); ++it)
+    writeElementsMSH(fp, this, (*it)->triangles, saveAll, saveSinglePartition,
+                     version, binary, num, (*it)->tag(), (*it)->physicals);
+
+  // quads
+  for(fiter it = firstFace(); it != lastFace(); ++it)
+    writeElementsMSH(fp, this, (*it)->quadrangles, saveAll, saveSinglePartition,
+                     version, binary, num, (*it)->tag(), (*it)->physicals);
+
+  // polygons
+  for(fiter it = firstFace(); it != lastFace(); it++)
+    writeElementsMSH(fp, this, (*it)->polygons, saveAll, saveSinglePartition,
+                     version, binary, num, (*it)->tag(), (*it)->physicals);
+
+  // tets
+  for(riter it = firstRegion(); it != lastRegion(); ++it)
+    writeElementsMSH(fp, this, (*it)->tetrahedra, saveAll, saveSinglePartition,
+                     version, binary, num, (*it)->tag(), (*it)->physicals);
+
+  // hexas
+  for(riter it = firstRegion(); it != lastRegion(); ++it)
+    writeElementsMSH(fp, this, (*it)->hexahedra, saveAll, saveSinglePartition,
+                     version, binary, num, (*it)->tag(), (*it)->physicals);
+
+  // prisms
+  for(riter it = firstRegion(); it != lastRegion(); ++it)
+    writeElementsMSH(fp, this, (*it)->prisms, saveAll, saveSinglePartition,
+                     version, binary, num, (*it)->tag(), (*it)->physicals);
+  
+  // pyramids
+  for(riter it = firstRegion(); it != lastRegion(); ++it)
+    writeElementsMSH(fp, this, (*it)->pyramids, saveAll, saveSinglePartition,
+                     version, binary, num, (*it)->tag(), (*it)->physicals);
+
+  // polyhedra
+  for(riter it = firstRegion(); it != lastRegion(); ++it)
+    writeElementsMSH(fp, this, (*it)->polyhedra, saveAll, saveSinglePartition,
+                     version, binary, num, (*it)->tag(), (*it)->physicals);
+
+  // borders
+  for(fiter it = firstFace(); it != lastFace(); ++it) {
+    for(unsigned int i = 0; i < (*it)->triangles.size(); i++) {
+      MTriangle *t = (*it)->triangles[i];
+      if(t->getDomain(0))
+        writeElementMSH(fp, this, t, saveAll, version, binary, num,
+                        (*it)->tag(), (*it)->physicals, 0,
+                        getMeshElementIndex(t->getDomain(0)),
+                        getMeshElementIndex(t->getDomain(1)));
+    }
+    for(unsigned int i = 0; i < (*it)->polygons.size(); i++) {
+      MPolygon *p = (*it)->polygons[i];
+      if(p->getDomain(0))
+        writeElementMSH(fp, this, p, saveAll, version, binary, num,
+                        (*it)->tag(), (*it)->physicals, 0,
+                        getMeshElementIndex(p->getDomain(0)),
+                        getMeshElementIndex(p->getDomain(1)));
+    }
+  }
+  for(eiter it = firstEdge(); it != lastEdge(); ++it) //border lines after border surfaces
+    for(unsigned int i = 0; i < (*it)->lines.size(); i++) {
+      MLine *l = (*it)->lines[i];
+      if(l->getDomain(0))
+        writeElementMSH(fp, this, l, saveAll, version, binary, num,
+                        (*it)->tag(), (*it)->physicals, 0,
+                        getMeshElementIndex(l->getDomain(0)),
+                        getMeshElementIndex(l->getDomain(1)));
+    }
+
   if(binary) fprintf(fp, "\n");
 
   if(version >= 2.0){
@@ -787,13 +848,49 @@ int GModel::writeMSH(const std::string &name, double version, bool binary,
   }
 
   fclose(fp);
+
+  return 1;
+}
+
+int GModel::writePartitionedMSH(const std::string &baseName, bool binary,
+                                bool saveAll, bool saveParametric,
+                                double scalingFactor)
+{
+  int index = 0;
+  for(std::set<int>::iterator it = meshPartitions.begin(); 
+      it != meshPartitions.end(); it++){
+    int partition = *it;
+    
+    std::ostringstream sstream;
+    sstream << baseName << "_" << std::setw(3) << std::setfill('0') << partition;
+
+    int startNum = index ? getNumElementsMSH(this, saveAll, partition) : 0;
+    Msg::Info("Writing partition %d in file '%s'", partition, sstream.str().c_str());
+    writeMSH(sstream.str(), 2.2, binary, saveAll, saveParametric, 
+             scalingFactor, startNum, partition);
+    index++;
+  }
+
+#if 0
+  if(_ghostCells.size()){
+    Msg::Info("Writing ghost cells in debug file 'ghosts.pos'");
+    FILE *fp = fopen("ghosts.pos", "w");
+    fprintf(fp, "View \"ghosts\"{\n");
+    for(std::multimap<MElement*, short>::iterator it = _ghostCells.begin();
+        it != _ghostCells.end(); it++)
+      it->first->writePOS(fp, false, true, false, false, false, false);
+    fprintf(fp, "};\n");
+    fclose(fp);
+  }
+#endif
+
   return 1;
 }
 
 int GModel::writePOS(const std::string &name, bool printElementary, 
                      bool printElementNumber, bool printGamma, bool printEta, 
-                     bool printRho, bool printDisto, bool saveAll, 
-                     double scalingFactor)
+                     bool printRho, bool printDisto, 
+                     bool saveAll, double scalingFactor)
 {
   FILE *fp = fopen(name.c_str(), "w");
   if(!fp){
@@ -801,10 +898,27 @@ int GModel::writePOS(const std::string &name, bool printElementary,
     return 0;
   }
 
+  /*
+  bool printVertices = true;
+  if(printVertices){
+    fprintf(fp, "View \"Vertices\" {\n");
+    std::vector<GEntity*> entities;
+    getEntities(entities);
+    for(unsigned int i = 0; i < entities.size(); i++)
+      for(unsigned int j = 0; j < entities[i]->mesh_vertices.size(); j++){
+        MVertex *v = entities[i]->mesh_vertices[j];
+        fprintf(fp, "SP(%g,%g,%g){1};\n", v->x(), v->y(), v->z());
+      }
+    fprintf(fp, "};\n");
+    fclose(fp);
+    return 1;
+  }
+  */
+
   bool f[6] = {printElementary, printElementNumber, printGamma, printEta, printRho,
                printDisto};
 
-  bool first = true;  
+  bool first = true; 
   std::string names;
   if(f[0]){
     if(first) first = false; else names += ",";
@@ -867,13 +981,10 @@ int GModel::readSTL(const std::string &name, double tolerance)
   char buffer[256];
   if(!fgets(buffer, sizeof(buffer), fp)) return 0;
 
-  // workaround for stupid tools which use "solid" to start their
-  // binary files
-  if(!strncmp(buffer, "solid 3D-DOCTOR", 15)) buffer[0] = 'z';
-  if(!strncmp(buffer, "solid binary STL from Solid Edge", 32)) buffer[0] = 'z';
+  bool binary = strncmp(buffer, "solid", 5);
 
-  if(!strncmp(buffer, "solid", 5)){
-    // ASCII STL
+  // ASCII STL
+  if(!binary){
     points.resize(1);
     while(!feof(fp)) {
       // "facet normal x y z" or "endsolid"
@@ -904,10 +1015,24 @@ int GModel::readSTL(const std::string &name, double tolerance)
       // "endfacet"
       if(!fgets(buffer, sizeof(buffer), fp)) break;
     }
+   }
+
+  // check if we could parse something
+  bool empty = true;
+  for(unsigned int i = 0; i < points.size(); i++){
+    if(points[i].size()){
+      empty = false;
+      break;
+    }
   }
-  else{
-    // Binary STL
-    Msg::Info("Mesh is in binary format");
+  if(empty) points.clear();
+ 
+
+  // binary STL (we also try to read in binary mode if the header told
+  // us the format was ASCII but we could not read any vertices)
+  if(binary || empty){
+    if(binary) Msg::Info("Mesh is in binary format");
+    else Msg::Info("Wrong ASCII header or empty file: trying binary read");
     rewind(fp);
     while(!feof(fp)) {
       char header[80];
@@ -953,16 +1078,22 @@ int GModel::readSTL(const std::string &name, double tolerance)
     }
     Msg::Info("%d facets in solid %d", points[i].size() / 3, i);
     // create face
-    GFace *face = new discreteFace(this, getNumFaces() + 1);
+    GFace *face = new discreteFace(this, getMaxElementaryNumber(2) + 1);
     faces.push_back(face);
     add(face);
   }
 
-  // create (unique) vertices and triangles
-  double lc = norm(SVector3(bbox.max(), bbox.min()));
-  double old_tol = MVertexLessThanLexicographic::tolerance;
-  MVertexLessThanLexicographic::tolerance = lc * tolerance;
-  std::set<MVertex*, MVertexLessThanLexicographic> vertices;
+  // create triangles using unique vertices
+  double eps = norm(SVector3(bbox.max(), bbox.min())) * tolerance;
+  std::vector<MVertex*> vertices;
+  for(unsigned int i = 0; i < points.size(); i++)
+    for(unsigned int j = 0; j < points[i].size(); j++)
+      vertices.push_back(new MVertex(points[i][j].x(), points[i][j].y(),
+                                     points[i][j].z()));
+  MVertexPositionSet pos(vertices);
+  
+  std::set<MFace,Less_Face> unique;
+  int nbDuplic = 0;
   for(unsigned int i = 0; i < points.size(); i ++){
     for(unsigned int j = 0; j < points[i].size(); j += 3){
       MVertex *v[3];
@@ -970,22 +1101,22 @@ int GModel::readSTL(const std::string &name, double tolerance)
         double x = points[i][j + k].x();
         double y = points[i][j + k].y();
         double z = points[i][j + k].z();
-        MVertex w(x, y, z);
-        std::set<MVertex*, MVertexLessThanLexicographic>::iterator it = vertices.find(&w);
-        if(it != vertices.end()) {
-          v[k] = *it;
-        }
-        else {
-          v[k] = new MVertex(x, y, z, faces[i]);
-          vertices.insert(v[k]);
-          faces[i]->mesh_vertices.push_back(v[k]);
-        }
+        v[k] = pos.find(x, y, z, eps);
       }
-      faces[i]->triangles.push_back(new MTriangle(v[0], v[1], v[2]));
+      MFace mf (v[0],v[1],v[2]);
+      if (unique.find(mf) == unique.end()){
+	faces[i]->triangles.push_back(new MTriangle(v[0], v[1], v[2]));
+	unique.insert(mf);
+      }
+      else{
+	nbDuplic++;
+      }
     }
   }
-
-  MVertexLessThanLexicographic::tolerance = old_tol;
+  if (nbDuplic) Msg::Warning("%d Duplicate triangle in STL file read",nbDuplic);
+  
+  _associateEntityWithMeshVertices();
+  _storeVerticesInEntities(vertices); // will delete unused vertices
 
   fclose(fp);
   return 1;
@@ -1017,7 +1148,7 @@ int GModel::writeSTL(const std::string &name, bool binary, bool saveAll,
     }
     fwrite(&nfacets, sizeof(unsigned int), 1, fp);
   }
-    
+
   for(fiter it = firstFace(); it != lastFace(); ++it) {
     if(saveAll || (*it)->physicals.size()){
       for(unsigned int i = 0; i < (*it)->triangles.size(); i++)
@@ -1029,7 +1160,7 @@ int GModel::writeSTL(const std::string &name, bool binary, bool saveAll,
 
   if(!binary)
     fprintf(fp, "endsolid Created by Gmsh\n");
-  
+
   fclose(fp);
   return 1;
 }
@@ -1040,9 +1171,9 @@ static int skipUntil(FILE *fp, const char *key)
   strcpy(key_bracket, key);
   strcat(key_bracket, "[");
   while(fscanf(fp, "%s", str)){
-    if(!strcmp(str, key)){ 
+    if(!strcmp(str, key)){
       while(!feof(fp) && fgetc(fp) != '['){}
-      return 1; 
+      return 1;
     }
     if(!strcmp(str, key_bracket)){
       return 1;
@@ -1066,7 +1197,7 @@ static int readVerticesVRML(FILE *fp, std::vector<MVertex*> &vertexVector,
 }
 
 static int readElementsVRML(FILE *fp, std::vector<MVertex*> &vertexVector, int region,
-                            std::map<int, std::vector<MElement*> > elements[3], 
+                            std::map<int, std::vector<MElement*> > elements[3],
                             bool strips=false)
 {
   int i;
@@ -1079,7 +1210,7 @@ static int readElementsVRML(FILE *fp, std::vector<MVertex*> &vertexVector, int r
   const char *format;
   fpos_t position;
   fgetpos(fp, &position);
-  if(!fgets(tmp, sizeof(tmp), fp)) return 0;;
+  if(!fgets(tmp, sizeof(tmp), fp)) return 0;
   fsetpos(fp, &position);
   if(strstr(tmp, ","))
     format = " , %d";
@@ -1128,8 +1259,224 @@ static int readElementsVRML(FILE *fp, std::vector<MVertex*> &vertexVector, int r
     Msg::Error("Prematured end of VRML file");
     return 0;
   }
-  Msg::Info("%d elements", elements[0][region].size() + 
+  Msg::Info("%d elements", elements[0][region].size() +
             elements[1][region].size() + elements[2][region].size());
+  return 1;
+}
+
+int GModel::readPLY(const std::string &name)
+{
+  replaceCommaByDot(name);
+
+  FILE *fp = fopen(name.c_str(), "r");
+  if(!fp){
+    Msg::Error("Unable to open file '%s'", name.c_str());
+    return 0;
+  }
+ 
+  std::vector<MVertex*> vertexVector;
+  std::map<int, std::vector<MElement*> > elements[5];
+  std::map<int, std::vector<double> > properties;
+
+  char buffer[256], str[256], str2[256], str3[256];
+  std::string s1;
+  int elementary = getMaxElementaryNumber(-1) + 1;
+  int nbv, nbf;
+  int nbprop = 0;
+  int nbView = 0;
+  std::vector<std::string> propName;
+  while(!feof(fp)) {
+    if(!fgets(buffer, sizeof(buffer), fp)) break;
+    if(buffer[0] != '#'){ // skip comments
+      sscanf(buffer, "%s %s", str, str2);
+      if(!strcmp(str, "element") && !strcmp(str2, "vertex")){
+	sscanf(buffer, "%s %s %d", str, str2, &nbv);
+      } 
+      if(!strcmp(str, "format") && strcmp(str2, "ascii")){
+	Msg::Error("Only reading of ascii PLY files implemented");
+	return 0;
+      }
+      if(!strcmp(str, "property") && strcmp(str2, "list")){
+	nbprop++;
+	sscanf(buffer, "%s %s %s", str, str2, str3);
+	if (nbprop > 3) propName.push_back(s1+str3);
+      } 
+      if(!strcmp(str, "element") && !strcmp(str2, "face")){
+	sscanf(buffer, "%s %s %d", str, str2, &nbf);
+      } 
+      if(!strcmp(str, "end_header")){
+	nbView = nbprop -3;
+	Msg::Info("%d elements", nbv);
+	Msg::Info("%d triangles", nbf);
+	Msg::Info("%d properties", nbView);
+
+	vertexVector.resize(nbv);
+	for(int i = 0; i < nbv; i++) {
+	  double x,y,z;
+	  char line[10000], *pEnd, *pEnd2, *pEnd3;
+	  if(!fgets(line, sizeof(line), fp)) return 0;
+	  x = strtod(line, &pEnd);
+	  y = strtod(pEnd, &pEnd2);
+	  z = strtod(pEnd2, &pEnd3);
+	  vertexVector[i] = new MVertex(x, y, z);
+
+	  pEnd = pEnd3;
+          std::vector<double> prop(nbView);
+	  for (int k=0; k< nbView; k++){
+	    prop[k]=strtod(pEnd, &pEnd2);
+	    pEnd = pEnd2;
+	    properties[k].push_back(prop[k]);
+	  }
+	}
+
+	for(int i = 0; i < nbf; i++) {
+	  if(!fgets(buffer, sizeof(buffer), fp)) break;
+	  int n[3], nbe;
+	  int nb = sscanf(buffer, "%d %d %d %d", &nbe, &n[0], &n[1], &n[2]);
+	  std::vector<MVertex*> vertices;
+	  if(!getVertices(3, n, vertexVector, vertices)) return 0;
+	  elements[0][elementary].push_back(new MTriangle(vertices));
+	}
+	
+      }
+ 
+    }
+  }
+
+  for(int i = 0; i < (int)(sizeof(elements) / sizeof(elements[0])); i++)
+    _storeElementsInEntities(elements[i]);
+  _associateEntityWithMeshVertices();
+  _storeVerticesInEntities(vertexVector);
+
+#if defined(HAVE_POST)
+  // create PViews here 
+  std::vector<GEntity*> _entities;
+  getEntities(_entities);
+  for (int iV=0; iV< nbView; iV++){
+    PView *view = new PView();
+    PViewDataList *data = dynamic_cast<PViewDataList*>(view->getData());
+    for(unsigned int ii = 0; ii < _entities.size(); ii++){
+	for(unsigned int i = 0; i < _entities[ii]->getNumMeshElements(); i++){ 
+	  MElement *e = _entities[ii]->getMeshElement(i);	  
+	  int numNodes = e->getNumVertices();
+	  std::vector<double> x(numNodes), y(numNodes), z(numNodes);
+	  std::vector<double> *out = data->incrementList(1, e->getType());
+	  for(int nod = 0; nod < numNodes; nod++) out->push_back((e->getVertex(nod))->x()); 
+	  for(int nod = 0; nod < numNodes; nod++) out->push_back((e->getVertex(nod))->y()); 
+	  for(int nod = 0; nod < numNodes; nod++) out->push_back((e->getVertex(nod))->z());
+	  std::vector<double> props;
+	  int n[3];
+	  n[0] = e->getVertex(0)->getNum()-1;
+	  n[1] = e->getVertex(1)->getNum()-1;
+	  n[2] = e->getVertex(2)->getNum()-1;
+	  if(!getProperties(3, n, properties[iV], props)) return 0;
+	  for(int nod = 0; nod < numNodes; nod++) out->push_back(props[nod]);
+	}
+    }
+    data->setName(propName[iV]);
+    data->Time.push_back(0);
+    data->setFileName("property.pos");
+    data->finalize();
+  }
+#endif
+
+  fclose(fp);
+
+  return 1;
+}
+
+int GModel::readPLY2(const std::string &name)
+{
+  FILE *fp = fopen(name.c_str(), "r");
+  if(!fp){
+    Msg::Error("Unable to open file '%s'", name.c_str());
+    return 0;
+  }
+
+  std::vector<MVertex*> vertexVector;
+  std::map<int, std::vector<MElement*> > elements[5];
+
+  char buffer[256];
+  int elementary = getMaxElementaryNumber(-1) + 1;
+  int nbv, nbf;
+  while(!feof(fp)) {
+    if(!fgets(buffer, sizeof(buffer), fp)) break;
+    if(buffer[0] != '#'){ // skip comments
+      sscanf(buffer, "%d", &nbv);
+      if(!fgets(buffer, sizeof(buffer), fp)) break;
+      sscanf(buffer, "%d", &nbf);
+      Msg::Info("%d vertices", nbv);
+      Msg::Info("%d triangles", nbf);
+      vertexVector.resize(nbv);
+      for(int i = 0; i < nbv; i++) {
+	if(!fgets(buffer, sizeof(buffer), fp)) break;
+	double x, y, z;
+	int nb = sscanf(buffer, "%lf %lf %lf", &x, &y, &z);
+	if (nb !=3){
+	  if(!fgets(buffer, sizeof(buffer), fp)) break;
+	  sscanf(buffer, "%lf",  &y);
+	  if(!fgets(buffer, sizeof(buffer), fp)) break;
+	  sscanf(buffer, "%lf",  &z);
+	}
+	vertexVector[i] = new MVertex(x, y, z);
+      }
+      for(int i = 0; i < nbf; i++) {
+	if(!fgets(buffer, sizeof(buffer), fp)) break;
+	int n[3], nbe;
+	int nb = sscanf(buffer, "%d %d %d %d", &nbe, &n[0], &n[1], &n[2]);
+	if (nb !=4){
+	  if(!fgets(buffer, sizeof(buffer), fp)) break;
+	  sscanf(buffer, "%d",  &n[0]);
+	  if(!fgets(buffer, sizeof(buffer), fp)) break;
+	  sscanf(buffer, "%d",  &n[1]);
+	  if(!fgets(buffer, sizeof(buffer), fp)) break;
+	  sscanf(buffer, "%d",  &n[2]);
+	}
+	std::vector<MVertex*> vertices;
+	if(!getVertices(3, n, vertexVector, vertices)) return 0;
+	elements[0][elementary].push_back(new MTriangle(vertices));
+      }     
+    }
+  }
+
+  for(int i = 0; i < (int)(sizeof(elements) / sizeof(elements[0])); i++)
+    _storeElementsInEntities(elements[i]);
+  _associateEntityWithMeshVertices();
+  _storeVerticesInEntities(vertexVector);
+
+  fclose(fp);
+  return 1;
+}
+
+int GModel::writePLY2(const std::string &name)
+{
+  FILE *fp = fopen(name.c_str(), "w");
+  if(!fp){
+    Msg::Error("Unable to open file '%s'", name.c_str());
+    return 0;
+  }
+
+  int numVertices = indexMeshVertices(true);
+  int numTriangles = 0;
+  for(fiter it = firstFace(); it != lastFace(); ++it){
+    numTriangles += (*it)->triangles.size();
+  }
+
+  fprintf(fp, "%d\n", numVertices);
+  fprintf(fp, "%d\n", numTriangles);
+
+  std::vector<GEntity*> entities;
+  getEntities(entities);
+  for(unsigned int i = 0; i < entities.size(); i++)
+    for(unsigned int j = 0; j < entities[i]->mesh_vertices.size(); j++)
+      entities[i]->mesh_vertices[j]->writePLY2(fp);
+
+  for(fiter it = firstFace(); it != lastFace(); ++it){
+      for(unsigned int i = 0; i < (*it)->triangles.size(); i++)
+        (*it)->triangles[i]->writePLY2(fp);
+  }
+
+  fclose(fp);
   return 1;
 }
 
@@ -1146,7 +1493,7 @@ int GModel::readVRML(const std::string &name)
   // need)
   std::vector<MVertex*> vertexVector, allVertexVector;
   std::map<int, std::vector<MElement*> > elements[3];
-  int region = 0;
+  int region = getMaxElementaryNumber(-1);
   char buffer[256], str[256];
   while(!feof(fp)) {
     if(!fgets(buffer, sizeof(buffer), fp)) break;
@@ -1158,6 +1505,7 @@ int GModel::readVRML(const std::string &name)
         if(!readVerticesVRML(fp, vertexVector, allVertexVector)) break;
       }
       else if(!strcmp(str, "coord")){
+        region++;
         vertexVector.clear();
         if(!skipUntil(fp, "point")) break;
         if(!readVerticesVRML(fp, vertexVector, allVertexVector)) break;
@@ -1194,7 +1542,7 @@ int GModel::readVRML(const std::string &name)
     }
   }
 
-  for(int i = 0; i < (int)(sizeof(elements) / sizeof(elements[0])); i++) 
+  for(int i = 0; i < (int)(sizeof(elements) / sizeof(elements[0])); i++)
     _storeElementsInEntities(elements[i]);
   _associateEntityWithMeshVertices();
   _storeVerticesInEntities(allVertexVector);
@@ -1221,13 +1569,13 @@ int GModel::writeVRML(const std::string &name, bool saveAll, double scalingFacto
   fprintf(fp, "  point [\n");
 
   for(viter it = firstVertex(); it != lastVertex(); ++it)
-    for(unsigned int i = 0; i < (*it)->mesh_vertices.size(); i++) 
+    for(unsigned int i = 0; i < (*it)->mesh_vertices.size(); i++)
       (*it)->mesh_vertices[i]->writeVRML(fp, scalingFactor);
   for(eiter it = firstEdge(); it != lastEdge(); ++it)
     for(unsigned int i = 0; i < (*it)->mesh_vertices.size(); i++)
       (*it)->mesh_vertices[i]->writeVRML(fp, scalingFactor);
   for(fiter it = firstFace(); it != lastFace(); ++it)
-    for(unsigned int i = 0; i < (*it)->mesh_vertices.size(); i++) 
+    for(unsigned int i = 0; i < (*it)->mesh_vertices.size(); i++)
       (*it)->mesh_vertices[i]->writeVRML(fp, scalingFactor);
 
   fprintf(fp, "  ]\n");
@@ -1277,7 +1625,7 @@ int GModel::readUNV(const std::string &name)
   while(!feof(fp)) {
     if(!fgets(buffer, sizeof(buffer), fp)) break;
     if(!strncmp(buffer, "    -1", 6)){
-      if(!fgets(buffer, sizeof(buffer), fp)) break;      
+      if(!fgets(buffer, sizeof(buffer), fp)) break;     
       if(!strncmp(buffer, "    -1", 6))
         if(!fgets(buffer, sizeof(buffer), fp)) break;
       int record = 0;
@@ -1300,9 +1648,9 @@ int GModel::readUNV(const std::string &name)
           if(strlen(buffer) < 3) continue; // possible line ending after last fscanf
           if(!strncmp(buffer, "    -1", 6)) break;
           int num, type, elementary, physical, color, numNodes;
-          if(sscanf(buffer, "%d %d %d %d %d %d", &num, &type, &elementary, &physical, 
+          if(sscanf(buffer, "%d %d %d %d %d %d", &num, &type, &elementary, &physical,
                     &color, &numNodes) != 6) break;
-          if(elementary < 0) elementary = 1;
+          if(elementary < 0) elementary = getMaxElementaryNumber(-1) + 1;
           if(physical < 0) physical = 0;
           switch(type){
           case 11: case 21: case 22: case 31:
@@ -1329,17 +1677,17 @@ int GModel::readUNV(const std::string &name)
               (new MLine3(vertices[0], vertices[2], vertices[1], num));
             dim = 1;
             break;
-          case 41: case 51: case 61: case 74: case 81: case 91: 
+          case 41: case 51: case 61: case 74: case 81: case 91:
             elements[1][elementary].push_back(new MTriangle(vertices, num));
             dim = 2;
             break;
-          case 42: case 52: case 62: case 72: case 82: case 92: 
+          case 42: case 52: case 62: case 72: case 82: case 92:
             elements[1][elementary].push_back
-              (new MTriangle6(vertices[0], vertices[2], vertices[4], vertices[1], 
+              (new MTriangle6(vertices[0], vertices[2], vertices[4], vertices[1],
                               vertices[3], vertices[5], num));
             dim = 2;
             break;
-          case 44: case 54: case 64: case 71: case 84: case 94: 
+          case 44: case 54: case 64: case 71: case 84: case 94:
             elements[2][elementary].push_back(new MQuadrangle(vertices, num));
             dim = 2;
             break;
@@ -1352,64 +1700,64 @@ int GModel::readUNV(const std::string &name)
             break;
           case 111:
             elements[3][elementary].push_back(new MTetrahedron(vertices, num));
-            dim = 3; 
+            dim = 3;
             break;
-          case 118: 
+          case 118:
             elements[3][elementary].push_back
               (new MTetrahedron10(vertices[0], vertices[2], vertices[4], vertices[9],
                                   vertices[1], vertices[3], vertices[5], vertices[6],
                                   vertices[8], vertices[7], num));
             dim = 3;
             break;
-          case 104: case 115:  
+          case 104: case 115:
             elements[4][elementary].push_back(new MHexahedron(vertices, num));
-            dim = 3; 
+            dim = 3;
             break;
           case 105: case 116:
             elements[4][elementary].push_back
-              (new MHexahedron20(vertices[0], vertices[2], vertices[4], vertices[6], 
+              (new MHexahedron20(vertices[0], vertices[2], vertices[4], vertices[6],
                                  vertices[12], vertices[14], vertices[16], vertices[18],
                                  vertices[1], vertices[7], vertices[8], vertices[3],
                                  vertices[9], vertices[5], vertices[10], vertices[11],
-                                 vertices[13], vertices[19], vertices[15], vertices[17], 
+                                 vertices[13], vertices[19], vertices[15], vertices[17],
                                  num));
-            dim = 3; 
+            dim = 3;
             break;
           case 101: case 112:
             elements[5][elementary].push_back(new MPrism(vertices, num));
-            dim = 3; 
+            dim = 3;
             break;
           case 102: case 113:
             elements[5][elementary].push_back
-              (new MPrism15(vertices[0], vertices[2], vertices[4], vertices[9], 
-                            vertices[11], vertices[13], vertices[1], vertices[5], 
+              (new MPrism15(vertices[0], vertices[2], vertices[4], vertices[9],
+                            vertices[11], vertices[13], vertices[1], vertices[5],
                             vertices[6], vertices[3], vertices[7], vertices[8],
                             vertices[10], vertices[14], vertices[12], num));
             dim = 3;
             break;
           }
-  
-          if(dim >= 0 && physical && (!physicals[dim].count(elementary) || 
+
+          if(dim >= 0 && physical && (!physicals[dim].count(elementary) ||
                                       !physicals[dim][elementary].count(physical)))
             physicals[dim][elementary][physical] = "unnamed";
         }
       }
     }
   }
-  
-  for(int i = 0; i < (int)(sizeof(elements) / sizeof(elements[0])); i++) 
+
+  for(int i = 0; i < (int)(sizeof(elements) / sizeof(elements[0])); i++)
     _storeElementsInEntities(elements[i]);
   _associateEntityWithMeshVertices();
   _storeVerticesInEntities(vertexMap);
 
-  for(int i = 0; i < 4; i++)  
+  for(int i = 0; i < 4; i++)
     _storePhysicalTagsInEntities(i, physicals[i]);
 
   fclose(fp);
   return 1;
 }
 
-int GModel::writeUNV(const std::string &name, bool saveAll, bool saveGroupsOfNodes, 
+int GModel::writeUNV(const std::string &name, bool saveAll, bool saveGroupsOfNodes,
                      double scalingFactor)
 {
   FILE *fp = fopen(name.c_str(), "w");
@@ -1429,9 +1777,9 @@ int GModel::writeUNV(const std::string &name, bool saveAll, bool saveGroupsOfNod
   fprintf(fp, "%6d\n", -1);
   fprintf(fp, "%6d\n", 2411);
   for(unsigned int i = 0; i < entities.size(); i++)
-    for(unsigned int j = 0; j < entities[i]->mesh_vertices.size(); j++) 
+    for(unsigned int j = 0; j < entities[i]->mesh_vertices.size(); j++)
       entities[i]->mesh_vertices[j]->writeUNV(fp, scalingFactor);
-  fprintf(fp, "%6d\n", -1);  
+  fprintf(fp, "%6d\n", -1); 
 
   // elements
   fprintf(fp, "%6d\n", -1);
@@ -1468,7 +1816,7 @@ int GModel::writeUNV(const std::string &name, bool saveAll, bool saveGroupsOfNod
               nodes.insert(e->getVertex(k));
           }
         }
-        fprintf(fp, "%10d%10d%10d%10d%10d%10d%10d%10d\n", 
+        fprintf(fp, "%10d%10d%10d%10d%10d%10d%10d%10d\n",
                 gr, 0, 0, 0, 0, 0, 0, (int)nodes.size());
         fprintf(fp, "PERMANENT GROUP%d\n", gr++);
         int row = 0;
@@ -1510,7 +1858,7 @@ int GModel::readMESH(const std::string &name)
   }
 
   std::vector<MVertex*> vertexVector;
-  std::map<int, std::vector<MElement*> > elements[4];
+  std::map<int, std::vector<MElement*> > elements[5];
 
   while(!feof(fp)) {
     if(!fgets(buffer, 256, fp)) break;
@@ -1546,7 +1894,7 @@ int GModel::readMESH(const std::string &name)
           for(int j = 0; j < 2; j++) n[j]--;
           std::vector<MVertex*> vertices;
           if(!getVertices(2, n, vertexVector, vertices)) return 0;
-          elements[3][cl].push_back(new MLine(vertices));
+          elements[0][cl].push_back(new MLine(vertices));
         }
       }
       else if(!strcmp(str, "Triangles")){
@@ -1561,7 +1909,7 @@ int GModel::readMESH(const std::string &name)
           for(int j = 0; j < 3; j++) n[j]--;
           std::vector<MVertex*> vertices;
           if(!getVertices(3, n, vertexVector, vertices)) return 0;
-          elements[0][cl].push_back(new MTriangle(vertices));
+          elements[1][cl].push_back(new MTriangle(vertices));
         }
       }
       else if(!strcmp(str, "Quadrilaterals")) {
@@ -1576,7 +1924,7 @@ int GModel::readMESH(const std::string &name)
           for(int j = 0; j < 4; j++) n[j]--;
           std::vector<MVertex*> vertices;
           if(!getVertices(4, n, vertexVector, vertices)) return 0;
-          elements[1][cl].push_back(new MQuadrangle(vertices));
+          elements[2][cl].push_back(new MQuadrangle(vertices));
         }
       }
       else if(!strcmp(str, "Tetrahedra")) {
@@ -1591,13 +1939,29 @@ int GModel::readMESH(const std::string &name)
           for(int j = 0; j < 4; j++) n[j]--;
           std::vector<MVertex*> vertices;
           if(!getVertices(4, n, vertexVector, vertices)) return 0;
-          elements[2][cl].push_back(new MTetrahedron(vertices));
+          elements[3][cl].push_back(new MTetrahedron(vertices));
+        }
+      }
+      else if(!strcmp(str, "Hexahedra")) {
+        if(!fgets(buffer, sizeof(buffer), fp)) break;
+        int nbe;
+        sscanf(buffer, "%d", &nbe);
+        Msg::Info("%d hexahedra", nbe);
+        for(int i = 0; i < nbe; i++) {
+          if(!fgets(buffer, sizeof(buffer), fp)) break;
+          int n[8], cl;
+          sscanf(buffer, "%d %d %d %d %d %d %d %d %d", &n[0], &n[1], &n[2], &n[3], 
+                 &n[4], &n[5], &n[6], &n[7], &cl);
+          for(int j = 0; j < 8; j++) n[j]--;
+          std::vector<MVertex*> vertices;
+          if(!getVertices(8, n, vertexVector, vertices)) return 0;
+          elements[4][cl].push_back(new MHexahedron(vertices));
         }
       }
     }
   }
 
-  for(int i = 0; i < (int)(sizeof(elements) / sizeof(elements[0])); i++) 
+  for(int i = 0; i < (int)(sizeof(elements) / sizeof(elements[0])); i++)
     _storeElementsInEntities(elements[i]);
   _associateEntityWithMeshVertices();
   _storeVerticesInEntities(vertexVector);
@@ -1606,7 +1970,7 @@ int GModel::readMESH(const std::string &name)
   return 1;
 }
 
-int GModel::writeMESH(const std::string &name, int elementTagType, 
+int GModel::writeMESH(const std::string &name, int elementTagType,
                       bool saveAll, double scalingFactor)
 {
   FILE *fp = fopen(name.c_str(), "w");
@@ -1628,10 +1992,11 @@ int GModel::writeMESH(const std::string &name, int elementTagType,
   std::vector<GEntity*> entities;
   getEntities(entities);
   for(unsigned int i = 0; i < entities.size(); i++)
-    for(unsigned int j = 0; j < entities[i]->mesh_vertices.size(); j++) 
+    for(unsigned int j = 0; j < entities[i]->mesh_vertices.size(); j++)
       entities[i]->mesh_vertices[j]->writeMESH(fp, scalingFactor);
-  
-  int numEdges = 0, numTriangles = 0, numQuadrangles = 0, numTetrahedra = 0;
+
+  int numEdges = 0, numTriangles = 0, numQuadrangles = 0;
+  int numTetrahedra = 0, numHexahedra = 0;
   for(eiter it = firstEdge(); it != lastEdge(); ++it){
     if(saveAll || (*it)->physicals.size()){
       numEdges += (*it)->lines.size();
@@ -1646,6 +2011,7 @@ int GModel::writeMESH(const std::string &name, int elementTagType,
   for(riter it = firstRegion(); it != lastRegion(); ++it){
     if(saveAll || (*it)->physicals.size()){
       numTetrahedra += (*it)->tetrahedra.size();
+      numHexahedra += (*it)->hexahedra.size();
     }
   }
 
@@ -1656,7 +2022,7 @@ int GModel::writeMESH(const std::string &name, int elementTagType,
       int numPhys = (*it)->physicals.size();
       if(saveAll || numPhys){
         for(unsigned int i = 0; i < (*it)->lines.size(); i++)
-          (*it)->lines[i]->writeMESH(fp, elementTagType, (*it)->tag(), 
+          (*it)->lines[i]->writeMESH(fp, elementTagType, (*it)->tag(),
                                      numPhys ? (*it)->physicals[0] : 0);
       }
     }
@@ -1668,7 +2034,7 @@ int GModel::writeMESH(const std::string &name, int elementTagType,
       int numPhys = (*it)->physicals.size();
       if(saveAll || numPhys){
         for(unsigned int i = 0; i < (*it)->triangles.size(); i++)
-          (*it)->triangles[i]->writeMESH(fp, elementTagType, (*it)->tag(), 
+          (*it)->triangles[i]->writeMESH(fp, elementTagType, (*it)->tag(),
                                          numPhys ? (*it)->physicals[0] : 0);
       }
     }
@@ -1697,9 +2063,81 @@ int GModel::writeMESH(const std::string &name, int elementTagType,
       }
     }
   }
+  if(numHexahedra){
+    fprintf(fp, " Hexahedra\n");
+    fprintf(fp, " %d\n", numHexahedra);
+    for(riter it = firstRegion(); it != lastRegion(); ++it){
+      int numPhys = (*it)->physicals.size();
+      if(saveAll || numPhys){
+        for(unsigned int i = 0; i < (*it)->hexahedra.size(); i++)
+          (*it)->hexahedra[i]->writeMESH(fp, elementTagType, (*it)->tag(),
+                                         numPhys ? (*it)->physicals[0] : 0);
+      }
+    }
+  }
 
   fprintf(fp, " End\n");
-  
+
+  fclose(fp);
+  return 1;
+}
+
+int GModel::writeIR3(const std::string &name, int elementTagType,
+                     bool saveAll, double scalingFactor)
+{
+  FILE *fp = fopen(name.c_str(), "w");
+  if(!fp){
+    Msg::Error("Unable to open file '%s'", name.c_str());
+    return 0;
+  }
+
+  if(noPhysicalGroups()) saveAll = true;
+
+  int numVertices = indexMeshVertices(saveAll), num2D = 0, num3D = 0;
+  for(fiter it = firstFace(); it != lastFace(); ++it)
+    if(saveAll || (*it)->physicals.size())
+      num2D += (*it)->getNumMeshElements();
+  for(riter it = firstRegion(); it != lastRegion(); ++it)
+    if(saveAll || (*it)->physicals.size())
+      num3D += (*it)->getNumMeshElements();
+
+  fprintf(fp,"33\n");
+  if(num2D && num3D)
+    fprintf(fp,"%d %d %d\n", numVertices, num2D, num3D);
+  else
+    fprintf(fp,"%d %d\n", numVertices, num2D ? num2D : num3D);
+
+  std::vector<GEntity*> entities;
+  getEntities(entities);
+
+  for(unsigned int i = 0; i < entities.size(); i++)
+    for(unsigned int j = 0; j < entities[i]->mesh_vertices.size(); j++)
+      if(entities[i]->mesh_vertices[j]->getIndex() >= 0)
+        fprintf(fp,"%d %.16g %.16g %.16g\n", entities[i]->mesh_vertices[j]->getIndex(),
+                entities[i]->mesh_vertices[j]->x() * scalingFactor,
+                entities[i]->mesh_vertices[j]->y() * scalingFactor,
+                entities[i]->mesh_vertices[j]->z() * scalingFactor);
+
+  int iElement = 1;
+  for(fiter it = firstFace(); it != lastFace(); ++it){
+    int numPhys = (*it)->physicals.size();
+    if(saveAll || numPhys)
+      for(unsigned int i = 0; i < (*it)->getNumMeshElements(); i++)
+        (*it)->getMeshElement(i)->writeIR3
+          (fp, elementTagType, iElement++, (*it)->tag(),
+           numPhys ? (*it)->physicals[0] : 0);
+  }
+
+  iElement = 1;
+  for(riter it = firstRegion(); it != lastRegion(); ++it){
+    int numPhys = (*it)->physicals.size();
+    if(saveAll || numPhys)
+      for(unsigned int i = 0; i < (*it)->getNumMeshElements(); i++)
+        (*it)->getMeshElement(i)->writeIR3
+          (fp, elementTagType, iElement++, (*it)->tag(),
+           numPhys ? (*it)->physicals[0] : 0);
+  }
+
   fclose(fp);
   return 1;
 }
@@ -1720,8 +2158,8 @@ static double atofBDF(char *str)
     if(str[i] == 'E' || str[i] == 'e') {
       return atof(str);
     }
-    else if(str[i] == 'D' || str[i] == 'd'){ 
-      str[i] = 'E'; 
+    else if(str[i] == 'D' || str[i] == 'd'){
+      str[i] = 'E';
       return atof(str);
     }
   }
@@ -1739,7 +2177,7 @@ static double atofBDF(char *str)
   return atof(tmp);
 }
 
-static int readVertexBDF(FILE *fp, char *buffer, int keySize, 
+static int readVertexBDF(FILE *fp, char *buffer, int keySize,
                          int *num, double *x, double *y, double *z)
 {
   char tmp[5][32];
@@ -1758,9 +2196,9 @@ static int readVertexBDF(FILE *fp, char *buffer, int keySize,
   case 1: // small field
     for(int i = 0; i < 5; i++) tmp[i][8] = '\0';
     strncpy(tmp[0], &buffer[8], 8);
-    strncpy(tmp[2], &buffer[24], 8); 
-    strncpy(tmp[3], &buffer[32], 8); 
-    strncpy(tmp[4], &buffer[40], 8); 
+    strncpy(tmp[2], &buffer[24], 8);
+    strncpy(tmp[3], &buffer[32], 8);
+    strncpy(tmp[4], &buffer[40], 8);
     break;
   case 2: // long field
     for(int i = 0; i < 5; i++) tmp[i][16] = '\0';
@@ -1807,7 +2245,7 @@ static void readLineBDF(char *buffer, int format, std::vector<char*> &fields)
   }
 }
 
-static int readElementBDF(FILE *fp, char *buffer, int keySize, int numVertices, 
+static int readElementBDF(FILE *fp, char *buffer, int keySize, int numVertices,
                           int &num, int &region, std::vector<MVertex*> &vertices,
                           std::map<int, MVertex*> &vertexMap)
 {
@@ -1819,14 +2257,14 @@ static int readElementBDF(FILE *fp, char *buffer, int keySize, int numVertices,
 
   readLineBDF(buffer, format, fields);
 
-  if(((int)fields.size() - 2 < abs(numVertices)) || 
+  if(((int)fields.size() - 2 < abs(numVertices)) ||
      (numVertices < 0 && (fields.size() == 9))){
     if(fields.size() == 9) fields.pop_back();
     if(!fgets(buffer2, sizeof(buffer2), fp)) return 0;
     readLineBDF(buffer2, format, fields);
   }
 
-  if(((int)fields.size() - 2 < abs(numVertices)) || 
+  if(((int)fields.size() - 2 < abs(numVertices)) ||
      (numVertices < 0 && (fields.size() == 17))){
     if(fields.size() == 17) fields.pop_back();
     if(!fgets(buffer3, sizeof(buffer3), fp)) return 0;
@@ -1931,8 +2369,8 @@ int GModel::readBDF(const std::string &name)
         if(readElementBDF(fp, buffer, 6, -4, num, region, vertices, vertexMap)){
           if(vertices.size() == 10)
             elements[3][region].push_back
-              (new MTetrahedron10(vertices[0], vertices[1], vertices[2], vertices[3], 
-                                  vertices[4], vertices[5], vertices[6], vertices[7], 
+              (new MTetrahedron10(vertices[0], vertices[1], vertices[2], vertices[3],
+                                  vertices[4], vertices[5], vertices[6], vertices[7],
                                   vertices[9], vertices[8], num));
           else
             elements[3][region].push_back(new MTetrahedron(vertices, num));
@@ -1942,11 +2380,11 @@ int GModel::readBDF(const std::string &name)
         if(readElementBDF(fp, buffer, 5, -8, num, region, vertices, vertexMap)){
           if(vertices.size() == 20)
             elements[4][region].push_back
-              (new MHexahedron20(vertices[0], vertices[1], vertices[2], vertices[3], 
-                                 vertices[4], vertices[5], vertices[6], vertices[7], 
-                                 vertices[8], vertices[11], vertices[12], vertices[9], 
-                                 vertices[13], vertices[10], vertices[14], vertices[15], 
-                                 vertices[16], vertices[19], vertices[17], vertices[18], 
+              (new MHexahedron20(vertices[0], vertices[1], vertices[2], vertices[3],
+                                 vertices[4], vertices[5], vertices[6], vertices[7],
+                                 vertices[8], vertices[11], vertices[12], vertices[9],
+                                 vertices[13], vertices[10], vertices[14], vertices[15],
+                                 vertices[16], vertices[19], vertices[17], vertices[18],
                                  num));
           else
             elements[4][region].push_back(new MHexahedron(vertices, num));
@@ -1970,8 +2408,8 @@ int GModel::readBDF(const std::string &name)
       }
     }
   }
-  
-  for(int i = 0; i < (int)(sizeof(elements) / sizeof(elements[0])); i++) 
+
+  for(int i = 0; i < (int)(sizeof(elements) / sizeof(elements[0])); i++)
     _storeElementsInEntities(elements[i]);
   _associateEntityWithMeshVertices();
   _storeVerticesInEntities(vertexMap);
@@ -1980,7 +2418,7 @@ int GModel::readBDF(const std::string &name)
   return 1;
 }
 
-int GModel::writeBDF(const std::string &name, int format, int elementTagType, 
+int GModel::writeBDF(const std::string &name, int format, int elementTagType,
                      bool saveAll, double scalingFactor)
 {
   FILE *fp = fopen(name.c_str(), "w");
@@ -2000,7 +2438,7 @@ int GModel::writeBDF(const std::string &name, int format, int elementTagType,
 
   // nodes
   for(unsigned int i = 0; i < entities.size(); i++)
-    for(unsigned int j = 0; j < entities[i]->mesh_vertices.size(); j++) 
+    for(unsigned int j = 0; j < entities[i]->mesh_vertices.size(); j++)
       entities[i]->mesh_vertices[j]->writeBDF(fp, format, scalingFactor);
 
   // elements
@@ -2009,12 +2447,12 @@ int GModel::writeBDF(const std::string &name, int format, int elementTagType,
       int numPhys = entities[i]->physicals.size();
       if(saveAll || numPhys)
         entities[i]->getMeshElement(j)->writeBDF
-          (fp, format, elementTagType, entities[i]->tag(), 
+          (fp, format, elementTagType, entities[i]->tag(),
            numPhys ? entities[i]->physicals[0] : 0);
     }
 
   fprintf(fp, "ENDDATA\n");
-   
+
   fclose(fp);
   return 1;
 }
@@ -2036,7 +2474,7 @@ int GModel::readP3D(const std::string &name)
 
   for(int n = 0; n < numBlocks; n++){
     if(Nk[n] == 1){
-      GFace *gf = new discreteFace(this, getNumFaces() + 1);
+      GFace *gf = new discreteFace(this, getMaxElementaryNumber(2) + 1);
       add(gf);
       gf->transfinite_vertices.resize(Ni[n]);
       for(int i = 0; i < Ni[n]; i++)
@@ -2069,7 +2507,7 @@ int GModel::readP3D(const std::string &name)
                              gf->transfinite_vertices[i    ][j + 1]));
     }
     else{
-      GRegion *gr = new discreteRegion(this, getNumRegions() + 1);
+      GRegion *gr = new discreteRegion(this,  getMaxElementaryNumber(3) + 1);
       add(gr);
       gr->transfinite_vertices.resize(Ni[n]);
       for(int i = 0; i < Ni[n]; i++){
@@ -2112,8 +2550,8 @@ int GModel::readP3D(const std::string &name)
                                gr->transfinite_vertices[i + 1][j + 1][k + 1],
                                gr->transfinite_vertices[i    ][j + 1][k + 1]));
     }
-  }  
-  
+  }
+
   fclose(fp);
   return 1;
 }
@@ -2130,17 +2568,17 @@ int GModel::writeP3D(const std::string &name, bool saveAll, double scalingFactor
 
   std::vector<GFace*> faces;
   for(fiter it = firstFace(); it != lastFace(); ++it)
-    if((*it)->transfinite_vertices.size() && 
+    if((*it)->transfinite_vertices.size() &&
        (*it)->transfinite_vertices[0].size() &&
        ((*it)->physicals.size() || saveAll)) faces.push_back(*it);
 
   std::vector<GRegion*> regions;
   for(riter it = firstRegion(); it != lastRegion(); ++it)
-    if((*it)->transfinite_vertices.size() && 
-       (*it)->transfinite_vertices[0].size() && 
-       (*it)->transfinite_vertices[0][0].size() && 
+    if((*it)->transfinite_vertices.size() &&
+       (*it)->transfinite_vertices[0].size() &&
+       (*it)->transfinite_vertices[0][0].size() &&
        ((*it)->physicals.size() || saveAll)) regions.push_back(*it);
-  
+
   if(faces.empty() && regions.empty()){
     Msg::Warning("No structured grids to save");
     fclose(fp);
@@ -2148,18 +2586,18 @@ int GModel::writeP3D(const std::string &name, bool saveAll, double scalingFactor
   }
 
   fprintf(fp, "%d\n", (int)(faces.size() + regions.size()));
-  
+
   for(unsigned int i = 0; i < faces.size(); i++)
-    fprintf(fp, "%d %d 1\n", 
+    fprintf(fp, "%d %d 1\n",
             (int)faces[i]->transfinite_vertices.size(),
             (int)faces[i]->transfinite_vertices[0].size());
 
   for(unsigned int i = 0; i < regions.size(); i++)
-    fprintf(fp, "%d %d %d\n", 
+    fprintf(fp, "%d %d %d\n",
             (int)regions[i]->transfinite_vertices.size(),
             (int)regions[i]->transfinite_vertices[0].size(),
             (int)regions[i]->transfinite_vertices[0][0].size());
-  
+
   for(unsigned int i = 0; i < faces.size(); i++){
     GFace *gf = faces[i];
     for(int coord = 0; coord < 3; coord++){
@@ -2167,13 +2605,13 @@ int GModel::writeP3D(const std::string &name, bool saveAll, double scalingFactor
         for(unsigned int k = 0; k < gf->transfinite_vertices[j].size(); k++){
           MVertex *v = gf->transfinite_vertices[j][k];
           double d = (coord == 0) ? v->x() : (coord == 1) ? v->y() : v->z();
-          fprintf(fp, "%g ", d * scalingFactor);
+          fprintf(fp, "%.16g ", d * scalingFactor);
         }
         fprintf(fp, "\n");
       }
     }
   }
-  
+
   for(unsigned int i = 0; i < regions.size(); i++){
     GRegion *gr = regions[i];
     for(int coord = 0; coord < 3; coord++){
@@ -2182,14 +2620,14 @@ int GModel::writeP3D(const std::string &name, bool saveAll, double scalingFactor
           for(unsigned int l = 0; l < gr->transfinite_vertices[j][k].size(); l++){
             MVertex *v = gr->transfinite_vertices[j][k][l];
             double d = (coord == 0) ? v->x() : (coord == 1) ? v->y() : v->z();
-            fprintf(fp, "%g ", d * scalingFactor);
+            fprintf(fp, "%.16g ", d * scalingFactor);
           }
           fprintf(fp, "\n");
         }
       }
     }
   }
-  
+
   fclose(fp);
   return 1;
 }
@@ -2224,10 +2662,10 @@ int GModel::writeVTK(const std::string &name, bool binary, bool saveAll,
   // write mesh vertices
   fprintf(fp, "POINTS %d double\n", numVertices);
   for(unsigned int i = 0; i < entities.size(); i++)
-    for(unsigned int j = 0; j < entities[i]->mesh_vertices.size(); j++) 
+    for(unsigned int j = 0; j < entities[i]->mesh_vertices.size(); j++)
       entities[i]->mesh_vertices[j]->writeVTK(fp, binary, scalingFactor, bigEndian);
   fprintf(fp, "\n");
-  
+
   // loop over all elements we need to save and count vertices
   int numElements = 0, totalNumInt = 0;
   for(unsigned int i = 0; i < entities.size(); i++){
@@ -2240,7 +2678,7 @@ int GModel::writeVTK(const std::string &name, bool binary, bool saveAll,
       }
     }
   }
-  
+
   // print vertex indices in ascii or binary
   fprintf(fp, "CELLS %d %d\n", numElements, totalNumInt);
   for(unsigned int i = 0; i < entities.size(); i++){
@@ -2252,8 +2690,8 @@ int GModel::writeVTK(const std::string &name, bool binary, bool saveAll,
     }
   }
   fprintf(fp, "\n");
-  
-  // print element types in ascii or binary  
+
+  // print element types in ascii or binary
   fprintf(fp, "CELL_TYPES %d\n", numElements);
   for(unsigned int i = 0; i < entities.size(); i++){
     if(entities[i]->physicals.size() || saveAll){
@@ -2271,7 +2709,7 @@ int GModel::writeVTK(const std::string &name, bool binary, bool saveAll,
       }
     }
   }
-  
+
   fclose(fp);
   return 1;
 }
@@ -2283,23 +2721,29 @@ int GModel::readVTK(const std::string &name, bool bigEndian)
     Msg::Error("Unable to open file '%s'", name.c_str());
     return 0;
   }
-  
+
   char buffer[256], buffer2[256];
-  
+  std::map<int, std::map<int, std::string> > physicals[4];
+
   if(!fgets(buffer, sizeof(buffer), fp)) return 0; // version line
   if(!fgets(buffer, sizeof(buffer), fp)) return 0; // title
-  
+
   if(fscanf(fp, "%s", buffer) != 1) // ASCII or BINARY
     Msg::Error("Failed reading buffer");
   bool binary = false;
   if(!strcmp(buffer, "BINARY")) binary = true;
-  
+
   if(fscanf(fp, "%s %s", buffer, buffer2) != 2) return 0;
-  if(strcmp(buffer, "DATASET") || strcmp(buffer2, "UNSTRUCTURED_GRID")){
-    Msg::Error("VTK reader can only read unstructured datasets");
+  
+  bool unstructured = false;
+  if( !strcmp(buffer, "DATASET") &&  !strcmp(buffer2, "UNSTRUCTURED_GRID") ) unstructured = true;
+
+  if( (strcmp(buffer, "DATASET") &&  strcmp(buffer2, "UNSTRUCTURED_GRID")) ||
+      (strcmp(buffer, "DATASET") &&  strcmp(buffer2, "POLYDATA")) ){
+    Msg::Error("VTK reader can only read unstructured or polydata datasets");
     return 0;
   }
-  
+
   // read mesh vertices
   int numVertices;
   if(fscanf(fp, "%s %d %s\n", buffer, &numVertices, buffer2) != 3) return 0;
@@ -2316,7 +2760,6 @@ int GModel::readVTK(const std::string &name, bool bigEndian)
     Msg::Warning("VTK reader only accepts float or double datasets");
     return 0;
   }
-
   Msg::Info("Reading %d points", numVertices);
   std::vector<MVertex*> vertices(numVertices);
   for(int i = 0 ; i < numVertices; i++){
@@ -2342,68 +2785,128 @@ int GModel::readVTK(const std::string &name, bool bigEndian)
   // read mesh elements
   int numElements, totalNumInt;
   if(fscanf(fp, "%s %d %d\n", buffer, &numElements, &totalNumInt) != 3) return 0;
-  if(strcmp(buffer, "CELLS") || !numElements){
-    Msg::Warning("No cells in dataset");
+ 
+  bool haveCells = true;
+  bool haveLines = false;
+  if( !strcmp(buffer, "CELLS") && numElements>0 )  Msg::Info("Reading %d cells", numElements);
+  else if (!strcmp(buffer, "POLYGONS") && numElements>0 ) Msg::Info("Reading %d polygons", numElements);
+  else if (!strcmp(buffer, "LINES") && numElements>0 ) { 
+    haveCells = false; 
+    haveLines = true;
+    Msg::Info("Reading %d lines", numElements); 
+  } 
+  else{
+    Msg::Warning("No cells or polygons in dataset");
     return 0;
   }
-  Msg::Info("Reading %d cells", numElements);
-  std::vector<std::vector<MVertex*> > cells(numElements);
-  for(unsigned int i = 0; i < cells.size(); i++){
-    int numVerts, n[100];
-    if(binary){
-      if(fread(&numVerts, sizeof(int), 1, fp) != 1) return 0;
-      if(!bigEndian) SwapBytes((char*)&numVerts, sizeof(int), 1);
-      if((int)fread(n, sizeof(int), numVerts, fp) != numVerts) return 0;
-      if(!bigEndian) SwapBytes((char*)n, sizeof(int), numVerts);
-    }
-    else{
-      if(fscanf(fp, "%d", &numVerts) != 1) return 0;
+
+  std::map<int, std::vector<MElement*> > elements[8];
+
+  if (haveCells){
+    std::vector<std::vector<MVertex*> > cells(numElements);
+    for(unsigned int i = 0; i < cells.size(); i++){
+      int numVerts, n[100];
+      if(binary){
+	if(fread(&numVerts, sizeof(int), 1, fp) != 1) return 0;
+	if(!bigEndian) SwapBytes((char*)&numVerts, sizeof(int), 1);
+	if((int)fread(n, sizeof(int), numVerts, fp) != numVerts) return 0;
+	if(!bigEndian) SwapBytes((char*)n, sizeof(int), numVerts);
+      }
+      else{
+	if(fscanf(fp, "%d", &numVerts) != 1) return 0;
+	for(int j = 0; j < numVerts; j++){
+	  if(fscanf(fp, "%d", &n[j]) != 1) return 0;
+	}
+      }
       for(int j = 0; j < numVerts; j++){
-        if(fscanf(fp, "%d", &n[j]) != 1) return 0;
+	if(n[j] >= 0 && n[j] < (int)vertices.size())
+	  cells[i].push_back(vertices[n[j]]);
+	else
+	  Msg::Error("Bad vertex index");
       }
     }
-    for(int j = 0; j < numVerts; j++){
-      if(n[j] >= 0 && n[j] < (int)vertices.size())
-        cells[i].push_back(vertices[n[j]]);
-      else
-        Msg::Error("Bad vertex index");
-    }
-  }
-  if(fscanf(fp, "%s %d\n", buffer, &numElements) != 2) return 0;
-  if(strcmp(buffer, "CELL_TYPES") || numElements != (int)cells.size()){
-    Msg::Error("No or invalid number of cells types");
-    return 0;
-  }
-  std::map<int, std::vector<MElement*> > elements[8];
-  for(unsigned int i = 0; i < cells.size(); i++){
-    int type;
-    if(binary){
-      if(fread(&type, sizeof(int), 1, fp) != 1) return 0;
-      if(!bigEndian) SwapBytes((char*)&type, sizeof(int), 1);
+   
+    if (unstructured){
+      if(fscanf(fp, "%s %d\n", buffer, &numElements) != 2 ) return 0;
+      if(strcmp(buffer, "CELL_TYPES") || numElements != (int)cells.size()){
+	Msg::Error("No or invalid number of cells types");
+	return 0;
+      }
+      for(unsigned int i = 0; i < cells.size(); i++){
+	int type;
+	if(binary){
+	  if(fread(&type, sizeof(int), 1, fp) != 1) return 0;
+	  if(!bigEndian) SwapBytes((char*)&type, sizeof(int), 1);
+	}
+	else{
+	  if(fscanf(fp, "%d", &type) != 1) return 0;
+	}
+	switch(type){
+	case 1: elements[0][1].push_back(new MPoint(cells[i])); break;
+	case 3: elements[1][1].push_back(new MLine(cells[i])); break;
+	case 5: elements[2][1].push_back(new MTriangle(cells[i])); break;
+	case 9: elements[3][1].push_back(new MQuadrangle(cells[i])); break;
+	case 10: elements[4][1].push_back(new MTetrahedron(cells[i])); break;
+	case 12: elements[5][1].push_back(new MHexahedron(cells[i])); break;
+	case 13: elements[6][1].push_back(new MPrism(cells[i])); break;
+	case 14: elements[7][1].push_back(new MPyramid(cells[i])); break;
+	default:
+	  Msg::Error("Unknown type of cell %d", type);
+	  break;
+	}
+      }
     }
     else{
-      if(fscanf(fp, "%d", &type) != 1) return 0;
+      for(unsigned int i = 0; i < cells.size(); i++){
+	int nbNodes = (int)cells[i].size();
+	switch(nbNodes){
+	case 1: elements[0][1].push_back(new MPoint(cells[i])); break;
+	case 2: elements[1][1].push_back(new MLine(cells[i])); break;
+	case 3: elements[2][1].push_back(new MTriangle(cells[i])); break;
+	case 4: elements[3][1].push_back(new MQuadrangle(cells[i])); break;
+	default:
+	  Msg::Error("Unknown type of mesh element with %d nodes", nbNodes);
+	  break;
+	}
+      }
     }
-    switch(type){
-    case 1: elements[0][1].push_back(new MPoint(cells[i])); break;
-    case 3: elements[1][1].push_back(new MLine(cells[i])); break;
-    case 5: elements[2][1].push_back(new MTriangle(cells[i])); break;
-    case 9: elements[3][1].push_back(new MQuadrangle(cells[i])); break;
-    case 10: elements[4][1].push_back(new MTetrahedron(cells[i])); break;
-    case 12: elements[5][1].push_back(new MHexahedron(cells[i])); break;
-    case 13: elements[6][1].push_back(new MPrism(cells[i])); break;
-    case 14: elements[7][1].push_back(new MPyramid(cells[i])); break;
-    default: 
-      Msg::Error("Unknown type of cell %d", type);
-      break;
+  }
+  else if (haveLines){
+    if(!binary){
+      int v0, v1;
+      char line[100000], *p, *pEnd, *pEnd2;
+      int iLine = 1;
+      int num = 0;
+      for (int k= 0; k < numElements; k++){
+	physicals[1][iLine][1] = "centerline";
+	if(!fgets(line, sizeof(line), fp)) return 0;
+	v0=(int)strtol(line, &pEnd, 10);//ignore first line
+	v0=(int)strtol(pEnd, &pEnd2, 10);
+	p=pEnd2;
+	while(1){
+	  v1 = strtol(p, &pEnd, 10);
+	  if (p == pEnd )  break;
+	  elements[1][iLine].push_back(new MLine(vertices[v0],vertices[v1])); 
+	  p=pEnd;
+	  v0=v1;
+	}
+	iLine++;
+      }
     }
-  }  
-  
-  for(int i = 0; i < (int)(sizeof(elements) / sizeof(elements[0])); i++) 
+    else{
+      Msg::Error("TODO: implement reading lines for binary files \n");
+    }
+  }
+
+  for(int i = 0; i < (int)(sizeof(elements) / sizeof(elements[0])); i++)
     _storeElementsInEntities(elements[i]);
   _associateEntityWithMeshVertices();
   _storeVerticesInEntities(vertices);
-  
+
+  // store the physical tags
+  for(int i = 0; i < 4; i++)
+    _storePhysicalTagsInEntities(i, physicals[i]);
+
   fclose(fp);
   return 1;
 }
@@ -2421,17 +2924,17 @@ int GModel::readDIFF(const std::string &name)
   std::map<int, std::map<int, std::string> > physicals[4];
   std::map<int, MVertex*> vertexMap;
   std::vector<MVertex*> vertexVector;
- 
+
   while(1) {
 
     while(strstr(str, "Number of space dim. =") == NULL){
       if(!fgets(str, sizeof(str), fp) || feof(fp))
         break;
     }
-    
+
     int dim;
     if(sscanf(str, "%*s %*s %*s %*s %*s %d", &dim) != 1) return 0;
-    Msg::Info("dimension %d", dim); 
+    Msg::Info("dimension %d", dim);
 
     int numElements;
     if(!fgets(str, sizeof(str), fp) || feof(fp)) return 0;
@@ -2440,7 +2943,7 @@ int GModel::readDIFF(const std::string &name)
         break;
     }
     if(sscanf(str, "%*s %*s %*s %*s %d", &numElements) != 1) return 0;
-    Msg::Info("%d elements", numElements); 
+    Msg::Info("%d elements", numElements);
 
     int numVertices;
     if(!fgets(str, sizeof(str), fp) || feof(fp)) return 0;
@@ -2449,7 +2952,7 @@ int GModel::readDIFF(const std::string &name)
         break;
     }
     if(sscanf(str, "%*s %*s %*s %*s %d", &numVertices) != 1) return 0;
-    Msg::Info("%d vertices", numVertices); 
+    Msg::Info("%d vertices", numVertices);
 
     int numVerticesPerElement;
     if(!fgets(str, sizeof(str), fp)||feof(fp)) return 0;
@@ -2459,7 +2962,7 @@ int GModel::readDIFF(const std::string &name)
     }
     if(sscanf(str, "%*s %*s %*s %*s %*s %*s %*s %d", &numVerticesPerElement) != 1)
       return 0;
-    Msg::Info("numVerticesPerElement %d",numVerticesPerElement); 
+    Msg::Info("numVerticesPerElement %d",numVerticesPerElement);
 
     bool several_subdomains;
     if(!fgets(str, sizeof(str), fp) || feof(fp)) return 0;
@@ -2471,8 +2974,8 @@ int GModel::readDIFF(const std::string &name)
       several_subdomains = true;
     else
       several_subdomains = false;
-    Msg::Info("several_subdomains %x", several_subdomains); 
-    
+    Msg::Info("several_subdomains %x", several_subdomains);
+
     int nbi;
     std::vector<int> bi;
     if(!fgets(str, sizeof(str), fp) || feof(fp)) return 0;
@@ -2493,9 +2996,9 @@ int GModel::readDIFF(const std::string &name)
       else
         format_read_bi += " %d";
       if(sscanf(str, format_read_bi.c_str(), &bi[i]) != 1) return 0;
-      Msg::Info("bi[%d]=%d", i, bi[i]); 
+      Msg::Info("bi[%d]=%d", i, bi[i]);
     }
-    
+
     while(str[0] != '#'){
       if(!fgets(str, sizeof(str), fp) || feof(fp))
         break;
@@ -2511,7 +3014,7 @@ int GModel::readDIFF(const std::string &name)
       if(!fgets(str, sizeof(str), fp)) return 0;
       double xyz[3];
       int tmp;
-      if(sscanf(str, "%d ( %lf , %lf , %lf ) [%d]", &num, &xyz[0], &xyz[1], &xyz[2], 
+      if(sscanf(str, "%d ( %lf , %lf , %lf ) [%d]", &num, &xyz[0], &xyz[1], &xyz[2],
                 &tmp) != 5) return 0;
       elementary[i].resize(tmp + 1);
       elementary[i][0] = tmp;
@@ -2521,16 +3024,16 @@ int GModel::readDIFF(const std::string &name)
         Msg::Warning("Skipping duplicate vertex %d", num);
       else
         vertexMap[num] = new MVertex(xyz[0], xyz[1], xyz[2], 0, num);
-      if(numVertices > 100000) 
+      if(numVertices > 100000)
         Msg::ProgressMeter(i + 1, numVertices, "Reading nodes");
-      // If the vertex numbering is dense, tranfer the map into a
+      // If the vertex numbering is dense, transfer the map into a
       // vector to speed up element creation
-      if((int)vertexMap.size() == numVertices && 
+      if((int)vertexMap.size() == numVertices &&
          ((minVertex == 1 && maxVertex == numVertices) ||
           (minVertex == 0 && maxVertex == numVertices - 1))){
         Msg::Info("Vertex numbering is dense");
         vertexVector.resize(vertexMap.size() + 1);
-        if(minVertex == 1) 
+        if(minVertex == 1)
           vertexVector[0] = 0;
         else
           vertexVector[numVertices] = 0;
@@ -2539,7 +3042,7 @@ int GModel::readDIFF(const std::string &name)
           vertexVector[it->first] = it->second;
         vertexMap.clear();
       }
-      Msg::Info("%d ( %lf , %lf , %lf ) [%d]",i, xyz[0], xyz[1], xyz[2], 
+      Msg::Info("%d ( %lf , %lf , %lf ) [%d]",i, xyz[0], xyz[1], xyz[2],
                 elementary[i][0]);
       std::string format_read_bi = "%*d ( %*lf , %*lf , %*lf ) [%*d]";
       for(int j = 0; j < elementary[i][0]; j++){
@@ -2549,9 +3052,9 @@ int GModel::readDIFF(const std::string &name)
         }
         else
           format_read_bi += " %d";
-        if(sscanf(str, format_read_bi.c_str(), &(elementary[i][j + 1])) != 1) 
+        if(sscanf(str, format_read_bi.c_str(), &(elementary[i][j + 1])) != 1)
           return 0;
-        Msg::Info("elementary[%d][%d]=%d", i + 1, j + 1, elementary[i][j + 1]); 
+        Msg::Info("elementary[%d][%d]=%d", i + 1, j + 1, elementary[i][j + 1]);
       }
     }
     while(str[0] != '#'){
@@ -2575,31 +3078,31 @@ int GModel::readDIFF(const std::string &name)
       eleType = std::string(eleTypec);
       int k2; // local number for the element
       int NoVertices; // number of vertices per element
-      if(eleType == "ElmT3n2D"){ 
+      if(eleType == "ElmT3n2D"){
         NoVertices = 3;
         static int map[3] = {0, 1, 2}; // identical to gmsh
         mapping=std::vector<int>(map, map + sizeof(map) / sizeof(int));
         type = MSH_TRI_3;
       }
-      else if(eleType == "ElmT6n2D"){ 
+      else if(eleType == "ElmT6n2D"){
         NoVertices = 6;
         static int map[6] = {0, 1, 2, 3, 4, 5}; // identical to gmsh
         mapping = std::vector<int>(map, map + sizeof(map) / sizeof(int));
         type = MSH_TRI_6;
       }
-      else if(eleType == "ElmB4n2D"){ 
+      else if(eleType == "ElmB4n2D"){
         NoVertices = 4;
         static int map[4] = {0, 1, 3, 2}; // local numbering
         mapping = std::vector<int>(map, map + sizeof(map) / sizeof(int));
         type = MSH_QUA_4;
       }
-      else if(eleType == "ElmB8n2D"){ 
+      else if(eleType == "ElmB8n2D"){
         NoVertices = 8;
         static int map[8] = {0, 1, 3, 2, 4, 6, 7, 5}; // local numbering
         mapping = std::vector<int>(map, map + sizeof(map) / sizeof(int));
         type = MSH_QUA_8;
       }
-      else if(eleType == "ElmB9n2D"){ 
+      else if(eleType == "ElmB9n2D"){
         NoVertices = 9;
         static int map[9] = {0, 4, 1, 7, 8, 5, 3, 6, 2}; // local numbering
         mapping = std::vector<int>(map, map + sizeof(map) / sizeof(int));
@@ -2610,8 +3113,8 @@ int GModel::readDIFF(const std::string &name)
         static int map[4] = {0, 1, 2, 3}; // identical to gmsh
         mapping = std::vector<int>(map, map + sizeof(map) / sizeof(int));
         type = MSH_TET_4;
-      } 
-      else if(eleType == "ElmT10n3D"){ 
+      }
+      else if(eleType == "ElmT10n3D"){
         NoVertices = 10;
         static int map[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}; // local numbering
         mapping = std::vector<int>(map, map + sizeof(map) / sizeof(int));
@@ -2622,21 +3125,21 @@ int GModel::readDIFF(const std::string &name)
         static int map[8] = {4, 5, 0, 1, 7, 6, 3, 2};
         mapping = std::vector<int>(map, map + sizeof(map) / sizeof(int));
         type = MSH_HEX_8;
-      } 
+      }
       else if(eleType == "ElmB20n3D"){
         NoVertices = 20;
-        static int map[20] = {4, 5, 0, 1, 7, 6, 3, 2, 16, 8, 19, 13, 15, 12, 
+        static int map[20] = {4, 5, 0, 1, 7, 6, 3, 2, 16, 8, 19, 13, 15, 12,
                               14, 17, 18, 9, 11};
         mapping = std::vector<int>(map, map + sizeof(map) / sizeof(int));
         type = MSH_HEX_20;
-      } 
+      }
       else if(eleType == "ElmB27n3D"){
         NoVertices = 27;
-        static int map[27] = {4, 16, 5, 10, 21, 12, 0, 8, 1, 17, 25, 18, 22, 
+        static int map[27] = {4, 16, 5, 10, 21, 12, 0, 8, 1, 17, 25, 18, 22,
                               26, 23, 9, 20, 11, 7, 19, 6, 15, 24, 14, 3, 13, 2};
         mapping = std::vector<int>(map, map + sizeof(map) / sizeof(int));
         type = MSH_HEX_27;
-      } 
+      }
       else{
         return 0;
       }
@@ -2645,11 +3148,11 @@ int GModel::readDIFF(const std::string &name)
         if(format_read_vertices[format_read_vertices.size()-2] != '*') {
           format_read_vertices[format_read_vertices.size()-1] = '*';
           format_read_vertices += "d %d";
-        } 
+        }
         else
           format_read_vertices += " %d";
         k2 = mapping[k];
-        if(sscanf(str, format_read_vertices.c_str(), &ElementsNodes[i-1][k2]) != 1) 
+        if(sscanf(str, format_read_vertices.c_str(), &ElementsNodes[i-1][k2]) != 1)
           return 0;
       }
       mapping.clear();
@@ -2657,21 +3160,21 @@ int GModel::readDIFF(const std::string &name)
         indices[j] = ElementsNodes[i - 1][j];
       std::vector<MVertex*> vertices;
       if(vertexVector.size()){
-        if(!getVertices(numVerticesPerElement, indices, vertexVector, vertices)) 
+        if(!getVertices(numVerticesPerElement, indices, vertexVector, vertices))
           return 0;
       }
       else{
-        if(!getVertices(numVerticesPerElement, indices, vertexMap, vertices)) 
+        if(!getVertices(numVerticesPerElement, indices, vertexMap, vertices))
           return 0;
       }
-      createElementMSH(this, num, type, physical, elementary[i-1][1], partition, 
-                       vertices, elements, physicals); 
+      createElementMSH(this, num, type, physical, elementary[i-1][1], partition,
+                       vertices, elements, physicals);
       // trouble if elementary[i-1][0]>1 nodal post-processing needed ?
-      if(numElements > 100000) 
+      if(numElements > 100000)
         Msg::ProgressMeter(i + 1, numElements, "Reading elements");
     }
   }
-  
+
   // store the elements in their associated elementary entity. If the
   // entity does not exist, create a new (discrete) one.
   for(int i = 0; i < (int)(sizeof(elements) / sizeof(elements[0])); i++)
@@ -2707,7 +3210,7 @@ int GModel::writeDIFF(const std::string &name, bool binary, bool saveAll,
     Msg::Error("Unable to open file '%s'", name.c_str());
     return 0;
   }
-  
+
   if(noPhysicalGroups()) saveAll = true;
 
   // get the number of vertices and index the vertices in a continuous
@@ -2753,7 +3256,7 @@ int GModel::writeDIFF(const std::string &name, bool binary, bool saveAll,
     if(entities[i]->physicals.size() || saveAll)
       for(unsigned int j = 0; j < entities[i]->getNumMeshElements(); j++)
         dim = std::max(dim, entities[i]->getMeshElement(j)->getDim());
-  
+
   // loop over all elements we need to save
   int numElements = 0, maxNumNodesPerElement = 0;
   for(unsigned int i = 0; i < entities.size(); i++){
@@ -2781,7 +3284,7 @@ int GModel::writeDIFF(const std::string &name, bool binary, bool saveAll,
   for(std::list<int>::iterator it = boundaryIndicators.begin();
       it != boundaryIndicators.end(); it++)
     fprintf(fp, " %d", *it);
-  
+
   fprintf(fp, "\n\n\n");
   fprintf(fp,"  Nodal coordinates and nodal boundary indicators,\n");
   fprintf(fp,"  the columns contain:\n");
@@ -2790,7 +3293,7 @@ int GModel::writeDIFF(const std::string &name, bool binary, bool saveAll,
   fprintf(fp,"   - no of boundary indicators that are set (ON)\n");
   fprintf(fp,"   - the boundary indicators that are set (ON) if any.\n");
   fprintf(fp,"#\n");
-  
+
   // write mesh vertices
   for(unsigned int i = 0; i < entities.size(); i++){
     for(unsigned int j = 0; j < entities[i]->mesh_vertices.size(); j++){
@@ -2805,7 +3308,7 @@ int GModel::writeDIFF(const std::string &name, bool binary, bool saveAll,
       }
     }
   }
-  
+
   fprintf(fp, "\n");
   fprintf(fp, "\n");
   fprintf(fp,     "  Element types and connectivity\n");
@@ -2828,7 +3331,183 @@ int GModel::writeDIFF(const std::string &name, bool binary, bool saveAll,
     }
   }
   fprintf(fp, "\n");
-  
+
   fclose(fp);
   return 1;
+}
+
+template <class T>
+static void writeElementsINP(FILE *fp, GEntity *ge, std::vector<T*> &elements,
+                             bool saveAll, int &ne)
+{
+  if(elements.size() && (saveAll || ge->physicals.size())){
+    const char *typ = elements[0]->getStringForINP();
+    if(typ){
+      int np = (saveAll ? 1 : ge->physicals.size());
+      for(int p = 0; p < np; p++){
+        int part = (saveAll ? ge->tag() : ge->physicals[p]);
+        fprintf(fp, "*Element, type=%s, ELSET=PART%d\n", typ, part);
+        for(unsigned int i = 0; i < elements.size(); i++)
+          elements[i]->writeINP(fp, ne);
+      }
+    }
+  }
+}
+
+int GModel::writeINP(const std::string &name, bool saveAll,
+                     double scalingFactor)
+{
+  FILE *fp = fopen(name.c_str(), "w");
+  if(!fp){
+    Msg::Error("Unable to open file '%s'", name.c_str());
+    return 0;
+  }
+
+  Msg::Error("Abaqus INP export has not been tested yet -- please give us"
+             "feedback!");
+
+  if(noPhysicalGroups()) saveAll = true;
+
+  indexMeshVertices(saveAll);
+  std::vector<GEntity*> entities;
+  getEntities(entities);
+
+  fprintf(fp, "*Heading\n");
+  fprintf(fp, " %s\n", name.c_str());
+
+  fprintf(fp, "*Node\n");
+  for(unsigned int i = 0; i < entities.size(); i++)
+    if(entities[i]->physicals.size() || saveAll)
+      for(unsigned int j = 0; j < entities[i]->getNumMeshVertices(); j++){
+        MVertex *v = entities[i]->getMeshVertex(j);
+        if(v->getIndex() >= 0)
+          fprintf(fp, "%d, %.16g, %.16g, %.16g\n", v->getIndex(), v->x() * scalingFactor,
+                  v->y() * scalingFactor, v->z() * scalingFactor);
+      }
+  
+  int ne = 1;
+  for(viter it = firstVertex(); it != lastVertex(); ++it){
+    writeElementsINP(fp, *it, (*it)->points, saveAll, ne);
+  }
+  for(eiter it = firstEdge(); it != lastEdge(); ++it){
+    writeElementsINP(fp, *it, (*it)->lines, saveAll, ne);
+  }
+  for(fiter it = firstFace(); it != lastFace(); ++it){
+    writeElementsINP(fp, *it, (*it)->triangles, saveAll, ne);
+    writeElementsINP(fp, *it, (*it)->quadrangles, saveAll, ne);
+  }
+  for(riter it = firstRegion(); it != lastRegion(); ++it){
+    writeElementsINP(fp, *it, (*it)->tetrahedra, saveAll, ne);
+    writeElementsINP(fp, *it, (*it)->hexahedra, saveAll, ne);
+    writeElementsINP(fp, *it, (*it)->prisms, saveAll, ne);
+    writeElementsINP(fp, *it, (*it)->pyramids, saveAll, ne);
+  }
+
+  fclose(fp);
+  return 1;
+}
+
+GModel *GModel::createGModel(std::map<int, MVertex*> &vertexMap,
+                             std::vector<int> &elementNum,
+                             std::vector<std::vector<int> > &vertexIndices,
+                             std::vector<int> &elementType,
+                             std::vector<int> &physical,
+                             std::vector<int> &elementary,
+                             std::vector<int> &partition)
+{
+  GModel *gm = new GModel();
+  std::map<int, std::vector<MElement*> > elements[10];
+  std::map<int, std::map<int, std::string> > physicals[4];
+  std::vector<MVertex*> vertexVector;
+
+  int numVertices = (int)vertexMap.size();
+  int numElement = (int)elementNum.size();
+
+  if(numElement != (int)vertexIndices.size())
+    Msg::Error("Dimension in vertices numbers");
+  if(numElement != (int)elementType.size())
+    Msg::Error("Dimension in elementType numbers");
+  if(numElement != (int)physical.size())
+    Msg::Error("Dimension in physical numbers");
+  if(numElement != (int)elementary.size())
+    Msg::Error("Dimension in elementary numbers");
+  if(numElement != (int)partition.size())
+    Msg::Error("Dimension in partition numbers");
+
+  std::map<int, MVertex*>::const_iterator it = vertexMap.begin();
+  std::map<int, MVertex*>::const_iterator end = vertexMap.end();
+
+  int maxVertex = std::numeric_limits<int>::min();
+  int minVertex = std::numeric_limits<int>::max();
+  int num;
+
+  for(; it != end; ++it){
+    num = it->first;
+    minVertex = std::min(minVertex, num);
+    maxVertex = std::max(maxVertex, num);
+  }
+  if(minVertex == std::numeric_limits<int>::max())
+    Msg::Error("Could not determine the min index of vertices");
+
+  // If the vertex numbering is dense, transfer the map into a
+  // vector to speed up element creation
+  if((minVertex == 1 && maxVertex == numVertices) ||
+     (minVertex == 0 && maxVertex == numVertices - 1)){
+    Msg::Info("Vertex numbering is dense");
+    vertexVector.resize(vertexMap.size() + 1);
+    if(minVertex == 1)
+      vertexVector[0] = 0;
+    else
+      vertexVector[numVertices] = 0;
+    std::map<int, MVertex*>::const_iterator it = vertexMap.begin();
+    for(; it != vertexMap.end(); ++it)
+      vertexVector[it->first] = it->second;
+    vertexMap.clear();
+  }
+
+  int *indices;
+  int nbVertices;
+  for(int i = 0; i < numElement; ++i){
+    num=elementNum[i];
+    std::vector<MVertex*> vertices;
+    nbVertices = (int)vertexIndices[i].size();
+    indices = &vertexIndices[i][0];
+    if(vertexVector.size()){
+      Msg::Error("Vertex not found aborting");
+      if(!getVertices(nbVertices, indices, vertexVector, vertices)){
+        delete gm;
+        return 0;
+      }
+    }
+    else{
+      Msg::Error("Vertex not found aborting");
+      if(!getVertices(nbVertices, indices, vertexMap, vertices)){
+        delete gm;
+        return 0;
+      }
+    }
+
+    createElementMSH(gm, num, elementType[i], physical[i], elementary[i],
+                     partition[i], vertices, elements, physicals);
+  }
+
+  // store the elements in their associated elementary entity. If the
+  // entity does not exist, create a new (discrete) one.
+  for(int i = 0; i < (int)(sizeof(elements) / sizeof(elements[0])); i++)
+    gm->_storeElementsInEntities(elements[i]);
+
+  // associate the correct geometrical entity with each mesh vertex
+  gm->_associateEntityWithMeshVertices();
+
+  // store the vertices in their associated geometrical entity
+  if(vertexVector.size())
+    gm->_storeVerticesInEntities(vertexVector);
+  else
+    gm->_storeVerticesInEntities(vertexMap);
+
+  // store the physical tags
+  for(int i = 0; i < 4; i++)
+    gm->_storePhysicalTagsInEntities(i, physicals[i]);
+
+  return gm;
 }

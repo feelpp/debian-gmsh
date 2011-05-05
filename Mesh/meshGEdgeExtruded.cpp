@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -54,16 +54,23 @@ int MeshExtrudedCurve(GEdge *ge)
   if(!ep || !ep->mesh.ExtrudeMesh)
     return 0;
 
+  Msg::Info("Meshing curve %d (extruded)", ge->tag());
+
   if(ep->geo.Mode == EXTRUDED_ENTITY) {
     // curve is extruded from a point
     extrudeMesh(ge->getBeginVertex(), ge);
   }
   else {
-    // curve is a copy of another curve (the "top" of the extrusion)
     GEdge *from = ge->model()->getEdgeByTag(std::abs(ep->geo.Source));
+    // curve is a copy of another curve (the "top" of the extrusion)
     if(!from){
       Msg::Error("Unknown source curve %d for extrusion", ep->geo.Source);
       return 0;
+    }
+    else if(from->geomType() != GEntity::DiscreteCurve &&
+            from->meshStatistics.status != GEdge::DONE){
+      // cannot mesh this edge yet: will do it later
+      return 1;
     }
     copyMesh(from, ge);
   }
@@ -74,8 +81,17 @@ int MeshExtrudedCurve(GEdge *ge)
       ge->getBeginVertex()->mesh_vertices[0] : ge->mesh_vertices[i - 1];
     MVertex *v1 = (i == ge->mesh_vertices.size()) ? 
       ge->getEndVertex()->mesh_vertices[0] : ge->mesh_vertices[i];
-    ge->lines.push_back(new MLine(v0, v1));
+    MLine* newElem = new MLine(v0, v1);
+    ge->lines.push_back(newElem);
+    if(ep->geo.Mode == COPIED_ENTITY) {
+      // Extrusion information is only stored for copied edges
+      // (the source of extruded edge is a vertex, not an element)
+      GEdge *from = ge->model()->getEdgeByTag(std::abs(ep->geo.Source));
+      MElement* sourceElem = from->getMeshElement(i);
+      ep->elementMap.addExtrudedElem(sourceElem, newElem);
+    }
   }
 
+  ge->meshStatistics.status = GEdge::DONE;
   return 1;
 }

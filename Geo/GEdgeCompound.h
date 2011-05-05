@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -16,9 +16,9 @@ class GEdgeCompound : public GEdge {
   std::vector<GEdge*> _compound;
   std::vector<int> _orientation;
   std::vector<double> _pars;
-  void parametrize();
   void orderEdges();
  public:
+  void parametrize();
   void getLocalParameter(const double &t, int &iEdge, double & tLoc) const;
   void getCompoundParameter(GEdge *ge, const double &tLoc, double &t) const;
   GEdgeCompound(GModel *m, int tag, std::vector<GEdge*> &compound);

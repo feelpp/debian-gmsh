@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -15,6 +15,7 @@ class GEntity;
 class GEdge;
 class GFace;
 class MVertex;
+class binding;
 
 class MVertexLessThanLexicographic{
  public:
@@ -45,6 +46,7 @@ class MVertex{
  public:
   MVertex(double x, double y, double z, GEntity *ge=0, int num=0);
   virtual ~MVertex(){}
+  inline void deleteLast() {if(_num == _globalNum) _globalNum--; delete this;}
 
   // get/reset the global node number
   static int getGlobalNumber(){ return _globalNum; }
@@ -56,7 +58,7 @@ class MVertex{
   
   // get the "polynomial order" of the vertex
   inline int getPolynomialOrder(){ return _order; }
-  inline void setPolynomialOrder(char order){ _order = order; }
+  inline void setPolynomialOrder(int order){ _order = (char)order; }
 
   // get/set the coordinates
   inline double x() const { return _x; }
@@ -65,13 +67,16 @@ class MVertex{
   inline double & x() { return _x; }
   inline double & y() { return _y; }
   inline double & z() { return _z; }
+  // cannot use the reference to set the value in the bindings
+  inline void setXYZ(double x, double y, double z) { _x = x; _y = y; _z = z; }
+
   inline SPoint3 point() const { return SPoint3(_x, _y, _z); }
 
   // get/set the parent entity
   inline GEntity* onWhat() const { return _ge; }
   inline void setEntity(GEntity *ge) { _ge = ge; }
 
-  // get the immutable vertex number
+  // get the immutab vertex number
   inline int getNum() const { return _num; }
 
   // force the immutable number (this should normally never be used)
@@ -101,6 +106,7 @@ class MVertex{
   // IO routines
   void writeMSH(FILE *fp, bool binary=false, bool saveParametric=false,
                 double scalingFactor=1.0);
+  void writePLY2(FILE *fp);
   void writeVRML(FILE *fp, double scalingFactor=1.0);
   void writeUNV(FILE *fp, double scalingFactor=1.0);
   void writeVTK(FILE *fp, bool binary=false, double scalingFactor=1.0,
@@ -108,6 +114,7 @@ class MVertex{
   void writeMESH(FILE *fp, double scalingFactor=1.0);
   void writeBDF(FILE *fp, int format=0, double scalingFactor=1.0);
   void writeDIFF(FILE *fp, bool binary, double scalingFactor=1.0);
+  static void registerBindings(binding *b);
 };
 
 class MEdgeVertex : public MVertex{
@@ -120,8 +127,7 @@ class MEdgeVertex : public MVertex{
   {
   }
   virtual ~MEdgeVertex(){}
-  virtual bool getParameter(int i, double &par) const { 
-    par = _u; return true; }
+  virtual bool getParameter(int i, double &par) const { par = _u; return true; }
   virtual bool setParameter(int i, double par){ _u = par; return true; }
   double getLc() const { return _lc; }
 };
@@ -148,7 +154,10 @@ class MFaceVertex : public MVertex{
 
 bool reparamMeshEdgeOnFace(MVertex *v1, MVertex *v2, GFace *gf, 
                            SPoint2 &param1, SPoint2 &param2);
-bool reparamMeshVertexOnFace(const MVertex *v, const GFace *gf, SPoint2 &param);
+bool reparamMeshVertexOnFace(const MVertex *v, const GFace *gf, SPoint2 &param,
+                             bool onSurface=true);
 bool reparamMeshVertexOnEdge(const MVertex *v, const GEdge *ge, double &param);
+
+double angle3Vertices(MVertex *p1, MVertex *p2, MVertex *p3);
 
 #endif

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -6,16 +6,23 @@
 #include <stdlib.h>
 #include "GModel.h"
 #include "gmshFace.h"
+#include "meshGFace.h"
+#include "meshGEdge.h"
 #include "Geo.h"
 #include "GeoInterpolation.h"
 #include "Numeric.h"
 #include "GmshMessage.h"
 #include "Context.h"
+#include "MTriangle.h"
+#include "VertexArray.h"
 
 gmshFace::gmshFace(GModel *m, Surface *face)
   : GFace(m, face->Num), s(face)
 {
   resetMeshAttributes();
+
+  setMeshMaster(s->meshMaster);
+  edgeCounterparts = s->edgeCounterparts;
 
   std::list<GEdge*> l_wire;
   GVertex *first = 0;
@@ -26,9 +33,9 @@ gmshFace::gmshFace(GModel *m, Surface *face)
     if(e){
       GVertex *start = (c->Num > 0) ? e->getBeginVertex() : e->getEndVertex();
       GVertex *next  = (c->Num > 0) ? e->getEndVertex() : e->getBeginVertex();
-      if ( ! first ) first = start;
+      if (!first) first = start;
       l_wire.push_back(e);
-      if ( next == first ){
+      if (next == first){
         edgeLoops.push_back(GEdgeLoop(l_wire));
         l_wire.clear();
         first = 0;
@@ -73,7 +80,6 @@ gmshFace::gmshFace(GModel *m, Surface *face)
     }
   }
   isSphere = iSRuledSurfaceASphere(s, center, radius);
-
 }
 
 double gmshFace::getMetricEigenvalue(const SPoint2 &pt)
@@ -110,7 +116,7 @@ void gmshFace::resetMeshAttributes()
       else
         Msg::Error("Unknown vertex %d in transfinite attributes", corn->Num);
     }
-  }
+  }  
 }
 
 Range<double> gmshFace::parBounds(int i) const
@@ -120,7 +126,7 @@ Range<double> gmshFace::parBounds(int i) const
 
 SVector3 gmshFace::normal(const SPoint2 &param) const
 {
-  if(geomType() != Plane){
+  if(s->Typ != MSH_SURF_PLAN){
     Vertex vu = InterpolateSurface(s, param[0], param[1], 1, 1);
     Vertex vv = InterpolateSurface(s, param[0], param[1], 1, 2);
     Vertex n = vu % vv;
@@ -161,7 +167,7 @@ SVector3 gmshFace::normal(const SPoint2 &param) const
   }
 }
 
-Pair<SVector3,SVector3> gmshFace::firstDer(const SPoint2 &param) const
+Pair<SVector3, SVector3> gmshFace::firstDer(const SPoint2 &param) const
 {
   if(s->Typ == MSH_SURF_PLAN && !s->geometry){
     double x, y, z, VX[3], VY[3];
@@ -181,9 +187,9 @@ void gmshFace::secondDer(const SPoint2 &param,
                          SVector3 *dudu, SVector3 *dvdv, SVector3 *dudv) const
 {
   if(s->Typ == MSH_SURF_PLAN && !s->geometry){
-    *dudu = SVector3(0.,0.,0.);
-    *dvdv = SVector3(0.,0.,0.);
-    *dudv = SVector3(0.,0.,0.);
+    *dudu = SVector3(0., 0., 0.);
+    *dvdv = SVector3(0., 0., 0.);
+    *dudv = SVector3(0., 0., 0.);
   }
   else{
     Vertex vuu = InterpolateSurface(s, param[0], param[1], 2, 1);
@@ -252,7 +258,7 @@ GPoint gmshFace::closestPoint(const SPoint3 & qp, const double initialGuess[2]) 
   return GPoint(v.Pos.X, v.Pos.Y, v.Pos.Z, this, u);
 }
 
-SPoint2 gmshFace::parFromPoint(const SPoint3 &qp) const
+SPoint2 gmshFace::parFromPoint(const SPoint3 &qp, bool onSurface) const
 {
   if(s->Typ == MSH_SURF_PLAN){
     double x, y, z, VX[3], VY[3];
@@ -263,7 +269,7 @@ SPoint2 gmshFace::parFromPoint(const SPoint3 &qp) const
     return SPoint2(u, v); 
   }
   else{
-    return GFace::parFromPoint(qp);
+    return GFace::parFromPoint(qp, onSurface);
   }
 }
 
@@ -289,7 +295,7 @@ GEntity::GeomType gmshFace::geomType() const
 
 bool gmshFace::containsPoint(const SPoint3 &pt) const
 { 
-  if(geomType() == Plane){
+  if(s->Typ == MSH_SURF_PLAN){
     // OK to use the normal from the mean plane here: we compensate
     // for the (possibly wrong) orientation at the end
     double n[3] = {meanPlane.a, meanPlane.b, meanPlane.c};
@@ -317,4 +323,76 @@ bool gmshFace::containsPoint(const SPoint3 &pt) const
   }
 
   return false;
+}
+
+bool gmshFace::buildSTLTriangulation(bool force)
+{
+  return false;
+  /*
+  if(va_geom_triangles){
+    if(force)
+      delete va_geom_triangles;
+    else
+      return true;
+  }
+  
+  stl_vertices.clear();
+  stl_triangles.clear();
+
+  contextMeshOptions _temp = CTX::instance()->mesh;
+
+  CTX::instance()->mesh.lcFromPoints = 0;
+  CTX::instance()->mesh.lcFromCurvature = 1;
+  CTX::instance()->mesh.lcExtendFromBoundary = 0;
+  CTX::instance()->mesh.scalingFactor = 1;
+  CTX::instance()->mesh.lcFactor = 1;
+  CTX::instance()->mesh.order = 1;
+  CTX::instance()->mesh.lcIntegrationPrecision = 1.e-5;
+  std::for_each(l_edges.begin(), l_edges.end(), meshGEdge(true));
+  meshGFace mesher (false,true);
+  mesher(this);
+  printf("%d triangles face %d\n",triangles_stl.size(),tag());
+  CTX::instance()->mesh = _temp;  
+
+  std::map<MVertex*,int> _v;
+  int COUNT =0;
+  for (int j = 0; j < triangles_stl.size(); j++){
+    int C[3];
+    for (int i=0;i<3;i++){
+      std::map<MVertex*,int>::iterator it = 
+        _v.find(triangles_stl[j]->getVertex(j));
+      if (it != _v.end()){
+        stl_triangles.push_back(COUNT);
+        _v[triangles_stl[j]->getVertex(j)] = COUNT++;
+      }
+      else stl_triangles.push_back(it->second);
+    }    
+  }
+  std::map<MVertex*,int>::iterator itv = _v.begin();
+  for ( ; itv != _v.end() ; ++itv){
+    MVertex *v = itv->first;
+    SPoint2 param;
+    reparamMeshVertexOnFace(v, this, param);
+    stl_vertices.push_back(param);
+  }
+  
+  va_geom_triangles = new VertexArray(3, stl_triangles.size() / 3);
+  unsigned int c = CTX::instance()->color.geom.surface;
+  unsigned int col[4] = {c, c, c, c};
+  for (unsigned int i = 0; i < stl_triangles.size(); i += 3){
+    SPoint2 &p1(stl_vertices[stl_triangles[i]]);
+    SPoint2 &p2(stl_vertices[stl_triangles[i + 1]]);
+    SPoint2 &p3(stl_vertices[stl_triangles[i + 2]]);
+    GPoint gp1 = GFace::point(p1);
+    GPoint gp2 = GFace::point(p2);
+    GPoint gp3 = GFace::point(p3);
+    double x[3] = {gp1.x(), gp2.x(), gp3.x()};
+    double y[3] = {gp1.y(), gp2.y(), gp3.y()};
+    double z[3] = {gp1.z(), gp2.z(), gp3.z()};
+    SVector3 n[3] = {normal(p1), normal(p2), normal(p3)};
+    va_geom_triangles->add(x, y, z, n, col);
+  }
+  va_geom_triangles->finalize();
+  return true;
+  */
 }

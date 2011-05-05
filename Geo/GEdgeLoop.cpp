@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -61,6 +61,7 @@ GEdgeSigned nextOne(GEdgeSigned *thisOne, std::list<GEdge*> &wire)
       if(v1 == gv) return GEdgeSigned(1, ge);   
       if(v2 == gv) return GEdgeSigned(-1, ge);   
       Msg::Error("Something wrong in edge loop");
+      thisOne->print();
     }
     ++it;
   }
@@ -77,6 +78,7 @@ GEdgeSigned nextOne(GEdgeSigned *thisOne, std::list<GEdge*> &wire)
       if(v1 == gv) return GEdgeSigned(1, ge);   
       if(v2 == gv) return GEdgeSigned(-1, ge);
       Msg::Error("Something wrong in edge loop");
+      thisOne->print();
     }   
     ++it;
   }
@@ -107,7 +109,10 @@ GEdgeLoop::GEdgeLoop(const std::list<GEdge*> &cwire)
   while(wire.size()){
     ges = nextOne(prevOne, wire);
     if(ges.getSign() == 0){ // oops
-      Msg::Error("Something wrong in edge loop");
+      Msg::Error("Something wrong in edge loop of size=%d, no sign !", wire.size());
+      for (std::list<GEdge* >::iterator it = wire.begin(); it != wire.end(); it++){
+	printf("GEdge=%d begin=%d end =%d \n", (*it)->tag(), (*it)->getBeginVertex()->tag(), (*it)->getEndVertex()->tag()  );
+      }
       break;
     }
     prevOne = &ges;

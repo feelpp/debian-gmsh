@@ -132,7 +132,7 @@ create_gmp_matrix_identity(size_t dim)
 
 gmp_matrix * 
 create_gmp_matrix_zero(size_t rows, size_t cols)
-{
+{ 
   gmp_matrix * new_matrix;
   size_t       ind;
 
@@ -156,7 +156,6 @@ create_gmp_matrix_zero(size_t rows, size_t cols)
     {
       mpz_init_set_si (new_matrix -> storage[ind], 0);
     }
-
   return new_matrix;
 }
 
@@ -374,7 +373,6 @@ gmp_matrix_negate_col(size_t col, gmp_matrix * m)
     {
       return EXIT_FAILURE;
     }
-
   mpz_init(minus_one);
   mpz_set_si(minus_one, -1);
   gmp_blas_scal(m -> rows, minus_one, 
@@ -621,6 +619,36 @@ gmp_matrix_transp(gmp_matrix * M)
   return EXIT_SUCCESS;
 }
 
+int
+gmp_matrix_sum(gmp_matrix * A, const gmp_matrix * B)
+{
+  size_t i,j;
+  size_t rows_A, cols_A, rows_B, cols_B;
+
+  if((A == NULL) || (B == NULL))
+    {
+      return EXIT_FAILURE;
+    }
+  
+  rows_A = A->rows;
+  cols_A = A->cols;
+  rows_B = B->rows;
+  cols_B = B->cols;
+
+  if(cols_A != cols_B || rows_A != rows_B)
+    {
+      return EXIT_FAILURE;
+    }
+  mpz_t a;
+  mpz_init_set_si(a, 1);
+  /* Compute the sum */
+  for(i = 1; i <= rows_A; i++)
+    {
+    
+    }
+
+  return EXIT_SUCCESS;
+}
 
 int
 gmp_matrix_right_mult(gmp_matrix * A, const gmp_matrix * B)

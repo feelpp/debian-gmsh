@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -706,7 +706,7 @@ public:
 
 class prism : public element{
 public:
-  prism(double *x, double *y, double *z) : element(x, y, z) {};
+  prism(double *x, double *y, double *z) : element(x, y, z) {}
   inline int getDimension(){ return 3; }
   inline int getNumNodes(){ return 6; }
   void getNode(int num, double &u, double &v, double &w)

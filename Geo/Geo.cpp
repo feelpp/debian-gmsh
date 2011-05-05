@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -10,10 +10,11 @@
 #include "Geo.h"
 #include "GModel.h"
 #include "GeoInterpolation.h"
-#include "Field.h"
 #include "Context.h"
 
-#define SQU(a)      ((a)*(a))
+#if defined(HAVE_MESH)
+#include "Field.h"
+#endif
 
 static List_T *ListOfTransformedPoints = NULL;
 
@@ -130,8 +131,8 @@ Vertex *Create_Vertex(int Num, double u, double v, gmshSurface *surf, double lc)
     std::max(GModel::current()->getGEOInternals()->MaxPointNum, Num);
   pV->u = u;
   pV->geometry = surf;
-  pV->pntOnGeometry = SPoint2(u,v);
-  surf->vertex_defined_on_surface=true;
+  pV->pntOnGeometry = SPoint2(u, v);
+  surf->vertex_defined_on_surface = true;
   return pV;
 }
 
@@ -144,7 +145,7 @@ static void Free_Vertex(void *a, void *b)
   }
 }
 
-PhysicalGroup *Create_PhysicalGroup(int Num, int typ, List_T *intlist, List_T *bndlist[4])
+PhysicalGroup *Create_PhysicalGroup(int Num, int typ, List_T *intlist)
 {
   PhysicalGroup *p = new PhysicalGroup;
   p->Entities = List_Create(List_Nbr(intlist), 1, sizeof(int));
@@ -157,17 +158,6 @@ PhysicalGroup *Create_PhysicalGroup(int Num, int typ, List_T *intlist, List_T *b
     int j;
     List_Read(intlist, i, &j);
     List_Add(p->Entities, &j);
-  }
-  p->Boundaries[0] = p->Boundaries[1] = p->Boundaries[2] = p->Boundaries[3] = 0;
-  if (bndlist){
-    for(int i = 0; i < 4; i++) {
-      p->Boundaries[i] = List_Create(List_Nbr(bndlist[i]), 1, sizeof(int));
-      for(int j = 0; j < List_Nbr(bndlist[i]); j++) {
-        int k;
-        List_Read(bndlist[i], j, &k);
-        List_Add(p->Boundaries[i], &k);
-      }
-    }
   }
   return p;
 }
@@ -429,9 +419,6 @@ void End_Curve(Curve *c)
     c->Circle.f1 = f1;
     c->Circle.f2 = f2;
 
-    for(int i = 0; i < 4; i++)
-      c->Circle.v[i] = v[i];
-
     if(!CTX::instance()->expertMode && c->Num > 0 && A3 - A1 > 1.01 * M_PI){
       Msg::Error("Circle or ellipse arc %d greater than Pi (angle=%g)", c->Num, A3-A1);
       Msg::Error("(If you understand what this implies, you can disable this error");
@@ -483,6 +470,7 @@ Curve *Create_Curve(int Num, int Typ, int Order, List_T *Liste,
   pC->Extrude = NULL;
   pC->Typ = Typ;
   pC->Num = Num;
+  pC->meshMaster = Num; 
   GModel::current()->getGEOInternals()->MaxLineNum = 
     std::max(GModel::current()->getGEOInternals()->MaxLineNum, Num);
   pC->Method = MESH_UNSTRUCTURED;
@@ -596,14 +584,15 @@ Surface *Create_Surface(int Num, int Typ)
   pS->Num = Num;
   pS->geometry = 0;
   pS->InSphereCenter = 0;
+  pS->meshMaster = Num; 
 
   GModel::current()->getGEOInternals()->MaxSurfaceNum = 
     std::max(GModel::current()->getGEOInternals()->MaxSurfaceNum, Num);
   pS->Typ = Typ;
   pS->Method = MESH_UNSTRUCTURED;
   pS->Recombine = 0;
-  pS->Recombine_Dir = -1;
   pS->RecombineAngle = 45;
+  pS->Recombine_Dir = -1;
   pS->TransfiniteSmoothing = -1;
   pS->TrsfPoints = List_Create(4, 4, sizeof(Vertex *));
   pS->Generatrices = NULL;
@@ -722,7 +711,11 @@ int NEWVOLUME(void)
 
 int NEWFIELD(void)
 {
+#if defined(HAVE_MESH)
   return (GModel::current()->getFields()->maxId() + 1);
+#else
+  return 0;
+#endif
 }
 
 int NEWPHYSICAL(void)
@@ -776,12 +769,28 @@ static int compare2Lists(List_T *List1, List_T *List2,
   return 0;
 }
 
-Vertex *FindPoint(int inum)
+static Vertex *FindPoint(int inum, Tree_T *t)
 {
   Vertex C, *pc;
   pc = &C;
   pc->Num = inum;
-  if(Tree_Query(GModel::current()->getGEOInternals()->Points, &pc)) {
+  if(Tree_Query(t, &pc)) {
+    return pc;
+  }
+  return NULL;
+}
+
+Vertex *FindPoint(int inum)
+{
+  return FindPoint(inum, GModel::current()->getGEOInternals()->Points);
+}
+
+static Curve *FindCurve(int inum, Tree_T *t)
+{
+  Curve C, *pc;
+  pc = &C;
+  pc->Num = inum;
+  if(Tree_Query(t, &pc)) {
     return pc;
   }
   return NULL;
@@ -789,24 +798,23 @@ Vertex *FindPoint(int inum)
 
 Curve *FindCurve(int inum)
 {
-  Curve C, *pc;
-  pc = &C;
-  pc->Num = inum;
-  if(Tree_Query(GModel::current()->getGEOInternals()->Curves, &pc)) {
-    return pc;
+  return FindCurve(inum, GModel::current()->getGEOInternals()->Curves);
+}
+
+static Surface *FindSurface(int inum, Tree_T *t)
+{
+  Surface S, *ps;
+  ps = &S;
+  ps->Num = inum;
+  if(Tree_Query(t, &ps)) {
+    return ps;
   }
   return NULL;
 }
 
 Surface *FindSurface(int inum)
 {
-  Surface S, *ps;
-  ps = &S;
-  ps->Num = inum;
-  if(Tree_Query(GModel::current()->getGEOInternals()->Surfaces, &ps)) {
-    return ps;
-  }
-  return NULL;
+  return FindSurface(inum, GModel::current()->getGEOInternals()->Surfaces);
 }
 
 Volume *FindVolume(int inum)
@@ -894,7 +902,6 @@ static int compareAbsCurve(const void *a, const void *b)
 
 static void CopyCurve(Curve *c, Curve *cc, bool copyMeshingMethod)
 {
-  int i, j;
   cc->Typ = c->Typ;
   if(copyMeshingMethod){
     cc->Method = c->Method;
@@ -903,8 +910,8 @@ static void CopyCurve(Curve *c, Curve *cc, bool copyMeshingMethod)
     cc->coeffTransfinite = c->coeffTransfinite;
   }
   cc->l = c->l;
-  for(i = 0; i < 4; i++)
-    for(j = 0; j < 4; j++)
+  for(int i = 0; i < 4; i++)
+    for(int j = 0; j < 4; j++)
       cc->mat[i][j] = c->mat[i][j];
   cc->beg = c->beg;
   cc->end = c->end;
@@ -913,24 +920,22 @@ static void CopyCurve(Curve *c, Curve *cc, bool copyMeshingMethod)
   cc->Control_Points = List_Create(List_Nbr(c->Control_Points), 1, sizeof(Vertex *));
   List_Copy(c->Control_Points, cc->Control_Points);
   End_Curve(cc);
-  Tree_Insert(GModel::current()->getGEOInternals()->Curves, &cc);
 }
 
 static Curve *DuplicateCurve(Curve *c, bool copyMeshingMethod)
 {
-  Curve *pc;
-  Vertex *v, *newv;
-  pc = Create_Curve(NEWLINE(), 0, 1, NULL, NULL, -1, -1, 0., 1.);
+  Curve *pc = Create_Curve(NEWLINE(), 0, 1, NULL, NULL, -1, -1, 0., 1.);
   CopyCurve(c, pc, copyMeshingMethod);
+  Tree_Insert(GModel::current()->getGEOInternals()->Curves, &pc);
   for(int i = 0; i < List_Nbr(c->Control_Points); i++) {
+    Vertex *v;
     List_Read(pc->Control_Points, i, &v);
-    newv = DuplicateVertex(v);
+    Vertex *newv = DuplicateVertex(v);
     List_Write(pc->Control_Points, i, &newv);
   }
   pc->beg = DuplicateVertex(c->beg);
   pc->end = DuplicateVertex(c->end);
   CreateReversedCurve(pc);
-
   return pc;
 }
 
@@ -947,19 +952,17 @@ static void CopySurface(Surface *s, Surface *ss, bool copyMeshingMethod)
   ss->Generatrices = List_Create(List_Nbr(s->Generatrices), 1, sizeof(Curve *));
   List_Copy(s->Generatrices, ss->Generatrices);
   End_Surface(ss);
-  Tree_Insert(GModel::current()->getGEOInternals()->Surfaces, &ss);
 }
 
 static Surface *DuplicateSurface(Surface *s, bool copyMeshingMethod)
 {
-  Surface *ps;
-  Curve *c, *newc;
-
-  ps = Create_Surface(NEWSURFACE(), 0);
+  Surface *ps = Create_Surface(NEWSURFACE(), 0);
   CopySurface(s, ps, copyMeshingMethod);
+  Tree_Insert(GModel::current()->getGEOInternals()->Surfaces, &ps);
   for(int i = 0; i < List_Nbr(ps->Generatrices); i++) {
+    Curve *c;
     List_Read(ps->Generatrices, i, &c);
-    newc = DuplicateCurve(c, copyMeshingMethod);
+    Curve *newc = DuplicateCurve(c, copyMeshingMethod);
     List_Write(ps->Generatrices, i, &newc);
   }
   return ps;
@@ -976,19 +979,17 @@ static void CopyVolume(Volume *v, Volume *vv, bool copyMeshingMethod)
   List_Copy(v->Surfaces, vv->Surfaces);
   List_Copy(v->SurfacesOrientations, vv->SurfacesOrientations);
   List_Copy(v->SurfacesByTag, vv->SurfacesByTag);
-  Tree_Insert(GModel::current()->getGEOInternals()->Volumes, &vv);
 }
 
 static Volume *DuplicateVolume(Volume *v, bool copyMeshingMethod)
 {
-  Volume *pv;
-  Surface *s, *news;
-
-  pv = Create_Volume(NEWVOLUME(), 0);
+  Volume *pv = Create_Volume(NEWVOLUME(), 0);
   CopyVolume(v, pv, copyMeshingMethod);
+  Tree_Insert(GModel::current()->getGEOInternals()->Volumes, &pv);
   for(int i = 0; i < List_Nbr(pv->Surfaces); i++) {
+    Surface *s;
     List_Read(pv->Surfaces, i, &s);
-    news = DuplicateSurface(s, copyMeshingMethod);
+    Surface *news = DuplicateSurface(s, copyMeshingMethod);
     List_Write(pv->Surfaces, i, &news);
   }
   return pv;
@@ -1145,22 +1146,43 @@ void DeleteShape(int Type, int Num)
   case MSH_SEGM_ELLI:
   case MSH_SEGM_ELLI_INV:
   case MSH_SEGM_NURBS:
+  case MSH_SEGM_COMPOUND:
     DeleteCurve(Num);
     DeleteCurve(-Num);
     break;
   case MSH_SURF_TRIC:
   case MSH_SURF_REGL:
   case MSH_SURF_PLAN:
+  case MSH_SURF_COMPOUND:
     DeleteSurface(Num);
     break;
   case MSH_VOLUME:
+  case MSH_VOLUME_COMPOUND:
     DeleteVolume(Num);
     break;
   case MSH_POINT_FROM_GMODEL:
+    {
+      GVertex *gv = GModel::current()->getVertexByTag(Num);
+      if(gv) GModel::current()->remove(gv);
+    }
+    break;
   case MSH_SEGM_FROM_GMODEL:
+    {
+      GEdge *ge = GModel::current()->getEdgeByTag(Num);
+      if(ge) GModel::current()->remove(ge);
+    }
+    break;
   case MSH_SURF_FROM_GMODEL:
+    {
+      GFace *gf = GModel::current()->getFaceByTag(Num);
+      if(gf) GModel::current()->remove(gf);
+    }
+    break;
   case MSH_VOLUME_FROM_GMODEL:
-    Msg::Error("Deletion of external CAD entities is not implemented yet");
+    {
+      GRegion *gr = GModel::current()->getRegionByTag(Num);
+      if(gr) GModel::current()->remove(gr);
+    }
     break;
   default:
     Msg::Error("Impossible to delete entity %d (of type %d)", Num, Type);
@@ -1257,6 +1279,7 @@ void VisibilityShape(int Type, int Num, int Mode)
   case MSH_SEGM_ELLI_INV:
   case MSH_SEGM_NURBS:
   case MSH_SEGM_DISCRETE:
+  case MSH_SEGM_COMPOUND:
   case MSH_SEGM_FROM_GMODEL:
     if((c = FindCurve(Num)))
       c->Visible = Mode;
@@ -1272,6 +1295,7 @@ void VisibilityShape(int Type, int Num, int Mode)
   case MSH_SURF_REGL:
   case MSH_SURF_PLAN:
   case MSH_SURF_DISCRETE:
+  case MSH_SURF_COMPOUND:
   case MSH_SURF_FROM_GMODEL:
     if((s = FindSurface(Num)))
       s->Visible = Mode;
@@ -1285,6 +1309,7 @@ void VisibilityShape(int Type, int Num, int Mode)
     break;
   case MSH_VOLUME:
   case MSH_VOLUME_DISCRETE:
+  case MSH_VOLUME_COMPOUND:
   case MSH_VOLUME_FROM_GMODEL:
     if((V = FindVolume(Num)))
       V->Visible = Mode;
@@ -1346,15 +1371,13 @@ void VisibilityShape(char *str, int Type, int Mode)
 
 Curve *CreateReversedCurve(Curve *c)
 {
-  Curve *newc;
-  Vertex *e1, *e2, *e3, *e4;
-  int i;
-  newc = Create_Curve(-c->Num, c->Typ, 1, NULL, NULL, -1, -1, 0., 1.);
+  Curve *newc = Create_Curve(-c->Num, c->Typ, 1, NULL, NULL, -1, -1, 0., 1.);
 
   if(List_Nbr(c->Control_Points)){
     newc->Control_Points =
       List_Create(List_Nbr(c->Control_Points), 1, sizeof(Vertex *));
     if(c->Typ == MSH_SEGM_ELLI || c->Typ == MSH_SEGM_ELLI_INV) {
+      Vertex *e1, *e2, *e3, *e4;
       List_Read(c->Control_Points, 0, &e1);
       List_Read(c->Control_Points, 1, &e2);
       List_Read(c->Control_Points, 2, &e3);
@@ -1370,7 +1393,7 @@ Curve *CreateReversedCurve(Curve *c)
 
   if(c->Typ == MSH_SEGM_NURBS && c->k) {
     newc->k = new float[c->degre + List_Nbr(c->Control_Points) + 1];
-    for(i = 0; i < c->degre + List_Nbr(c->Control_Points) + 1; i++)
+    for(int i = 0; i < c->degre + List_Nbr(c->Control_Points) + 1; i++)
       newc->k[c->degre + List_Nbr(c->Control_Points) - i] = c->k[i];
   }
   
@@ -1407,13 +1430,12 @@ Curve *CreateReversedCurve(Curve *c)
 
 int recognize_seg(int typ, List_T *liste, int *seg)
 {
-  int i, beg, end;
-  Curve *pc;
-
   List_T *temp = Tree2List(GModel::current()->getGEOInternals()->Curves);
+  int beg, end;
   List_Read(liste, 0, &beg);
   List_Read(liste, List_Nbr(liste) - 1, &end);
-  for(i = 0; i < List_Nbr(temp); i++) {
+  for(int i = 0; i < List_Nbr(temp); i++) {
+    Curve *pc;
     List_Read(temp, i, &pc);
     if(pc->Typ == typ && pc->beg->Num == beg && pc->end->Num == end) {
       List_Delete(temp);
@@ -1427,13 +1449,11 @@ int recognize_seg(int typ, List_T *liste, int *seg)
 
 int recognize_loop(List_T *liste, int *loop)
 {
-  int i, res;
-  EdgeLoop *pe;
-
-  res = 0;
+  int res = 0;
   *loop = 0;
   List_T *temp = Tree2List(GModel::current()->getGEOInternals()->EdgeLoops);
-  for(i = 0; i < List_Nbr(temp); i++) {
+  for(int i = 0; i < List_Nbr(temp); i++) {
+    EdgeLoop *pe;
     List_Read(temp, i, &pe);
     if(!compare2Lists(pe->Curves, liste, fcmp_absint)) {
       res = 1;
@@ -1447,13 +1467,11 @@ int recognize_loop(List_T *liste, int *loop)
 
 int recognize_surfloop(List_T *liste, int *loop)
 {
-  int i, res;
-  EdgeLoop *pe;
-
-  res = 0;
+  int res = 0;
   *loop = 0;
   List_T *temp = Tree2List(GModel::current()->getGEOInternals()->SurfaceLoops);
-  for(i = 0; i < List_Nbr(temp); i++) {
+  for(int i = 0; i < List_Nbr(temp); i++) {
+    EdgeLoop *pe;
     List_Read(temp, i, &pe);
     if(!compare2Lists(pe->Curves, liste, fcmp_absint)) {
       res = 1;
@@ -1469,14 +1487,12 @@ int recognize_surfloop(List_T *liste, int *loop)
 
 static void SetTranslationMatrix(double matrix[4][4], double T[3])
 {
-  int i, j;
-
-  for(i = 0; i < 4; i++) {
-    for(j = 0; j < 4; j++) {
+  for(int i = 0; i < 4; i++) {
+    for(int j = 0; j < 4; j++) {
       matrix[i][j] = (i == j) ? 1.0 : 0.0;
     }
   }
-  for(i = 0; i < 3; i++)
+  for(int i = 0; i < 3; i++)
     matrix[i][3] = T[i];
 }
 
@@ -1606,10 +1622,9 @@ static void SetRotationMatrix(double matrix[4][4], double Axe[3], double alpha)
 
 static void vecmat4x4(double mat[4][4], double vec[4], double res[4])
 {
-  int i, j;
-  for(i = 0; i < 4; i++) {
+  for(int i = 0; i < 4; i++) {
     res[i] = 0.0;
-    for(j = 0; j < 4; j++) {
+    for(int j = 0; j < 4; j++) {
       res[i] += mat[i][j] * vec[j];
     }
   }
@@ -1854,7 +1869,16 @@ void SymmetryShapes(double A, double B, double C, double D, List_T *shapes)
     ReplaceAllDuplicates();
 }
 
-void BoundaryShapes(List_T *shapes, List_T *shapesBoundary)
+class ShapeLessThan{
+ public:
+  bool operator()(Shape *v1, Shape *v2) const
+  {
+    if(std::abs(v1->Num) < std::abs(v2->Num)) return true;
+    return false;
+  }
+};
+
+void BoundaryShapes(List_T *shapes, List_T *shapesBoundary, bool combined)
 {
   for(int i = 0; i < List_Nbr(shapes); i++) {
     Shape O;
@@ -1936,6 +1960,26 @@ void BoundaryShapes(List_T *shapes, List_T *shapesBoundary)
                  O.Type);
       break;
     }
+  }
+
+  if(combined){
+    // compute boundary of the combined shapes
+    std::set<Shape*, ShapeLessThan> combined;
+    for(int i = 0; i < List_Nbr(shapesBoundary); i++){
+      Shape *s = (Shape*)List_Pointer(shapesBoundary, i);
+      std::set<Shape*, ShapeLessThan>::iterator it = combined.find(s);
+      if(it == combined.end())
+        combined.insert(s);
+      else
+        combined.erase(it);
+    }
+    List_T *tmp = List_Create(combined.size(), 10, sizeof(Shape));
+    for(std::set<Shape*, ShapeLessThan>::iterator it = combined.begin(); 
+        it != combined.end(); it++)
+      List_Add(tmp, *it);
+    List_Reset(shapesBoundary);
+    List_Copy(tmp, shapesBoundary);
+    List_Delete(tmp);
   }
 }
 
@@ -2318,7 +2362,6 @@ static int Extrude_ProtudeSurface(int type, int is,
   Msg::Debug("Extrude Surface %d", is);
 
   chapeau = DuplicateSurface(ps, false);
-
   chapeau->Extrude = new ExtrudeParams(COPIED_ENTITY);
   chapeau->Extrude->fill(type, T0, T1, T2, A0, A1, A2, X0, X1, X2, alpha);
   chapeau->Extrude->geo.Source = is; // not ps->Num: we need the sign info
@@ -2457,6 +2500,7 @@ static int Extrude_ProtudeSurface(int type, int is,
   // numbering scheme
   Tree_Suppress(GModel::current()->getGEOInternals()->Surfaces, &chapeau);
   chapeau->Num = NEWSURFACE();
+  chapeau->meshMaster = chapeau->Num;
   GModel::current()->getGEOInternals()->MaxSurfaceNum = chapeau->Num;
   Tree_Add(GModel::current()->getGEOInternals()->Surfaces, &chapeau);
 
@@ -2571,6 +2615,7 @@ void ExtrudeShapes(int type, List_T *list_in,
                                          &pv, e);
         Surface *ps = FindSurface(top.Num);
         top.Type = ps ? ps->Typ : 0;
+
         List_Add(list_out, &top);
         if(pv){
           Shape body;
@@ -2701,39 +2746,42 @@ static void MaxNumSurface(void *a, void *b)
 
 static void ReplaceDuplicatePoints()
 {
-  List_T *All;
-  Tree_T *allNonDuplicatedPoints;
-  Vertex *v, **pv, **pv2;
+  // FIXME: This routine is in fact logically wrong (the
+  // compareTwoPoints function used in the avl tree is not a
+  // appropriate comparison function). The fix is simple (use a multi
+  // dimensional tree, e.g., MVertexPositionSet), but fixing the
+  // routine would break backward compatibility with old .geo
+  // files. This will be fixed in the new abstract GModel CAD creation
+  // routines.
+  Vertex *v, *v2, **pv, **pv2;
   Curve *c;
   Surface *s;
   Volume *vol;
-  int i, j, start, end;
-
-  List_T *points2delete = List_Create(100, 100, sizeof(Vertex *));
+  Tree_T *points2delete = Tree_Create(sizeof(Vertex *), compareVertex);
+  Tree_T *allNonDuplicatedPoints = Tree_Create(sizeof(Vertex *), compareTwoPoints);
 
   // Create unique points
 
-  start = Tree_Nbr(GModel::current()->getGEOInternals()->Points);
+  int start = Tree_Nbr(GModel::current()->getGEOInternals()->Points);
 
-  All = Tree2List(GModel::current()->getGEOInternals()->Points);
-  allNonDuplicatedPoints = Tree_Create(sizeof(Vertex *), compareTwoPoints);
-  for(i = 0; i < List_Nbr(All); i++) {
+  List_T *All = Tree2List(GModel::current()->getGEOInternals()->Points);
+  for(int i = 0; i < List_Nbr(All); i++) {
     List_Read(All, i, &v);
     if(!Tree_Search(allNonDuplicatedPoints, &v)) {
       Tree_Insert(allNonDuplicatedPoints, &v);
     }
     else {
       Tree_Suppress(GModel::current()->getGEOInternals()->Points, &v);
-      //List_Add(points2delete,&v);      
+      Tree_Insert(points2delete, &v);
     }
   }
   List_Delete(All);
 
-  end = Tree_Nbr(GModel::current()->getGEOInternals()->Points);
+  int end = Tree_Nbr(GModel::current()->getGEOInternals()->Points);
 
   if(start == end) {
+    Tree_Delete(points2delete);
     Tree_Delete(allNonDuplicatedPoints);
-    List_Delete(points2delete);
     return;
   }
 
@@ -2747,18 +2795,30 @@ static void ReplaceDuplicatePoints()
   // Replace old points in curves
 
   All = Tree2List(GModel::current()->getGEOInternals()->Curves);
-  for(i = 0; i < List_Nbr(All); i++) {
+  for(int i = 0; i < List_Nbr(All); i++) {
     List_Read(All, i, &c);
+    // replace begin/end points
     if(!Tree_Query(allNonDuplicatedPoints, &c->beg))
       Msg::Error("Weird point %d in Coherence", c->beg->Num);
     if(!Tree_Query(allNonDuplicatedPoints, &c->end))
       Msg::Error("Weird point %d in Coherence", c->end->Num);
-    for(j = 0; j < List_Nbr(c->Control_Points); j++) {
+    // replace control points
+    for(int j = 0; j < List_Nbr(c->Control_Points); j++) {
       pv = (Vertex **)List_Pointer(c->Control_Points, j);
       if(!(pv2 = (Vertex **)Tree_PQuery(allNonDuplicatedPoints, pv)))
         Msg::Error("Weird point %d in Coherence", (*pv)->Num);
       else
         List_Write(c->Control_Points, j, pv2);
+    }
+    // replace extrusion sources
+    if(c->Extrude && c->Extrude->geo.Mode == EXTRUDED_ENTITY){
+      v2 = FindPoint(std::abs(c->Extrude->geo.Source), points2delete);
+      if(v2){
+        if(!(pv2 = (Vertex **)Tree_PQuery(allNonDuplicatedPoints, &v2)))
+          Msg::Error("Weird point %d in Coherence", v2->Num);
+        else
+          c->Extrude->geo.Source = (*pv2)->Num;
+      }
     }
   }
   List_Delete(All);
@@ -2766,9 +2826,10 @@ static void ReplaceDuplicatePoints()
   // Replace old points in surfaces
 
   All = Tree2List(GModel::current()->getGEOInternals()->Surfaces);
-  for(i = 0; i < List_Nbr(All); i++) {
+  for(int i = 0; i < List_Nbr(All); i++) {
     List_Read(All, i, &s);
-    for(j = 0; j < List_Nbr(s->TrsfPoints); j++){
+    // replace transfinite corners
+    for(int j = 0; j < List_Nbr(s->TrsfPoints); j++){
       pv = (Vertex **)List_Pointer(s->TrsfPoints, j);
       if(!(pv2 = (Vertex **)Tree_PQuery(allNonDuplicatedPoints, pv)))
         Msg::Error("Weird point %d in Coherence", (*pv)->Num);
@@ -2781,9 +2842,10 @@ static void ReplaceDuplicatePoints()
   // Replace old points in volumes
 
   All = Tree2List(GModel::current()->getGEOInternals()->Volumes);
-  for(i = 0; i < List_Nbr(All); i++) {
+  for(int i = 0; i < List_Nbr(All); i++) {
     List_Read(All, i, &vol);
-    for(j = 0; j < List_Nbr(vol->TrsfPoints); j++){
+    // replace transfinite corners
+    for(int j = 0; j < List_Nbr(vol->TrsfPoints); j++){
       pv = (Vertex **)List_Pointer(vol->TrsfPoints, j);
       if(!(pv2 = (Vertex **)Tree_PQuery(allNonDuplicatedPoints, pv)))
         Msg::Error("Weird point %d in Coherence", (*pv)->Num);
@@ -2793,30 +2855,26 @@ static void ReplaceDuplicatePoints()
   }
   List_Delete(All);
 
-  for(int k = 0; k < List_Nbr(points2delete); k++) {
-    List_Read(points2delete, i, &v);
-    Free_Vertex(&v, 0);
-  }
+  // TODO: replace old points in physical groups
 
+  Tree_Action(points2delete, Free_Vertex);
+  Tree_Delete(points2delete);
   Tree_Delete(allNonDuplicatedPoints);
-  List_Delete(points2delete);
 }
 
 static void ReplaceDuplicateCurves()
 {
-  List_T *All;
-  Tree_T *allNonDuplicatedCurves;
   Curve *c, *c2, **pc, **pc2;
   Surface *s;
-  int i, j, start, end;
+  Tree_T *curves2delete = Tree_Create(sizeof(Curve *), compareCurve);
+  Tree_T *allNonDuplicatedCurves = Tree_Create(sizeof(Curve *), compareTwoCurves);
 
   // Create unique curves
 
-  start = Tree_Nbr(GModel::current()->getGEOInternals()->Curves);
+  int start = Tree_Nbr(GModel::current()->getGEOInternals()->Curves);
 
-  All = Tree2List(GModel::current()->getGEOInternals()->Curves);
-  allNonDuplicatedCurves = Tree_Create(sizeof(Curve *), compareTwoCurves);
-  for(i = 0; i < List_Nbr(All); i++) {
+  List_T *All = Tree2List(GModel::current()->getGEOInternals()->Curves);
+  for(int i = 0; i < List_Nbr(All); i++) {
     List_Read(All, i, &c);
     if(c->Num > 0) {
       if(!Tree_Search(allNonDuplicatedCurves, &c)) {
@@ -2832,18 +2890,20 @@ static void ReplaceDuplicateCurves()
         Tree_Suppress(GModel::current()->getGEOInternals()->Curves, &c);
         if(!(c2 = FindCurve(-c->Num))) {
           Msg::Error("Unknown curve %d", -c->Num);
-          List_Delete(All);
-          return;
+          break;
         }
         Tree_Suppress(GModel::current()->getGEOInternals()->Curves, &c2);
+        Tree_Insert(curves2delete, &c);
+        Tree_Insert(curves2delete, &c2);
       }
     }
   }
   List_Delete(All);
 
-  end = Tree_Nbr(GModel::current()->getGEOInternals()->Curves);
+  int end = Tree_Nbr(GModel::current()->getGEOInternals()->Curves);
 
   if(start == end) {
+    Tree_Delete(curves2delete);
     Tree_Delete(allNonDuplicatedCurves);
     return;
   }
@@ -2855,42 +2915,73 @@ static void ReplaceDuplicateCurves()
     Tree_Action(GModel::current()->getGEOInternals()->Curves, MaxNumCurve);
   }
 
-  // Replace old curves in surfaces
+  // Replace old curves in curves
 
-  All = Tree2List(GModel::current()->getGEOInternals()->Surfaces);
-  for(i = 0; i < List_Nbr(All); i++) {
-    List_Read(All, i, &s);
-    for(j = 0; j < List_Nbr(s->Generatrices); j++) {
-      pc = (Curve **)List_Pointer(s->Generatrices, j);
-      if(!(pc2 = (Curve **)Tree_PQuery(allNonDuplicatedCurves, pc)))
-        Msg::Error("Weird curve %d in Coherence", (*pc)->Num);
-      else {
-        List_Write(s->Generatrices, j, pc2);
-        // Arghhh. Revoir compareTwoCurves !
-        End_Curve(*pc2);
+  All = Tree2List(GModel::current()->getGEOInternals()->Curves);
+  for(int i = 0; i < List_Nbr(All); i++) {
+    List_Read(All, i, &c);
+    // replace extrusion sources
+    if(c->Extrude && c->Extrude->geo.Mode == COPIED_ENTITY){
+      c2 = FindCurve(std::abs(c->Extrude->geo.Source), curves2delete);
+      if(c2){
+        if(!(pc2 = (Curve **)Tree_PQuery(allNonDuplicatedCurves, &c2)))
+          Msg::Error("Weird curve %d in Coherence", c2->Num);
+        else
+          c->Extrude->geo.Source = (*pc2)->Num;
       }
     }
   }
   List_Delete(All);
 
+  // Replace old curves in surfaces
+
+  All = Tree2List(GModel::current()->getGEOInternals()->Surfaces);
+  for(int i = 0; i < List_Nbr(All); i++) {
+    List_Read(All, i, &s);
+    // replace bounding curves
+    for(int j = 0; j < List_Nbr(s->Generatrices); j++) {
+      pc = (Curve **)List_Pointer(s->Generatrices, j);
+      if(!(pc2 = (Curve **)Tree_PQuery(allNonDuplicatedCurves, pc)))
+        Msg::Error("Weird curve %d in Coherence", (*pc)->Num);
+      else {
+        List_Write(s->Generatrices, j, pc2);
+        // arghhh: check compareTwoCurves!
+        End_Curve(*pc2);
+      }
+    }
+    // replace extrusion sources
+    if(s->Extrude && s->Extrude->geo.Mode == EXTRUDED_ENTITY){
+      c2 = FindCurve(std::abs(s->Extrude->geo.Source), curves2delete);
+      if(c2){
+        if(!(pc2 = (Curve **)Tree_PQuery(allNonDuplicatedCurves, &c2)))
+          Msg::Error("Weird curve %d in Coherence", c2->Num);
+        else
+          s->Extrude->geo.Source = (*pc2)->Num;
+      }
+    }
+  }
+  List_Delete(All);
+
+  // TODO: replace old curves in physical groups
+
+  Tree_Action(curves2delete, Free_Curve);
+  Tree_Delete(curves2delete);
   Tree_Delete(allNonDuplicatedCurves);
 }
 
 static void ReplaceDuplicateSurfaces()
 {
-  List_T *All;
-  Tree_T *allNonDuplicatedSurfaces;
-  Surface *s, **ps, **ps2;
+  Surface *s, *s2, **ps, **ps2;
   Volume *vol;
-  int i, j, start, end;
+  Tree_T *surfaces2delete = Tree_Create(sizeof(Surface *), compareSurface);
+  Tree_T *allNonDuplicatedSurfaces = Tree_Create(sizeof(Surface *), compareTwoSurfaces);
 
   // Create unique surfaces
 
-  start = Tree_Nbr(GModel::current()->getGEOInternals()->Surfaces);
+  int start = Tree_Nbr(GModel::current()->getGEOInternals()->Surfaces);
 
-  All = Tree2List(GModel::current()->getGEOInternals()->Surfaces);
-  allNonDuplicatedSurfaces = Tree_Create(sizeof(Surface *), compareTwoSurfaces);
-  for(i = 0; i < List_Nbr(All); i++) {
+  List_T *All = Tree2List(GModel::current()->getGEOInternals()->Surfaces);
+  for(int i = 0; i < List_Nbr(All); i++) {
     List_Read(All, i, &s);
     if(s->Num > 0) {
       if(!Tree_Search(allNonDuplicatedSurfaces, &s)) {
@@ -2898,14 +2989,16 @@ static void ReplaceDuplicateSurfaces()
       }
       else {
         Tree_Suppress(GModel::current()->getGEOInternals()->Surfaces, &s);
+        Tree_Insert(surfaces2delete, &s);
       }
     }
   }
   List_Delete(All);
 
-  end = Tree_Nbr(GModel::current()->getGEOInternals()->Surfaces);
+  int end = Tree_Nbr(GModel::current()->getGEOInternals()->Surfaces);
 
   if(start == end) {
+    Tree_Delete(surfaces2delete);
     Tree_Delete(allNonDuplicatedSurfaces);
     return;
   }
@@ -2917,21 +3010,54 @@ static void ReplaceDuplicateSurfaces()
     Tree_Action(GModel::current()->getGEOInternals()->Surfaces, MaxNumSurface);
   } 
 
+  // Replace old surfaces in surfaces
+
+  All = Tree2List(GModel::current()->getGEOInternals()->Surfaces);
+  for(int i = 0; i < List_Nbr(All); i++) {
+    List_Read(All, i, &s);
+    // replace extrusion sources
+    if(s->Extrude && s->Extrude->geo.Mode == COPIED_ENTITY){
+      s2 = FindSurface(std::abs(s->Extrude->geo.Source), surfaces2delete);
+      if(s2){
+        if(!(ps2 = (Surface **)Tree_PQuery(allNonDuplicatedSurfaces, &s2)))
+          Msg::Error("Weird surface %d in Coherence", s2->Num);
+        else
+          s->Extrude->geo.Source = (*ps2)->Num;
+      }
+    }
+  }
+  List_Delete(All);
+
   // Replace old surfaces in volumes
 
   All = Tree2List(GModel::current()->getGEOInternals()->Volumes);
-  for(i = 0; i < List_Nbr(All); i++) {
+  for(int i = 0; i < List_Nbr(All); i++) {
     List_Read(All, i, &vol);
-    for(j = 0; j < List_Nbr(vol->Surfaces); j++) {
+    // replace bounding surfaces
+    for(int j = 0; j < List_Nbr(vol->Surfaces); j++) {
       ps = (Surface **)List_Pointer(vol->Surfaces, j);
       if(!(ps2 = (Surface **)Tree_PQuery(allNonDuplicatedSurfaces, ps)))
         Msg::Error("Weird surface %d in Coherence", (*ps)->Num);
       else
         List_Write(vol->Surfaces, j, ps2);
     }
+    // replace extrusion sources
+    if(vol->Extrude && vol->Extrude->geo.Mode == EXTRUDED_ENTITY){
+      s2 = FindSurface(std::abs(vol->Extrude->geo.Source), surfaces2delete);
+      if(s2){
+        if(!(ps2 = (Surface **)Tree_PQuery(allNonDuplicatedSurfaces, &s2)))
+          Msg::Error("Weird surface %d in Coherence", s2->Num);
+        else
+          vol->Extrude->geo.Source = (*ps2)->Num;
+      }
+    }
   }
   List_Delete(All);
 
+  // TODO: replace old surfaces in physical groups
+
+  Tree_Action(surfaces2delete, Free_Surface);
+  Tree_Delete(surfaces2delete);
   Tree_Delete(allNonDuplicatedSurfaces);
 }
 
@@ -3074,7 +3200,7 @@ bool SplitCurve(int line_id, List_T *vertices_id, List_T *shapes)
     Msg::Error("Cannot split curve %i with type %i", line_id, c->Typ);
     return false;
   }
-  std::set<int>v_break;
+  std::set<int> v_break;
   for(int i = 0; i < List_Nbr(vertices_id); i++){
     int id;
     List_Read(vertices_id, i, &id);

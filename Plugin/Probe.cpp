@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -18,7 +18,7 @@ StringXNumber ProbeOptions_Number[] = {
   {GMSH_FULLRC, "X", GMSH_ProbePlugin::callbackX, 0.},
   {GMSH_FULLRC, "Y", GMSH_ProbePlugin::callbackY, 0.},
   {GMSH_FULLRC, "Z", GMSH_ProbePlugin::callbackZ, 0.},
-  {GMSH_FULLRC, "iView", NULL, -1.},
+  {GMSH_FULLRC, "View", NULL, -1.},
 };
 
 extern "C"
@@ -97,11 +97,10 @@ double GMSH_ProbePlugin::callbackZ(int num, int action, double value)
 
 std::string GMSH_ProbePlugin::getHelp() const
 {
-  return "Plugin(Probe) gets the value of the view `iView' at\n"
-         "the point (`X',`Y',`Z'). If `iView' < 0, the plugin is\n"
-         "run on the current view.\n"
-         "\n"
-         "Plugin(Probe) creates one new view.\n";
+  return "Plugin(Probe) gets the value of the view `View' at "
+    "the point (`X',`Y',`Z').\n\n"
+    "If `View' < 0, the plugin is run on the current view.\n\n"
+    "Plugin(Probe) creates one new view.";
 }
 
 int GMSH_ProbePlugin::getNbOptions() const

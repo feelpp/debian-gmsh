@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -51,7 +51,7 @@ void drawContext::drawText2d()
 static bool getGraphData(PView *p, std::vector<double> &x, double &xmin, 
                          double &xmax, std::vector<std::vector<double> > &y) 
 {
-  PViewData *data = p->getData();
+  PViewData *data = p->getData(true); // use adaptive data if available
   PViewOptions *opt = p->getOptions();
 
   if(data->hasMultipleMeshes()) return false; // cannot handle multi-mesh
@@ -62,9 +62,15 @@ static bool getGraphData(PView *p, std::vector<double> &x, double &xmin,
   }
   else if(opt->type == PViewOptions::Plot2DTime){
     numy = 0;
-    for(int ent = 0; ent < data->getNumEntities(0); ent++)
-      for(int i = 0; i < data->getNumElements(0, ent); i++)
-        if(data->getDimension(0, ent, i) < 2) numy++;
+    for(int ent = 0; ent < data->getNumEntities(0); ent++){
+      if(data->skipEntity(0, ent)) continue;
+      for(int ele = 0; ele < data->getNumElements(0, ent); ele++){
+        if(data->skipElement(0, ent, ele, true)) continue;
+        if(opt->skipElement(data->getType(0, ent, ele))) continue;
+        if(data->getDimension(0, ent, ele) >= 2) continue;
+        numy++;
+      }
+    }
   }
   
   if(!numy) return false;
@@ -76,37 +82,51 @@ static bool getGraphData(PView *p, std::vector<double> &x, double &xmin,
 
   numy = 0;
   for(int ent = 0; ent < data->getNumEntities(0); ent++){
-    for(int i = 0; i < data->getNumElements(0, ent); i++){
-      int dim = data->getDimension(0, ent, i);
-      if(dim < 2){
-        int numNodes = data->getNumNodes(0, ent, i);
-        for(int ts = space ? opt->timeStep : 0; ts < opt->timeStep + 1; ts++){
-          int numComp = data->getNumComponents(ts, ent, i);
-          for(int j = 0; j < numNodes; j++){
-            double val[9], xyz[3];
-            data->getNode(ts, ent, i, j, xyz[0], xyz[1], xyz[2]);
-            for(int k = 0; k < numComp; k++)
-              data->getValue(ts, ent, i, j, k, val[k]);
-            double vy = ComputeScalarRep(numComp, val);
-            if(space){
-              // store offset to origin + distance to first point
-              if(x.empty()){
-                p0 = SPoint3(xyz[0], xyz[1], xyz[2]);
-                x.push_back(ComputeScalarRep(3, xyz));
-              }
-              else{
-                x.push_back(x[0] + p0.distance(SPoint3(xyz[0], xyz[1], xyz[2])));
-              }
-              y[0].push_back(vy);
+    if(data->skipEntity(0, ent)) continue;
+    for(int ele = 0; ele < data->getNumElements(0, ent); ele++){
+      if(data->skipElement(0, ent, ele, true)) continue;
+      if(opt->skipElement(data->getType(0, ent, ele))) continue;
+      if(data->getDimension(0, ent, ele) >= 2) continue;
+      int numNodes = data->getNumNodes(0, ent, ele);
+      // reorder the nodes for high order line elements
+      std::vector<int> reorder(numNodes);
+      if(numNodes < 3){
+        for(int j = 0; j < numNodes; j++)
+          reorder[j] = j;
+      }
+      else{
+        reorder[0] = 0;
+        reorder[numNodes - 1] = 1;
+        for(int j = 1; j < numNodes - 1; j++)
+          reorder[j] = 1 + j;
+      }
+      for(int ts = space ? opt->timeStep : 0; ts < opt->timeStep + 1; ts++){
+        if(!data->hasTimeStep(ts)) continue;
+        int numComp = data->getNumComponents(ts, ent, ele);
+        for(int j = 0; j < numNodes; j++){
+          double val[9], xyz[3];
+          data->getNode(ts, ent, ele, reorder[j], xyz[0], xyz[1], xyz[2]);
+          for(int k = 0; k < numComp; k++)
+            data->getValue(ts, ent, ele, reorder[j], k, val[k]);
+          double vy = ComputeScalarRep(numComp, val);
+          if(space){
+            // store offset to origin + distance to first point
+            if(x.empty()){
+              p0 = SPoint3(xyz[0], xyz[1], xyz[2]);
+              x.push_back(ComputeScalarRep(3, xyz));
             }
             else{
-              if(!numy) x.push_back(data->getTime(ts));
-              y[numy].push_back(vy);
+              x.push_back(x[0] + p0.distance(SPoint3(xyz[0], xyz[1], xyz[2])));
             }
+            y[0].push_back(vy);
+          }
+          else{
+            if(!numy) x.push_back(data->getTime(ts));
+            y[numy].push_back(vy);
           }
         }
-        numy++;
       }
+      numy++;
     }
   }
 
@@ -298,7 +318,7 @@ static void drawGraphAxes(drawContext *ctx, PView *p, double xleft, double ytop,
 static void addGraphPoint(drawContext *ctx, PView *p, double xleft, double ytop, 
                           double width, double height, double x, double y, 
                           double xmin, double xmax, double ymin, double ymax, 
-                          bool numeric)
+                          bool numeric, bool sphere)
 {
   PViewOptions *opt = p->getOptions();
 
@@ -325,6 +345,8 @@ static void addGraphPoint(drawContext *ctx, PView *p, double xleft, double ytop,
       sprintf(label, opt->format.c_str(), y);
       ctx->drawString(label);
     }
+    else if(sphere)
+      ctx->drawSphere(opt->pointSize, px, py, 0, 10, 10, opt->light);
     else
       glVertex2d(px, py);
   }
@@ -343,24 +365,6 @@ static void drawGraphCurves(drawContext *ctx, PView *p, double xleft, double yto
   glLineWidth((float)opt->lineWidth);
   gl2psLineWidth((float)(opt->lineWidth * CTX::instance()->print.epsLineWidthFactor));
 
-  if(opt->intervalsType == PViewOptions::Numeric){
-    for(unsigned int i = 0; i < y.size(); i++)
-      for(unsigned int j = 0; j < x.size(); j++)
-        addGraphPoint(ctx, p, xleft, ytop, width, height, x[j], y[i][j], 
-                      xmin, xmax, opt->tmpMin, opt->tmpMax, true);
-  }
-
-  if(opt->intervalsType == PViewOptions::Iso ||
-     opt->intervalsType == PViewOptions::Discrete ||
-     opt->intervalsType == PViewOptions::Numeric){
-    glBegin(GL_POINTS);
-    for(unsigned int i = 0; i < y.size(); i++)
-      for(unsigned int j = 0; j < x.size(); j++)
-        addGraphPoint(ctx, p, xleft, ytop, width, height, x[j], y[i][j], 
-                      xmin, xmax, opt->tmpMin, opt->tmpMax, false);
-    glEnd();    
-  }
-
   if(opt->intervalsType == PViewOptions::Discrete ||
      opt->intervalsType == PViewOptions::Continuous){
     for(unsigned int i = 0; i < y.size(); i++){
@@ -372,13 +376,32 @@ static void drawGraphCurves(drawContext *ctx, PView *p, double xleft, double yto
       glBegin(GL_LINE_STRIP);
       for(unsigned int j = 0; j < x.size(); j++)
         addGraphPoint(ctx, p, xleft, ytop, width, height, x[j], y[i][j], 
-                      xmin, xmax, opt->tmpMin, opt->tmpMax, false);
+                      xmin, xmax, opt->tmpMin, opt->tmpMax, false, false);
       glEnd();
       if(opt->useStipple){
         glDisable(GL_LINE_STIPPLE);
         gl2psDisable(GL2PS_LINE_STIPPLE);
       }
     }
+  }
+
+  if(opt->intervalsType == PViewOptions::Iso ||
+     opt->intervalsType == PViewOptions::Discrete ||
+     opt->intervalsType == PViewOptions::Numeric){
+    bool sphere =  (opt->pointType == 1 || opt->pointType == 3);
+    if(!sphere) glBegin(GL_POINTS);
+    for(unsigned int i = 0; i < y.size(); i++)
+      for(unsigned int j = 0; j < x.size(); j++)
+        addGraphPoint(ctx, p, xleft, ytop, width, height, x[j], y[i][j], 
+                      xmin, xmax, opt->tmpMin, opt->tmpMax, false, sphere);
+    if(!sphere) glEnd();    
+  }
+
+  if(opt->intervalsType == PViewOptions::Numeric){
+    for(unsigned int i = 0; i < y.size(); i++)
+      for(unsigned int j = 0; j < x.size(); j++)
+        addGraphPoint(ctx, p, xleft, ytop, width, height, x[j], y[i][j], 
+                      xmin, xmax, opt->tmpMin, opt->tmpMax, true, false);
   }
 }
 

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -58,11 +58,13 @@ class SOrientedBoundingBox {
   ~SOrientedBoundingBox(){}
 
   SVector3 getCenter(){ return center; }
+  const SVector3 &getCenter() const{ return center; }
   double getCenterX(){ return center[0]; }
   double getCenterY(){ return center[1]; }
   double getCenterZ(){ return center[2]; }
   SVector3 getSize(){ return size; }
   double getMaxSize();
+  double getMinSize();
 
   // valid values for axis are 0 (X-axis), 1 (Y-axis) or 2 (Z-axis)
   SVector3 getAxis(int axis);

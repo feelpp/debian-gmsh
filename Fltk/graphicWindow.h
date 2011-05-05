@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -22,7 +22,7 @@ class graphicWindow{
   Fl_Tile *tile;
   std::vector<openglWindow*> gl;
   Fl_Box *bottom;
-  Fl_Button *butt[12];
+  Fl_Button *butt[14];
   Fl_Box *label[2];
   int minWidth, minHeight;
  public:
@@ -36,6 +36,6 @@ class graphicWindow{
 
 void status_xyz1p_cb(Fl_Widget *w, void *data);
 void status_options_cb(Fl_Widget *w, void *data);
-void status_play_manual(int time, int step);
+void status_play_manual(int time, int incr);
 
 #endif

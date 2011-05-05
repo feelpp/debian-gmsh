@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -16,7 +16,7 @@
 #include "Numeric.h"
 #include "STensor3.h"
 
-const double LIMIT_ = 0.5 * sqrt(2.0);
+const double LIMIT_ = 0.5 * sqrt(2.0) * 1;
 
 static const bool _experimental_anisotropic_blues_band_ = false;
 
@@ -656,6 +656,35 @@ static void insertAPoint(GFace *gf, std::set<MTri3*,compareTri3Ptr>::iterator it
   }
 }
 
+
+static void insertManyPoints(GFace *gf,
+			     std::list<SPoint2> &points,
+			     std::vector<double> &Us, 
+			     std::vector<double> &Vs,
+			     std::vector<double> &vSizes, 
+			     std::vector<double> &vSizesBGM,
+			     std::vector<SMetric3> &vMetricsBGM,
+			     std::set<MTri3*,compareTri3Ptr> &AllTris,
+			     std::set<MTri3*,compareTri3Ptr> *ActiveTris = 0){
+  
+  // a first implementation : greeeeedy algorithm
+  for (std::list<SPoint2>::iterator itp = points.begin(); itp != points.end() ; ++itp){
+    std::set<MTri3*,compareTri3Ptr> :: iterator it =  AllTris.begin();  
+    double metric[3];
+    double pa[2] = {itp->x(),itp->y()};
+    buildMetric(gf, pa, metric);
+    for (; it != AllTris.end() ; ++it){
+      int found =  inCircumCircleAniso(gf, (*it)->tri(), pa, metric, Us, Vs);
+      if (found){
+	insertAPoint(gf, it, pa, metric, Us, Vs, vSizes, vSizesBGM, vMetricsBGM, 
+                     AllTris, ActiveTris);
+	break;
+      }
+    }    
+  }
+}
+
+
 void bowyerWatson(GFace *gf)
 {
   std::set<MTri3*,compareTri3Ptr> AllTris;
@@ -663,15 +692,25 @@ void bowyerWatson(GFace *gf)
   std::vector<SMetric3> vMetricsBGM;
 
   buildMeshGenerationDataStructures
-    (gf, AllTris, vSizes, vSizesBGM, vMetricsBGM,Us, Vs);
+    (gf, AllTris, vSizes, vSizesBGM, vMetricsBGM, Us, Vs);
 
   // _printTris ("before.pos", AllTris, Us,Vs);
   int nbSwaps = edgeSwapPass(gf, AllTris, SWCR_DEL, Us, Vs, vSizes, vSizesBGM);
   // _printTris ("after2.pos", AllTris, Us,Vs);
   Msg::Debug("Delaunization of the initial mesh done (%d swaps)", nbSwaps);
 
+  if(AllTris.empty()){
+    Msg::Error("No triangles in initial mesh");
+    return;
+  }
+
   int ITER = 0;
   while (1){
+    //    if(ITER % 1== 0){
+    //      char name[245];
+    //      sprintf(name,"del2d%d-ITER%4d.pos",gf->tag(),ITER);
+    //      _printTris (name, AllTris, Us,Vs,false);
+    //    }
     MTri3 *worst = *AllTris.begin();
     if (worst->isDeleted()){
       delete worst->tri();
@@ -683,7 +722,7 @@ void bowyerWatson(GFace *gf)
         Msg::Debug("%7d points created -- Worst tri radius is %8.3f",
                    vSizes.size(), worst->getRadius());
       double center[2],metric[3],r2;
-      if (worst->getRadius() < 0.5 * sqrt(2.0)) break;
+      if (worst->getRadius() < /*1.333333/(sqrt(3.0))*/0.5 * sqrt(2.0)) break;
       circUV(worst->tri(), Us, Vs, center, gf);
       MTriangle *base = worst->tri();
       double pa[2] = {(Us[base->getVertex(0)->getIndex()] + 
@@ -705,11 +744,6 @@ void bowyerWatson(GFace *gf)
       insertAPoint(gf, AllTris.begin(), center, metric, Us, Vs, vSizes, 
                    vSizesBGM, vMetricsBGM, AllTris);
     }
-    //     if(ITER % 10== 0){
-    //       char name[245];
-    //       sprintf(name,"del2d%d-ITER%d.pos",gf->tag(),ITER);
-    //       _printTris (name, AllTris, Us,Vs,false);
-    //     }
   }    
   transferDataStructure(gf, AllTris, Us, Vs); 
 }
@@ -754,30 +788,12 @@ static double lengthMetric(const double p[2], const double q[2],
      
 */
 
-void testTensor()
-{
-  SMetric3 t(1.0);  
-  t(0,0) = 1;
-  t(1,0) = .2;
-  t(1,1) = 2;
-  t(2,2) = 3;
-  fullMatrix<double> m(3,3);
-  fullVector<double> v(3);
-  t.eig(m,v);
-  printf("%12.5E %12.5E %12.5E \n",v(0),v(1),v(2));
-  printf("%12.5E %12.5E %12.5E \n",m(0,0),m(1,0),m(2,0));
-  printf("%12.5E %12.5E %12.5E \n",m(0,1),m(1,1),m(2,1));
-  printf("%12.5E %12.5E %12.5E \n",m(0,2),m(1,2),m(2,2));
-}
-
 void bowyerWatsonFrontal(GFace *gf)
 {
   std::set<MTri3*,compareTri3Ptr> AllTris;
   std::set<MTri3*,compareTri3Ptr> ActiveTris;
   std::vector<double> vSizes, vSizesBGM, Us, Vs;
   std::vector<SMetric3> vMetricsBGM;
-
-  //testTensor();
 
   buildMeshGenerationDataStructures
     (gf, AllTris, vSizes, vSizesBGM, vMetricsBGM,Us, Vs);
@@ -797,6 +813,15 @@ void bowyerWatsonFrontal(GFace *gf)
   
   // insert points
   while (1){
+    /*
+        if(ITER % 1== 0){
+          char name[245];
+          sprintf(name,"delfr2d%d-ITER%4d.pos",gf->tag(),ITER);
+          _printTris (name, AllTris, Us,Vs,false);
+          sprintf(name,"delfr2dA%d-ITER%4d.pos",gf->tag(),ITER);
+          _printTris (name, ActiveTris, Us,Vs,false);
+        }
+    */
     if (!ActiveTris.size())break;
     MTri3 *worst = (*ActiveTris.begin());
     ActiveTris.erase(ActiveTris.begin());
@@ -863,15 +888,27 @@ void bowyerWatsonFrontal(GFace *gf)
       insertAPoint(gf, AllTris.end(), newPoint, metric, Us, Vs, vSizes,
                    vSizesBGM, vMetricsBGM, AllTris, &ActiveTris, worst);
     } 
-//     if(ITER % 1000== 0){
-//       char name[245];
-//       sprintf(name,"frontal%d-ITER%d.pos",gf->tag(),ITER);
-//       _printTris (name, AllTris, Us,Vs,false);
-//     }
+    /*
+   if(ITER % 100== 0){
+       char name[245];
+       sprintf(name,"frontal%d-ITER%d.pos",gf->tag(),ITER);
+       _printTris (name, AllTris, Us,Vs,false);
+     }
+    */
   }
 
-  // char name[245];
-  // sprintf(name,"frontal%d.pos", gf->tag());
-  // _printTris (name, AllTris, Us, Vs);
+//   char name[245];
+//   sprintf(name,"frontal%d-real.pos", gf->tag());
+//   _printTris (name, AllTris, Us, Vs,false);
+//   sprintf(name,"frontal%d-param.pos", gf->tag());
+//   _printTris (name, AllTris, Us, Vs,true);
   transferDataStructure(gf, AllTris, Us, Vs); 
 } 
+
+void addBoundaryLayers(GFace *gf) {
+  // first compute the distance function u on the existing mesh
+  // then compute the dual function v that has gradients orthogonal everywhere
+  // build a set of points in the boundary layer
+  // connect everybody with delaunay 
+
+}

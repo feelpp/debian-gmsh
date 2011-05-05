@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -6,6 +6,7 @@
 #include <string.h>
 #include "GmshMessage.h"
 #include "GmshDefines.h"
+#include "ConnectionManager.h"
 #include "Iso.h"
 #include "PView.h"
 #include "PViewOptions.h"
@@ -17,6 +18,8 @@
 #include "Context.h"
 #include "OpenFile.h"
 #include "mathEvaluator.h"
+#include "Options.h"
+#include "StringUtils.h"
 
 static void saturate(int nb, double val[PVIEW_NMAX][9], double vmin, double vmax, 
                      int i0=0, int i1=1, int i2=2, int i3=3, 
@@ -262,8 +265,8 @@ static double intersectClipPlane(int clip, int numNodes, double xyz[PVIEW_NMAX][
   return val;
 }
 
-static bool isElementVisible(PViewOptions *opt, int dim, int numNodes, 
-                             double xyz[PVIEW_NMAX][3])
+bool isElementVisible(PViewOptions *opt, int dim, int numNodes, 
+                      double xyz[PVIEW_NMAX][3])
 {
   if(!CTX::instance()->clipWholeElements) return true;
   bool hidden = false;
@@ -606,6 +609,22 @@ static void addScalarQuadrangle(PView *p, double xyz[PVIEW_NMAX][3],
     addScalarTriangle(p, xyz, val, pre, it[i][0], it[i][1], it[i][2], unique);
 }
 
+static void addOutlinePolygon(PView *p, double xyz[PVIEW_NMAX][3], 
+                                  unsigned int color, bool pre, int numNodes)
+{
+  if(numNodes == 3) addOutlineTriangle(p, xyz, color, pre);
+  if(numNodes == 4) addOutlineQuadrangle(p, xyz, color, pre);
+
+}
+
+static void addScalarPolygon(PView *p, double xyz[PVIEW_NMAX][3], 
+                             double val[PVIEW_NMAX][9], bool pre, int numNodes)
+{
+  if(numNodes == 3) addScalarTriangle(p, xyz, val, pre);
+  if(numNodes == 4) addScalarQuadrangle(p, xyz, val, pre);
+  
+}
+
 static void addOutlineTetrahedron(PView *p, double xyz[PVIEW_NMAX][3], 
                                   unsigned int color, bool pre)
 {
@@ -688,8 +707,8 @@ static void addScalarHexahedron(PView *p, double xyz[PVIEW_NMAX][3],
 
   const int iq[6][4] = {{0, 3, 2, 1}, {0, 1, 5, 4}, {0, 4, 7, 3},
                         {1, 2, 6, 5}, {2, 3, 7, 6}, {4, 5, 6, 7}};
-  const int is[6][4] = {{0, 1, 3, 7}, {0, 4, 1, 7}, {1, 4, 5, 7},
-                        {1, 2, 3, 7}, {1, 6, 2, 7}, {1, 5, 6, 7}};
+  const int is[6][4] = {{0, 1, 3, 4}, {1, 3, 4, 5}, {3, 4, 5, 7},
+                        {1, 2, 3, 6}, {3, 1, 6, 5}, {6, 3, 5, 7}};
 
   if(opt->boundary > 0){
     opt->boundary--;
@@ -767,7 +786,20 @@ static void addScalarPyramid(PView *p, double xyz[PVIEW_NMAX][3],
     addScalarTetrahedron(p, xyz, val, pre, is[i][0], is[i][1], is[i][2], is[i][3]);
 }
 
-static void addOutlineElement(PView *p, int type, double xyz[PVIEW_NMAX][3], bool pre)
+static void addOutlinePolyhedron(PView *p, double xyz[PVIEW_NMAX][3], 
+                                 unsigned int color, bool pre)
+{
+  //TODO
+}
+
+static void addScalarPolyhedron(PView *p, double xyz[PVIEW_NMAX][3], 
+                                double val[PVIEW_NMAX][9], bool pre, int NumNodes)
+{
+  //TODO
+}
+
+static void addOutlineElement(PView *p, int type, double xyz[PVIEW_NMAX][3], 
+                              bool pre, int numNodes=0)
 {
   PViewOptions *opt = p->getOptions();
   switch(type){
@@ -775,25 +807,29 @@ static void addOutlineElement(PView *p, int type, double xyz[PVIEW_NMAX][3], boo
   case TYPE_LIN: addOutlineLine(p, xyz, opt->color.line, pre); break;
   case TYPE_TRI: addOutlineTriangle(p, xyz, opt->color.triangle, pre); break;
   case TYPE_QUA: addOutlineQuadrangle(p, xyz, opt->color.quadrangle, pre); break;
+  case TYPE_POLYG: addOutlinePolygon(p, xyz, opt->color.quadrangle, pre, numNodes); break;
   case TYPE_TET: addOutlineTetrahedron(p, xyz, opt->color.tetrahedron, pre); break;
   case TYPE_HEX: addOutlineHexahedron(p, xyz, opt->color.hexahedron, pre); break;
   case TYPE_PRI: addOutlinePrism(p, xyz, opt->color.prism, pre); break;
   case TYPE_PYR: addOutlinePyramid(p, xyz, opt->color.pyramid, pre); break;
+  case TYPE_POLYH: addOutlinePolyhedron(p, xyz, opt->color.pyramid, pre); break;
   }
 }
 
 static void addScalarElement(PView *p, int type, double xyz[PVIEW_NMAX][3],
-                             double val[PVIEW_NMAX][9], bool pre)
+                             double val[PVIEW_NMAX][9], bool pre, int numNodes=0)
 {
   switch(type){
   case TYPE_PNT: addScalarPoint(p, xyz, val, pre); break;
   case TYPE_LIN: addScalarLine(p, xyz, val, pre); break;
   case TYPE_TRI: addScalarTriangle(p, xyz, val, pre); break;
   case TYPE_QUA: addScalarQuadrangle(p, xyz, val, pre); break;
+  case TYPE_POLYG: addScalarPolygon(p, xyz, val, pre, numNodes); break;
   case TYPE_TET: addScalarTetrahedron(p, xyz, val, pre); break;
   case TYPE_HEX: addScalarHexahedron(p, xyz, val, pre); break;
   case TYPE_PRI: addScalarPrism(p, xyz, val, pre); break;
   case TYPE_PYR: addScalarPyramid(p, xyz, val, pre); break;
+  case TYPE_POLYH: addScalarPolyhedron(p, xyz, val, pre, numNodes); break;
   }
 }
 
@@ -818,18 +854,22 @@ static void addVectorElement(PView *p, int ient, int iele, int numNodes,
     double min = opt->tmpMin, max = opt->tmpMax;
     opt->tmpMin = opt->externalMin;
     opt->tmpMax = opt->externalMax;
-    addScalarElement(p, type, xyz, val2, pre);
+    addScalarElement(p, type, xyz, val2, pre, numNodes);
     opt->tmpMin = min;
     opt->tmpMax = max;
 
     // add point trajectories
     if(!pre && numNodes == 1 && opt->timeStep > 0 && opt->lineWidth){
       for(int ts = 0; ts < opt->timeStep; ts++){
-        double xyz0[3], dxyz[3][2];
+        int numComp = data->getNumComponents(ts, ient, iele);
+        double xyz0[3], dxyz[3][2] = {{0., 0.}, {0., 0.}, {0., 0.}};
+        data->getNode(ts, ient, iele, 0, xyz0[0], xyz0[1], xyz0[2]);
         for(int j = 0; j < 3; j++){
-          data->getNode(ts, ient, iele, 0, xyz0[0], xyz0[1], xyz0[2]);
-          data->getValue(ts, ient, iele, 0, j, dxyz[j][0]);
-          data->getValue(ts + 1, ient, iele, 0, j, dxyz[j][1]);
+          int comp = opt->forceNumComponents ? opt->componentMap[j] : j;
+          if(comp >= 0 && comp < numComp){
+            data->getValue(ts, ient, iele, 0, comp, dxyz[j][0]);
+            data->getValue(ts + 1, ient, iele, 0, comp, dxyz[j][1]);
+          }
         }
         unsigned int col[2];
         double norm[2];
@@ -913,7 +953,7 @@ static void addTensorElement(PView *p, int numNodes, int type,
   if(opt->tensorType == PViewOptions::VonMises){
     for(int i = 0; i < numNodes; i++)
       val[i][0] = ComputeVonMises(val[i]);
-    addScalarElement(p, type, xyz, val, pre);
+    addScalarElement(p, type, xyz, val, pre, numNodes);
   }
 }
 
@@ -931,7 +971,7 @@ static void addElementsInArrays(PView *p, bool preprocessNormalsOnly)
   for(int ent = 0; ent < data->getNumEntities(opt->timeStep); ent++){
     if(data->skipEntity(opt->timeStep, ent)) continue;
     for(int i = 0; i < data->getNumElements(opt->timeStep, ent); i++){
-      if(data->skipElement(opt->timeStep, ent, i, true)) continue;
+      if(data->skipElement(opt->timeStep, ent, i, true, opt->sampling)) continue;
       int type = data->getType(opt->timeStep, ent, i);
       if(opt->skipElement(type)) continue;
       int numComp = data->getNumComponents(opt->timeStep, ent, i);
@@ -945,7 +985,7 @@ static void addElementsInArrays(PView *p, bool preprocessNormalsOnly)
         }
         continue;
       }
-      if(numComp > 9){
+      if((numComp > 9 && !opt->forceNumComponents) || opt->forceNumComponents > 9){
         if(numCompError != numComp){
           numCompError = numComp;
           Msg::Error("You should never draw views with > 9 values per node: use");
@@ -955,18 +995,30 @@ static void addElementsInArrays(PView *p, bool preprocessNormalsOnly)
       }
       for(int j = 0; j < numNodes; j++){
         data->getNode(opt->timeStep, ent, i, j, xyz[j][0], xyz[j][1], xyz[j][2]);
-        for(int k = 0; k < numComp; k++)
-          data->getValue(opt->timeStep, ent, i, j, k, val[j][k]);
+        if(opt->forceNumComponents){
+          for(int k = 0; k < opt->forceNumComponents; k++){
+            int comp = opt->componentMap[k];
+            if(comp >= 0 && comp < numComp)
+              data->getValue(opt->timeStep, ent, i, j, comp, val[j][k]);
+            else
+              val[j][k] = 0.;
+          }
+        }
+        else
+          for(int k = 0; k < numComp; k++)
+            data->getValue(opt->timeStep, ent, i, j, k, val[j][k]);
       }
+      if(opt->forceNumComponents) numComp = opt->forceNumComponents;
+
       changeCoordinates(p, ent, i, numNodes, type, numComp, xyz, val);
       int dim = data->getDimension(opt->timeStep, ent, i);
       if(!isElementVisible(opt, dim, numNodes, xyz)) continue;
 
       for(int j = 0; j < numNodes; j++)
         opt->tmpBBox += SPoint3(xyz[j][0], xyz[j][1], xyz[j][2]);
-      
+
       if(opt->showElement && !data->useGaussPoints()) 
-        addOutlineElement(p, type, xyz, preprocessNormalsOnly);
+        addOutlineElement(p, type, xyz, preprocessNormalsOnly, numNodes);
       
       if(opt->intervalsType != PViewOptions::Numeric){
         if(data->useGaussPoints()){
@@ -978,7 +1030,7 @@ static void addElementsInArrays(PView *p, bool preprocessNormalsOnly)
             for(int k = 0; k < numComp; k++)
               val2[0][k] = val[j][k];
             if(numComp == 1 && opt->drawScalars)
-              addScalarElement(p, TYPE_PNT, xyz2, val2, preprocessNormalsOnly);
+              addScalarElement(p, TYPE_PNT, xyz2, val2, preprocessNormalsOnly, numNodes);
             else if(numComp == 3 && opt->drawVectors)
               addVectorElement(p, ent, i, 1, TYPE_PNT, xyz2, val2, preprocessNormalsOnly);
             else if(numComp == 9 && opt->drawTensors)
@@ -986,7 +1038,7 @@ static void addElementsInArrays(PView *p, bool preprocessNormalsOnly)
           }
         }
         else if(numComp == 1 && opt->drawScalars)
-          addScalarElement(p, type, xyz, val, preprocessNormalsOnly);
+          addScalarElement(p, type, xyz, val, preprocessNormalsOnly, numNodes);
         else if(numComp == 3 && opt->drawVectors)
           addVectorElement(p, ent, i, numNodes, type, xyz, val, preprocessNormalsOnly);
         else if(numComp == 9 && opt->drawTensors)
@@ -1067,6 +1119,17 @@ class initPView {
     if(data->getDirty() || !data->getNumTimeSteps() || !p->getChanged()) return;
     if(!opt->visible || opt->type != PViewOptions::Plot3D) return;
 
+    p->deleteVertexArrays();
+
+    if(data->isRemote()){
+      // FIXME: need to rewrite option code and add nice serialization
+      std::string fileName = CTX::instance()->homeDir + CTX::instance()->tmpFileName;
+      PrintOptions(0, GMSH_FULLRC, 0, 0, fileName.c_str());
+      std::string options = ConvertFileToString(fileName);
+      data->fillRemoteVertexArrays(options);
+      return;
+    }
+
     if(opt->useGenRaise) opt->createGeneralRaise();
 
     if(opt->rangeType == PViewOptions::Custom){
@@ -1084,7 +1147,6 @@ class initPView {
       opt->tmpMax = data->getMax();
     }
 
-    p->deleteVertexArrays();
     p->va_points = new VertexArray(1, _estimateNumPoints(p));
     p->va_lines = new VertexArray(2, _estimateNumLines(p));
     p->va_triangles = new VertexArray(3, _estimateNumTriangles(p));
@@ -1101,9 +1163,11 @@ class initPView {
     p->va_triangles->finalize();
     p->va_vectors->finalize();
 
-    Msg::Info("%d vertices in vertex arrays", p->va_points->getNumVertices() + 
+    Msg::Info("%d vertices in vertex arrays (%g Mb)", p->va_points->getNumVertices() + 
               p->va_lines->getNumVertices() + p->va_triangles->getNumVertices() + 
-              p->va_vectors->getNumVertices());
+              p->va_vectors->getNumVertices(), p->va_points->getMemoryInMb() +
+              p->va_lines->getMemoryInMb() + p->va_triangles->getMemoryInMb() + 
+              p->va_vectors->getMemoryInMb());
 
     p->setChanged(false);
   }
@@ -1115,68 +1179,66 @@ void PView::fillVertexArrays()
   init(this);
 }
 
-void PView::fillVertexArray(int length, const char *bytes)
+void PView::fillVertexArray(ConnectionManager *remote, int length, 
+                            const char *bytes, int swap)
 {
-  int is = sizeof(int), ds = sizeof(double);
-
-  if(length < 2 * is + 9 * ds){
-    Msg::Error("Too few bytes to create vertex array: %d", length);
+  std::string name;
+  int num, type, numSteps;
+  double min, max, time, xmin, ymin, zmin, xmax, ymax, zmax;
+  if(!VertexArray::decodeHeader(length, bytes, swap, name, num, type, min, max,
+                                numSteps, time, xmin, ymin, zmin, xmax, ymax, zmax))
     return;
-  }
   
-  int index = 0;
-  int num; memcpy(&num, &bytes[index], is); index += is;
-  int type; memcpy(&type, &bytes[index], is); index += is;
-  double min; memcpy(&min, &bytes[index], ds); index += ds;
-  double max; memcpy(&max, &bytes[index], ds); index += ds;
-  double time; memcpy(&time, &bytes[index], ds); index += ds;
-  double xmin; memcpy(&xmin, &bytes[index], ds); index += ds;
-  double ymin; memcpy(&ymin, &bytes[index], ds); index += ds;
-  double zmin; memcpy(&zmin, &bytes[index], ds); index += ds;
-  double xmax; memcpy(&xmax, &bytes[index], ds); index += ds;
-  double ymax; memcpy(&ymax, &bytes[index], ds); index += ds;
-  double zmax; memcpy(&zmax, &bytes[index], ds); index += ds;
-  
-  Msg::Info("Filling vertex array (type %d) in view num %d", type, num);
+  Msg::Debug("Filling vertex array (type %d) in view num %d", type, num);
 
-  PView *view;
-  if(num >= 0 && num < (int)list.size()){
-    view = PView::list[num];
-  }
-  else{
-    Msg::Info("View num %d does not exist: creating new view");
-    view = new PView
-      (new PViewDataRemote(min, max, time, SBoundingBox3d(xmin, ymin, zmin,
-                                                          xmax, ymax, zmax)));
+  SBoundingBox3d bbox(xmin, ymin, zmin, xmax, ymax, zmax);
+
+  PView *p = PView::getViewByNum(num);
+  if(!p){
+    Msg::Info("View num %d does not exist: creating new view", num);
+    PViewData *data = new PViewDataRemote(remote, min, max, numSteps, time, bbox);
+    data->setName(name + " (remote)");
+    p = new PView(data, num);
     SetBoundingBox();
   }
+  else{
+    PViewDataRemote *data = dynamic_cast<PViewDataRemote*>(p->getData());
+    if(data){
+      data->setMin(min);
+      data->setMax(max);
+      data->setTime(time);
+      data->setBoundingBox(bbox);
+    }
+  }
+  // not perfect (does not take transformations into account)
+  p->getOptions()->tmpBBox = bbox;
 
   switch(type){
-  case 1: 
-    if(view->va_points) delete view->va_points; 
-    view->va_points = new VertexArray(1, 100);
-    view->va_points->fromChar(bytes);
+  case 1:
+    if(p->va_points) delete p->va_points; 
+    p->va_points = new VertexArray(1, 100);
+    p->va_points->fromChar(length, bytes, swap);
     break;
   case 2: 
-    if(view->va_lines) delete view->va_lines; 
-    view->va_lines = new VertexArray(2, 100);
-    view->va_lines->fromChar(bytes);
+    if(p->va_lines) delete p->va_lines; 
+    p->va_lines = new VertexArray(2, 100);
+    p->va_lines->fromChar(length, bytes, swap);
     break;
   case 3:
-    if(view->va_triangles) delete view->va_triangles;
-    view->va_triangles = new VertexArray(3, 100);
-    view->va_triangles->fromChar(bytes);
+    if(p->va_triangles) delete p->va_triangles;
+    p->va_triangles = new VertexArray(3, 100);
+    p->va_triangles->fromChar(length, bytes, swap);
     break;
   case 4:
-    if(view->va_vectors) delete view->va_vectors;
-    view->va_vectors = new VertexArray(2, 100);
-    view->va_vectors->fromChar(bytes);
+    if(p->va_vectors) delete p->va_vectors;
+    p->va_vectors = new VertexArray(2, 100);
+    p->va_vectors->fromChar(length, bytes, swap);
     break;
   default: 
     Msg::Error("Cannot fill vertex array of type %d", type);
     return;
   }
 
-  view->setChanged(false);
-  view->getData()->setDirty(false);
+  p->setChanged(false);
+  p->getData()->setDirty(false);
 }

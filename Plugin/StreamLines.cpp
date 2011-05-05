@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -24,13 +24,13 @@ StringXNumber StreamLinesOptions_Number[] = {
   {GMSH_FULLRC, "X2", GMSH_StreamLinesPlugin::callbackX2, 0.},
   {GMSH_FULLRC, "Y2", GMSH_StreamLinesPlugin::callbackY2, 1.},
   {GMSH_FULLRC, "Z2", GMSH_StreamLinesPlugin::callbackZ2, 0.},
-  {GMSH_FULLRC, "nPointsU", GMSH_StreamLinesPlugin::callbackU, 10},
-  {GMSH_FULLRC, "nPointsV", GMSH_StreamLinesPlugin::callbackV, 1},
-  {GMSH_FULLRC, "MaxIter", NULL, 100},
+  {GMSH_FULLRC, "NumPointsU", GMSH_StreamLinesPlugin::callbackU, 10},
+  {GMSH_FULLRC, "NumPointsV", GMSH_StreamLinesPlugin::callbackV, 1},
   {GMSH_FULLRC, "DT", NULL, .1},
+  {GMSH_FULLRC, "MaxIter", NULL, 100},
   {GMSH_FULLRC, "TimeStep", NULL, 0},
-  {GMSH_FULLRC, "dView", NULL, -1.},
-  {GMSH_FULLRC, "iView", NULL, -1.}
+  {GMSH_FULLRC, "View", NULL, -1.},
+  {GMSH_FULLRC, "OtherView", NULL, -1.}
 };
 
 extern "C"
@@ -138,28 +138,29 @@ double GMSH_StreamLinesPlugin::callbackV(int num, int action, double value)
 
 std::string GMSH_StreamLinesPlugin::getHelp() const
 {
-  return "Plugin(StreamLines) computes stream lines\n"
-         "from the `TimeStep'-th time step of a vector\n"
-         "view `iView' and optionally interpolates the\n"
-         "scalar view `dView' on the resulting stream\n"
-         "lines. The plugin takes as input a grid defined\n"
-         "by the 3 points (`X0',`Y0',`Z0') (origin),\n"
-         "(`X1',`Y1',`Z1') (axis of U) and (`X2',`Y2',`Z2')\n"
-         "(axis of V). The number of points that are to\n"
-         "be transported along U and V is set with the\n"
-         "options `nPointsU' and `nPointsV'. The equation\n"
-         "DX(t)/dt=V(x,y,z) is then solved with the initial\n"
-         "condition X(t=0) chosen as the grid and with V(x,y,z)\n"
-         "interpolated on the vector view. The time stepping\n"
-         "scheme is a RK44 with step size `DT' and `MaxIter'\n"
-         "maximum number of iterations. If `iView' < 0, the\n"
-         "plugin is run on the current view. If `TimeStep' < 0,\n"
-         "the plugin tries to compute streamlines of the unsteady\n"
-         "flow.\n"
-         "\n"
-         "Plugin(StreamLines) creates one new view. This\n"
-         "view contains multi-step vector points if `dView'\n"
-         "< 0, or single-step scalar lines if `dView' >= 0.\n";
+  return "Plugin(StreamLines) computes stream lines "
+    "from the `TimeStep'-th time step of a vector "
+    "view `View' and optionally interpolates the "
+    "scalar view `OtherView' on the resulting stream "
+    "lines.\n\n"
+    "The plugin takes as input a grid defined by the "
+    "3 points (`X0',`Y0',`Z0') (origin), (`X1',`Y1',`Z1') "
+    "(axis of U) and (`X2',`Y2',`Z2') (axis of V).\n\n"
+    "The number of points along U and V that are to be "
+    "transported is set with the options `NumPointsU' "
+    "and `NumPointsV'. The equation\n\n"
+    "dX(t)/dt = V(x,y,z)\n\n"
+    "is then solved with the initial condition X(t=0) "
+    "chosen as the grid and with V(x,y,z) interpolated "
+    "on the vector view.\n\n"
+    "The time stepping scheme is a RK44 with step size "
+    "`DT' and `MaxIter' maximum number of iterations.\n\n"
+    "If `TimeStep' < 0, the plugin tries to compute "
+    "streamlines of the unsteady flow.\n\n"
+    "If `View' < 0, the plugin is run on the current view.\n\n"
+    "Plugin(StreamLines) creates one new view. This "
+    "view contains multi-step vector points if `OtherView' "
+    "< 0, or single-step scalar lines if `OtherView' >= 0.";
 }
 
 int GMSH_StreamLinesPlugin::getNbOptions() const
@@ -187,29 +188,29 @@ void GMSH_StreamLinesPlugin::getPoint(int iU, int iV, double *X)
   double u = getNbU() > 1 ? (double)iU / (double)(getNbU() - 1.) : 0.;
   double v = getNbV() > 1 ? (double)iV / (double)(getNbV() - 1.) : 0.;
   X[0] = StreamLinesOptions_Number[0].def + 
-    u  * (StreamLinesOptions_Number[3].def-StreamLinesOptions_Number[0].def) +
-    v  * (StreamLinesOptions_Number[6].def-StreamLinesOptions_Number[0].def);
+    u  * (StreamLinesOptions_Number[3].def - StreamLinesOptions_Number[0].def) +
+    v  * (StreamLinesOptions_Number[6].def - StreamLinesOptions_Number[0].def);
   X[1] = StreamLinesOptions_Number[1].def + 
-    u  * (StreamLinesOptions_Number[4].def-StreamLinesOptions_Number[1].def) +
-    v  * (StreamLinesOptions_Number[7].def-StreamLinesOptions_Number[1].def);
+    u  * (StreamLinesOptions_Number[4].def - StreamLinesOptions_Number[1].def) +
+    v  * (StreamLinesOptions_Number[7].def - StreamLinesOptions_Number[1].def);
   X[2] = StreamLinesOptions_Number[2].def + 
-    u  * (StreamLinesOptions_Number[5].def-StreamLinesOptions_Number[2].def) +
-    v  * (StreamLinesOptions_Number[8].def-StreamLinesOptions_Number[2].def);
+    u  * (StreamLinesOptions_Number[5].def - StreamLinesOptions_Number[2].def) +
+    v  * (StreamLinesOptions_Number[8].def - StreamLinesOptions_Number[2].def);
 }
 
 PView *GMSH_StreamLinesPlugin::execute(PView *v)
 {
-  int maxIter = (int)StreamLinesOptions_Number[11].def;
-  double DT = StreamLinesOptions_Number[12].def;
+  double DT = StreamLinesOptions_Number[11].def;
+  int maxIter = (int)StreamLinesOptions_Number[12].def;
   int timeStep = (int)StreamLinesOptions_Number[13].def;
-  int dView = (int)StreamLinesOptions_Number[14].def;
-  int iView = (int)StreamLinesOptions_Number[15].def;
+  int iView = (int)StreamLinesOptions_Number[14].def;
+  int otherView = (int)StreamLinesOptions_Number[15].def;
 
   PView *v1 = getView(iView, v);
   if(!v1) return v;
   PViewData *data1 = v1->getData();
 
-  PView *v2 = (dView < 0) ? 0 : getView(dView, v);
+  PView *v2 = (otherView < 0) ? 0 : getView(otherView, v);
   PViewData *data2 = v2 ? v2->getData() : 0;
 
   // sanity checks
@@ -245,7 +246,7 @@ PView *GMSH_StreamLinesPlugin::execute(PView *v)
         data3->NbVP++;
         data3->VP.push_back(X[0]);
         data3->VP.push_back(X[1]);
-        data3->VP.push_back(X[2]);            
+        data3->VP.push_back(X[2]);
       }
 
       int currentTimeStep = 0;
@@ -302,7 +303,7 @@ PView *GMSH_StreamLinesPlugin::execute(PView *v)
         else{
           data3->VP.push_back(DX[0]);
           data3->VP.push_back(DX[1]);
-          data3->VP.push_back(DX[2]);         
+          data3->VP.push_back(DX[2]);
         }
       }
     }

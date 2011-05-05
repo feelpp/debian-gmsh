@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -8,7 +8,7 @@
 #include "GmshDefines.h"
 
 StringXNumber DivergenceOptions_Number[] = {
-  {GMSH_FULLRC, "iView", NULL, -1.}
+  {GMSH_FULLRC, "View", NULL, -1.}
 };
 
 extern "C"
@@ -21,11 +21,10 @@ extern "C"
 
 std::string GMSH_DivergencePlugin::getHelp() const
 {
-  return "Plugin(Divergence) computes the divergence of the\n"
-         "field in the view `iView'. If `iView' < 0, the plugin\n"
-         "is run on the current view.\n"
-         "\n"
-         "Plugin(Divergence) creates one new view.\n";
+  return "Plugin(Divergence) computes the divergence of the "
+    "field in the view `View'.\n\n"
+    "If `View' < 0, the plugin is run on the current view.\n\n"
+    "Plugin(Divergence) creates one new view.";
 }
 
 int GMSH_DivergencePlugin::getNbOptions() const
@@ -38,21 +37,6 @@ StringXNumber *GMSH_DivergencePlugin::getOption(int iopt)
   return &DivergenceOptions_Number[iopt];
 }
 
-static std::vector<double> *incrementList(PViewDataList *data2, int type)
-{
-  switch(type){
-  case TYPE_PNT: data2->NbSP++; return &data2->SP;
-  case TYPE_LIN: data2->NbSL++; return &data2->SL;
-  case TYPE_TRI: data2->NbST++; return &data2->ST;
-  case TYPE_QUA: data2->NbSQ++; return &data2->SQ;
-  case TYPE_TET: data2->NbSS++; return &data2->SS;
-  case TYPE_HEX: data2->NbSH++; return &data2->SH;
-  case TYPE_PRI: data2->NbSI++; return &data2->SI;
-  case TYPE_PYR: data2->NbSY++; return &data2->SY;
-  default: return 0;
-  }
-}
-
 PView *GMSH_DivergencePlugin::execute(PView *v)
 {
   int iView = (int)DivergenceOptions_Number[0].def;
@@ -60,7 +44,7 @@ PView *GMSH_DivergencePlugin::execute(PView *v)
   PView *v1 = getView(iView, v);
   if(!v1) return v;
 
-  PViewData *data1 = v1->getData();
+  PViewData *data1 = v1->getData(true); // get adaptive data if available
   if(data1->hasMultipleMeshes()){
     Msg::Error("Divergence plugin cannot be run on multi-mesh views");
     return v;
@@ -75,7 +59,7 @@ PView *GMSH_DivergencePlugin::execute(PView *v)
       int numComp = data1->getNumComponents(0, ent, ele);
       if(numComp != 3) continue;
       int type = data1->getType(0, ent, ele);
-      std::vector<double> *out = incrementList(data2, type);
+      std::vector<double> *out = data2->incrementList(1, type);
       if(!out) continue;
       int numNodes = data1->getNumNodes(0, ent, ele);
       double x[8], y[8], z[8], val[8 * 3];

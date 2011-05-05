@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -14,6 +14,7 @@
 #include "MElementCut.h"
 #include "GmshMessage.h"
 #include "VertexArray.h"
+#include "Bindings.h"
 
 GRegion::GRegion(GModel *model, int tag) : GEntity (model, tag)
 {
@@ -46,11 +47,14 @@ void GRegion::deleteMesh()
   pyramids.clear();
   for(unsigned int i = 0; i < polyhedra.size(); i++) delete polyhedra[i];
   polyhedra.clear();
+  deleteVertexArrays();
+  model()->destroyMeshCaches();
 }
 
 unsigned int GRegion::getNumMeshElements()
 { 
-  return tetrahedra.size() + hexahedra.size() + prisms.size() + pyramids.size() + polyhedra.size();
+  return tetrahedra.size() + hexahedra.size() + prisms.size() + pyramids.size() +
+    polyhedra.size();
 }
 
 void GRegion::getNumMeshElements(unsigned *const c) const
@@ -92,10 +96,13 @@ MElement *GRegion::getMeshElement(unsigned int index)
     return hexahedra[index - tetrahedra.size()];
   else if(index < tetrahedra.size() + hexahedra.size() + prisms.size())
     return prisms[index - tetrahedra.size() - hexahedra.size()];
-  else if(index < tetrahedra.size() + hexahedra.size() + prisms.size() + pyramids.size())
+  else if(index < tetrahedra.size() + hexahedra.size() + prisms.size() + 
+          pyramids.size())
     return pyramids[index - tetrahedra.size() - hexahedra.size() - prisms.size()];
-  else if(index < tetrahedra.size() + hexahedra.size() + prisms.size() + pyramids.size() + polyhedra.size())
-    return polyhedra[index - tetrahedra.size() - hexahedra.size() - prisms.size() - pyramids.size()];
+  else if(index < tetrahedra.size() + hexahedra.size() + prisms.size() + 
+          pyramids.size() + polyhedra.size())
+    return polyhedra[index - tetrahedra.size() - hexahedra.size() - prisms.size() - 
+                     pyramids.size()];
   return 0;
 }
 
@@ -152,14 +159,11 @@ SOrientedBoundingBox GRegion::getOBB()
         }
       } 
       else if ((*b_face)->buildSTLTriangulation()) {
-        int N = (*b_face)->va_geom_triangles->getNumVertices();
-        for(int i = 0; i < N; i++) {
-          SPoint3 p(((*b_face)->va_geom_triangles->getVertexArray(3*i))[0],
-                    ((*b_face)->va_geom_triangles->getVertexArray(3*i))[1],
-                    ((*b_face)->va_geom_triangles->getVertexArray(3*i))[2]);
-          vertices.push_back(p);          
-        }
-      } 
+        for (unsigned int i = 0; i < (*b_face)->stl_vertices.size(); i++){
+          GPoint p = (*b_face)->point((*b_face)->stl_vertices[i]);
+          vertices.push_back(SPoint3(p.x(), p.y(), p.z()));
+        } 
+      }
       else {
         int N = 10;
         std::list<GEdge*> b_edges = (*b_face)->edges();
@@ -224,6 +228,19 @@ void GRegion::writeGEO(FILE *fp)
     fprintf(fp, "};\n");
     fprintf(fp, "Volume(%d) = {%d};\n", tag(), tag());
   }
+
+  if(meshAttributes.Method == MESH_TRANSFINITE){
+    fprintf(fp, "Transfinite Volume {%d}", tag());
+    if(meshAttributes.corners.size()){
+      fprintf(fp, " = {");
+      for(unsigned int i = 0; i < meshAttributes.corners.size(); i++){
+        if(i) fprintf(fp, ",");
+        fprintf(fp, "%d", meshAttributes.corners[i]->tag());
+      }
+      fprintf(fp, "}");
+    }
+    fprintf(fp, ";\n");
+  }
 }
 
 std::list<GEdge*> GRegion::edges() const
@@ -256,4 +273,134 @@ bool GRegion::edgeConnected(GRegion *r) const
     ++it;
   }
   return false;
+}
+
+void GRegion::replaceFaces (std::list<GFace*> &new_faces)
+{
+  replaceFacesInternal (new_faces);
+  if (l_faces.size() != new_faces.size()){
+    Msg::Fatal("impossible to replace faces in region %d (%d vs %d)",tag(),
+	       l_faces.size(),new_faces.size());
+  }
+
+  std::list<GFace*>::iterator it  = l_faces.begin();
+  std::list<GFace*>::iterator it2 = new_faces.begin();
+  std::list<int>::iterator it3 = l_dirs.begin();
+  std::list<int> newdirs;
+  for ( ; it != l_faces.end(); ++it, ++it2, ++it3){
+    (*it)->delRegion(this);
+    (*it2)->addRegion(this);        
+    // if ((*it2)->getBeginVertex() == (*it)->getBeginVertex())
+      newdirs.push_back(*it3);
+    // else
+    //   newdirs.push_back(-(*it3));
+  }
+  l_faces = new_faces;
+  l_dirs = newdirs;
+}
+
+double GRegion::computeSolidProperties (std::vector<double> cg,
+					std::vector<double> inertia)
+{
+  std::list<GFace*>::iterator it = l_faces.begin();
+  std::list<int>::iterator itdir =  l_dirs.begin();
+  double volumex = 0;
+  double volumey = 0;
+  double volumez = 0;
+  double surface = 0;
+  cg[0] = cg[1] = cg[2] = 0.0;
+  for ( ; it != l_faces.end(); ++it,++itdir){    
+    printf("face %d dir %d %d elements\n",(*it)->tag(),*itdir,(int)(*it)->triangles.size());
+    for (unsigned int i = 0; i < (*it)->triangles.size(); ++i){
+      MTriangle *e = (*it)->triangles[i];
+      int npt;
+      IntPt *pts;
+      e->getIntegrationPoints (2*(e->getPolynomialOrder()-1)+3, &npt, &pts);      
+      for (int j=0;j<npt;j++){
+	SPoint3 pt;
+	// compute x,y,z of the integration point
+	e->pnt(pts[j].pt[0],pts[j].pt[1],pts[j].pt[2],pt);
+	double jac[3][3];
+	// compute normal
+	double detJ = e->getJacobian(pts[j].pt[0],pts[j].pt[1],pts[j].pt[2],jac);
+	SVector3 n (jac[2][0],jac[2][1],jac[2][2]);
+	n.normalize();
+	n *= (double)*itdir;
+	surface += detJ*pts[j].weight;
+	volumex += detJ*n.x()*pt.x()*pts[j].weight;
+	volumey += detJ*n.y()*pt.y()*pts[j].weight;
+	volumez += detJ*n.z()*pt.z()*pts[j].weight;
+	cg[0]  += detJ*n.x()*(pt.x()*pt.x())*pts[j].weight*0.5;
+	cg[1]  += detJ*n.y()*(pt.y()*pt.y())*pts[j].weight*0.5;
+	cg[2]  += detJ*n.z()*(pt.z()*pt.z())*pts[j].weight*0.5;
+      }
+    }
+  }
+
+  printf("%g -- %g %g %g\n",surface,volumex,volumey,volumez);
+
+  double volume = volumex;
+
+  cg[0]/=volume;
+  cg[1]/=volume;
+  cg[2]/=volume;
+
+  it = l_faces.begin();
+  itdir =  l_dirs.begin();
+  inertia[0] =   
+    inertia[1] = 
+    inertia[2] = 
+    inertia[3] = 
+    inertia[4] = 
+    inertia[5] = 0.0;
+
+  for ( ; it != l_faces.end(); ++it,++itdir){    
+    for (unsigned int i = 0; i < (*it)->getNumMeshElements(); ++i){
+      MElement *e = (*it)->getMeshElement(i);
+      int npt;
+      IntPt *pts;
+      e->getIntegrationPoints (2*(e->getPolynomialOrder()-1)+3, &npt, &pts);      
+      for (int j = 0; j < npt; j++){
+	SPoint3 pt;
+	// compute x,y,z of the integration point
+	e->pnt(pts[j].pt[0],pts[j].pt[1],pts[j].pt[2],pt);
+	double jac[3][3];
+	// compute normal
+	double detJ = e->getJacobian(pts[j].pt[0],pts[j].pt[1],pts[j].pt[2],jac);
+	SVector3 n (jac[2][0],jac[2][1],jac[2][2]);
+	n *= (double)*itdir;
+	inertia[0]  += pts[j].weight*detJ*n.x()*(pt.x()-cg[0])*(pt.x()-cg[0])*(pt.x()-cg[0])/3.0;
+	inertia[1]  += pts[j].weight*detJ*n.y()*(pt.y()-cg[1])*(pt.y()-cg[1])*(pt.y()-cg[1])/3.0;
+	inertia[2]  += pts[j].weight*detJ*n.z()*(pt.z()-cg[2])*(pt.z()-cg[2])*(pt.z()-cg[2])/3.0;
+	inertia[3]  += pts[j].weight*detJ*n.x()*(pt.y()-cg[1])*(pt.x()-cg[0])*(pt.x()-cg[0])/3.0;
+	inertia[4]  += pts[j].weight*detJ*n.x()*(pt.z()-cg[2])*(pt.x()-cg[0])*(pt.x()-cg[0])/3.0;
+	inertia[5]  += pts[j].weight*detJ*n.y()*(pt.z()-cg[2])*(pt.y()-cg[1])*(pt.y()-cg[1])/3.0;
+      }
+    }
+  }
+  return volume;
+}
+
+void GRegion::addPrism(MPrism *p) 
+{
+  prisms.push_back(p); 
+}
+
+void GRegion::registerBindings(binding *b)
+{
+  classBinding *cb = b->addClass<GRegion>("GRegion");
+  cb->setDescription("A GRegion is a geometrical 3D entity");
+  cb->setParentClass<GEntity>();
+  methodBinding *cm = cb->setConstructor<GRegion,GModel*,int>();
+  cm->setDescription("create a new GRegion");
+  cm->setArgNames("model","tag",NULL);
+  cm = cb->addMethod("set",&GRegion::set);
+  cm->setDescription("set the faces that bound this region");
+  cm->setArgNames("faces",NULL);
+  cm = cb->addMethod("addPrism", &GRegion::addPrism);
+  cm->setDescription("insert a prism mesh element");
+  cm->setArgNames("prism", NULL);
+  cm = cb->addMethod("computeSolidProperties", &GRegion::computeSolidProperties);
+  cm->setDescription("returns the volume and computes the center of gravity and tensor of inertia of the volume (requires a surface mesh)");
+  cm->setArgNames("cg","inertia", NULL);
 }

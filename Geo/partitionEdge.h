@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -15,15 +15,14 @@ class partitionEdge : public discreteEdge {
   std::vector<int> _partitions;
  public:
   partitionEdge(GModel *model, int num, GVertex *_v0, GVertex *_v1, 
-		std::vector<int> &partitions) 
-    : discreteEdge(model,num,_v0,_v1),_partitions(partitions)
+                std::vector<int> &partitions) 
+    : discreteEdge(model, num, _v0, _v1), _partitions(partitions)
   {
-    std::sort(_partitions.begin(),_partitions.end());
+    std::sort(_partitions.begin(), _partitions.end());
   }
   virtual ~partitionEdge() {}
   virtual GeomType geomType() const { return PartitionCurve; }
 };
-
 
 struct Less_partitionEdge : 
   public std::binary_function<partitionEdge*, partitionEdge*, bool> {

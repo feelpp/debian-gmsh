@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -17,9 +17,15 @@
 int PView::_globalNum = 0;
 std::vector<PView*> PView::list;
 
-void PView::_init()
+void PView::_init(int num)
 {
-  _num = ++_globalNum;
+  if(num){
+    _num = num;
+    _globalNum = std::max(_globalNum, _num);
+  }
+  else{
+    _num = ++_globalNum;
+  }
   _changed = true;
   _aliasOf = 0;
   _eye = SPoint3(0., 0., 0.);
@@ -29,9 +35,9 @@ void PView::_init()
   for(unsigned int i = 0; i < list.size(); i++) list[i]->setIndex(i);
 }
 
-PView::PView()
+PView::PView(int num)
 {
-  _init();
+  _init(num);
   _data = new PViewDataList();
   _options = new PViewOptions(PViewOptions::reference);
   if(_options->adaptVisualizationGrid)
@@ -39,9 +45,9 @@ PView::PView()
                             _options->targetError);
 }
 
-PView::PView(PViewData *data)
+PView::PView(PViewData *data, int num)
 {
-  _init();
+  _init(num);
   _data = data;
   _options = new PViewOptions(PViewOptions::reference);
   if(_options->adaptVisualizationGrid)
@@ -52,7 +58,18 @@ PView::PView(PViewData *data)
 PView::PView(PView *ref, bool copyOptions)
 {
   _init();
-  _aliasOf = ref->getNum();
+
+  if(ref->getAliasOf()){ // alias of an alias
+    PView *orig = getViewByNum(ref->getAliasOf());
+    if(orig) _aliasOf = orig->getNum();
+    else{
+      Msg::Warning("Original view for alias does not exist anymore");
+      _aliasOf = ref->getNum();
+    }
+  }
+  else
+    _aliasOf = ref->getNum();
+
   _data = ref->getData();
   if(copyOptions)
     _options = new PViewOptions(*ref->getOptions());
@@ -95,7 +112,7 @@ PView::PView(std::string xname, std::string yname,
 
 PView::PView(std::string name, std::string type, 
              GModel *model, std::map<int, std::vector<double> > &data,
-             double time)
+             double time, int numComp)
 {
   _init();
   PViewDataGModel::DataType t;
@@ -110,7 +127,7 @@ PView::PView(std::string name, std::string type,
     return;
   }
   PViewDataGModel *d = new PViewDataGModel(t);
-  d->addData(model, data, 0, time, 1);
+  d->addData(model, data, 0, time, 1, numComp);
   d->setName(name);
   d->setFileName(name + ".msh");
   _data = d;
@@ -121,10 +138,10 @@ PView::PView(std::string name, std::string type,
 }
 
 void PView::addStep(GModel *model, std::map<int, std::vector<double> > &data, 
-                    double time)
+                    double time, int numComp)
 {
   PViewDataGModel *d = dynamic_cast<PViewDataGModel*>(_data);
-  if(d) d->addData(model, data, d->getNumTimeSteps(), time, 1);
+  if(d) d->addData(model, data, d->getNumTimeSteps(), time, 1, numComp);
   else Msg::Error("Can only add step data to model-based datasets");
 }
 
@@ -174,7 +191,7 @@ void PView::setOptions(PViewOptions *val)
 
 PViewData *PView::getData(bool useAdaptiveIfAvailable)
 { 
-  if(useAdaptiveIfAvailable && _data->isAdaptive())
+  if(useAdaptiveIfAvailable && _data->isAdaptive() && !_data->isRemote())
     return _data->getAdaptiveData()->getData();
   else
     return _data;
@@ -228,15 +245,32 @@ void PView::combine(bool time, int how, bool remove)
 
   std::set<PView*> rm;
   for(unsigned int i = 0; i < nds.size(); i++){
-    if(nds[i].data.size() > 1){
-      // there's potentially something to combine
-      PView *p = new PView();
-      PViewData *data = p->getData();
-      bool res = time ? data->combineTime(nds[i]): data->combineSpace(nds[i]);
+    if(nds[i].data.size() > 1){ // there's potentially something to combine
+      // sanity checks:
+      bool allListBased = true, allModelBased = true;
+      for(unsigned int j = 0; j < nds[i].data.size(); j++){
+        PViewDataList *d1 = dynamic_cast<PViewDataList*>(nds[i].data[j]);
+        if(!d1) allListBased = false;
+        PViewDataGModel *d2 = dynamic_cast<PViewDataGModel*>(nds[i].data[j]);
+        if(!d2) allModelBased = false;
+      }
+      PViewData *data = 0;
+      if(allListBased){
+        data = new PViewDataList();
+      }
+      else if(allModelBased){
+        PViewDataGModel *d2 = dynamic_cast<PViewDataGModel*>(nds[i].data[0]);
+        data = new PViewDataGModel(d2->getType());
+      }
+      else{
+        Msg::Error("Cannot combine hybrid list/model-based datasets");
+        continue;
+      }
+      PView *p = new PView(data);
+      bool res = time ? data->combineTime(nds[i]) : data->combineSpace(nds[i]);
       if(res){
         for(unsigned int j = 0; j < nds[i].indices.size(); j++)
           rm.insert(list[nds[i].indices[j]]);
-
         PViewOptions *opt = p->getOptions();
         if(opt->adaptVisualizationGrid){
           // the (empty) adaptive data created in PView() must be
@@ -245,7 +279,6 @@ void PView::combine(bool time, int how, bool remove)
           data->initAdaptiveData
             (opt->timeStep, opt->maxRecursionLevel, opt->targetError);
         }
-
       }
       else
         delete p;
@@ -261,9 +294,35 @@ PView *PView::getViewByName(std::string name, int timeStep, int partition)
   for(unsigned int i = 0; i < list.size(); i++){
     if(list[i]->getData()->getName() == name &&
        ((timeStep < 0 || !list[i]->getData()->hasTimeStep(timeStep)) ||
-        (partition < 0 || !list[i]->getData()->hasPartition(partition))))
+        (partition < 0 || !list[i]->getData()->hasPartition(timeStep, partition))))
       return list[i];
   }
   return 0;
 }
 
+PView *PView::getViewByNum(int num, int timeStep, int partition)
+{
+  for(unsigned int i = 0; i < list.size(); i++){
+    if(list[i]->getNum() == num &&
+       ((timeStep < 0 || !list[i]->getData()->hasTimeStep(timeStep)) ||
+        (partition < 0 || !list[i]->getData()->hasPartition(timeStep, partition))))
+      return list[i];
+  }
+  return 0;
+}
+
+#include "Bindings.h"
+void PView::registerBindings(binding *b) {
+  classBinding *cb = b->addClass<PView>("PView");
+  cb->setDescription("A post-processing view");
+  methodBinding *cm;
+  cm = cb->addMethod("write",&PView::write);
+  cm->setArgNames("fileName","format","append",NULL);
+  cm->setDescription("write data to a file. Format can be: 0 for ascii pos file, "
+                     "1 for binary pos file, 2 for parsed pos file, 3 for STL, "
+                     "4 for TXT, 5 for MSH, 6 for MED files, or 10 for automatic. "
+                     "'append' option is only supported for pos format.");
+  cm = cb->addMethod("getData",&PView::getData);
+  cm->setArgNames("useAdaptiveIfAvailable",NULL);
+  cm->setDescription("return the structure containing the data of this view.");
+}

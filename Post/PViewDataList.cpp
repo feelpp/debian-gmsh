@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -6,7 +6,7 @@
 #include "PViewDataList.h"
 #include "GmshMessage.h"
 #include "GmshDefines.h"
-#include "functionSpace.h"
+#include "polynomialBasis.h"
 #include "Numeric.h"
 #include "SmoothData.h"
 #include "Context.h"
@@ -25,7 +25,7 @@ PViewDataList::PViewDataList()
   for(int i = 0; i < 24; i++) _index[i] = 0;
 }
 
-bool PViewDataList::finalize()
+bool PViewDataList::finalize(bool computeMinMax)
 {
   BBox.reset();
   Min = VAL_INF;
@@ -104,13 +104,13 @@ double PViewDataList::getTime(int step)
   return Time[step];
 }
 
-double PViewDataList::getMin(int step)
+double PViewDataList::getMin(int step, bool onlyVisible)
 {
   if(step < 0 || step >= (int)TimeStepMin.size()) return Min;
   return TimeStepMin[step];
 }
 
-double PViewDataList::getMax(int step)
+double PViewDataList::getMax(int step, bool onlyVisible)
 {
   if(step < 0 || step >= (int)TimeStepMax.size()) return Max;
   return TimeStepMax[step];
@@ -491,12 +491,12 @@ void PViewDataList::smooth()
   std::vector<double> *list = 0;
   int *nbe = 0, nbc, nbn;
   for(int i = 0; i < 24; i++){
-    getRawData(i, &list, &nbe, &nbc, &nbn);
+    _getRawData(i, &list, &nbe, &nbc, &nbn);
     if(nbn > 1)
       generateConnectivities(*list, *nbe, NbTimeStep, nbn, nbc, data);
   }
   for(int i = 0; i < 24; i++){
-    getRawData(i, &list, &nbe, &nbc, &nbn);
+    _getRawData(i, &list, &nbe, &nbc, &nbn);
     if(nbn > 1)
       smoothList(*list, *nbe, NbTimeStep, nbn, nbc, data);
   }
@@ -618,8 +618,8 @@ bool PViewDataList::combineTime(nameData &nd)
   
   // use the first data set as the reference
   for(int i = 0; i < 24; i++){
-    getRawData(i, &list, &nbe, &nbc, &nbn);
-    data[0]->getRawData(i, &list2, &nbe2, &nbc2, &nbn2);
+    _getRawData(i, &list, &nbe, &nbc, &nbn);
+    data[0]->_getRawData(i, &list2, &nbe2, &nbc2, &nbn2);
     *nbe = *nbe2;
   }
   NbT2 = data[0]->NbT2;
@@ -632,10 +632,10 @@ bool PViewDataList::combineTime(nameData &nd)
   
   // merge values for all element types
   for(int i = 0; i < 24; i++){
-    getRawData(i, &list, &nbe, &nbc, &nbn);
+    _getRawData(i, &list, &nbe, &nbc, &nbn);
     for(int j = 0; j < *nbe; j++){
       for(unsigned int k = 0; k < data.size(); k++){
-        data[k]->getRawData(i, &list2, &nbe2, &nbc2, &nbn2);
+        data[k]->_getRawData(i, &list2, &nbe2, &nbc2, &nbn2);
         if(*nbe && *nbe == *nbe2){
           int nb2 = list2->size() / *nbe2;
           if(!k){ 
@@ -740,35 +740,42 @@ bool PViewDataList::combineTime(nameData &nd)
   return finalize();
 }
 
-void PViewDataList::getRawData(int type, std::vector<double> **l, int **ne, 
-                               int *nc, int *nn)
+void PViewDataList::_getRawData(int idxtype, std::vector<double> **l, int **ne, 
+                                int *nc, int *nn)
 {
-  switch(type){
-  case 0 : *l = &SP; *ne = &NbSP; *nc = 1; *nn = 1; break;
-  case 1 : *l = &VP; *ne = &NbVP; *nc = 3; *nn = 1; break;
-  case 2 : *l = &TP; *ne = &NbTP; *nc = 9; *nn = 1; break;
-  case 3 : *l = &SL; *ne = &NbSL; *nc = 1; *nn = 2; break;
-  case 4 : *l = &VL; *ne = &NbVL; *nc = 3; *nn = 2; break;
-  case 5 : *l = &TL; *ne = &NbTL; *nc = 9; *nn = 2; break;
-  case 6 : *l = &ST; *ne = &NbST; *nc = 1; *nn = 3; break;
-  case 7 : *l = &VT; *ne = &NbVT; *nc = 3; *nn = 3; break;
-  case 8 : *l = &TT; *ne = &NbTT; *nc = 9; *nn = 3; break;
-  case 9 : *l = &SQ; *ne = &NbSQ; *nc = 1; *nn = 4; break;
-  case 10: *l = &VQ; *ne = &NbVQ; *nc = 3; *nn = 4; break;
-  case 11: *l = &TQ; *ne = &NbTQ; *nc = 9; *nn = 4; break;
-  case 12: *l = &SS; *ne = &NbSS; *nc = 1; *nn = 4; break;
-  case 13: *l = &VS; *ne = &NbVS; *nc = 3; *nn = 4; break;
-  case 14: *l = &TS; *ne = &NbTS; *nc = 9; *nn = 4; break;
-  case 15: *l = &SH; *ne = &NbSH; *nc = 1; *nn = 8; break;
-  case 16: *l = &VH; *ne = &NbVH; *nc = 3; *nn = 8; break;
-  case 17: *l = &TH; *ne = &NbTH; *nc = 9; *nn = 8; break;
-  case 18: *l = &SI; *ne = &NbSI; *nc = 1; *nn = 6; break;
-  case 19: *l = &VI; *ne = &NbVI; *nc = 3; *nn = 6; break;
-  case 20: *l = &TI; *ne = &NbTI; *nc = 9; *nn = 6; break;
-  case 21: *l = &SY; *ne = &NbSY; *nc = 1; *nn = 5; break;
-  case 22: *l = &VY; *ne = &NbVY; *nc = 3; *nn = 5; break;
-  case 23: *l = &TY; *ne = &NbTY; *nc = 9; *nn = 5; break;
+  int type = 0;
+  switch(idxtype){
+  case 0 : *l = &SP; *ne = &NbSP; *nc = 1; *nn = 1; type = TYPE_PNT; break;
+  case 1 : *l = &VP; *ne = &NbVP; *nc = 3; *nn = 1; type = TYPE_PNT; break;
+  case 2 : *l = &TP; *ne = &NbTP; *nc = 9; *nn = 1; type = TYPE_PNT; break;
+  case 3 : *l = &SL; *ne = &NbSL; *nc = 1; *nn = 2; type = TYPE_LIN; break;
+  case 4 : *l = &VL; *ne = &NbVL; *nc = 3; *nn = 2; type = TYPE_LIN; break;
+  case 5 : *l = &TL; *ne = &NbTL; *nc = 9; *nn = 2; type = TYPE_LIN; break;
+  case 6 : *l = &ST; *ne = &NbST; *nc = 1; *nn = 3; type = TYPE_TRI; break;
+  case 7 : *l = &VT; *ne = &NbVT; *nc = 3; *nn = 3; type = TYPE_TRI; break;
+  case 8 : *l = &TT; *ne = &NbTT; *nc = 9; *nn = 3; type = TYPE_TRI; break;
+  case 9 : *l = &SQ; *ne = &NbSQ; *nc = 1; *nn = 4; type = TYPE_QUA; break;
+  case 10: *l = &VQ; *ne = &NbVQ; *nc = 3; *nn = 4; type = TYPE_QUA; break;
+  case 11: *l = &TQ; *ne = &NbTQ; *nc = 9; *nn = 4; type = TYPE_QUA; break;
+  case 12: *l = &SS; *ne = &NbSS; *nc = 1; *nn = 4; type = TYPE_TET; break;
+  case 13: *l = &VS; *ne = &NbVS; *nc = 3; *nn = 4; type = TYPE_TET; break;
+  case 14: *l = &TS; *ne = &NbTS; *nc = 9; *nn = 4; type = TYPE_TET; break;
+  case 15: *l = &SH; *ne = &NbSH; *nc = 1; *nn = 8; type = TYPE_HEX; break;
+  case 16: *l = &VH; *ne = &NbVH; *nc = 3; *nn = 8; type = TYPE_HEX; break;
+  case 17: *l = &TH; *ne = &NbTH; *nc = 9; *nn = 8; type = TYPE_HEX; break;
+  case 18: *l = &SI; *ne = &NbSI; *nc = 1; *nn = 6; type = TYPE_PRI; break;
+  case 19: *l = &VI; *ne = &NbVI; *nc = 3; *nn = 6; type = TYPE_PRI; break;
+  case 20: *l = &TI; *ne = &NbTI; *nc = 9; *nn = 6; type = TYPE_PRI; break;
+  case 21: *l = &SY; *ne = &NbSY; *nc = 1; *nn = 5; type = TYPE_PYR; break;
+  case 22: *l = &VY; *ne = &NbVY; *nc = 3; *nn = 5; type = TYPE_PYR; break;
+  case 23: *l = &TY; *ne = &NbTY; *nc = 9; *nn = 5; type = TYPE_PYR; break;
   default: Msg::Error("Wrong type in PViewDataList"); break;
+  }
+
+  if(haveInterpolationMatrices()){
+    std::vector<fullMatrix<double>*> im;
+    int nim = getInterpolationMatrices(type, im);
+    if(nim == 4) *nn = im[2]->size1();
   }
 }
 
@@ -784,11 +791,58 @@ void PViewDataList::setOrder2(int type)
   case TYPE_PRI: typeMSH = MSH_PRI_18; break;
   case TYPE_PYR: typeMSH = MSH_PYR_14; break;
   }
-  const functionSpace *fs = &functionSpaces::find(typeMSH);
+  const polynomialBasis *fs = polynomialBases::find(typeMSH);
   if(!fs){
     Msg::Error("Could not find function space for element type %d", typeMSH);
     return;
   }
   setInterpolationMatrices(type, fs->coefficients, fs->monomials,
                            fs->coefficients, fs->monomials);
+}
+
+std::vector<double> *PViewDataList::incrementList(int numComp, int type)
+{
+  switch(type){
+  case TYPE_PNT:
+    if     (numComp == 1){ NbSP++; return &SP; }
+    else if(numComp == 3){ NbVP++; return &VP; }
+    else if(numComp == 9){ NbTP++; return &TP; }
+    break;
+  case TYPE_LIN:
+    if     (numComp == 1){ NbSL++; return &SL; }
+    else if(numComp == 3){ NbVL++; return &VL; }
+    else if(numComp == 9){ NbTL++; return &TL; }
+    break;
+  case TYPE_TRI:
+    if     (numComp == 1){ NbST++; return &ST; }
+    else if(numComp == 3){ NbVT++; return &VT; }
+    else if(numComp == 9){ NbTT++; return &TT; }
+    break;
+  case TYPE_QUA:
+    if     (numComp == 1){ NbSQ++; return &SQ; }
+    else if(numComp == 3){ NbVQ++; return &VQ; }
+    else if(numComp == 9){ NbTQ++; return &TQ; }
+    break;
+  case TYPE_TET:
+    if     (numComp == 1){ NbSS++; return &SS; }
+    else if(numComp == 3){ NbVS++; return &VS; }
+    else if(numComp == 9){ NbTS++; return &TS; }
+    break;
+  case TYPE_HEX:
+    if     (numComp == 1){ NbSH++; return &SH; }
+    else if(numComp == 3){ NbVH++; return &VH; }
+    else if(numComp == 9){ NbTH++; return &TH; }
+    break;
+  case TYPE_PRI:
+    if     (numComp == 1){ NbSI++; return &SI; }
+    else if(numComp == 3){ NbVI++; return &VI; }
+    else if(numComp == 9){ NbTI++; return &TI; }
+    break;
+  case TYPE_PYR:
+    if     (numComp == 1){ NbSY++; return &SY; }
+    else if(numComp == 3){ NbVY++; return &VY; }
+    else if(numComp == 9){ NbTY++; return &TY; }
+    break;
+  }
+  return 0;
 }

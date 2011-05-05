@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -13,7 +13,7 @@ StringXNumber SphericalRaiseOptions_Number[] = {
   {GMSH_FULLRC, "Raise", NULL, 1.},
   {GMSH_FULLRC, "Offset", NULL, 0.},
   {GMSH_FULLRC, "TimeStep", NULL, 0.},
-  {GMSH_FULLRC, "iView", NULL, -1.}
+  {GMSH_FULLRC, "View", NULL, -1.}
 };
 
 extern "C"
@@ -26,21 +26,20 @@ extern "C"
 
 std::string GMSH_SphericalRaisePlugin::getHelp() const
 {
-  return "Plugin(SphericalRaise) transforms the\n"
-         "coordinates of the elements in the view\n"
-         "`iView' using the values associated with the\n"
-         "`TimeStep'-th time step. Instead of elevating\n"
-         "the nodes along the X, Y and Z axes as in\n"
-         "View[`iView'].RaiseX, View[`iView'].RaiseY\n"
-         "and View[`iView'].RaiseZ, the raise is applied\n"
-         " along the radius of a sphere centered at\n"
-         "(`Xc', `Yc', `Zc'). To produce a standard\n"
-         "radiation pattern, set `Offset' to minus the\n"
-         "radius of the sphere the original data lives on.\n"
-         "If `iView' < 0, the plugin is run on the current\n"
-         "view.\n"
-         "\n"
-         "Plugin(SphericalRaise) is executed in-place.\n";
+  return "Plugin(SphericalRaise) transforms the "
+    "coordinates of the elements in the view "
+    "`View' using the values associated with the "
+    "`TimeStep'-th time step.\n\n"
+    "Instead of elevating the nodes along the X, Y "
+    "and Z axes as with the View[`View'].RaiseX, "
+    "View[`View'].RaiseY and View[`View'].RaiseZ "
+    "options, the raise is applied along the radius "
+    "of a sphere centered at (`Xc', `Yc', `Zc').\n\n"
+    "To produce a standard radiation pattern, set "
+    "`Offset' to minus the radius of the sphere the "
+    "original data lives on.\n\n"
+    "If `View' < 0, the plugin is run on the current view.\n\n"
+    "Plugin(SphericalRaise) is executed in-place.";
 }
 
 int GMSH_SphericalRaisePlugin::getNbOptions() const

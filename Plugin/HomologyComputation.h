@@ -1,9 +1,9 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 //
-// Contributed by Matti Pellikka
+// Contributed by Matti Pellikka <matti.pellikka@tut.fi>.
 
 #ifndef _HOMOLOGY_COMPUTATION_H_
 #define _HOMOLOGY_COMPUTATION_H_
@@ -22,7 +22,11 @@ class GMSH_HomologyComputationPlugin : public GMSH_PostPlugin
 {
  public:
   GMSH_HomologyComputationPlugin(){}
-  std::string getName() const { return "HomologyComputation"; }
+  std::string getName() const { return "Homology"; }
+  std::string getShortHelp() const
+  {
+    return "Compute relative homology groups";
+  }
   std::string getHelp() const;
   std::string getAuthor() const { return "M. Pellikka"; }
   int getNbOptions() const;

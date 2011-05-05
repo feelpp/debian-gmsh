@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -1134,6 +1134,7 @@ adaptiveData::adaptiveData(PViewData *data)
     _tetrahedra(0), _hexahedra(0), _prisms(0)
 {
   _outData = new PViewDataList();
+  _outData->setName(data->getName() + "_adapted");
   std::vector<fullMatrix<double>*> p;
   if(_inData->getNumLines()){
     _inData->getInterpolationMatrices(TYPE_LIN, p);

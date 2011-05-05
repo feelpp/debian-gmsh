@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -22,12 +22,12 @@ class linearSystemFull : public linearSystem<scalar> {
  public :
   linearSystemFull() : _a(0), _b(0), _x(0){}
   virtual bool isAllocated() const { return _a != 0; }
-  virtual void allocate(int _nbRows)
+  virtual void allocate(int nbRows)
   {
     clear();
-    _a = new fullMatrix<scalar>(_nbRows, _nbRows);
-    _b = new fullVector<scalar>(_nbRows);
-    _x = new fullVector<scalar>(_nbRows);
+    _a = new fullMatrix<scalar>(nbRows, nbRows);
+    _b = new fullVector<scalar>(nbRows);
+    _x = new fullVector<scalar>(nbRows);
   }
   virtual ~linearSystemFull()
   {
@@ -42,39 +42,49 @@ class linearSystemFull : public linearSystem<scalar> {
     }
     _a = 0;
   }
-  virtual void addToMatrix(int _row, int _col, scalar _val)
+  virtual void addToMatrix(int row, int col, const scalar &val)
   {
-    if(_val != 0.0) (*_a)(_row, _col) += _val;
+    if(val != 0.0) (*_a)(row, col) += val;
   }
-  virtual scalar getFromMatrix(int _row, int _col) const
+  virtual void getFromMatrix(int row, int col, scalar &val) const
   {
-    return (*_a)(_row, _col);
+    val = (*_a)(row, col);
   }
-  virtual void addToRightHandSide(int _row, scalar _val)
+  virtual void addToRightHandSide(int row, const scalar &val)
   {
-    if(_val != 0.0) (*_b)(_row) += _val;
+    if(val != 0.0) (*_b)(row) += val;
   }
-  virtual scalar getFromRightHandSide(int _row) const 
+  virtual void getFromRightHandSide(int row, scalar &val) const
   {
-    return (*_b)(_row);
+    val = (*_b)(row);
   }
-  virtual scalar getFromSolution(int _row) const 
+  virtual void getFromSolution(int row, scalar &val) const
   {
-    return (*_x)(_row);
+    val = (*_x)(row);
   }
-  virtual void zeroMatrix() 
+  virtual void zeroMatrix()
   {
-    _a->set_all(0.);
+    _a->setAll(0.);
   }
   virtual void zeroRightHandSide()
   {
     for(int i = 0; i < _b->size(); i++) (*_b)(i) = 0.;
   }
-  virtual int systemSolve() 
+  virtual double normInfRightHandSide() const{
+    double nor = 0.;
+    double temp;
+    for(int i=0;i<_b->size();i++){
+      temp = (*_b)(i);
+      if(temp<0) temp = -temp;
+      if(nor<temp) nor=temp;
+    }
+    return nor;
+  }
+  virtual int systemSolve()
   {
     if (_b->size())
-      _a->lu_solve(*_b, *_x);
-    // _x->print("********* mySol");
+      _a->luSolve(*_b, *_x);
+    //    _x->print("X in solve");
     return 1;
   }
 };

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -19,7 +19,7 @@ StringXNumber RemoveOptions_Number[] = {
   {GMSH_FULLRC, "Scalar", NULL, 1.},
   {GMSH_FULLRC, "Vector", NULL, 1.},
   {GMSH_FULLRC, "Tensor", NULL, 1.},
-  {GMSH_FULLRC, "iView", NULL, -1.}
+  {GMSH_FULLRC, "View", NULL, -1.}
 };
 
 extern "C"
@@ -32,11 +32,10 @@ extern "C"
 
 std::string GMSH_RemovePlugin::getHelp() const
 {
-  return "Plugin(Remove) removes the marked items\n"
-         "from the view `iView'. If `iView' < 0, the plugin\n"
-         "is run on the current view.\n"
-         "\n"
-         "Plugin(Remove) is executed in-place.\n";
+  return "Plugin(Remove) removes the marked items "
+    "from the view `View'.\n\n"
+    "If `View' < 0, the plugin is run on the current view.\n\n"
+    "Plugin(Remove) is executed in-place.";
 }
 
 int GMSH_RemovePlugin::getNbOptions() const

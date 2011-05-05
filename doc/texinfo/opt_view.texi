@@ -205,7 +205,7 @@ Default value: @code{0}@*
 Saved in: @code{General.OptionsFileName}
 
 @item View.CenterGlyphs
-Center glyphs (arrows, numbers, etc.)@*
+Center glyphs (arrows, numbers, etc.)? (0=left, 1=centered, 2=right)@*
 Default value: @code{0}@*
 Saved in: @code{General.OptionsFileName}
 
@@ -257,6 +257,51 @@ Saved in: @code{General.OptionsFileName}
 @item View.ColormapSwap
 Swap the min/max values in the colormap?@*
 Default value: @code{0}@*
+Saved in: @code{General.OptionsFileName}
+
+@item View.ComponentMap0
+Forced component 0 (if View.ForceComponents > 0)@*
+Default value: @code{0}@*
+Saved in: @code{General.OptionsFileName}
+
+@item View.ComponentMap1
+Forced component 1 (if View.ForceComponents > 0)@*
+Default value: @code{1}@*
+Saved in: @code{General.OptionsFileName}
+
+@item View.ComponentMap2
+Forced component 2 (if View.ForceComponents > 0)@*
+Default value: @code{2}@*
+Saved in: @code{General.OptionsFileName}
+
+@item View.ComponentMap3
+Forced component 3 (if View.ForceComponents > 0)@*
+Default value: @code{3}@*
+Saved in: @code{General.OptionsFileName}
+
+@item View.ComponentMap4
+Forced component 4 (if View.ForceComponents > 0)@*
+Default value: @code{4}@*
+Saved in: @code{General.OptionsFileName}
+
+@item View.ComponentMap5
+Forced component 5 (if View.ForceComponents > 0)@*
+Default value: @code{5}@*
+Saved in: @code{General.OptionsFileName}
+
+@item View.ComponentMap6
+Forced component 6 (if View.ForceComponents > 0)@*
+Default value: @code{6}@*
+Saved in: @code{General.OptionsFileName}
+
+@item View.ComponentMap7
+Forced component 7 (if View.ForceComponents > 0)@*
+Default value: @code{7}@*
+Saved in: @code{General.OptionsFileName}
+
+@item View.ComponentMap8
+Forced component 8 (if View.ForceComponents > 0)@*
+Default value: @code{8}@*
 Saved in: @code{General.OptionsFileName}
 
 @item View.CustomMax
@@ -351,6 +396,11 @@ Saved in: @code{General.OptionsFileName}
 
 @item View.FakeTransparency
 Use fake transparency (cheaper than the real thing, but incorrect)@*
+Default value: @code{0}@*
+Saved in: @code{General.OptionsFileName}
+
+@item View.ForceNumComponents
+Force number of components to display (see View.ComponentMapN for mapping)@*
 Default value: @code{0}@*
 Saved in: @code{General.OptionsFileName}
 
@@ -451,7 +501,7 @@ Saved in: @code{-}
 
 @item View.NbIso
 Number of intervals@*
-Default value: @code{15}@*
+Default value: @code{10}@*
 Saved in: @code{General.OptionsFileName}
 
 @item View.NbTimeStep
@@ -524,6 +574,11 @@ Value scale range type (1=default, 2=custom, 3=per time step)@*
 Default value: @code{1}@*
 Saved in: @code{General.OptionsFileName}
 
+@item View.Sampling
+Element sampling rate (draw one out every `Sampling' elements)@*
+Default value: @code{1}@*
+Saved in: @code{General.OptionsFileName}
+
 @item View.SaturateValues
 Saturate the view values to custom min and max (1=true, 0=false)@*
 Default value: @code{0}@*
@@ -545,8 +600,8 @@ Default value: @code{1}@*
 Saved in: @code{General.OptionsFileName}
 
 @item View.ShowTime
-Time display mode (0=hidden, 1=value if multi-step, 2=value always, 3=step if multi-step, 4=step always)@*
-Default value: @code{1}@*
+Time display mode (0=hidden, 1=time value if multi-step, 2=time value always, 3=time step if multi-step, 4=time step always)@*
+Default value: @code{3}@*
 Saved in: @code{General.OptionsFileName}
 
 @item View.SmoothNormals

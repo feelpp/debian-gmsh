@@ -2,12 +2,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include "Field.h"
 #include <sstream>
 #include <fstream>
 #include "SPoint2.h"
 #include "GSHHS.h"
 #include "GModel.h"
+
+#if defined(HAVE_MESH)
+#include "Field.h"
+#else
+class Field {
+ public:
+  virtual double operator() (double x, double y, double z){ return 0.; }
+};
+#endif
 
 class GMSH_GSHHSPlugin : public GMSH_PostPlugin
 {
@@ -51,12 +59,12 @@ public:
       point[2] = 0;
       ipoint++;
       if(fscanf(fp, "%le %le", &point[0], &point[1]) != 2) 
-        Msg::Error("gshhs:  Error reading loops2 file.\n");
+        Msg::Error("gshhs:  Error reading loops2 file.");
       return true;
     }
   };
   class reader_gshhs : public reader{
-    /*  $Id: GSHHS.cpp,v 1.33 2009-09-17 07:56:14 remacle Exp $
+    /*  $Id: GSHHS.cpp,v 1.34 2009-10-12 15:46:20 geuzaine Exp $
      *
      * Include file defining structures used in gshhs.c
      *
@@ -110,7 +118,10 @@ public:
        * 4th byte:      source = (flag >> 24) & 255: Values: 0 = CIA WDBII, 1 = WVS
        */
       int west, east, south, north;     /* min/max extent in micro-degrees */
-      int area;                 /* Area of polygon in 1/10 km^2 */
+      int area; /* Area of polygon in 1/10 km^2 */
+      int area_full;    /* Area of original full-resolution polygon in 1/10 km^2 */
+      int container;    /* Id of container polygon that encloses this polygon (-1 if none) */
+      int ancestor;     /* Id of ancestor polygon in the full resolution set that was the source of this polygon (-1 if none) */
     };
     GSHHS h;
     POINT p;
@@ -173,7 +184,7 @@ public:
       if(ip >= h.n)
         return false;
       if (fread ((void *)&p, (size_t)sizeof(POINT), (size_t)1, fp) != 1) {
-        printf ("gshhs:  Error reading gshhs file.\n");
+        Msg::Error("gshhs:  Error reading gshhs file.");
         exit(1);
       }
       if (flip) {
@@ -223,7 +234,7 @@ public:
     coordinate_lonlat cll;
     SPoint3 llradian;
   public:
-    coordinate_lonlat_degrees(double r) : cll(r){};
+    coordinate_lonlat_degrees(double r) : cll(r){}
     void to_cartesian(const SPoint3 ll, SPoint3 &xyz)
     {
       llradian.setPosition(ll.x() * M_PI / 180, ll.y() * M_PI / 180, 0);
@@ -356,13 +367,13 @@ public:
     box *b;
     double min_dist;
     loop *l;
-    point(double _x,double _y,double _z,Field *f)
+    point(double _x,double _y,double _z,Field *f) : b(0), min_dist(0.), l(0)
     {
       v[0]=_x; v[1]=_y; v[2]=_z;
       if(f)
         min_dist=(*f)(v[0],v[1],v[2]);
     }
-    point(double _x,double _y,double _z,double _min_dist)
+    point(double _x,double _y,double _z,double _min_dist) : b(0), l(0)
     {
       v[0]=_x; v[1]=_y; v[2]=_z;
       min_dist=_min_dist;
@@ -866,6 +877,10 @@ public:
     }
   };
   std::string getName() const { return "GSHHS"; }
+  std::string getShortHelp() const
+  {
+    return "Import and process GSHHS data sets";
+  }
   std::string getHelp() const;
   std::string getAuthor() const { return "J. Lambrechts"; }
   int getNbOptions() const;
@@ -903,40 +918,44 @@ extern "C"
 std::string GMSH_GSHHSPlugin::getHelp() const
 {
   return 
-    "Plugin(GSHHS) read different kind of contour lines data\n"
-    "and write a .geo file on the surface of a sphere (the Earth).\n"
-    "The principal application is to load GSHHS data\n (see\n"
-    "http://www.soest.hawaii.edu/wessel/gshhs/gshhs.html).\n"
-    "Valid values for \"Format\" are ):\n"
-    " -\"gshhs\" : open GSHHS file\n"
-    " -\"loops2\" : import 2D contour lines in simple text format :\n"
-    "   NB_POINTS_IN_FIRST_LOOP FIRST_LOOP_IS_CLOSED\n"
-    "   COORD1 COORD2\n"
-    "   COORD1 COORD2\n"
-    "   ...    ...\n"
-    "   NB_POINTS_IN_SECOND_LOOP SECOND_LOOP_IS_CLOSED\n"
-    "   ...\n"
-    "   (LOOP_IS_CLOSED specify if this coast line describe a closed curve\n"
-    "   (0=no, 1=yes).\n"
-    "In the case of \"loops2\" format, you can specify the the coordinate\n"
-    "system used in the input file with the \"Coordinate\" option, valid\n"
-    "values are\n"
-    " -\"lonlat\" for longitude-latidute radian,\n"
-    " -\"lonlat_degrees\" for longitude-latitude degrees,\n"
-    " -\"UTM\" for universal transverse mercartor (\"UTMZone\" option should\n"
-    "  be specified)\n"
-    " -\"cartesian\" for full 3D coordinates\n"
-    " -\"radius\" specify the earth radius.\n"
-    "If the \"iField\" option is set, consecutive points closer than the\n"
-    "value of the field iField (in meters) will not be added.\n"
-    "If \"MinStraitsFactor\" >0 and if a field iField is provided, coastlines\n"
-    "closer than MinStraitsFactor*field(IField) are merged and inner corners\n"
-    " which form an angle < pi/3 are removed.\n"
-    "The output is always in stereographic coordinates, if the \"WritePolarSphere\"\n"
-    "option is not 0, a sphere is added to the geo file.\n"
-    "WARNING : this plugin is still experimental and need polishing and\n"
-    "error-handling. In particular, it will probably crash if an inexistant\n"
-    "field id is given or if the input/output cannot be open.\n";
+    "Plugin(GSHHS) read different kind of contour lines data "
+    "and write a .geo file on the surface of a sphere (the Earth).\n\n"
+    "The principal application is to load GSHHS data\n (see "
+    "http://www.soest.hawaii.edu/wessel/gshhs/gshhs.html).\n\n"
+    "Valid values for \"Format\" are:\n\n"
+    "- \"gshhs\": open GSHHS file\n\n"
+    "- \"loops2\": import 2D contour lines in simple text format:\n\n"
+    "NB_POINTS_IN_FIRST_LOOP FIRST_LOOP_IS_CLOSED\n"
+    "COORD1 COORD2\n"
+    "COORD1 COORD2\n"
+    "...    ...\n"
+    "NB_POINTS_IN_SECOND_LOOP SECOND_LOOP_IS_CLOSED\n"
+    "...\n\n"
+    "(LOOP_IS_CLOSED specifies if this coast line describes a closed "
+    "curve (0=no, 1=yes)).\n\n"
+    "In the case of \"loops2\" format, you "
+    "can specify the coordinate system used in the input file "
+    "with the \"Coordinate\" option. Valid values are\n\n"
+    "- \"lonlat\" for longitude-latidute radian,\n\n"
+    "- \"lonlat_degrees\" for longitude-latitude degrees,\n\n"
+    "- \"UTM\" for universal transverse mercartor (\"UTMZone\" "
+    "option should be specified)\n\n"
+    "- \"cartesian\" for full 3D coordinates\n\n"
+    "- \"radius\" specify the earth radius.\n\n"
+    "If the \"iField\" option is set, consecutive points closer "
+    "than the value of the field iField (in meters) will not be "
+    "added.\n\n"
+    "If \"MinStraitsFactor\" > 0 and if a field iField is "
+    "provided, coastlines closer than MinStraitsFactor * "
+    "field(IField) are merged and inner corners which form an "
+    "angle < pi/3 are removed.\n\n"
+    "The output is always in stereographic coordinates, if "
+    "the \"WritePolarSphere\" option is not 0, a sphere is "
+    "added to the geo file.\n\n"
+    "WARNING: this plugin is still experimental and needs "
+    "polishing and error-handling. In particular, it will "
+    "probably crash if an inexistant field id is given or if "
+    "the input/output cannot be open.";
 }
 
 int GMSH_GSHHSPlugin::getNbOptions() const
@@ -990,6 +1009,7 @@ PView *GMSH_GSHHSPlugin::execute(PView * v)
     return NULL;
   }
   Field *field = NULL;
+#if defined(HAVE_MESH)
   if (iField != -1) {
     field = GModel::current()->getFields()->get(iField);
     if(!field){
@@ -997,6 +1017,7 @@ PView *GMSH_GSHHSPlugin::execute(PView * v)
       return NULL;
     }
   }
+#endif
   SPoint3 p;
   reader *read=0;
   if(format == "loops2") {

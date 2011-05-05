@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -47,6 +47,7 @@ void GRegionCompound::getBoundingFaces()
   
   std::set<GFace*>::iterator itf = _unique.begin();
   for ( ; itf != _unique.end(); ++itf){
+    printf("Compound Volume %d face %d \n", tag(), (*itf)->tag());
     l_faces.push_back(*itf);
     (*itf)->addRegion(this);
   }

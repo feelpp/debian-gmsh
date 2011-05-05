@@ -1,5 +1,5 @@
 %{
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -132,6 +132,8 @@ Fmod                    return tFmod;
 For                     return tFor;
 Function                return tFunction;
 
+GetEnv                  return tGetEnv;
+GetString               return tGetString;
 GetValue                return tGetValue;
 GMSH_MAJOR_VERSION      return tGMSH_MAJOR_VERSION;
 GMSH_MINOR_VERSION      return tGMSH_MINOR_VERSION;
@@ -139,6 +141,10 @@ GMSH_PATCH_VERSION      return tGMSH_PATCH_VERSION;
 
 Hide                    return tHide;
 Hole                    return tHole;
+HomRank                 return tHomRank;
+HomGen                  return tHomGen;
+HomCut                  return tHomCut;
+HomSeq                  return tHomSeq;
 Hypot                   return tHypot;
 
 In                      return tIn;
@@ -163,8 +169,8 @@ MPI_Size                return tMPI_Size;
 Nurbs			return tNurbs;
 
 Order			return tNurbsOrder;
-OCCShape  	        return tOCCShape;
 
+Periodic                return tPeriodic;
 Physical                return tPhysical;
 Pi                      return tPi;
 Plane                   return tPlane;

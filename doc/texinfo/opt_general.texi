@@ -69,9 +69,39 @@ Font used in the graphic window@*
 Default value: @code{"Helvetica"}@*
 Saved in: @code{General.OptionsFileName}
 
+@item General.GraphicsFontTitle
+Font used in the graphic window for titles@*
+Default value: @code{"Helvetica"}@*
+Saved in: @code{General.OptionsFileName}
+
 @item General.OptionsFileName
 Option file created with `Tools->Options->Save'; automatically read on startup@*
 Default value: @code{".gmsh-options"}@*
+Saved in: @code{General.SessionFileName}
+
+@item General.RecentFile1
+Most recent opened file@*
+Default value: @code{""}@*
+Saved in: @code{General.SessionFileName}
+
+@item General.RecentFile2
+2nd most recent opened file@*
+Default value: @code{""}@*
+Saved in: @code{General.SessionFileName}
+
+@item General.RecentFile3
+3rd most recent opened file@*
+Default value: @code{""}@*
+Saved in: @code{General.SessionFileName}
+
+@item General.RecentFile4
+4th most recent opened file@*
+Default value: @code{""}@*
+Saved in: @code{General.SessionFileName}
+
+@item General.RecentFile5
+5th most recent opened file@*
+Default value: @code{""}@*
 Saved in: @code{General.SessionFileName}
 
 @item General.SessionFileName
@@ -93,6 +123,11 @@ Saved in: @code{General.SessionFileName}
 System command to launch a web browser@*
 Default value: @code{"open %s"}@*
 Saved in: @code{General.OptionsFileName}
+
+@item General.WatchFilePattern
+Pattern of files to merge as they become available@*
+Default value: @code{""}@*
+Saved in: @code{-}
 
 @item General.AlphaBlending
 Enable alpha blending (transparency) in post-processing views@*
@@ -422,6 +457,11 @@ Saved in: @code{General.OptionsFileName}
 @item General.GraphicsFontSize
 Size of the font in the graphic window@*
 Default value: @code{17}@*
+Saved in: @code{General.OptionsFileName}
+
+@item General.GraphicsFontSizeTitle
+Size of the font in the graphic window for titles@*
+Default value: @code{19}@*
 Saved in: @code{General.OptionsFileName}
 
 @item General.GraphicsHeight
@@ -868,6 +908,11 @@ Saved in: @code{General.SessionFileName}
 Vertical position (in pixels) of the upper left corner of the statistic window@*
 Default value: @code{150}@*
 Saved in: @code{General.SessionFileName}
+
+@item General.Stereo
+Use stereo rendering@*
+Default value: @code{0}@*
+Saved in: @code{General.OptionsFileName}
 
 @item General.SystemMenuBar
 Use the system menu bar on Mac OS X?@*

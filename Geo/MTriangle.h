@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -38,7 +38,7 @@ class MTriangle : public MElement {
     v[2] = _v[2];
   }
  public :
-  MTriangle(MVertex *v0, MVertex *v1, MVertex *v2, int num=0, int part=0) 
+  MTriangle(MVertex *v0, MVertex *v1, MVertex *v2, int num=0, int part=0)
     : MElement(num, part)
   {
     _v[0] = v0; _v[1] = v1; _v[2] = v2;
@@ -49,9 +49,12 @@ class MTriangle : public MElement {
     for(int i = 0; i < 3; i++) _v[i] = v[i];
   }
   ~MTriangle(){}
-  virtual int getDim(){ return 2; }
+  virtual int getDim() const { return 2; }
+  virtual double etaShapeMeasure();
   virtual double gammaShapeMeasure();
   virtual double distoShapeMeasure();
+  virtual double getInnerRadius();
+  virtual double angleShapeMeasure();
   virtual int getNumVertices() const { return 3; }
   virtual MVertex *getVertex(int num){ return _v[num]; }
   virtual MVertex *getVertexMED(int num)
@@ -70,6 +73,20 @@ class MTriangle : public MElement {
   virtual MEdge getEdge(int num)
   {
     return MEdge(_v[edges_tri(num, 0)], _v[edges_tri(num, 1)]);
+  }
+  virtual void getEdgeInfo (const MEdge & edge, int &ithEdge, int &sign) const
+  {
+    for (ithEdge = 0; ithEdge < 3; ithEdge++){
+      const MVertex *v0 = _v[edges_tri(ithEdge, 0)];
+      const MVertex *v1 = _v[edges_tri(ithEdge, 1)];
+      if (v0 == edge.getVertex(0) && v1 == edge.getVertex(1)){
+        sign = 1; return;
+      }
+      if (v1 == edge.getVertex(0) && v0 == edge.getVertex(1)){
+        sign = -1; return;
+      }
+    }
+    Msg::Error("Could not get edge information for triangle %d", getNum());
   }
   virtual int getNumEdgesRep(){ return 3; }
   virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n)
@@ -104,11 +121,13 @@ class MTriangle : public MElement {
   virtual const char *getStringForPOS() const { return "ST"; }
   virtual const char *getStringForBDF() const { return "CTRIA3"; }
   virtual const char *getStringForDIFF() const { return "ElmT3n2D"; }
+  virtual const char *getStringForINP() const { return "C2D3"; }
   virtual void revert() 
   {
     MVertex *tmp = _v[1]; _v[1] = _v[2]; _v[2] = tmp;
   }
-  virtual const functionSpace* getFunctionSpace(int o=-1) const;
+  virtual const polynomialBasis* getFunctionSpace(int o=-1) const;
+  virtual const JacobianBasis* getJacobianFuncSpace(int o=-1) const;
   virtual bool isInside(double u, double v, double w)
   {
     double tol = _isInsideTolerance;
@@ -116,7 +135,7 @@ class MTriangle : public MElement {
       return false; 
     return true;
   }
-  virtual void getIntegrationPoints(int pOrder, int *npts, IntPt **pts) const;
+  virtual void getIntegrationPoints(int pOrder, int *npts, IntPt **pts);
   virtual SPoint3 circumcenter();
  private:
   int edges_tri(const int edge, const int vert) const
@@ -128,6 +147,8 @@ class MTriangle : public MElement {
     };
     return e[edge][vert];
   }
+  public:
+  static void registerBindings(binding *b);
 };
 
 /*
@@ -198,6 +219,7 @@ class MTriangle6 : public MTriangle {
   virtual const char *getStringForPOS() const { return "ST2"; }
   virtual const char *getStringForBDF() const { return "CTRIA6"; }
   virtual const char *getStringForDIFF() const { return "ElmT6n2D"; }
+  virtual const char *getStringForINP() const { return "C2D6"; }
   virtual void revert() 
   {
     MVertex *tmp;
@@ -250,7 +272,17 @@ class MTriangleN : public MTriangle {
     if(_order == 4 && _vs.size() == 9) return 0;
     if(_order == 4 && _vs.size() == 12) return 3;
     if(_order == 5 && _vs.size() == 12) return 0;
-    if(_order == 5 && _vs.size() == 18) return 6;
+    if(_order == 5  && _vs.size() == 18) return 6;
+    if(_order == 6  && _vs.size() == 25) return 10;
+    if(_order == 7  && _vs.size() == 33) return 12;
+    if(_order == 8  && _vs.size() == 42) return 15;
+    if(_order == 9  && _vs.size() == 52) return 21;
+    if(_order == 10 && _vs.size() == 63) return 28;
+    if(_order == 6  && _vs.size() == 15) return 0;
+    if(_order == 7  && _vs.size() == 18) return 0;
+    if(_order == 8  && _vs.size() == 21) return 0;
+    if(_order == 9  && _vs.size() == 24) return 0;
+    if(_order == 10  && _vs.size() == 27) return 0;
     return 0;
   }
   virtual int getNumEdgeVertices() const { return 3 * (_order - 1); }
@@ -281,6 +313,11 @@ class MTriangleN : public MTriangle {
     if(_order == 4 && _vs.size() == 12) return MSH_TRI_15; 
     if(_order == 5 && _vs.size() == 12) return MSH_TRI_15I; 
     if(_order == 5 && _vs.size() == 18) return MSH_TRI_21;
+    if(_order == 6 && _vs.size() == 25) return MSH_TRI_28; 
+    if(_order == 7 && _vs.size() == 33) return MSH_TRI_36; 
+    if(_order == 8 && _vs.size() == 42) return MSH_TRI_45; 
+    if(_order == 9 && _vs.size() == 52) return MSH_TRI_55; 
+    if(_order ==10 && _vs.size() == 63) return MSH_TRI_66; 
     return 0;
   }
   virtual void revert() 

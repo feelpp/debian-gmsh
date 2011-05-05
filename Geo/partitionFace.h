@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -14,14 +14,13 @@ class partitionFace : public discreteFace {
   std::vector<int> _partitions;
  public:
   partitionFace(GModel *model, int num, std::vector<int> &partitions) 
-    : discreteFace(model,num),_partitions(partitions)
+    : discreteFace(model, num), _partitions(partitions)
   {
-    std::sort(_partitions.begin(),_partitions.end());
+    std::sort(_partitions.begin(), _partitions.end());
   }
   virtual ~partitionFace() {}
   virtual GeomType geomType() const { return PartitionSurface; }
 };
-
 
 struct Less_partitionFace : 
   public std::binary_function<partitionFace*, partitionFace*, bool> {

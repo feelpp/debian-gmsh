@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -22,6 +22,10 @@ class GMSH_CutPlanePlugin : public GMSH_LevelsetPlugin
  public:
   GMSH_CutPlanePlugin(){}
   std::string getName() const { return "CutPlane"; }
+  std::string getShortHelp() const
+  {
+    return "Cut with the plane A*X + B*Y + C*Z + D = 0";
+  }
   std::string getHelp() const;
   int getNbOptions() const;
   StringXNumber *getOption(int iopt);  

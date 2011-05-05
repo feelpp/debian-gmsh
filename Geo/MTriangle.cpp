@@ -1,12 +1,17 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
+#include "GmshConfig.h"
 #include "MTriangle.h"
 #include "Numeric.h"
 #include "Context.h"
+#include "GmshDefines.h"
+
+#if defined(HAVE_MESH)
 #include "qualityMeasures.h"
+#endif
 
 #define SQU(a)      ((a)*(a))
 
@@ -22,15 +27,56 @@ SPoint3 MTriangle::circumcenter()
 
 double MTriangle::distoShapeMeasure()
 {
+#if defined(HAVE_MESH)
+  //return qmTriangleAngles(this);
   return qmDistorsionOfMapping(this);
+#else
+  return 0.;
+#endif
+}
+
+double MTriangle::getInnerRadius()
+{
+  // radius of inscribed circle = 2 * Area / sum(Line_i)        
+  double dist[3], k = 0.;
+  for (int i = 0; i < 3; i++){
+    MEdge e = getEdge(i);
+    dist[i] = e.getVertex(0)->distance(e.getVertex(1));
+    k += 0.5 * dist[i];
+  }
+  return sqrt(k * (k - dist[0]) * (k - dist[1]) * (k - dist[2])) / k;
+}
+
+double MTriangle::angleShapeMeasure()
+{
+#if defined(HAVE_MESH)
+  return qmTriangleAngles(this);
+#else
+  return 0.;
+#endif
+}
+
+double MTriangle::etaShapeMeasure()
+{
+  double a1 = 180 * angle3Vertices(_v[0], _v[1], _v[2]) / M_PI;
+  double a2 = 180 * angle3Vertices(_v[1], _v[2], _v[0]) / M_PI;
+  double a3 = 180 * angle3Vertices(_v[2], _v[0], _v[1]) / M_PI;
+  double angle = fabs(60. - a1);
+  angle = std::max(fabs(60. - a2),angle);
+  angle = std::max(fabs(60. - a3),angle);
+  return 1.-angle/60;
 }
 
 double MTriangle::gammaShapeMeasure()
 {
+#if defined(HAVE_MESH)
   return qmTriangle(this, QMTRI_RHO);
+#else
+  return 0.;
+#endif
 }
 
-const functionSpace* MTriangle::getFunctionSpace(int o) const
+const polynomialBasis* MTriangle::getFunctionSpace(int o) const
 {
   int order = (o == -1) ? getPolynomialOrder() : o;
 
@@ -38,21 +84,70 @@ const functionSpace* MTriangle::getFunctionSpace(int o) const
 
   if ((nf == 0) && (o == -1)) {
     switch (order) {
-    case 1: return &functionSpaces::find(MSH_TRI_3);
-    case 2: return &functionSpaces::find(MSH_TRI_6);
-    case 3: return &functionSpaces::find(MSH_TRI_9);
-    case 4: return &functionSpaces::find(MSH_TRI_12);
-    case 5: return &functionSpaces::find(MSH_TRI_15I);
-    default: Msg::Error("Order %d triangle function space not implemented", order);
+    case 1: return polynomialBases::find(MSH_TRI_3);
+    case 2: return polynomialBases::find(MSH_TRI_6);
+    case 3: return polynomialBases::find(MSH_TRI_9);
+    case 4: return polynomialBases::find(MSH_TRI_12);
+    case 5: return polynomialBases::find(MSH_TRI_15I);
+    case 6: return polynomialBases::find(MSH_TRI_18);
+    case 7: return polynomialBases::find(MSH_TRI_21I);
+    case 8: return polynomialBases::find(MSH_TRI_24);
+    case 9: return polynomialBases::find(MSH_TRI_27);
+    case 10: return polynomialBases::find(MSH_TRI_30);
+    default: Msg::Error("Order %d triangle incomplete function space not implemented", order);
     }
   }
   else { 
     switch (order) {
-    case 1: return &functionSpaces::find(MSH_TRI_3);
-    case 2: return &functionSpaces::find(MSH_TRI_6);
-    case 3: return &functionSpaces::find(MSH_TRI_10);
-    case 4: return &functionSpaces::find(MSH_TRI_15);
-    case 5: return &functionSpaces::find(MSH_TRI_21);
+    case 1: return polynomialBases::find(MSH_TRI_3);
+    case 2: return polynomialBases::find(MSH_TRI_6);
+    case 3: return polynomialBases::find(MSH_TRI_10);
+    case 4: return polynomialBases::find(MSH_TRI_15);
+    case 5: return polynomialBases::find(MSH_TRI_21);
+    case 6: return polynomialBases::find(MSH_TRI_28);
+    case 7: return polynomialBases::find(MSH_TRI_36);
+    case 8: return polynomialBases::find(MSH_TRI_45);
+    case 9: return polynomialBases::find(MSH_TRI_55);
+    case 10: return polynomialBases::find(MSH_TRI_66);
+    default: Msg::Error("Order %d triangle function space not implemented", order);
+    }
+  }
+  return 0;
+}
+
+const JacobianBasis* MTriangle::getJacobianFuncSpace(int o) const
+{
+  int order = (o == -1) ? getPolynomialOrder() : o;
+
+  int nf = getNumFaceVertices();  
+
+  if ((nf == 0) && (o == -1)) {
+    switch (order) {
+    case 1: return JacobianBases::find(MSH_TRI_3);
+    case 2: return JacobianBases::find(MSH_TRI_6);
+    case 3: return JacobianBases::find(MSH_TRI_9);
+    case 4: return JacobianBases::find(MSH_TRI_12);
+    case 5: return JacobianBases::find(MSH_TRI_15I);
+    case 6: return JacobianBases::find(MSH_TRI_18);
+    case 7: return JacobianBases::find(MSH_TRI_21I);
+    case 8: return JacobianBases::find(MSH_TRI_24);
+    case 9: return JacobianBases::find(MSH_TRI_27);
+    case 10: return JacobianBases::find(MSH_TRI_30);
+    default: Msg::Error("Order %d triangle incomplete function space not implemented", order);
+    }
+  }
+  else { 
+    switch (order) {
+    case 1: return JacobianBases::find(MSH_TRI_3);
+    case 2: return JacobianBases::find(MSH_TRI_6);
+    case 3: return JacobianBases::find(MSH_TRI_10);
+    case 4: return JacobianBases::find(MSH_TRI_15);
+    case 5: return JacobianBases::find(MSH_TRI_21);
+    case 6: return JacobianBases::find(MSH_TRI_28);
+    case 7: return JacobianBases::find(MSH_TRI_36);
+    case 8: return JacobianBases::find(MSH_TRI_45);
+    case 9: return JacobianBases::find(MSH_TRI_55);
+    case 10: return JacobianBases::find(MSH_TRI_66);
     default: Msg::Error("Order %d triangle function space not implemented", order);
     }
   }
@@ -182,9 +277,37 @@ void MTriangle6::getFaceRep(int num, double *x, double *y, double *z, SVector3 *
   _myGetFaceRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
 }
 
-void MTriangle::getIntegrationPoints(int pOrder, int *npts, IntPt **pts) const
+void MTriangle::getIntegrationPoints(int pOrder, int *npts, IntPt **pts)
 {
   *npts = getNGQTPts(pOrder);
   *pts = getGQTPts(pOrder);
+}
+#include "Bindings.h"
+static MTriangle6* MTriangle6_binding(std::vector<MVertex*> v) {
+  return new MTriangle6(v);
+}
+
+void MTriangle::registerBindings(binding *b)
+{
+  classBinding *cb = b->addClass<MTriangle>("MTriangle");
+  cb->setDescription("A mesh first-order triangle.");
+  methodBinding *cm;
+  cm = cb->setConstructor<MTriangle,MVertex*,MVertex*,MVertex*>();
+  cm->setArgNames("v0", "v1", "v2", NULL);
+  cm->setDescription("Create a new triangle with vertices (v0,v1,v2).");
+  cb->setParentClass<MElement>();
+
+  cb = b->addClass<MTriangle6>("MTriangle6");
+  cb->setDescription("A mesh second-order triangle.");
+  cm = cb->addMethod("MTriangle6",&MTriangle6_binding);
+  cm->setArgNames("vectorOfVertices", NULL);
+  cm->setDescription("Create a new triangle with vertices given in the vector (length = 6).");
+  cb->setParentClass<MTriangle>();
+
+/*  cb->setDescription("A mesh second-order triangle.");
+  cm = cb->setConstructor<MTriangle6_binding,std::vector<MVertex*> >();
+  cm->setArgNames("vectorOfVertices", NULL);
+  cm->setDescription("Create a new triangle with vertices given in the vector (length = 6).");
+  cb->setParentClass<MTriangle>();*/
 }
 

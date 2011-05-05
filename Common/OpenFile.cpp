@@ -1,15 +1,16 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
+#include <sstream>
 #include <string.h>
 #include "GmshConfig.h"
 #include "GmshMessage.h"
+#include "Options.h"
 #include "Geo.h"
 #include "GModel.h"
 #include "Numeric.h"
-#include "HighOrder.h"
 #include "Context.h"
 #include "OpenFile.h"
 #include "CommandLine.h"
@@ -17,12 +18,17 @@
 #include "OS.h"
 #include "StringUtils.h"
 #include "GeomMeshMatcher.h"
+#include "LuaBindings.h"
 
-#if !defined(HAVE_NO_PARSER)
+#if defined(HAVE_PARSER)
 #include "Parser.h"
 #endif
 
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_MESH)
+#include "HighOrder.h"
+#endif
+
+#if defined(HAVE_POST)
 #include "PView.h"
 #include "PViewData.h"
 #endif
@@ -30,6 +36,7 @@
 #if defined(HAVE_FLTK)
 #include <FL/fl_ask.H>
 #include "FlGui.h"
+#include "menuWindow.h"
 #include "drawContext.h"
 #endif
 
@@ -91,7 +98,7 @@ void SetBoundingBox()
 
   SBoundingBox3d bb = GModel::current()->bounds();
   
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   if(bb.empty()) {
     for(unsigned int i = 0; i < PView::list.size(); i++)
       if(!PView::list[i]->getData()->getBoundingBox().empty())
@@ -135,13 +142,13 @@ void AddToTemporaryBoundingBox(double x, double y, double z)
                              SQU(temp_bb.max().y() - temp_bb.min().y()) + 
                              SQU(temp_bb.max().z() - temp_bb.min().z()));
   if(CTX::instance()->lc == 0) CTX::instance()->lc = 1.;
-  // to get correct cg during interctive point creation
+  // to get correct cg during interactive point creation
   for(int i = 0; i < 3; i++) CTX::instance()->cg[i] = temp_bb.center()[i];
 }
 
 int ParseFile(std::string fileName, bool close, bool warnIfMissing)
 {
-#if defined(HAVE_NO_PARSER)
+#if !defined(HAVE_PARSER)
   Msg::Error("Gmsh parser is not compiled in this version");
   return 0;
 #else
@@ -155,7 +162,7 @@ int ParseFile(std::string fileName, bool close, bool warnIfMissing)
     return 0;
   }
 
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   int numViewsBefore = PView::list.size();
 #endif
 
@@ -188,9 +195,9 @@ int ParseFile(std::string fileName, bool close, bool warnIfMissing)
   gmsh_yylineno = old_yylineno;
   gmsh_yyviewindex = old_yyviewindex;
 
-#if defined(HAVE_FLTK) && !defined(HAVE_NO_POST)
-  if(FlGui::available() && numViewsBefore != (int)PView::list.size())
-    FlGui::instance()->updateViews();
+#if defined(HAVE_FLTK) && defined(HAVE_POST)
+  if(FlGui::available())
+    FlGui::instance()->updateViews(numViewsBefore != (int)PView::list.size());
 #endif
 
   return 1;
@@ -209,16 +216,12 @@ void ParseString(std::string str)
   }
 }
 
-static void SetProjectName(std::string fileName)
-{
-  GModel::current()->setFileName(fileName);
-  GModel::current()->setName(SplitFileName(fileName)[1]);
-}
-
 int MergeFile(std::string fileName, bool warnIfMissing)
 {
-  if(GModel::current()->getName() == "")
-    SetProjectName(fileName);
+  if(GModel::current()->getName() == ""){
+    GModel::current()->setFileName(fileName);
+    GModel::current()->setName(SplitFileName(fileName)[1]);
+  }
 
 #if defined(HAVE_FLTK)
   if(FlGui::available())
@@ -238,31 +241,29 @@ int MergeFile(std::string fileName, bool warnIfMissing)
   if(!fgets(header, sizeof(header), fp)) return 0;
   fclose(fp);
 
-  Msg::StatusBar(2, true, "Reading '%s'", fileName.c_str());
+  Msg::StatusBar(2, true, "Reading '%s'...", fileName.c_str());
 
   std::vector<std::string> split = SplitFileName(fileName);
   std::string noExt = split[0] + split[1], ext = split[2];
 
-#if defined(HAVE_FLTK)
-  if(FlGui::available()) {
-    if(ext == ".gz") {
-      // the real solution would be to rewrite all our I/O functions in
-      // terms of gzFile, but until then, this is better than nothing
-      if(fl_choice("File '%s' is in gzip format.\n\nDo you want to uncompress it?", 
-                   "Cancel", "Uncompress", NULL, fileName.c_str())){
-        if(SystemCall(std::string("gunzip -c ") + fileName + " > " + noExt))
-          Msg::Error("Failed to uncompress `%s': check directory permissions", 
-                     fileName.c_str());
-        SetProjectName(noExt);
-        return MergeFile(noExt);
-      }
+  if(ext == ".gz") {
+    // the real solution would be to rewrite all our I/O functions in
+    // terms of gzFile, but until then, this is better than nothing
+    std::ostringstream sstream;
+    sstream << "File '"<< fileName << "' is in gzip format.\n\n"
+            << "Do you want to uncompress it?";
+    if(Msg::GetAnswer(sstream.str().c_str(), 0, "Cancel", "Uncompress")){
+      if(SystemCall(std::string("gunzip -c ") + fileName + " > " + noExt))
+        Msg::Error("Failed to uncompress `%s': check directory permissions", 
+                   fileName.c_str());
+      GModel::current()->setFileName(noExt);
+      return MergeFile(noExt);
     }
   }
-#endif
-
+  
   CTX::instance()->geom.draw = 0; // don't try to draw the model while reading
 
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   int numViewsBefore = PView::list.size();
 #endif
 
@@ -278,6 +279,9 @@ int MergeFile(std::string fileName, bool warnIfMissing)
   }
   else if(ext == ".step" || ext == ".STEP" || ext == ".stp" || ext == ".STP"){
     status = GModel::current()->readOCCSTEP(fileName);
+  }
+  else if(ext == ".sat" || ext == ".SAT"){
+    status = GModel::current()->readACISSAT(fileName);
   }
   else if(ext == ".unv" || ext == ".UNV"){
     status = GModel::current()->readUNV(fileName);
@@ -295,11 +299,12 @@ int MergeFile(std::string fileName, bool warnIfMissing)
   else if(ext == ".med" || ext == ".MED" || ext == ".mmed" || ext == ".MMED" ||
           ext == ".rmed" || ext == ".RMED"){
     status = GModel::readMED(fileName);
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
     if(status > 1) status = PView::readMED(fileName);
 #endif
   }
-  else if(ext == ".bdf" || ext == ".BDF" || ext == ".nas" || ext == ".NAS"){
+  else if(ext == ".bdf" || ext == ".BDF" || ext == ".nas" || ext == ".NAS" ||
+          ext == ".dat" || ext == ".DAT"){
     status = GModel::current()->readBDF(fileName);
   }
   else if(ext == ".p3d" || ext == ".P3D"){
@@ -327,34 +332,42 @@ int MergeFile(std::string fileName, bool warnIfMissing)
   }
 #endif
 #endif
+#if defined(HAVE_LUA)
+  else if(ext == ".lua" || ext == ".LUA") {
+    status = binding::instance()->readFile(fileName.c_str());
+  }
+#endif
+  else if(ext == ".ply2"){
+    status = GModel::current()->readPLY2(fileName);
+  }
+  else if(ext == ".ply"){
+    status = GModel::current()->readPLY(fileName);
+  }
   else {
     CTX::instance()->geom.draw = 1;
     if(!strncmp(header, "$PTS", 4) || !strncmp(header, "$NO", 3) || 
        !strncmp(header, "$PARA", 5) || !strncmp(header, "$ELM", 4) ||
        !strncmp(header, "$MeshFormat", 11) || !strncmp(header, "$Comments", 9)) {
-
-      // MATCHER
-      if(CTX::instance()->geom.matchGeomAndMesh  && !GModel::current()->empty() ) {
-        GModel* tmp_model = new GModel();
-        tmp_model->readMSH(fileName);
-        //tmp_model->scaleMesh(1000);
-        int match_status = GeomMeshMatcher::instance()->match(GModel::current(), tmp_model);
-        if (match_status)
+      // mesh matcher
+      if(CTX::instance()->geom.matchGeomAndMesh && !GModel::current()->empty()){
+        GModel* tmp = new GModel();
+        tmp->readMSH(fileName);
+        if(GeomMeshMatcher::instance()->match(GModel::current(), tmp))
           fileName = "out.msh";
-        delete tmp_model;
+        delete tmp;
       }
-      // MATCHER END
-
       status = GModel::current()->readMSH(fileName);
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
       if(status > 1) status = PView::readMSH(fileName);
 #endif
+#if defined(HAVE_MESH)
       if(CTX::instance()->mesh.order > 1) 
         SetOrderN(GModel::current(), CTX::instance()->mesh.order,
                   CTX::instance()->mesh.secondOrderLinear, 
                   CTX::instance()->mesh.secondOrderIncomplete);
+#endif
     }
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
     else if(!strncmp(header, "$PostFormat", 11) || 
             !strncmp(header, "$View", 5)) {
       status = PView::readPOS(fileName);
@@ -370,29 +383,49 @@ int MergeFile(std::string fileName, bool warnIfMissing)
   CTX::instance()->geom.draw = 1;
   CTX::instance()->mesh.changed = ENT_ALL;
 
-#if defined(HAVE_FLTK) && !defined(HAVE_NO_POST)
-  if(FlGui::available() && numViewsBefore != (int)PView::list.size())
-    FlGui::instance()->updateViews();
+#if defined(HAVE_FLTK) && defined(HAVE_POST)
+  if(FlGui::available()){
+    bool newViews = numViewsBefore != (int)PView::list.size();
+    if(newViews){
+      // go directly to the first non-empty step
+      for(unsigned int i = 0; i < PView::list.size(); i++){
+        for(int j = 0; j < (int)opt_view_nb_timestep(i, GMSH_GET, 0); j++){
+          int step = (int)opt_view_timestep(i, GMSH_GET, 0);
+          if(PView::list[i]->getData()->hasTimeStep(step))
+            break;
+          else
+            opt_view_timestep(i, GMSH_SET | GMSH_GUI, step + 1);
+        }
+      }
+    }
+    FlGui::instance()->updateViews(newViews);
+  }
 #endif
 
   if(!status) Msg::Error("Error loading '%s'", fileName.c_str());
-  Msg::StatusBar(2, true, "Read '%s'", fileName.c_str());
+  Msg::StatusBar(2, true, "Done reading '%s'", fileName.c_str());
+
+  // merge the associated option file if there is one
+  if(!StatFile(fileName + ".opt"))
+    MergeFile(fileName + ".opt");
+
   return status;
 }
 
 void ClearProject()
 {
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   for(int i = PView::list.size() - 1; i >= 0; i--)
     delete PView::list[i];
 #endif
-#if !defined(HAVE_NO_PARSER)
+#if defined(HAVE_PARSER)
   gmsh_yysymbols.clear();
 #endif
   for(int i = GModel::list.size() - 1; i >= 0; i--)
     delete GModel::list[i];
   new GModel();
-  SetProjectName(CTX::instance()->defaultFileName);
+  GModel::current()->setFileName(CTX::instance()->defaultFileName);
+  GModel::current()->setName("");
 #if defined(HAVE_FLTK)
   if(FlGui::available()){
     FlGui::instance()->setGraphicTitle(GModel::current()->getFileName());
@@ -425,7 +458,7 @@ void OpenProject(std::string fileName)
     // if the current model is not empty make it invisible, clear the
     // parser variables and add a new model
     GModel::current()->setVisibility(0);
-#if !defined(HAVE_NO_PARSER)
+#if defined(HAVE_PARSER)
     gmsh_yysymbols.clear();
 #endif
     new GModel();
@@ -434,19 +467,25 @@ void OpenProject(std::string fileName)
 
   // temporary hack until we fill the current GModel on the fly during
   // parsing
-  ResetTemporaryBoundingBox();
+  ResetTemporaryBoundingBox(); 
 
   // merge the file
-  MergeFile(fileName);
-
-  // merge the associated option file if there is one
-  if(!StatFile(fileName + ".opt"))
-    MergeFile(fileName + ".opt");
-
+  if(MergeFile(fileName)) {
+    if(fileName != CTX::instance()->recentFiles.front())
+      CTX::instance()->recentFiles.insert
+        (CTX::instance()->recentFiles.begin(), fileName);
+    if(CTX::instance()->recentFiles.size() > 5)
+      CTX::instance()->recentFiles.resize(5);
+#if defined(HAVE_FLTK)
+    if(FlGui::available())
+      FlGui::instance()->menu->fillRecentHistoryMenu();
+#endif
+  }
   CTX::instance()->lock = 0;
 
 #if defined(HAVE_FLTK)
   if(FlGui::available()){
+    file_watch_cb(0, 0);
     FlGui::instance()->resetVisibility();
     FlGui::instance()->updateViews();
     FlGui::instance()->updateFields();

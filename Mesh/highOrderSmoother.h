@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -8,6 +8,11 @@
 
 #include <map>
 #include <vector>
+#include "GmshConfig.h"
+#include "GmshMessage.h"
+
+#if defined(HAVE_SOLVER)
+
 #include "SVector3.h"
 #include "fullMatrix.h"
 #include "dofManager.h"
@@ -39,7 +44,7 @@ public:
   }  
   void smooth(std::vector<MElement*> & );
   double smooth_metric_(std::vector<MElement*> &, GFace *gf,
-                        dofManager<double,double> &myAssembler,
+                        dofManager<double> &myAssembler,
                         std::set<MVertex*> &verticesToMove,
                         elasticityTerm &El);
   void smooth_metric(std::vector<MElement*> &, GFace *gf );
@@ -47,10 +52,14 @@ public:
   void smooth_p2point(GFace *);
   void smooth_pNpoint(GFace *);
   void smooth(GRegion*);
+  void smooth_cavity(std::vector<MElement*> &,
+                     std::vector<MElement*> &,
+                     GFace *gf);
   int getTag() const { return _tag; }
   void swap(GFace *, 
             edgeContainer &edgeVertices,
             faceContainer &faceVertices);
+
   void optimize(GFace *, 
                 edgeContainer &edgeVertices,
                 faceContainer &faceVertices);
@@ -83,5 +92,23 @@ public:
      }
   }
 };
+
+#else
+
+class highOrderSmoother 
+{
+ public:
+  highOrderSmoother(int dim) 
+  {
+    Msg::Error("Gmsh has to be compiled with solver support to use highOrderSmoother");
+  }
+  void add(MVertex * v, const SVector3 &d ){}  
+  void smooth(GRegion*){}
+  void optimize(GFace *, 
+                edgeContainer &edgeVertices,
+                faceContainer &faceVertices){}
+};
+
+#endif
 
 #endif

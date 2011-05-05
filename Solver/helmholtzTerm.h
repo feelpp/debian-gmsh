@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -15,9 +15,9 @@
 #include "fullMatrix.h"
 #include "Numeric.h"
 
-// \nabla \cdot k \nabla U + a U 
+// \nabla \cdot k \nabla U - a U 
 template<class scalar>
-class helmholtzTerm : public femTerm<scalar, scalar> {
+class helmholtzTerm : public femTerm<scalar> {
  protected:
   const simpleFunction<scalar> *_k, *_a;
   const int _iFieldR;
@@ -25,8 +25,7 @@ class helmholtzTerm : public femTerm<scalar, scalar> {
  public:
   helmholtzTerm(GModel *gm, int iFieldR, int iFieldC, simpleFunction<scalar> *k,
                 simpleFunction<scalar> *a) 
-    : femTerm<scalar, scalar>(gm), _iFieldR(iFieldR), _iFieldC(iFieldC),
-      _k(k), _a(a) {}
+    : femTerm<scalar>(gm), _k(k), _a(a), _iFieldR(iFieldR), _iFieldC(iFieldC) {}
   // one dof per vertex (nodal fem)
   virtual int sizeOfR(SElement *se) const 
   { 
@@ -48,10 +47,13 @@ class helmholtzTerm : public femTerm<scalar, scalar> {
   }
   virtual void elementMatrix(SElement *se, fullMatrix<scalar> &m) const
   {
+
     MElement *e = se->getMeshElement();
     // compute integration rule
     const int integrationOrder = (_a) ? 2 * e->getPolynomialOrder() : 
       2 * (e->getPolynomialOrder() - 1);
+   //    const int integrationOrder = 2 * e->getPolynomialOrder() + 1; 
+
     int npts; IntPt *GP;
     e->getIntegrationPoints(integrationOrder, &npts, &GP);
     // get the number of nodes
@@ -63,7 +65,7 @@ class helmholtzTerm : public femTerm<scalar, scalar> {
     double Grads[100][3], grads[100][3];  
     double sf[100];
     // set the local matrix to 0 
-    m.set_all(0.);
+    m.setAll(0.);
     // loop over integration points
     for (int i = 0; i < npts; i++){
       // compute stuff at this point
@@ -72,7 +74,7 @@ class helmholtzTerm : public femTerm<scalar, scalar> {
       const double w = GP[i].pt[2];
       const double weightDetJ = GP[i].weight * e->getJacobian(u, v, w, jac);   
       SPoint3 p; e->pnt(u, v, w, p);
-      const scalar K = (*_k)(p.x(), p.y(), p.z());
+      const scalar K = _k ? (*_k)(p.x(), p.y(), p.z()) : 0.0;
       const scalar A = _a ? (*_a)(p.x(), p.y(), p.z()) : 0.0;
       inv3x3(jac, invjac) ;
       e->getGradShapeFunctions(u, v, w, grads);
@@ -90,14 +92,14 @@ class helmholtzTerm : public femTerm<scalar, scalar> {
         for (int k = 0; k <= j; k++){
           m(j, k) += (K * (Grads[j][0] * Grads[k][0] +
                            Grads[j][1] * Grads[k][1] +
-                           Grads[j][2] * Grads[k][2]) + A * sf[j] * sf[k]) * 
-            weightDetJ;
+                           Grads[j][2] * Grads[k][2]) + A * sf[j] * sf[k]) * weightDetJ;
         }
       }
     }
     for (int j = 0; j < nbNodes; j++)
       for (int k = 0; k < j; k++)
         m(k, j) = m(j, k);
+
   }
 };
 

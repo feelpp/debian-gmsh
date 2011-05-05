@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -30,7 +30,9 @@ class OCCVertex : public GVertex {
   ModelType getNativeType() const { return OpenCascadeModel; }
   void * getNativePtr() const { return (void*)&v; }
   virtual SPoint2 reparamOnFace(const GFace *gf, int) const;
+  TopoDS_Vertex getShape() { return v; }
 };
+GVertex *getOCCVertexByNativePtr(GModel *model, TopoDS_Vertex toFind);
 
 #endif
 

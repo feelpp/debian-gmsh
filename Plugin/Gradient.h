@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -18,6 +18,10 @@ class GMSH_GradientPlugin : public GMSH_PostPlugin
  public:
   GMSH_GradientPlugin(){}
   std::string getName() const { return "Gradient"; }
+  std::string getShortHelp() const
+  {
+    return "Compute the gradient of a scalar view";
+  }
   std::string getHelp() const;
   int getNbOptions() const;
   StringXNumber *getOption(int iopt);  

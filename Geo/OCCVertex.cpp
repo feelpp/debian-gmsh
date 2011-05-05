@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -21,8 +21,6 @@ OCCVertex::OCCVertex(GModel *m, int num, TopoDS_Vertex _v)
   _x = pnt.X();
   _y = pnt.Y();
   _z = pnt.Z();
-  mesh_vertices.push_back(new MVertex(x(), y(), z(), this));
-  points.push_back(new MPoint(mesh_vertices.back()));
 }
 
 void OCCVertex::setPosition(GPoint &p)
@@ -103,6 +101,20 @@ SPoint2 OCCVertex::reparamOnFace(const GFace *gf, int dir) const
 
   // normally never here
   return GVertex::reparamOnFace(gf, dir);
+}
+
+GVertex *getOCCVertexByNativePtr(GModel *model, TopoDS_Vertex toFind)
+{
+  GModel::viter it =model->firstVertex();
+  for (; it != model->lastVertex(); it++){
+    OCCVertex *occv = dynamic_cast<OCCVertex*>(*it);
+    if (occv){
+      if (toFind.IsSame(occv->getShape())){
+	return *it;
+      }
+    }
+  }
+  return 0;
 }
 
 #endif

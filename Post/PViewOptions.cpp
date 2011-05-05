@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -124,10 +124,12 @@ bool PViewOptions::skipElement(int type)
   case TYPE_LIN: return !drawLines;
   case TYPE_TRI: return !drawTriangles;
   case TYPE_QUA: return !drawQuadrangles;
+  case TYPE_POLYG: return false;
   case TYPE_TET: return !drawTetrahedra;
   case TYPE_HEX: return !drawHexahedra;
   case TYPE_PRI: return !drawPrisms;
   case TYPE_PYR: return !drawPyramids;
+  case TYPE_POLYH: return false;
   default: return true;
   }
 }

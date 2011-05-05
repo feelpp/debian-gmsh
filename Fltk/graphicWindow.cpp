@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -79,10 +79,17 @@ static void gmsh_rotate(Fl_Color c)
 static void gmsh_models(Fl_Color c)
 {
   fl_color(c);
-  bl; vv(-0.8,-0.8); vv(-0.3,-0.8); vv(-0.3,-0.3); vv(-0.8,-0.3); el;
-  bl; vv(0.3,-0.8); vv(0.8,-0.8); vv(0.8,-0.3); vv(0.3,-0.3); el;
-  bl; vv(-0.8,0.3); vv(-0.3,0.3); vv(-0.3,0.8); vv(-0.8,0.8); el;
-  bl; vv(0.3,0.3); vv(0.8,0.3); vv(0.8,0.8); vv(0.3,0.8); el;
+  bl; vv(-0.8,-0.7); vv(0.8,-0.7); el;
+  bl; vv(-0.8,-0.2); vv(0.8,-0.2); el;
+  bl; vv(-0.8,0.3); vv(0.8,0.3); el;
+  bl; vv(-0.8,0.8); vv(0.8,0.8); el;
+}
+
+static void gmsh_clscale(Fl_Color c)
+{
+  fl_color(c);
+  bl; vv(-0.8,0.8); vv(-0.1,0.8); vv(-0.8,0.1); el;
+  bl; vv(-0.2,0.2); vv(0.9,0.2); vv(-0.2,-0.9); el;
 }
 
 #undef vv
@@ -189,7 +196,7 @@ void status_options_cb(Fl_Widget *w, void *data)
 {
   const char *str = (const char*)data;
   if(!strcmp(str, "model")){ // model selection
-    model_chooser();
+    modelChooser();
   }
   else if(!strcmp(str, "?")){ // display options
     PrintOptions(0, GMSH_FULLRC, 0, 1, NULL);
@@ -201,9 +208,48 @@ void status_options_cb(Fl_Widget *w, void *data)
                                !opt_general_orthographic(0, GMSH_GET, 0));
     }
     else{
-      perspective_editor();
+      perspectiveEditor();
     }
     drawContext::global()->draw();
+  }
+  else if(!strcmp(str, "M")){ // toggle mesh display
+    static int value = 1;
+    static int old_p = (int)opt_mesh_points(0, GMSH_GET, 0.);
+    static int old_l = (int)opt_mesh_lines(0, GMSH_GET, 0.);
+    static int old_se = (int)opt_mesh_surfaces_edges(0, GMSH_GET, 0.);
+    static int old_sf = (int)opt_mesh_surfaces_faces(0, GMSH_GET, 0.);
+    static int old_ve = (int)opt_mesh_volumes_edges(0, GMSH_GET, 0.);
+    static int old_vf = (int)opt_mesh_volumes_faces(0, GMSH_GET, 0.);
+    if(!value){ // retore visibility
+      Msg::StatusBar(2, false, "Mesh display restored");
+      value = 1;
+      opt_mesh_points(0, GMSH_SET | GMSH_GUI, old_p);
+      opt_mesh_lines(0, GMSH_SET | GMSH_GUI, old_l);
+      opt_mesh_surfaces_edges(0, GMSH_SET | GMSH_GUI, old_se);
+      opt_mesh_surfaces_faces(0, GMSH_SET | GMSH_GUI, old_sf);
+      opt_mesh_volumes_edges(0, GMSH_SET | GMSH_GUI, old_ve);
+      opt_mesh_volumes_faces(0, GMSH_SET | GMSH_GUI, old_vf);
+    }
+    else{
+      Msg::StatusBar(2, false, "Mesh display OFF");
+      value = 0;
+      old_p = (int)opt_mesh_points(0, GMSH_GET, 0.);
+      old_l = (int)opt_mesh_lines(0, GMSH_GET, 0.);
+      old_se = (int)opt_mesh_surfaces_edges(0, GMSH_GET, 0.);
+      old_sf = (int)opt_mesh_surfaces_faces(0, GMSH_GET, 0.);
+      old_ve = (int)opt_mesh_volumes_edges(0, GMSH_GET, 0.);
+      old_vf = (int)opt_mesh_volumes_faces(0, GMSH_GET, 0.);
+      opt_mesh_points(0, GMSH_SET | GMSH_GUI, 0);
+      opt_mesh_lines(0, GMSH_SET | GMSH_GUI, 0);
+      opt_mesh_surfaces_edges(0, GMSH_SET | GMSH_GUI, 0);
+      opt_mesh_surfaces_faces(0, GMSH_SET | GMSH_GUI, 0);
+      opt_mesh_volumes_edges(0, GMSH_SET | GMSH_GUI, 0);
+      opt_mesh_volumes_faces(0, GMSH_SET | GMSH_GUI, 0);
+    }
+    drawContext::global()->draw();
+  }
+  else if(!strcmp(str, "clscale")){
+    meshSizeEditor();
   }
   else if(!strcmp(str, "S")){ // mouse selection
     if(CTX::instance()->mouseSelection){
@@ -220,7 +266,7 @@ void status_options_cb(Fl_Widget *w, void *data)
 
 static int stop_anim = 0, view_in_cycle = -1;
 
-void status_play_manual(int time, int step)
+void status_play_manual(int time, int incr)
 {
   // avoid firing this routine recursively (can happen e.g when
   // keeping the finger down on the arrow key: if the system generates
@@ -229,23 +275,44 @@ void status_play_manual(int time, int step)
   static bool busy = false;
   if(busy) return;
   busy = true;
+
+  // if we watch some files this is a good time to check for new data
+  file_watch_cb(0, 0);
+
   if(time) {
-    for(unsigned int i = 0; i < PView::list.size(); i++)
-      if(opt_view_visible(i, GMSH_GET, 0))
-        opt_view_timestep(i, GMSH_SET | GMSH_GUI,
-                          opt_view_timestep(i, GMSH_GET, 0) + step);
+    for(unsigned int i = 0; i < PView::list.size(); i++){
+      if(opt_view_visible(i, GMSH_GET, 0)){
+        // skip empty steps
+        int step = (int)opt_view_timestep(i, GMSH_GET, 0) + incr;
+        int numSteps = (int)opt_view_nb_timestep(i, GMSH_GET, 0);
+        for(int j = 0; j < numSteps; j++){
+          if(PView::list[i]->getData()->hasTimeStep(step))
+            break;
+          else
+            step += incr;
+          if(step < 0) step = numSteps - 1;
+          if(step > numSteps - 1) step = 0;
+        }
+        opt_view_timestep(i, GMSH_SET | GMSH_GUI, step);
+      }
+    }
   }
   else { // hide all views except view_in_cycle
-    if(step > 0) {
-      if((view_in_cycle += step) >= (int)PView::list.size())
+    if(incr == 0) {
+      view_in_cycle = 0;
+      for(int i = 0; i < (int)PView::list.size(); i++)
+        opt_view_visible(i, GMSH_SET | GMSH_GUI, (i == view_in_cycle));
+    }
+    else if(incr > 0) {
+      if((view_in_cycle += incr) >= (int)PView::list.size())
         view_in_cycle = 0;
-      for(int i = 0; i < (int)PView::list.size(); i += step)
+      for(int i = 0; i < (int)PView::list.size(); i += incr)
         opt_view_visible(i, GMSH_SET | GMSH_GUI, (i == view_in_cycle));
     }
     else {
-      if((view_in_cycle += step) < 0)
+      if((view_in_cycle += incr) < 0)
         view_in_cycle = PView::list.size() - 1;
-      for(int i = PView::list.size() - 1; i >= 0; i += step)
+      for(int i = PView::list.size() - 1; i >= 0; i += incr)
         opt_view_visible(i, GMSH_SET | GMSH_GUI, (i == view_in_cycle));
     }
   }
@@ -340,6 +407,7 @@ graphicWindow::graphicWindow(bool main, int numTiles)
     fl_add_symbol("gmsh_ortho", gmsh_ortho, 1);
     fl_add_symbol("gmsh_rotate", gmsh_rotate, 1);
     fl_add_symbol("gmsh_models", gmsh_models, 1);
+    fl_add_symbol("gmsh_clscale", gmsh_clscale, 1);
     first = false;
   }
   
@@ -395,6 +463,14 @@ graphicWindow::graphicWindow(bool main, int numTiles)
   butt[8]->callback(status_options_cb, (void *)"p");
   butt[8]->tooltip("Toggle projection mode (Alt+o or Alt+Shift+o)");
   x += sw;  
+  butt[12] = new Fl_Button(x, glheight + 2, sw, sht, "M");
+  butt[12]->callback(status_options_cb, (void *)"M");
+  butt[12]->tooltip("Toggle mesh visibility (Alt+m)");
+  x += sw;  
+  butt[13] = new Fl_Button(x, glheight + 2, sw, sht, "@-1gmsh_clscale");
+  butt[13]->callback(status_options_cb, (void *)"clscale");
+  butt[13]->tooltip("Change mesh element size factor");
+  x += sw;  
   butt[9] = new Fl_Button(x, glheight + 2, sw, sht, "S");
   butt[9]->callback(status_options_cb, (void *)"S");
   butt[9]->tooltip("Toggle mouse selection ON/OFF (Escape)");
@@ -420,7 +496,7 @@ graphicWindow::graphicWindow(bool main, int numTiles)
   butt[11]->deactivate();
   x += sw;
   
-  for(int i = 0; i < 12; i++) {
+  for(int i = 0; i < 14; i++) {
     butt[i]->box(FL_FLAT_BOX);
     butt[i]->selection_color(FL_WHITE);
     butt[i]->align(FL_ALIGN_CENTER | FL_ALIGN_INSIDE | FL_ALIGN_CLIP);
@@ -481,6 +557,7 @@ graphicWindow::graphicWindow(bool main, int numTiles)
 
   int mode = FL_RGB | FL_DEPTH | (CTX::instance()->db ? FL_DOUBLE : FL_SINGLE);
   if(CTX::instance()->antialiasing) mode |= FL_MULTISAMPLE;
+  //mode |= FL_STEREO;
   for(unsigned int i = 0; i < gl.size(); i++) gl[i]->mode(mode);
 
   tile->end();

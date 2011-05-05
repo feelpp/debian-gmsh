@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -16,7 +16,10 @@
 
 class adaptiveData;
 class GModel;
+class GEntity;
+class MElement;
 class nameData;
+class binding;
 
 // The abstract interface to post-processing view data.
 class PViewData {
@@ -45,14 +48,14 @@ class PViewData {
   virtual void setDirty(bool val){ _dirty = val; }
 
   // finalize the view data (compute min/max, etc.)
-  virtual bool finalize();
+  virtual bool finalize(bool computeMinMax=true);
 
   // get/set name
   virtual std::string getName(){ return _name; }
   virtual void setName(std::string val){ _name = val; }
 
-  // get/set filename
-  virtual std::string getFileName(){ return _fileName; }
+  // get/set (the main) filename containing the data
+  virtual std::string getFileName(int step=-1){ return _fileName; }
   virtual void setFileName(std::string val){ _fileName = val; }
 
   // get/set index of view data in file
@@ -65,12 +68,15 @@ class PViewData {
   // get the time value associated with the step-th time step
   virtual double getTime(int step){ return 0.; }
 
-  // get min/max for given step (global over all steps if step=-1)
-  virtual double getMin(int step=-1) = 0;
-  virtual double getMax(int step=-1) = 0;
+  // get/set min/max for given step (global over all steps if step=-1)
+  virtual double getMin(int step=-1, bool onlyVisible=false) = 0;
+  virtual double getMax(int step=-1, bool onlyVisible=false) = 0;
+  virtual void setMin(double min) = 0;
+  virtual void setMax(double max) = 0;
 
-  // get the bounding box
+  // get/set the bounding box
   virtual SBoundingBox3d getBoundingBox(int step=-1) = 0;
+  virtual void setBoundingBox(SBoundingBox3d& box) = 0;
 
   // get the number of elements of a given type, for a given step
   virtual int getNumScalars(int step=-1){ return 0; }
@@ -80,10 +86,12 @@ class PViewData {
   virtual int getNumLines(int step=-1){ return 0; }
   virtual int getNumTriangles(int step=-1){ return 0; }
   virtual int getNumQuadrangles(int step=-1){ return 0; }
+  virtual int getNumPolygons(int step=-1){ return 0; }
   virtual int getNumTetrahedra(int step=-1){ return 0; }
   virtual int getNumHexahedra(int step=-1){ return 0; }
   virtual int getNumPrisms(int step=-1){ return 0; }
   virtual int getNumPyramids(int step=-1){ return 0; }
+  virtual int getNumPolyhedra(int step=-1){ return 0; }
 
   // return the number of geometrical entities in the view
   virtual int getNumEntities(int step=-1){ return 0; }
@@ -126,6 +134,10 @@ class PViewData {
   virtual void getValue(int step, int ent, int ele, int nod, int comp, double &val){}
   virtual void setValue(int step, int ent, int ele, int nod, int comp, double val);
 
+  double getValueBinding(int step, int ent, int ele, int nod, int comp);
+  void getAllValuesForElementBinding(int step, int ent, int ele, fullMatrix<double> &m);
+  void getAllNodesForElementBinding(int step, int ent, int ele, fullMatrix<double> &m);
+
   // return a scalar value (same as value for scalars, norm for
   // vectors, etc.) associated with the node-th node from the ele-th
   // element in the ent-th entity
@@ -156,12 +168,12 @@ class PViewData {
 
   // check if we should skip the given entity/element
   virtual bool skipEntity(int step, int ent){ return false; }
-  virtual bool skipElement(int step, int ent, int ele,
-                           bool checkVisibility=false){ return false; }
+  virtual bool skipElement(int step, int ent, int ele, bool checkVisibility=false,
+                           int samplingRate=1);
 
   // check if the data has the given step/partition/etc.
-  virtual bool hasTimeStep(int step){ return step < getNumTimeSteps(); }
-  virtual bool hasPartition(int part){ return false; }
+  virtual bool hasTimeStep(int step){ return step >= 0 && step < getNumTimeSteps(); }
+  virtual bool hasPartition(int step, int part){ return false; }
   virtual bool hasMultipleMeshes(){ return false; }
   virtual bool hasModel(GModel *model, int step=-1){ return false; }
 
@@ -196,6 +208,13 @@ class PViewData {
   // combine time steps or elements from multiple datasets
   virtual bool combineTime(nameData &nd);
   virtual bool combineSpace(nameData &nd);
+  
+  // ask to fill vertex arrays remotely
+  virtual bool isRemote(){ return false; }
+  virtual int fillRemoteVertexArrays(std::string &options){ return 0; }
+
+  // get MElement (if view supports it)
+  virtual MElement *getElement(int step, int entity, int element);
 
   // I/O routines
   virtual bool writeSTL(std::string fileName);
@@ -204,6 +223,8 @@ class PViewData {
                         bool append=false);
   virtual bool writeMSH(std::string fileName, bool binary=false);
   virtual bool writeMED(std::string fileName);
+
+  static void registerBindings(binding *b);
 };
 
 class nameData{

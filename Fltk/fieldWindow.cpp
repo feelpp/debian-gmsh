@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -26,6 +26,7 @@
 #include "GmshMessage.h"
 #include "Field.h"
 #include "GeoStringInterface.h"
+#include "StringUtils.h"
 #include "Options.h"
 #include "Context.h"
 
@@ -48,7 +49,8 @@ static void field_new_cb(Fl_Widget *w, void *data)
   FieldManager *fields = GModel::current()->getFields();
   int id = fields->newId();
   add_field(id, mb->text(), GModel::current()->getFileName());
-  FlGui::instance()->fields->editField((*fields)[id]);
+  if((*fields)[id])
+    FlGui::instance()->fields->editField((*fields)[id]);
 }
 
 static void field_apply_cb(Fl_Widget *w, void *data)
@@ -81,9 +83,9 @@ static void field_put_on_view_cb(Fl_Widget *w, void *data)
 static void field_select_file_cb(Fl_Widget *w, void *data)
 {
   Fl_Input *input = (Fl_Input*)data;
-  int ret = file_chooser(0, 0, "File selection", "", input->value());
+  int ret = fileChooser(FILE_CHOOSER_SINGLE, "Choose", "", input->value());
   if(ret){
-    input->value(file_chooser_get_name(0).c_str());
+    input->value(fileChooserGetName(0).c_str());
     input->set_changed();
   }
 }
@@ -163,7 +165,9 @@ fieldWindow::fieldWindow(int deltaFontSize) : _deltaFontSize(deltaFontSize)
   options_tab->end();
 
   Fl_Group *help_tab = new Fl_Group(x, y, w, h, "Help");
-  help_display = new Fl_Browser(x, y + WB, w, h - 2 * WB);
+  help_display = new Fl_Help_View(x, y + WB, w, h - 2 * WB);
+  help_display->textfont(FL_HELVETICA);
+  help_display->textsize(FL_NORMAL_SIZE);
   help_tab->end();
 
   tabs->end();
@@ -344,19 +348,16 @@ void fieldWindow::editField(Field *f)
   options_scroll->begin();
   int xx = options_scroll->x();
   int yy = options_scroll->y();
-  help_display->clear();
-  help_display->add("\n");
-  add_multiline_in_browser(help_display, "", f->getDescription().c_str(), 100);
-  help_display->add("\n");
-  help_display->add("@b@cOptions");
+
+  std::string help = f->getDescription();
+  ConvertToHTML(help);
+  help += std::string("<p><center><b>Options</b></center>");
   for(std::map<std::string, FieldOption*>::iterator it = f->options.begin(); 
       it != f->options.end(); it++){
     Fl_Widget *input;
-    help_display->add("\n");
-    help_display->add(("@b" + it->first).c_str());
-    help_display->add(("@i" + it->second->getTypeName()).c_str());
-    add_multiline_in_browser
-      (help_display, "", it->second->getDescription().c_str(), 100);
+    help += std::string("<p><b>") + it->first + "</b>";
+    help += " (<em>" + it->second->getTypeName() + "</em>): ";
+    help += it->second->getDescription();
     switch(it->second->getType()){
     case FIELD_OPTION_INT:
     case FIELD_OPTION_DOUBLE:
@@ -389,6 +390,7 @@ void fieldWindow::editField(Field *f)
     options_widget.push_back(input);
     yy += BH;
   }
+  help_display->value(help.c_str());
   options_scroll->end();
 
   FL_NORMAL_SIZE += _deltaFontSize;

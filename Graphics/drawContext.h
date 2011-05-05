@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -27,6 +27,11 @@
 
 class PView;
 class GModel;
+class GVertex;
+class GEdge;
+class GFace;
+class GRegion;
+class MElement;
 
 class drawTransform {
  public:
@@ -164,6 +169,10 @@ class drawContext {
   void unproject(double x, double y, double p[3], double d[3]);
   void viewport2World(double win[3], double xyz[3]);
   void world2Viewport(double xyz[3], double win[3]);
+  bool select(int type, bool multiple, bool mesh, int x, int y, int w, int h, 
+              std::vector<GVertex*> &vertices, std::vector<GEdge*> &edges, 
+              std::vector<GFace*> &faces, std::vector<GRegion*> &regions,
+              std::vector<MElement*> &elements);
   int fix2dCoordinates(double *x, double *y);
   void draw3d();
   void draw2d();
@@ -182,12 +191,12 @@ class drawContext {
   void drawAxes();
   void drawSmallAxes();
   void drawScales();
-  void drawString(std::string s, std::string &font_name, int font_enum, 
+  void drawString(const std::string &s, const std::string &font_name, int font_enum, 
                   int font_size, int align);
-  void drawString(std::string s);
-  void drawStringCenter(std::string s);
-  void drawStringRight(std::string s);
-  void drawString(std::string s, double style);
+  void drawString(const std::string &s);
+  void drawStringCenter(const std::string &s);
+  void drawStringRight(const std::string &s);
+  void drawString(const std::string &s, double style);
   void drawSphere(double R, double x, double y, double z, int n1, int n2, int light);
   void drawSphere(double size, double x, double y, double z, int light);
   void drawCylinder(double width, double *x, double *y, double *z, int light);

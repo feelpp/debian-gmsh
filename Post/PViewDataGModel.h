@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -35,9 +35,16 @@ class stepData{
   // the data and 2) not to store any additional info in MVertex or
   // MElement)
   std::vector<real*> *_data;
+  // a vector containing the multiplying factor allowing to compute
+  // the number of values stored in _data for each index (number of
+  // values = getMult() * getNumComponents()). If _mult is empty, a
+  // default value of "1" is assumed
+  std::vector<int> _mult;
   // a vector, indexed by MSH element type, of Gauss point locations
   // in parametric space
   std::vector<std::vector<double> > _gaussPoints;
+  // a set of all "partitions" encountered in the data
+  std::set<int> _partitions;
  public:
   stepData(GModel *model, int numComp, std::string fileName="", int fileIndex=-1, 
            double time=0., double min=VAL_INF, double max=-VAL_INF)
@@ -47,12 +54,44 @@ class stepData{
     _model->getEntities(_entities);
     _bbox = _model->bounds();
   }
+  stepData(stepData<real> &other) : _data(0)
+  {
+    _model = other._model;
+    _entities = other._entities;
+    _bbox = other._bbox;
+    _fileName = other._fileName;
+    _fileIndex = other._fileIndex;
+    _time = other._time;
+    _min = other._min;
+    _max = other._max;
+    _numComp = other._numComp;
+    if(other._data){
+      int n = other.getNumData();
+      _data = new std::vector<real*>(n, (real*)0);
+      for(int i = 0; i < n; i++){
+        real *d = other.getData(i);
+        if(d){
+          int m = other.getMult(i) * _numComp;
+          (*_data)[i] = new real[m];
+          for(int j = 0; j < m; j++) (*_data)[i][j] = d[j];
+        }
+      }
+    }
+    _mult = other._mult;
+    _gaussPoints = other._gaussPoints;
+    _partitions = other._partitions;
+  }
   ~stepData(){ destroyData(); }
   GModel *getModel(){ return _model; }
   SBoundingBox3d getBoundingBox(){ return _bbox; }
   int getNumEntities(){ return _entities.size(); }
   GEntity *getEntity(int ent){ return _entities[ent]; }
   int getNumComponents(){ return _numComp; }
+  int getMult(int index)
+  {
+    if(index < 0 || index >= (int)_mult.size()) return 1;
+    return _mult[index];
+  }
   std::string getFileName(){ return _fileName; }
   void setFileName(std::string name){ _fileName = name; }
   int getFileIndex(){ return _fileIndex; }
@@ -60,7 +99,7 @@ class stepData{
   double getTime(){ return _time; }
   void setTime(double time){ _time = time; }
   double getMin(){ return _min; }
-  void setMin(double min ){ _min = min; }
+  void setMin(double min){ _min = min; }
   double getMax(){ return _max; }
   void setMax(double max){ _max = max; }
   int getNumData()
@@ -80,6 +119,10 @@ class stepData{
       if(!(*_data)[index]){
         (*_data)[index] = new real[_numComp * mult];
         for(int i = 0; i < _numComp * mult; i++) (*_data)[index][i] = 0.;
+      }
+      if(mult > 1){
+        if(index >= (int)_mult.size()) _mult.resize(index + 100, 1); // optimize this
+        _mult[index] = mult;
       }
     }
     else{
@@ -101,6 +144,7 @@ class stepData{
     if((int)_gaussPoints.size() <= msh) _gaussPoints.resize(msh + 1);
     return _gaussPoints[msh];
   }
+  std::set<int> &getPartitions(){ return _partitions; }
 };
 
 // The data container using elements from one or more GModel(s).
@@ -117,8 +161,6 @@ class PViewDataGModel : public PViewData {
   std::vector<stepData<double>*> _steps;
   // the global min/max of the view
   double _min, _max;
-  // a set of all "partitions" encountered in the input data
-  std::set<int> _partitions;
   // the type of the dataset
   DataType _type;
   // cache last element to speed up loops
@@ -128,12 +170,16 @@ class PViewDataGModel : public PViewData {
  public:
   PViewDataGModel(DataType type=NodeData);
   ~PViewDataGModel();
-  bool finalize();
+  bool finalize(bool computeMinMax=true);
+  std::string getFileName(int step=-1);
   int getNumTimeSteps();
   double getTime(int step);
-  double getMin(int step=-1);
-  double getMax(int step=-1);
+  double getMin(int step=-1, bool onlyVisible=false);
+  double getMax(int step=-1, bool onlyVisible=false);
+  void setMin(double min){ _min = min; }
+  void setMax(double max){ _max = max; }
   SBoundingBox3d getBoundingBox(int step=-1);
+  void setBoundingBox(SBoundingBox3d& box){}
   int getNumScalars(int step=-1);
   int getNumVectors(int step=-1);
   int getNumTensors(int step=-1);
@@ -141,10 +187,12 @@ class PViewDataGModel : public PViewData {
   int getNumLines(int step=-1);
   int getNumTriangles(int step=-1);
   int getNumQuadrangles(int step=-1);
+  int getNumPolygons(int step=-1);
   int getNumTetrahedra(int step=-1);
   int getNumHexahedra(int step=-1);
   int getNumPrisms(int step=-1);
   int getNumPyramids(int step=-1);
+  int getNumPolyhedra(int step=-1);
   int getNumEntities(int step=-1);
   int getNumElements(int step=-1, int ent=-1);
   int getDimension(int step, int ent, int ele);
@@ -161,10 +209,12 @@ class PViewDataGModel : public PViewData {
   int getType(int step, int ent, int ele);
   void revertElement(int step, int ent, int ele);
   void smooth();
+  bool combineTime(nameData &nd);
   bool skipEntity(int step, int ent);
-  bool skipElement(int step, int ent, int ele, bool checkVisibility=false);
+  bool skipElement(int step, int ent, int ele, bool checkVisibility=false,
+                   int samplingRate=1);
   bool hasTimeStep(int step);
-  bool hasPartition(int part);
+  bool hasPartition(int step, int part);
   bool hasMultipleMeshes();
   bool hasModel(GModel *model, int step=-1);
   bool useGaussPoints(){ return _type == GaussPointData; }
@@ -177,12 +227,13 @@ class PViewDataGModel : public PViewData {
   bool getValueByIndex(int step, int dataIndex, int node, int comp, double &val);
   // get underlying model
   GModel* getModel(int step){ return _steps[step]->getModel(); }
+  // get MElement
+  MElement *getElement(int step, int entity, int element);
 
   // Add some data "on the fly" (data is stored in a map, indexed by
-  // node or element number depending on the type of dataset; all the
-  // vectors are supposed to have the same length)
+  // node or element number depending on the type of dataset)
   bool addData(GModel *model, std::map<int, std::vector<double> > &data,
-               int step, double time, int partition);
+               int step, double time, int partition, int numComp);
 
   // I/O routines
   bool readMSH(std::string fileName, int fileIndex, FILE *fp, bool binary, 

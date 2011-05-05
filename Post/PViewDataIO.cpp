@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -28,6 +28,7 @@ bool PViewData::writeSTL(std::string fileName)
   for(int ent = 0; ent < getNumEntities(step); ent++){
     for(int ele = 0; ele < getNumElements(step, ent); ele++){
       if(getDimension(step, ent, ele) != 2) continue;
+      if(skipElement(step, ent, ele)) continue;
       int N = getNumNodes(step, ent, ele);
       if(N != 3 && N != 4) continue;
       double x[4], y[4], z[4], n[3];
@@ -78,10 +79,12 @@ bool PViewData::writeTXT(std::string fileName)
   for(int step = 0; step < getNumTimeSteps(); step++){  
     for(int ent = 0; ent < getNumEntities(step); ent++){
       for(int ele = 0; ele < getNumElements(step, ent); ele++){
+        if(skipElement(step, ent, ele)) continue;
         for(int nod = 0; nod < getNumNodes(step, ent, ele); nod++){
           double x, y, z;
           getNode(step, ent, ele, nod, x, y, z);
-          fprintf(fp, "%.16g %.16g %.16g ", x, y, z);
+          fprintf(fp, "%d %.16g %d %d %.16g %.16g %.16g ", step, getTime(step), 
+                  ent, ele, x, y, z);
           for(int comp = 0; comp < getNumComponents(step, ent, ele); comp++){   
             double val;
             getValue(step, ent, ele, nod, comp, val);
@@ -90,9 +93,7 @@ bool PViewData::writeTXT(std::string fileName)
         }
         fprintf(fp, "\n");
       }
-      fprintf(fp, "\n");
     }
-    fprintf(fp, "\n");  
   }
 
   fclose(fp);

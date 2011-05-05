@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -11,6 +11,7 @@
 #include <vector>
 #include <set>
 #include <stdio.h>
+#include "GmshMessage.h"
 #include "GEntity.h"
 #include "GVertex.h"
 #include "SVector3.h"
@@ -30,9 +31,14 @@ class GEdge : public GEntity {
 
  protected:
   GVertex *v0, *v1;
+  // FIXME: normals need to be mutable at the moment, because thay can
+  // be created in const member functions
+  mutable std::map<MVertex*, SVector3, std::less<MVertex*> > _normals;
   GEdgeCompound *compound; // this model edge belongs to a compound 
   std::list<GFace *> l_faces;
-  std::set<GFace *> bl_faces;
+  // for specific solid modelers that need to re-do the internal curve
+  // if a topological change ending points is done (gluing)
+  virtual void replaceEndingPointsInternals(GVertex *, GVertex *) {}
 
  public:
   GEdge(GModel *model, int tag, GVertex *_v0, GVertex *_v1);
@@ -44,6 +50,8 @@ class GEdge : public GEntity {
   // get the start/end vertices of the edge
   GVertex *getBeginVertex() const { return v0; }
   GVertex *getEndVertex() const { return v1; }
+
+  void reverse();
 
   // add/delete a face bounded by this edge
   void addFace(GFace *f);
@@ -119,7 +127,14 @@ class GEdge : public GEntity {
   // true if start == end and no more than 2 segments
   void setTooSmall(bool b) { _tooSmall = b; }
   bool isMeshDegenerated() const 
-  { return _tooSmall || (v0 == v1 && mesh_vertices.size() < 2); }
+  { 
+    if (_tooSmall)
+      Msg::Debug("degenerated mesh on edge %d: too small", tag());
+    if (v0 == v1 && mesh_vertices.size() < 2)
+      Msg::Debug("degenerated mesh on edge %d: %d mesh vertices", tag(), 
+                 (int)mesh_vertices.size());
+    return _tooSmall || (v0 == v1 && mesh_vertices.size() < 2);
+  }
 
   // number of types of elements
   int getNumElementTypes() const { return 1; }
@@ -140,13 +155,7 @@ class GEdge : public GEntity {
   // true if entity is periodic in the "dim" direction.
   virtual bool periodic(int dim) const { return v0 == v1; }
 
-  // true if edge is used in hyperbolic layer on face gf
-  virtual bool inHyperbolicLayer(GFace *gf)
-  {
-    return bl_faces.find(gf) != bl_faces.end();
-  }
-
-  virtual void flagInHyperbolicLayer(GFace *gf) { bl_faces.insert(gf); }
+  std::map<MVertex*, SVector3, std::less<MVertex*> > &getNormals() { return _normals; }
 
   // get bounds of parametric coordinate 
   virtual Range<double> parBounds(int i) const = 0;
@@ -166,6 +175,9 @@ class GEdge : public GEntity {
   void setCompound(GEdgeCompound *gec) { compound = gec; }
   GEdgeCompound *getCompound() const { return compound; }
 
+  // gluing
+  void replaceEndingPoints(GVertex *, GVertex *);
+
   struct {
     char Method;
     double coeffTransfinite;
@@ -177,7 +189,16 @@ class GEdge : public GEntity {
     ExtrudeParams *extrude;
   } meshAttributes ;
 
+  typedef enum {PENDING, DONE, FAILED} meshGenerationStatus;
+  struct {
+    mutable meshGenerationStatus status;
+  } meshStatistics;
+  
   std::vector<MLine*> lines;
+
+  void addLine(MLine *line);
+
+  static void registerBindings(binding *b);
 };
 
 #endif

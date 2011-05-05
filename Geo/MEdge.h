@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -52,6 +52,13 @@ class MEdge {
                _v[1]->z() - _v[0]->z());
     t.normalize();
     return t;
+  }
+  double length() const
+  {
+    SVector3 t(_v[1]->x() - _v[0]->x(), 
+               _v[1]->y() - _v[0]->y(),
+               _v[1]->z() - _v[0]->z());
+    return t.norm();
   }
   SVector3 normal() const 
   {

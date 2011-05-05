@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -12,7 +12,7 @@
 #include "GmshConfig.h"
 #include "STensor3.h"
 
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
 #include "PView.h"
 #endif
 
@@ -65,13 +65,14 @@ class Field {
   virtual ~Field() {}
   int id;
   std::map<std::string, FieldOption *> options;
+  virtual bool isotropic () const { return true; }
+  // isotropic
   virtual double operator() (double x, double y, double z, GEntity *ge=0) = 0;
-  // start of the anisotropic field implementation
-  virtual void operator() (double x, double y, double z, SMetric3 &, GEntity *ge=0){throw;}
-  virtual bool isotropic () const {return true;}
+  // anisotropic
+  virtual void operator() (double x, double y, double z, SMetric3 &, GEntity *ge=0){}
   bool update_needed;
   virtual const char *getName() = 0;
-#if !defined(HAVE_NO_POST)
+#if defined(HAVE_POST)
   void putOnView(PView * view, int comp = -1);
   void putOnNewView();
 #endif
@@ -94,6 +95,7 @@ class FieldManager : public std::map<int, Field*> {
   int newId();
   int maxId();
   FieldManager();
+  ~FieldManager();
   int background_field;
   // compatibility with -bgm
   void setBackgroundMesh(int iView);

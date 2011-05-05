@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -14,9 +14,9 @@ class partitionVertex : public discreteVertex {
   std::vector<int> _partitions;
  public:
   partitionVertex(GModel *model, int num, std::vector<int> &partitions) 
-    : discreteVertex(model,num),_partitions(partitions)
+    : discreteVertex(model, num), _partitions(partitions)
   {
-    std::sort(_partitions.begin(),_partitions.end());
+    std::sort(_partitions.begin(), _partitions.end());
   }
   virtual ~partitionVertex() {}
   virtual GeomType geomType() const { return PartitionVertex; }

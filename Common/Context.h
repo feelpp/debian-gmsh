@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -11,7 +11,47 @@
 #include "CGNSOptions.h"
 #include "meshPartitionOptions.h"
 
+class binding;
+
 // The interface-independent context.
+
+struct contextMeshOptions {
+  int draw, changed, light, lightTwoSide, lightLines, pointType;
+  int points, lines, triangles, quadrangles, tetrahedra, hexahedra, prisms, pyramids;
+  int surfacesEdges, surfacesFaces, volumesEdges, volumesFaces, numSubEdges;
+  int pointsNum, linesNum, surfacesNum, volumesNum, qualityType, labelType;
+  int optimize, optimizeNetgen, optimizeLloyd, refineSteps, remove4triangles;
+  double normals, tangents, explode, angleSmoothNormals, allowSwapEdgeAngle;
+  double mshFileVersion, mshFilePartitioned, pointSize, lineWidth;
+  double qualityInf, qualitySup, radiusInf, radiusSup;
+  double scalingFactor, lcFactor, randFactor, lcIntegrationPrecision;
+  double lcMin, lcMax, toleranceEdgeLength, anisoMax, smoothRatio;
+  int lcFromPoints, lcFromCurvature, lcExtendFromBoundary;
+  int dual, voronoi, drawSkinOnly, colorCarousel, labelSampling;
+  int fileFormat, nbSmoothing, algo2d, algo3d, algoSubdivide;
+  int algoRecombine, recombineAll;
+  int remeshParam, remeshAlgo;
+  int order, secondOrderLinear, secondOrderIncomplete;
+  int secondOrderExperimental, meshOnlyVisible;
+  int smoothInternalEdges, minCircPoints, minCurvPoints;
+  int saveAll, saveGroupsOfNodes, binary, bdfFieldFormat, saveParametric;
+  int smoothNormals, reverseAllNormals, zoneDefinition, clip;
+  int saveElementTagType;  
+};
+
+struct contextGeometryOptions {
+  int draw, light, lightTwoSide, points, lines, surfaces, volumes;
+  int pointsNum, linesNum, surfacesNum, volumesNum;
+  double pointSize, lineWidth, selectedPointSize, selectedLineWidth;
+  int pointType, lineType, surfaceType, numSubEdges;
+  int oldCircle, extrudeSplinePoints, extrudeReturnLateral, oldNewreg;
+  double normals, tangents, scalingFactor;
+  int autoCoherence, highlightOrphans, clip, useTransform;
+  double tolerance, snap[3], transform[3][3], offset[3];
+  int occFixSmallEdges, occFixSmallFaces, occSewFaces, occConnectFaces;
+  int copyMeshingMethod, exactExtrusion;
+  int matchGeomAndMesh;
+};
 
 class CTX {
  private:
@@ -28,6 +68,8 @@ class CTX {
   std::string meshStatReportFileName;
   // the home directory
   std::string homeDir;
+  // file history
+  std::vector<std::string> recentFiles;
   // create mesh statistics report (0: do nothing, 1: create, 2: append)
   int createAppendMeshStatReport;
   // save session/option file on exit?
@@ -44,6 +86,8 @@ class CTX {
   int numWindows, numTiles;
   // text editor and web browser command (with included '%s')
   std::string editor, webBrowser;
+  // pattern of files to watch out for
+  std::string watchFilePattern;
   // show tootips in the GUI?
   int tooltips;
   // scroll automatically to last message in the message window?
@@ -56,11 +100,11 @@ class CTX {
   int fileChooserPosition[2];
   // use the system menu bar on Mac OS X?
   int systemMenuBar;
-  // batch mode (-3: server daemon, -2: check coherence, -1: write
+  // batch mode (-4: lua session, -3: server daemon, -2: check coherence, -1: write
   // geo, 0: full gfx, 1: 1D mesh, 2: 2D mesh, 3: 3D mesh, 4: adapt
   // mesh, 5: refine mesh)
   int batch; 
-  // batch operations to appy after meshing (1: partition mesh)
+  // batch operations to apply after meshing (1: partition mesh)
   int batchAfterMesh;
   // initial menu (0: automatic, 1: geom, 2: mesh, 3: solver, 4: post)
   int initialContext;
@@ -83,8 +127,8 @@ class CTX {
   // characteristic length for the whole problem (never used in mesh
   // generation ->only for geo/post)
   double lc;
-  // double buffer/antialias graphics?
-  int db, antialiasing;
+  // double buffer/antialias/stereo graphics?
+  int db, antialiasing, stereo;
   // orthogonal projection? 
   int ortho;
   // draw the bounding boxes and the rot center?
@@ -111,8 +155,8 @@ class CTX {
   // fltk font size (and delta for palette windows)
   int fontSize, deltaFontSize;
   // font name, FLTK enum and size for opengl graphics
-  std::string glFont;
-  int glFontEnum, glFontSize;
+  std::string glFont, glFontTitle;
+  int glFontEnum, glFontEnumTitle, glFontSize, glFontSizeTitle;
   // point/line widths
   double pointSize, lineWidth;
   // light options
@@ -147,41 +191,9 @@ class CTX {
   // is ready)
   double tmpRotation[3], tmpTranslation[3], tmpScale[3], tmpQuaternion[4];
   // geometry options 
-  struct{
-    int draw, light, lightTwoSide, points, lines, surfaces, volumes;
-    int pointsNum, linesNum, surfacesNum, volumesNum;
-    double pointSize, lineWidth, selectedPointSize, selectedLineWidth;
-    int pointType, lineType, surfaceType, numSubEdges;
-    int oldCircle, extrudeSplinePoints, extrudeReturnLateral, oldNewreg;
-    double normals, tangents, scalingFactor;
-    int autoCoherence, highlightOrphans, clip, useTransform;
-    double tolerance, snap[3], transform[3][3], offset[3];
-    int occFixSmallEdges, occFixSmallFaces, occSewFaces, occConnectFaces;
-    int copyMeshingMethod, exactExtrusion;
-    int matchGeomAndMesh;
-  } geom;
+  contextGeometryOptions geom;
   // mesh options 
-  struct {
-    int draw, changed, light, lightTwoSide, lightLines, pointType;
-    int points, lines, triangles, quadrangles, tetrahedra, hexahedra, prisms, pyramids;
-    int surfacesEdges, surfacesFaces, volumesEdges, volumesFaces, numSubEdges;
-    int pointsNum, linesNum, surfacesNum, volumesNum;
-    int optimize, optimizeNetgen, refineSteps, qualityType, labelType, remove4triangles;
-    double normals, tangents, explode, angleSmoothNormals, allowSwapEdgeAngle;
-    double mshFileVersion, labelFrequency, pointSize, lineWidth;
-    double qualityInf, qualitySup, radiusInf, radiusSup;
-    double scalingFactor, lcFactor, randFactor, lcIntegrationPrecision;
-    double lcMin, lcMax, toleranceEdgeLength;
-    int lcFromPoints, lcFromCurvature, lcExtendFromBoundary;
-    int dual, voronoi, drawSkinOnly, colorCarousel;
-    int format, nbSmoothing, algo2d, algo3d, algoSubdivide;
-    int order, secondOrderLinear, secondOrderIncomplete;
-    int secondOrderExperimental, meshOnlyVisible;
-    int smoothInternalEdges, minCircPoints, minCurvPoints;
-    int saveAll, saveGroupsOfNodes, binary, bdfFieldFormat, saveParametric;
-    int smoothNormals, reverseAllNormals, zoneDefinition, clip;
-    int saveElementTagType;
-  } mesh;
+  contextMeshOptions mesh;
   // FIXME: putting these in the mesh struct (where they belong) causes 
   // an LNK1179 error ("duplicate COMDAT") with MSVC...
   meshPartitionOptions partitionOptions;
@@ -200,13 +212,13 @@ class CTX {
   }solver;
   // print options 
   struct{
-    int format, epsQuality, epsBackground, epsCompress, epsPS3Shading;
+    int fileFormat, epsQuality, epsBackground, epsCompress, epsPS3Shading;
     int epsOcclusionCulling, epsBestRoot;
     double epsLineWidthFactor, epsPointSizeFactor;
     int jpegQuality, jpegSmoothing, geoLabels, text, texAsEquation;
     int gifDither, gifSort, gifInterlace, gifTransparent;
     int posElementary, posElement, posGamma, posEta, posRho, posDisto;
-    int compositeWindows;
+    int compositeWindows, deleteTmpFiles;
   } print;
   // color options
   struct{
@@ -234,6 +246,7 @@ class CTX {
   int unpackGreen(unsigned int X);
   int unpackBlue(unsigned int X);
   int unpackAlpha(unsigned int X);
+  
 };
 
 #endif

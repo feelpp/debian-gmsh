@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -17,6 +17,8 @@
 #include "MPyramid.h"
 #include "GmshMessage.h"
 #include "OS.h"
+#include "Context.h"
+#include "meshGFaceOptimize.h"
 
 class MVertexLessThanParam{
  public:
@@ -361,7 +363,7 @@ static void Subdivide(GRegion *gr, bool splitIntoHexas, faceContainer &faceVerti
 
 void RefineMesh(GModel *m, bool linear, bool splitIntoQuads, bool splitIntoHexas)
 {
-  Msg::StatusBar(1, true, "Refining mesh...");
+  Msg::StatusBar(2, true, "Refining mesh...");
   double t1 = Cpu();
         
   // Create 2nd order mesh (using "2nd order complete" elements) to
@@ -375,12 +377,14 @@ void RefineMesh(GModel *m, bool linear, bool splitIntoQuads, bool splitIntoHexas
   // mesh
   for(GModel::eiter it = m->firstEdge(); it != m->lastEdge(); ++it)
     Subdivide(*it);
-  for(GModel::fiter it = m->firstFace(); it != m->lastFace(); ++it)
+  for(GModel::fiter it = m->firstFace(); it != m->lastFace(); ++it){
     Subdivide(*it, splitIntoQuads, splitIntoHexas, faceVertices);
+    for(int i = 0; i < CTX::instance()->mesh.nbSmoothing; i++) 
+      laplaceSmoothing(*it);    
+  }
   for(GModel::riter it = m->firstRegion(); it != m->lastRegion(); ++it)
     Subdivide(*it, splitIntoHexas, faceVertices);
 
   double t2 = Cpu();
-  Msg::Info("Mesh refinement complete (%g s)", t2 - t1);
-  Msg::StatusBar(1, false, "Mesh");
+  Msg::StatusBar(2, true, "Done refining mesh (%g s)", t2 - t1);
 }

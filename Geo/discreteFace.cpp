@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -10,38 +10,36 @@
 #include "MTriangle.h"
 #include "MEdge.h"
 #include "Geo.h"
+#include "GFaceCompound.h"
+#include "Context.h"
+#include "OS.h"
 
 discreteFace::discreteFace(GModel *model, int num) : GFace(model, num)
 {
   Surface *s = Create_Surface(num, MSH_SURF_DISCRETE);
   Tree_Add(model->getGEOInternals()->Surfaces, &s);
-  meshStatistics.status = GFace::DONE;    
+  meshStatistics.status = GFace::DONE;
 }
 
 void discreteFace::findEdges(std::map<MEdge, std::vector<int>, Less_Edge> &map_edges)
 {
-  // find the boundary edges
-  std::list<MEdge> bound_edges;
+  std::set<MEdge, Less_Edge> bound_edges;
   for (unsigned int iFace = 0; iFace  < getNumMeshElements() ; iFace++) {
-    std::vector<MVertex*> fv;
     MElement *e = getMeshElement(iFace);
-    e->getFaceVertices(0, fv);
     for (int iEdge = 0; iEdge < e->getNumEdges(); iEdge++) {
       MEdge tmp_edge =  e->getEdge(iEdge);
-      if (std::find(bound_edges.begin(), bound_edges.end(), tmp_edge) == 
-          bound_edges.end())
-        bound_edges.push_back(tmp_edge);
-      else
-        bound_edges.erase(std::find(bound_edges.begin(), bound_edges.end(), tmp_edge));
+      std::set<MEdge, Less_Edge >::iterator itset = bound_edges.find(tmp_edge);
+      if (itset == bound_edges.end())   bound_edges.insert(tmp_edge);
+      else bound_edges.erase(itset);
     }
   }
- 
+
   // for the boundary edges, associate the tag of the current discrete face
-  for (std::list<MEdge>::iterator itv = bound_edges.begin(); 
+  for (std::set<MEdge, Less_Edge>::iterator itv = bound_edges.begin();
        itv != bound_edges.end(); ++itv){
     std::map<MEdge, std::vector<int>, Less_Edge >::iterator itmap = map_edges.find(*itv);
     if (itmap == map_edges.end()){
-      std::vector<int> tagFaces; 
+      std::vector<int> tagFaces;
       tagFaces.push_back(tag());
       map_edges.insert(std::make_pair(*itv, tagFaces));
     }
@@ -50,46 +48,91 @@ void discreteFace::findEdges(std::map<MEdge, std::vector<int>, Less_Edge> &map_e
       tagFaces.push_back(tag());
       itmap->second = tagFaces;
     }
- }
+  }
 }
 
 void discreteFace::setBoundEdges(std::vector<int> tagEdges)
 {
- for (std::vector<int>::iterator it = tagEdges.begin(); 
-      it != tagEdges.end(); it++){
-   GEdge *ge = GModel::current()->getEdgeByTag(abs(*it));
-   l_edges.push_back(ge);
-   l_dirs.push_back(1);
-   ge->addFace(this);
- }
+  for (std::vector<int>::iterator it = tagEdges.begin(); it != tagEdges.end(); it++){
+    GEdge *ge = GModel::current()->getEdgeByTag(*it);
+    l_edges.push_back(ge);
+    l_dirs.push_back(1);
+    ge->addFace(this);
+  }
 }
 
-GPoint discreteFace::point(double par1, double par2) const 
+GPoint discreteFace::point(double par1, double par2) const
 {
   Msg::Error("Cannot evaluate point on discrete face");
   return GPoint();
 }
 
-SPoint2 discreteFace::parFromPoint(const SPoint3 &p) const
+SPoint2 discreteFace::parFromPoint(const SPoint3 &p, bool onSurface) const
 {
-  Msg::Error("Cannot compute parametric coordinates on discrete face");
-  return SPoint2();
+  if (getCompound()){
+    return getCompound()->parFromPoint(p);
+  }
+  else{
+    Msg::Error("Cannot compute parametric coordinates on discrete face");
+    return SPoint2();
+  }
 }
 
 SVector3 discreteFace::normal(const SPoint2 &param) const
 {
-  Msg::Error("Cannot evaluate normal on discrete face");
-  return SVector3();
+  if (getCompound()){
+    return getCompound()->normal(param);
+  }
+  else{
+    Msg::Error("Cannot evaluate normal on discrete face");
+    return SVector3();
+  }
+}
+
+double discreteFace::curvatureMax(const SPoint2 &param) const
+{
+  if (getCompound()){
+    return getCompound()->curvatureMax(param);
+  }
+  else{
+    Msg::Error("Cannot evaluate curvature on discrete face");
+    return false;
+  }
 }
 
 Pair<SVector3, SVector3> discreteFace::firstDer(const SPoint2 &param) const
 {
-  Msg::Error("Cannot evaluate derivative on discrete face");
-  return Pair<SVector3, SVector3>();
+  if (getCompound()){
+    return getCompound()->firstDer(param);
+  }
+  else{
+    Msg::Error("Cannot evaluate derivative on discrete face");
+    return Pair<SVector3, SVector3>();
+  }
 }
 
-void discreteFace::secondDer(const SPoint2 &param, 
+void discreteFace::secondDer(const SPoint2 &param,
                              SVector3 *dudu, SVector3 *dvdv, SVector3 *dudv) const
 {
-  Msg::Error("Cannot evaluate derivative on discrete face");
+  if (getCompound()){
+    return getCompound()->secondDer(param, dudu, dvdv, dudv);
+  }
+  else{
+    Msg::Error("Cannot evaluate second derivative on discrete face");
+    return;
+  }
+}
+
+void discreteFace::writeGEO(FILE *fp)
+{
+  fprintf(fp, "Discrete Face(%d) = {",tag());
+  int count = 0;
+  for (std::list<GEdge*>::iterator it = l_edges.begin();
+       it != l_edges.end() ;++it){
+    if (count == 0)fprintf(fp, "%d",(*it)->tag());    
+    else fprintf(fp, ",%d",(*it)->tag());    
+    count ++;
+  }
+  fprintf(fp, "};\n");    
+  
 }

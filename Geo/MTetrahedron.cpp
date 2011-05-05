@@ -1,46 +1,103 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
+#include "GmshConfig.h"
 #include "MTetrahedron.h"
 #include "Numeric.h"
 #include "Context.h"
+
+#if defined(HAVE_MESH)
 #include "qualityMeasures.h"
 #include "meshGFaceDelaunayInsertion.h"
 #include "meshGRegionDelaunayInsertion.h"
+#endif
 
 #define SQU(a)      ((a)*(a))
 
 SPoint3 MTetrahedron::circumcenter()
 {
-  MTet4 t(this,0);
+#if defined(HAVE_MESH)
+  MTet4 t(this, 0);
   double res[3];
   t.circumcenter(res);
-  return SPoint3(res[0],res[1],res[2]);
+  return SPoint3(res[0], res[1], res[2]);
+#else
+  return SPoint3(0., 0., 0.);
+#endif
+}
+
+double MTetrahedron::getCircumRadius()
+{
+#if defined(HAVE_MESH)
+  SPoint3 center = circumcenter();
+  const double dx = getVertex(0)->x() - center.x();
+  const double dy = getVertex(0)->y() - center.y();
+  const double dz = getVertex(0)->z() - center.z();
+  double circum_radius = sqrt(dx * dx + dy * dy + dz * dz);
+  return circum_radius;
+#else
+  return 0.0;
+#endif
 }
 
 double MTetrahedron::distoShapeMeasure()
 {
+#if defined(HAVE_MESH)
   return qmDistorsionOfMapping(this);
+#else
+  return 0.;
+#endif
 }
 
 double MTetrahedronN::distoShapeMeasure()
 {
+#if defined(HAVE_MESH)
   _disto = qmDistorsionOfMapping(this);
+#else
+  _disto = 0.;
+#endif
   return _disto;
+}
+
+double MTetrahedron::getInnerRadius()
+{
+  // radius of inscribed sphere = 3 * Volume / sum(Area_i)
+  double dist[3], face_area = 0.;
+  double vol = getVolume();
+  for(int i = 0; i < 4; i++){  
+    MFace f = getFace(i);
+    for (int j = 0; j < 3; j++){
+      MEdge e = f.getEdge(j);
+      dist[j] = e.getVertex(0)->distance(e.getVertex(1));
+    }
+    face_area += 0.25 * sqrt((dist[0] + dist[1] + dist[2]) * 
+                             (-dist[0] + dist[1] + dist[2]) * 
+                             (dist[0] - dist[1] + dist[2]) * 
+                             (dist[0] + dist[1] - dist[2]));
+  }
+  return 3 * vol / face_area;
 }
 
 double MTetrahedron::gammaShapeMeasure()
 {
+#if defined(HAVE_MESH)
   double vol;
   return qmTet(this, QMTET_2, &vol);
+#else
+  return 0.;
+#endif
 }
 
 double MTetrahedron::etaShapeMeasure()
 {
+#if defined(HAVE_MESH)
   double vol;
   return qmTet(this, QMTET_3, &vol);
+#else
+  return 0.;
+#endif
 }
 
 double MTetrahedron::getVolume()
@@ -60,7 +117,7 @@ void MTetrahedron::xyz2uvw(double xyz[3], double uvw[3])
   sys3x3(mat, b, uvw, &det);
 }
 
-const functionSpace* MTetrahedron::getFunctionSpace(int o) const
+const polynomialBasis* MTetrahedron::getFunctionSpace(int o) const
 {
   int order = (o == -1) ? getPolynomialOrder() : o;
 
@@ -68,21 +125,65 @@ const functionSpace* MTetrahedron::getFunctionSpace(int o) const
   
   if ((nv == 0) && (o == -1)) {
     switch (order) {
-    case 1: return &functionSpaces::find(MSH_TET_4);
-    case 2: return &functionSpaces::find(MSH_TET_10);
-    case 3: return &functionSpaces::find(MSH_TET_20);
-    case 4: return &functionSpaces::find(MSH_TET_34);
-    case 5: return &functionSpaces::find(MSH_TET_52);
+    case 1: return polynomialBases::find(MSH_TET_4);
+    case 2: return polynomialBases::find(MSH_TET_10);
+    case 3: return polynomialBases::find(MSH_TET_20);
+    case 4: return polynomialBases::find(MSH_TET_34);
+    case 5: return polynomialBases::find(MSH_TET_52);
+    case 6: return polynomialBases::find(MSH_TET_74);
+    case 7: return polynomialBases::find(MSH_TET_100);
+    case 8: return polynomialBases::find(MSH_TET_130);
+    case 9: return polynomialBases::find(MSH_TET_164);
+    case 10: return polynomialBases::find(MSH_TET_202);
     default: Msg::Error("Order %d tetrahedron function space not implemented", order);
     }
   }
   else { 
     switch (order) {
-    case 1: return &functionSpaces::find(MSH_TET_4);
-    case 2: return &functionSpaces::find(MSH_TET_10);
-    case 3: return &functionSpaces::find(MSH_TET_20);
-    case 4: return &functionSpaces::find(MSH_TET_35);
-    case 5: return &functionSpaces::find(MSH_TET_56);
+    case 1: return polynomialBases::find(MSH_TET_4);
+    case 2: return polynomialBases::find(MSH_TET_10);
+    case 3: return polynomialBases::find(MSH_TET_20);
+    case 4: return polynomialBases::find(MSH_TET_35);
+    case 5: return polynomialBases::find(MSH_TET_56);
+    case 6: return polynomialBases::find(MSH_TET_84);
+    case 7: return polynomialBases::find(MSH_TET_120);
+    case 8: return polynomialBases::find(MSH_TET_165);
+    case 9: return polynomialBases::find(MSH_TET_220);
+    case 10: return polynomialBases::find(MSH_TET_286);
+    default: Msg::Error("Order %d tetrahedron function space not implemented", order);
+    }
+  }
+  return 0;
+}
+
+const JacobianBasis* MTetrahedron::getJacobianFuncSpace(int o) const
+{
+  int order = (o == -1) ? getPolynomialOrder() : o;
+
+  int nv = getNumVolumeVertices();
+  
+  if ((nv == 0) && (o == -1)) {
+    switch (order) {
+    case 1: return JacobianBases::find(MSH_TET_4);
+    case 2: return JacobianBases::find(MSH_TET_10);
+    case 3: return JacobianBases::find(MSH_TET_20);
+    case 4: return JacobianBases::find(MSH_TET_34);
+    case 5: return JacobianBases::find(MSH_TET_52);
+    default: Msg::Error("Order %d tetrahedron function space not implemented", order);
+    }
+  }
+  else { 
+    switch (order) {
+    case 1: return JacobianBases::find(MSH_TET_4);
+    case 2: return JacobianBases::find(MSH_TET_10);
+    case 3: return JacobianBases::find(MSH_TET_20);
+    case 4: return JacobianBases::find(MSH_TET_35);
+    case 5: return JacobianBases::find(MSH_TET_56);
+    case 6: return JacobianBases::find(MSH_TET_84);
+    case 7: return JacobianBases::find(MSH_TET_120);
+    case 8: return JacobianBases::find(MSH_TET_165);
+    case 9: return JacobianBases::find(MSH_TET_220);
+    case 10: return JacobianBases::find(MSH_TET_286);
     default: Msg::Error("Order %d tetrahedron function space not implemented", order);
     }
   }
@@ -226,8 +327,139 @@ void MTetrahedron10::getFaceRep(int num, double *x, double *y, double *z, SVecto
   _myGetFaceRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
 }
 
-void MTetrahedron::getIntegrationPoints(int pOrder, int *npts, IntPt **pts) const
+void MTetrahedron::getIntegrationPoints(int pOrder, int *npts, IntPt **pts)
 {
   *npts = getNGQTetPts(pOrder);
   *pts = getGQTetPts(pOrder);
+}
+
+void MTetrahedron::getFaceInfo(const MFace &face, int &ithFace, int &sign, int &rot) const
+{
+  for (ithFace = 0; ithFace < 4; ithFace++){
+    MVertex *v0 = _v[faces_tetra(ithFace, 0)];
+    MVertex *v1 = _v[faces_tetra(ithFace, 1)];
+    MVertex *v2 = _v[faces_tetra(ithFace, 2)];
+
+    if (v0 == face.getVertex(0) && v1 == face.getVertex(1) && v2 == face.getVertex(2)){
+      sign = 1; rot = 0; return;
+    }
+    if (v0 == face.getVertex(1) && v1 == face.getVertex(2) && v2 == face.getVertex(0)){
+      sign = 1; rot = 1; return;
+    }
+    if (v0 == face.getVertex(2) && v1 == face.getVertex(0) && v2 == face.getVertex(1)){
+      sign = 1; rot = 2; return;
+    }
+    if (v0 == face.getVertex(0) && v1 == face.getVertex(2) && v2 == face.getVertex(1)){
+      sign = -1; rot = 0; return;
+    }
+    if (v0 == face.getVertex(1) && v1 == face.getVertex(0) && v2 == face.getVertex(2)){
+      sign = -1; rot = 1; return;
+    }
+    if (v0 == face.getVertex(2) && v1 == face.getVertex(1) && v2 == face.getVertex(0)){
+      sign = -1; rot = 2; return;
+    }
+  }
+  Msg::Error("Could not get face information for tetrahedron %d", getNum());
+}
+
+static std::vector<std::vector<int> > tetReverseIndices(20);
+
+const std::vector<int> &MTetrahedronN::_getReverseIndices (int order) 
+{
+  if(order >= (int)tetReverseIndices.size())
+    tetReverseIndices.resize(order + 1);
+  std::vector<int> &r = tetReverseIndices[order];
+  if (r.size() != 0) return r;
+  //
+  // not the funniest code ever ... (guaranteed correct only up to order 5)
+  //
+  int nb = (order+1)*(order+2)*(order+3)/6;
+  r.resize(nb);
+  int p=0;
+  for (int layerOrder = order; layerOrder>=0; layerOrder-=4) {
+    //principal vertices
+    r[p+0] = p+0; 
+    if (layerOrder ==0) break;
+    r[p+1] = p+2; 
+    r[p+2] = p+1; 
+    r[p+3] = p+3;
+    p+=4;
+    for (int i = 0; i<layerOrder-1; i++) {
+      //E2 reversed switches with E0
+      r[p+i] = p+3*(layerOrder-1)-(i+1);
+      r[p+3*(layerOrder-1)-(i+1)] = p+i;
+      //E1 is reversed
+      r[p+(layerOrder-1)+i] = p+2*(layerOrder-1)-(i+1);
+      //E3 is preserved
+      r[p+3*(layerOrder-1)+i] = p+3*(layerOrder-1)+i;
+      //E4 switches with E5
+      r[p+4*(layerOrder-1)+i] = p+5*(layerOrder-1)+i;
+      r[p+5*(layerOrder-1)+i] = p+4*(layerOrder-1)+i;
+    }
+    p+=6*(layerOrder-1);
+    //F0(=012) switches its nodes 1 and 2
+    for (int of = layerOrder-3; of >= 0; of -= 3) {
+      r[p] = p;
+      if (of == 0) {
+        p+=1;
+        break;
+      }
+      r[p+1] = p+2;
+      r[p+2] = p+1;
+      for (int i = 0; i < of-1; i++) {
+        //switch edges 0 and 2
+        r[p+3+i] = p+3+3*(of-1)-(i+1);
+        r[p+3+3*(of-1)-(i+1)] = p+3+i;
+        //reverse edge 1
+        r[p+3+(of-1)+i] = p+3+2*(of-1)-(i+1);
+      }
+      p += 3*of;
+    }
+    //F1 (=013) reversed switches with F2 (=032)
+    int nf = (layerOrder-2)*(layerOrder-1)/2;
+    for (int of = layerOrder-3; of >= 0; of -= 3) {
+      r[p] = p+nf;
+      r[p+nf] = p;
+      if (of == 0) {
+        p += 1;
+        break;
+      }
+      r[p+1] = p+nf+2;
+      r[p+nf+2] = p+1;
+      r[p+2] = p+nf+1;
+      r[p+nf+1] = p+2;
+      for (int i = 0; i < of-1; i++) {
+        //switch edges 0 and 2
+        r[p+3+i] = p+3+3*(of-1)-(i+1)+nf;
+        r[p+3+3*(of-1)-(i+1)] = p+3+i+nf;
+        r[p+3+i+nf] = p+3+3*(of-1)-(i+1);
+        r[p+3+3*(of-1)-(i+1)+nf] = p+3+i;
+        //reverse edge 1
+        r[p+3+(of-1)+i] = p+3+2*(of-1)-(i+1)+nf;
+        r[p+3+(of-1)+i+nf] = p+3+2*(of-1)-(i+1);
+      }
+      p += 3*of;
+    }
+    p+=nf;
+
+    //F3(=312) switches its nodes 1 and 2
+    for (int of = layerOrder-3; of >= 0; of -= 3) {
+      r[p] = p;
+      if (of == 0) {
+        p += 1;
+        break;
+      }
+      r[p+1] = p+2;
+      r[p+2] = p+1;
+      for (int i = 0; i < of-1; i++) {
+        //switch edges 0 and 2
+        r[p+3+i] = p+3+3*(of-1)-(i+1);
+        r[p+3+3*(of-1)-(i+1)] = p+3+i;
+        //reverse edge 1
+        r[p+3+(of-1)+i] = p+3+2*(of-1)-(i+1);
+      }
+      p += 3*of;
+    }
+  }
+  return r;
 }

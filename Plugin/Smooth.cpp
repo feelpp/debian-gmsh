@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2009 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -6,7 +6,7 @@
 #include "Smooth.h"
 
 StringXNumber SmoothOptions_Number[] = {
-  {GMSH_FULLRC, "iView", NULL, -1.}
+  {GMSH_FULLRC, "View", NULL, -1.}
 };
 
 extern "C"
@@ -19,11 +19,10 @@ extern "C"
 
 std::string GMSH_SmoothPlugin::getHelp() const
 {
-  return "Plugin(Smooth) averages the values at the nodes\n"
-         "of the scalar view `iView'. If `iView' < 0, the\n"
-         "plugin is run on the current view.\n"
-         "\n"
-         "Plugin(Smooth) is executed in-place.\n";
+  return "Plugin(Smooth) averages the values at the nodes "
+    "of the view `View'.\n\n"
+    "If `View' < 0, the plugin is run on the current view.\n\n"
+    "Plugin(Smooth) is executed in-place.";
 }
 
 int GMSH_SmoothPlugin::getNbOptions() const
