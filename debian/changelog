@@ -1,8 +1,10 @@
 gmsh (2.5.0.dfsg-8) unstable; urgency=low
 
-  * Fix FTBFS on some platforms, adding list platforms for libmedc-dev 
+  * Fix FTBFS on some platforms, adding list platforms 
+    for libmedc-dev (Closes: #623561)
+  * debian/control: updated to Standards-Version 3.9.2 (no change)
 
- -- Anton Gladky <gladky.anton@gmail.com>  Fri, 15 Apr 2011 23:53:04 +0100
+ -- Anton Gladky <gladky.anton@gmail.com>  Tue, 10 May 2011 17:38:26 +0200
 
 gmsh (2.5.0.dfsg-7) unstable; urgency=low
 
