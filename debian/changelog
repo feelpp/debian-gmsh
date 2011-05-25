@@ -1,6 +1,6 @@
 gmsh (2.5.0.dfsg-8) unstable; urgency=low
 
-  * [7f7164f] Add platform restriction for libmedc-dev
+  * [7f7164f] Add platform restriction for libmedc-dev (Closes: #623561)
   * [1718816] Standards-Version: 3.9.2 (no changes)
   * [6de2ed7] Update VCS-field to git-repo
   * [f7cd0da] Add DM-Upload-Allowed field
