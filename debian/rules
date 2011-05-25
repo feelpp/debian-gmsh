@@ -8,7 +8,6 @@ DEB_COMPRESS_EXCLUDE   := .pdf
 
 include /usr/share/cdbs/1/class/cmake.mk
 include /usr/share/cdbs/1/rules/debhelper.mk
-include /usr/share/cdbs/1/rules/patchsys-quilt.mk
 
 #ENABLE_MED=--enable-med
 #ENABLE_MED=--disable-med

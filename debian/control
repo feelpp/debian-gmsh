@@ -3,7 +3,7 @@ Section: math
 Priority: optional
 Maintainer: Debian Science Maintainers <debian-science-maintainers@lists.alioth.debian.org>
 Uploaders: Christophe Prud'homme <prudhomm@debian.org>, Anton Gladky <gladky.anton@gmail.com>
-Build-Depends: debhelper (>= 7), cdbs, quilt, cmake, gfortran, libgl1-mesa-dev,
+Build-Depends: debhelper (>= 8), cdbs, cmake, gfortran, libgl1-mesa-dev,
  libglu1-mesa-dev, libfltk1.1-dev (>=1.1.7),
  libpng12-dev, libjpeg62-dev, zlib1g-dev, texlive, texinfo,
  mpi-default-dev,
