@@ -1,3 +1,12 @@
+gmsh (2.5.0.dfsg-8) unstable; urgency=low
+
+  * [7f7164f] Add platform restriction for libmedc-dev
+  * [1718816] Standards-Version: 3.9.2 (no changes)
+  * [6de2ed7] Update VCS-field to git-repo
+  * [f7cd0da] Add DM-Upload-Allowed field
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Wed, 25 May 2011 22:31:48 +0200
+
 gmsh (2.5.0.dfsg-7) unstable; urgency=low
 
   * Fix FTBFS on some platforms due to missing space between
