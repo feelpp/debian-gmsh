@@ -14,6 +14,7 @@ Build-Depends: debhelper (>= 7), cdbs, quilt, cmake, gfortran, libgl1-mesa-dev,
  libscotchmetis-dev,
  libblas-dev, liblapack-dev
 Standards-Version: 3.9.2
+DM-Upload-Allowed: yes
 Vcs-Git: git://git.debian.org/git/debian-science/packages/gmsh.git
 Vcs-Browser: http://git.debian.org/?p=debian-science/packages/gmsh.git
 Homepage: http://www.geuz.org/gmsh/
