@@ -1,4 +1,4 @@
-gmsh (2.5.0+dfsg-8) unstable; urgency=low
+gmsh (2.5.0.dfsg-8) unstable; urgency=low
 
   * [7f7164f] Add platform restriction for libmedc-dev (Closes: #623561)
   * [1718816] Standards-Version: 3.9.2 (no changes)
