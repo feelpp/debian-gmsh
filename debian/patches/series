@@ -1,1 +1,2 @@
-switch_off_metis_and_tetgen.patch
+change_shared_library_name.patch
+skip_license_file.patch
