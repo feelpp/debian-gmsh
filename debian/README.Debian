@@ -12,10 +12,7 @@ Gmsh is an academic 3D mesh generator with a simple enough interface.
 The documentation is available in several formats
 
 [PDF]
-/usr/share/doc/gmsh/gmsh.pdf
-
-[PS]
-/usr/share/doc/gmsh/gmsh.ps.gz
+/usr/share/doc/gmsh/gmsh.pdf.gz
 
 [Html]
 /usr/share/doc/gmsh/html/gmsh.html
