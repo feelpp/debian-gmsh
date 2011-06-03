@@ -1,0 +1,23 @@
+Description: Change name of shared library
+Author: Anton Gladky <gladky.anton@gmail.com>
+
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -885,7 +885,7 @@
+ # want to build the lib we need to recompile everything (the first
+ # time--it's a separate target)
+ add_library(lib STATIC EXCLUDE_FROM_ALL ${GMSH_SRC})
+-set_target_properties(lib PROPERTIES OUTPUT_NAME Gmsh)
++set_target_properties(lib PROPERTIES OUTPUT_NAME gmsh)
+ if(MSVC)
+   set_target_properties(lib PROPERTIES DEBUG_POSTFIX d) 
+   if(ENABLE_MSVC_STATIC_RUNTIME)
+@@ -895,7 +895,7 @@
+ 
+ # shared library target: we don't build it by default either
+ add_library(shared SHARED EXCLUDE_FROM_ALL ${GMSH_SRC})
+-set_target_properties(shared PROPERTIES OUTPUT_NAME Gmsh)
++set_target_properties(shared PROPERTIES OUTPUT_NAME gmsh-2.5.1)
+ if(HAVE_LAPACK AND LAPACK_FLAGS)
+   set_target_properties(shared PROPERTIES LINK_FLAGS ${LAPACK_FLAGS})
+ endif(HAVE_LAPACK AND LAPACK_FLAGS)
