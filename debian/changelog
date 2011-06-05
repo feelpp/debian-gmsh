@@ -1,3 +1,18 @@
+gmsh (2.5.1~beta1~svn9373~dfsg-1) UNRELEASED; urgency=low
+
+  * [5cf0714] Disable Metis. Packaged version of Metis does not support
+      some new finctions, itroduced in gmsh.
+  * [e6b9db7] Change compat to 8.
+  * [19d2bdf] Switch debian/rules to dh.
+  * [5cf0714] Temporarly disable metis support.
+  * [e6404c4] Fix some typos.
+  * [ad1f7c7] Delete prerm file.
+  * [e46bffc] Link with packaged gl2ps instead of shipped with the source.
+  * [fa15729] Change name of lib-file according to policy.
+  * [4e75a8e] Imported Upstream version 2.5.1~beta1~svn9373~dfsg
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Sun, 05 Jun 2011 21:14:37 +0200
+
 gmsh (2.5.0.dfsg-8) unstable; urgency=low
 
   * [7f7164f] Add platform restriction for libmedc-dev (Closes: #623561)
