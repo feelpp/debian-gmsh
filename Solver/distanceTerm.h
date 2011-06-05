@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -16,7 +16,6 @@ class distanceTerm : public helmholtzTerm<double> {
   void elementVector(SElement *se, fullVector<double> &m) const
   {
     MElement *e = se->getMeshElement();
-    int nbNodes = e->getNumVertices();
     int integrationOrder = 2 * e->getPolynomialOrder();
     int npts;
     IntPt *GP;
@@ -31,7 +30,7 @@ class distanceTerm : public helmholtzTerm<double> {
       const double weight = GP[i].weight;
       const double detJ = e->getJacobian(u, v, w, jac);
       e->getShapeFunctions(u, v, w, ff);
-      for (int j = 0; j < nbNodes; j++){
+      for (int j = 0; j < e->getNumShapeFunctions(); j++){
         m(j)  += ff[j] * weight * detJ;
       }
     }

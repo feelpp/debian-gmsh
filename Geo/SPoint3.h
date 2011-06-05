@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -7,7 +7,6 @@
 #define _SPOINT3_H_
 
 #include <math.h>
-
 // A point in 3-space
 class SPoint3 {
  protected:
@@ -19,6 +18,7 @@ class SPoint3 {
   SPoint3(const SPoint3 &pt) { P[0] = pt.P[0]; P[1] = pt.P[1]; P[2] = pt.P[2]; }
   virtual ~SPoint3() {}
   void setPosition(double xx, double yy, double zz);
+  void setPosition(const SPoint3 &pt,const SPoint3 &dir,const double dist_) {P[0]=pt.P[0]; P[1]=pt.P[1]; P[2]=pt.P[2]; SPoint3 a(dir); a*=dist_; P[0]+=a[0]; P[1]+=a[1]; P[2]+=a[2];}
   void getPosition(double *xx, double *yy, double *zz) const;
   void position(double *) const;
   inline double x(void) const;
@@ -95,7 +95,7 @@ inline double SPoint3::operator[](int i) const
 { return P[i]; }
 
 inline double SPoint3::distance(const SPoint3 &p)const
-{ 
+{
   double x = P[0] - p.P[0], y = P[1] - p.P[1], z = P[2] - p.P[2];
   return sqrt(x * x + y * y + z * z);
 }

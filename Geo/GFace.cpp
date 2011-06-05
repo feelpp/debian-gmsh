@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -18,12 +18,12 @@
 #include "GaussLegendre1D.h"
 #include "Context.h"
 #include "meshGFaceLloyd.h"
-#include "Bindings.h"
+#include "meshGFaceOptimize.h"
 
 #define SQU(a)      ((a)*(a))
 
 GFace::GFace(GModel *model, int tag)
-  : GEntity(model, tag), r1(0), r2(0), va_geom_triangles(0)
+  : GEntity(model, tag), r1(0), r2(0), compound(0), va_geom_triangles(0)
 {
   meshStatistics.status = GFace::PENDING;
   resetMeshAttributes();
@@ -45,7 +45,7 @@ GFace::~GFace()
 }
 
 void GFace::delFreeEdge(GEdge *e)
-{ 
+{
   // delete the edge from the edge list and the orientation list
   std::list<GEdge*>::iterator ite = l_edges.begin();
   std::list<int>::iterator itd = l_dirs.begin();
@@ -56,12 +56,12 @@ void GFace::delFreeEdge(GEdge *e)
       if(itd != l_dirs.end()) l_dirs.erase(itd);
       break;
     }
-    ite++; 
+    ite++;
     if(itd != l_dirs.end()) itd++;
   }
 
   // delete the edge from the edge loops
-  for(std::list<GEdgeLoop>::iterator it = edgeLoops.begin(); 
+  for(std::list<GEdgeLoop>::iterator it = edgeLoops.begin();
       it != edgeLoops.end(); it++){
     for(GEdgeLoop::iter it2 = it->begin(); it2 != it->end(); it2++){
       if(e == it2->ge){
@@ -89,8 +89,8 @@ void GFace::deleteMesh()
 }
 
 unsigned int GFace::getNumMeshElements()
-{ 
-  return triangles.size() + quadrangles.size() + polygons.size(); 
+{
+  return triangles.size() + quadrangles.size() + polygons.size();
 }
 
 void GFace::getNumMeshElements(unsigned *const c) const
@@ -117,7 +117,7 @@ MElement *const *GFace::getStartElementType(int type) const
 }
 
 MElement *GFace::getMeshElement(unsigned int index)
-{ 
+{
   if(index < triangles.size())
     return triangles[index];
   else if(index < triangles.size() + quadrangles.size())
@@ -179,7 +179,7 @@ SOrientedBoundingBox GFace::getOBB()
         vertices.push_back(pt1);
         vertices.push_back(pt2);
       }
-    } 
+    }
     else if(buildSTLTriangulation()) {
       for (unsigned int i = 0; i < stl_vertices.size(); i++){
         GPoint p = point(stl_vertices[i]);
@@ -238,7 +238,6 @@ void GFace::setVisibility(char val, bool recursive)
     std::list<GEdge*>::iterator it = l_edges.begin();
     while (it != l_edges.end()){
       (*it)->setVisibility(val, recursive);
-
       ++it;
     }
   }
@@ -292,11 +291,11 @@ void GFace::writeGEO(FILE *fp)
     }
   }
 
-  for(std::list<GEdge*>::iterator it = embedded_edges.begin(); 
+  for(std::list<GEdge*>::iterator it = embedded_edges.begin();
       it != embedded_edges.end(); it++)
     fprintf(fp, "Line {%d} In Surface {%d};\n", (*it)->tag(), tag());
 
-  for(std::list<GVertex*>::iterator it = embedded_vertices.begin(); 
+  for(std::list<GVertex*>::iterator it = embedded_vertices.begin();
       it != embedded_vertices.end(); it++)
     fprintf(fp, "Point {%d} In Surface {%d};\n", (*it)->tag(), tag());
 
@@ -330,14 +329,19 @@ void GFace::computeMeanPlane()
   if(pts.size() < 3){
     Msg::Info("Adding edge points to compute mean plane of face %d", tag());
     std::list<GEdge*> edg = edges();
-    std::list<GEdge*>::const_iterator ite = edg.begin();
-    for(; ite != edg.end(); ite++){
+    for(std::list<GEdge*>::const_iterator ite = edg.begin(); ite != edg.end(); ite++){
       const GEdge *e = *ite;
-      Range<double> b = e->parBounds(0);
-      GPoint p1 = e->point(b.low() + 0.333 * (b.high() - b.low()));
-      pts.push_back(SPoint3(p1.x(), p1.y(), p1.z()));
-      GPoint p2 = e->point(b.low() + 0.666 * (b.high() - b.low()));
-      pts.push_back(SPoint3(p2.x(), p2.y(), p2.z()));
+      if(e->mesh_vertices.size() > 1){
+        for(unsigned int i = 0; i < e->mesh_vertices.size(); i++)
+          pts.push_back(e->mesh_vertices[i]->point());
+      }
+      else{
+        Range<double> b = e->parBounds(0);
+        GPoint p1 = e->point(b.low() + 0.333 * (b.high() - b.low()));
+        pts.push_back(SPoint3(p1.x(), p1.y(), p1.z()));
+        GPoint p2 = e->point(b.low() + 0.666 * (b.high() - b.low()));
+        pts.push_back(SPoint3(p2.x(), p2.y(), p2.z()));
+      }
     }
   }
 
@@ -498,10 +502,10 @@ end:
       double d = meanPlane.a * v->x() + meanPlane.b * v->y() +
         meanPlane.c * v->z() - meanPlane.d;
       if(fabs(d) > lc * 1.e-3) {
-        Msg::Error("Plane surface %d (%gx+%gy+%gz=%g) is not plane!",
-                   tag(), meanPlane.a, meanPlane.b, meanPlane.c, meanPlane.d);
-        Msg::Error("Control point %d = (%g,%g,%g), val=%g",
-                   v->tag(), v->x(), v->y(), v->z(), d);
+        Msg::Warning("Plane surface %d (%gx+%gy+%gz=%g) is not plane!",
+                     tag(), meanPlane.a, meanPlane.b, meanPlane.c, meanPlane.d);
+        Msg::Warning("Control point %d = (%g,%g,%g), val=%g",
+                     v->tag(), v->x(), v->y(), v->z(), d);
         break;
       }
     }
@@ -660,7 +664,7 @@ double GFace::curvatureDiv(const SPoint2 &param) const
 
   double ddu = dot(dndu, du);
   double ddv = dot(dndv, dv);
-  
+
   return (fabs(ddu) + fabs(ddv)) / detJ;
 }
 
@@ -686,7 +690,7 @@ double GFace::curvatures(const SPoint2 &param, SVector3 *dirMax, SVector3 *dirMi
     *curvMin = 0.;
     return 0.;
   }
-  
+
   if(geomType() == Sphere){
     *dirMax = D1.first();
     *dirMin = D1.second();
@@ -703,7 +707,7 @@ double GFace::curvatures(const SPoint2 &param, SVector3 *dirMax, SVector3 *dirMi
   *curvMin = fabs(eigVal[0]);
   *dirMax = eigVec[1] * D1.first() + eigVec[3] * D1.second();
   *dirMin = eigVec[0] * D1.first() + eigVec[2] * D1.second();
-  
+
   return *curvMax;
 }
 
@@ -755,7 +759,7 @@ void GFace::getMetricEigenVectors(const SPoint2 &param,
   N(0, 1) = inv_form1[0][0] * form2[0][1] + inv_form1[0][1] * form2[1][1];
   N(1, 0) = inv_form1[1][0] * form2[0][0] + inv_form1[1][1] * form2[1][0];
   N(1, 1) = inv_form1[1][0] * form2[0][1] + inv_form1[1][1] * form2[1][1];
-  
+
   // eigen values and vectors of N
   fullMatrix<double> vl(2, 2), vr(2, 2);
   fullVector<double> dr(2), di(2);
@@ -874,7 +878,8 @@ SPoint2 GFace::parFromPoint(const SPoint3 &p, bool onSurface) const
 GPoint GFace::closestPoint(const SPoint3 &queryPoint, const double initialGuess[2]) const
 {
   Msg::Error("Closest point not implemented for this type of surface");
-  return GPoint(0, 0, 0);
+  SPoint2 p = parFromPoint(queryPoint, false);
+  return point(p);
 }
 
 bool GFace::containsParam(const SPoint2 &pt) const
@@ -1012,7 +1017,7 @@ bool GFace::buildSTLTriangulation(bool force)
     }
     return true;
   }
-  
+
   // build STL for general surfaces here
 
   return false;
@@ -1095,19 +1100,19 @@ double GFace::length(const SPoint2 &pt1, const SPoint2 &pt2, int nbQuadPoints)
   return L;
 }
 
-int GFace::poincareMesh()  
+int GFace::poincareMesh()
 {
   std::set<MEdge, Less_Edge> es;
   std::set<MVertex*> vs;
-  for(unsigned int i = 0; i < getNumMeshElements(); i++){ 
+  for(unsigned int i = 0; i < getNumMeshElements(); i++){
     MElement *e = getMeshElement(i);
     for(int j = 0; j < e->getNumVertices(); j++) vs.insert(e->getVertex(j));
     for(int j = 0; j < e->getNumEdges(); j++) es.insert(e->getEdge(j));
   }
-  return vs.size() - es.size() + getNumMeshElements();  
+  return vs.size() - es.size() + getNumMeshElements();
 }
 
-int GFace::genusGeom()  
+int GFace::genusGeom()
 {
   int nSeams = 0;
   std::set<GEdge*> single_seams;
@@ -1130,7 +1135,7 @@ bool GFace::fillPointCloud(double maxDist, std::vector<SPoint3> *points,
     Msg::Error("No STL triangulation available to fill point cloud");
     return false;
   }
-  
+
   if(!points) return false;
 
   for(unsigned int i = 0; i < stl_triangles.size(); i += 3){
@@ -1148,7 +1153,7 @@ bool GFace::fillPointCloud(double maxDist, std::vector<SPoint3> *points,
       for(double v = 0.; v < 1 - u; v += 1. / N){
         SPoint2 p = p0 * (1. - u - v) + p1 * u + p2 * v;
         GPoint gp(point(p));
-        points->push_back(SPoint3(gp.x(), gp.y(), gp.z())); 
+        points->push_back(SPoint3(gp.x(), gp.y(), gp.z()));
         if(normals) normals->push_back(normal(p));
       }
     }
@@ -1158,7 +1163,7 @@ bool GFace::fillPointCloud(double maxDist, std::vector<SPoint3> *points,
 
 void GFace::lloyd(int nbiter, int infn)
 {
-#if defined(HAVE_MESH)
+#if defined(HAVE_MESH) && defined(HAVE_BFGS)
   lloydAlgorithm algo(nbiter, infn);
   algo(this);
 #endif
@@ -1173,7 +1178,7 @@ void GFace::replaceEdges (std::list<GEdge*> &new_edges)
   std::list<int> newdirs;
   for ( ; it != l_edges.end(); ++it, ++it2, ++it3){
     (*it)->delFace(this);
-    (*it2)->addFace(this);        
+    (*it2)->addFace(this);
     if ((*it2)->getBeginVertex() == (*it)->getBeginVertex())
       newdirs.push_back(*it3);
     else
@@ -1204,26 +1209,64 @@ void GFace::moveToValidRange(SPoint2 &pt) const
   }
 }
 
-#include "Bindings.h"
-
-void GFace::registerBindings(binding *b)
-{
-  classBinding *cb = b->addClass<GFace>("GFace");
-  cb->setParentClass<GEntity>();
-  cb->setDescription("A GFace is a geometrical 2D entity");
-  methodBinding *mb;
-  mb = cb->addMethod("lloyd", &GFace::lloyd);
-  mb->setDescription("do N iteration of Lloyd's algorithm using or not the infinite norm");
-  mb->setArgNames("N","infiniteNorm",NULL);
-  mb = cb->addMethod("addTriangle", &GFace::addTriangle);
-  mb->setDescription("insert a triangle mesh element");
-  mb->setArgNames("triangle", NULL);
-  mb = cb->addMethod("addQuadrangle", &GFace::addQuadrangle);
-  mb->setDescription("insert a quadrangle mesh element");
-  mb->setArgNames("quadrangle", NULL);
-  mb = cb->addMethod("edges", &GFace::edges);
-  mb->setDescription("return the list of edges bounding this surface");
-/*  mb = cb->addMethod("addPolygon", &GFace::addPolygon);
-  mb->setDescription("insert a polygon mesh element");
-  mb->setArgNames("polygon", NULL);*/
+void GFace::addLayersOfQuads(int nLayers, GVertex *gv, double hmin, double ratio)
+{  
+  SVector3 ez (0, 0, 1);
+  std::list<GEdgeLoop>::iterator it = edgeLoops.begin();
+  FILE *f = fopen ("coucou.pos","w");
+  fprintf(f,"View \"\"{\n");
+  for (; it != edgeLoops.end(); ++it){
+    bool found = false;
+    // look if this edge loop has the GVertex as an endpoint
+    for (GEdgeLoop::iter it2 = it->begin(); it2 != it->end(); ++it2){
+      if (it2->ge->getBeginVertex() == gv || it2->ge->getEndVertex() == gv)
+	found = true;
+    }
+    // we found an edge loop with the GVertex that was specified
+    if (found){
+      // first build a list of edges in the parametric space
+      std::vector<std::pair<MVertex*,SPoint2> > contour;
+      for (GEdgeLoop::iter it2 = it->begin(); it2 != it->end(); ++it2){
+	GEdge *ge = it2->ge;
+	SPoint2 p[2];
+	if (it2->_sign == 1){
+	  for (unsigned int i = 0; i < ge->lines.size(); i++){
+	    reparamMeshEdgeOnFace(ge->lines[i]->getVertex(0), ge->lines[i]->getVertex(1),
+                                  this, p[0], p[1]);	  	  
+	    contour.push_back(std::make_pair(ge->lines[i]->getVertex(0), p[0]));
+	  }
+	}
+	else {
+	  for(int i = ge->lines.size() - 1; i >= 0; i--){
+	    reparamMeshEdgeOnFace(ge->lines[i]->getVertex(0), ge->lines[i]->getVertex(1),
+                                  this,p[0],p[1]);	  	  
+	    contour.push_back(std::make_pair(ge->lines[i]->getVertex(1),p[1]));
+	  }
+	}
+      }      
+      double hlayer = hmin;
+      for (int j = 0; j < nLayers; j++){
+	for (unsigned int i = 0; i < contour.size(); i++){
+	  SPoint2 p0 = contour[(i+0) % contour.size()].second;
+	  SPoint2 p1 = contour[(i+1) % contour.size()].second;
+	  SPoint2 p2 = contour[(i+2) % contour.size()].second;
+	  SVector3 p0p1 (p1.x()-p0.x(),p1.y()-p0.y(),0.0);
+	  SVector3 p1p2 (p2.x()-p1.x(),p2.y()-p1.y(),0.0);
+	  SVector3 n01 = crossprod(ez,p0p1);
+	  SVector3 n12 = crossprod(ez,p1p2);
+	  SVector3 n = (n01+n12)*-0.5;
+	  n.normalize();
+	  double u = p1.x() + n.x() * hmin;
+	  double v = p1.y() + n.y() * hmin;
+	  GPoint gp = point(SPoint2(u,v));
+	  additionalVertices.push_back(new MFaceVertex(gp.x(),gp.y(),gp.z(),this,u,v));
+	  fprintf(f,"SP(%g, %g, 0){1};\n",gp.x(),gp.y());
+	}
+	hlayer *= ratio;
+	hmin += hlayer;
+      }
+      fprintf(f,"};\n");
+      fclose(f);
+    }
+  }  
 }

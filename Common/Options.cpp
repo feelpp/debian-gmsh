@@ -1,10 +1,11 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include "GmshConfig.h"
 #include "GmshDefines.h"
 #include "GmshMessage.h"
@@ -3024,6 +3025,13 @@ double opt_general_clip_factor(OPT_ARGS_NUM)
   return CTX::instance()->clipFactor;
 }
 
+double opt_general_display_border_factor(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->displayBorderFactor = val;    
+  return CTX::instance()->displayBorderFactor;
+}
+
 double opt_general_point_size(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
@@ -3505,14 +3513,6 @@ double opt_general_antialiasing(OPT_ARGS_NUM)
   return CTX::instance()->antialiasing;
 }
 
-double opt_general_stereo(OPT_ARGS_NUM)
-{
-  if(action & GMSH_SET) {
-    CTX::instance()->stereo = (int)val;
-  }
-  return CTX::instance()->stereo;
-}
-
 double opt_general_alpha_blending(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
@@ -3651,6 +3651,13 @@ double opt_general_trackball(OPT_ARGS_NUM)
   return CTX::instance()->useTrackball;
 }
 
+double opt_general_trackball_hyperbolic_sheet(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->trackballHyperbolicSheet = (int)val;
+  return CTX::instance()->trackballHyperbolicSheet;
+}
+
 double opt_general_rotation_center_cg(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
@@ -3682,6 +3689,69 @@ double opt_general_expert_mode(OPT_ARGS_NUM)
       (CTX::instance()->expertMode);
 #endif
   return CTX::instance()->expertMode;
+}
+
+double opt_general_stereo_mode(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->stereo = (int)val;
+  if (CTX::instance()->stereo) // when stereo mode is active camera mode is obligatory
+    opt_general_camera_mode(num, action, 1.);
+#if defined(HAVE_FLTK)
+  if(FlGui::available() && (action & GMSH_GUI))
+    FlGui::instance()->options->general.butt[17]->value(CTX::instance()->stereo);
+#endif
+  return CTX::instance()->stereo ;
+}
+
+double opt_general_eye_sep_ratio(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)   
+    CTX::instance()->eye_sep_ratio =  (double)val;
+#if defined(HAVE_FLTK)
+  if(FlGui::available() && (action & GMSH_GUI))   
+    FlGui::instance()->options->general.value[29]->value
+      (CTX::instance()->eye_sep_ratio) ;
+#endif
+  return CTX::instance()->eye_sep_ratio ;
+}
+
+double opt_general_focallength_ratio(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->focallength_ratio = (double) val;
+#if defined(HAVE_FLTK)
+  if(FlGui::available() && (action & GMSH_GUI))
+    FlGui::instance()->options->general.value[30]->value
+      (CTX::instance()->focallength_ratio) ;
+#endif
+  return CTX::instance()->focallength_ratio ;
+}
+
+double opt_general_camera_aperture(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->camera_aperture = (double)val;
+#if defined(HAVE_FLTK)
+  if(FlGui::available() && (action & GMSH_GUI))
+    FlGui::instance()->options->general.value[31]->value
+      (CTX::instance()->camera_aperture);
+#endif
+  return CTX::instance()->camera_aperture;
+}
+
+double opt_general_camera_mode(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->camera = (int)val;
+#if defined(HAVE_FLTK)
+  if(FlGui::available() && (action & GMSH_GUI)){
+    FlGui::instance()->options->general.butt[18]->value
+      (CTX::instance()->camera);
+    FlGui::instance()->options->activate("general_camera");
+  }
+#endif
+  return CTX::instance()->camera ;
 }
 
 double opt_general_clip0a(OPT_ARGS_NUM)
@@ -5588,13 +5658,16 @@ double opt_mesh_algo2d(OPT_ARGS_NUM)
 #if defined(HAVE_FLTK)
   if(FlGui::available() && (action & GMSH_GUI)) {
     switch (CTX::instance()->mesh.algo2d) {
-    case ALGO_2D_DELAUNAY:
+    case ALGO_2D_MESHADAPT:
       FlGui::instance()->options->mesh.choice[2]->value(1);
       break;
-    case ALGO_2D_FRONTAL:
+    case ALGO_2D_DELAUNAY:
       FlGui::instance()->options->mesh.choice[2]->value(2);
       break;
-    case ALGO_2D_MESHADAPT:
+    case ALGO_2D_FRONTAL:
+      FlGui::instance()->options->mesh.choice[2]->value(3);
+      break;
+    case ALGO_2D_AUTO:
     default:
       FlGui::instance()->options->mesh.choice[2]->value(0);
       break;
@@ -5766,6 +5839,13 @@ double opt_mesh_second_order_experimental(OPT_ARGS_NUM)
   return CTX::instance()->mesh.secondOrderExperimental;
 }
 
+double opt_mesh_multiple_passes(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->mesh.multiplePasses = (int)val;
+  return CTX::instance()->mesh.multiplePasses;
+}
+
 double opt_mesh_second_order_linear(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
@@ -5783,6 +5863,13 @@ double opt_mesh_second_order_incomplete(OPT_ARGS_NUM)
       (CTX::instance()->mesh.secondOrderIncomplete);
 #endif
   return CTX::instance()->mesh.secondOrderIncomplete;
+}
+
+double opt_mesh_hom_no_metric(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->mesh.highOrderNoMetric = (int)val;
+  return CTX::instance()->mesh.highOrderNoMetric;
 }
 
 double opt_mesh_dual(OPT_ARGS_NUM)
@@ -5857,6 +5944,13 @@ double opt_mesh_color_carousel(OPT_ARGS_NUM)
   }
 #endif
   return CTX::instance()->mesh.colorCarousel;
+}
+
+double opt_mesh_switch_elem_tags(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->mesh.switchElementTags = val ? 1 : 0;
+  return CTX::instance()->mesh.switchElementTags;
 }
 
 double opt_mesh_zone_definition(OPT_ARGS_NUM)
@@ -6134,7 +6228,7 @@ double opt_mesh_partition_metis_algorithm(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET) {
     int ival = (int)val;
-    if(ival < 1 || ival > 2)
+    if(ival < 1 || ival > 3)
       ival = (CTX::instance()->partitionOptions.num_partitions <= 8) ? 1 : 2;
     CTX::instance()->partitionOptions.algorithm = ival;
   }
@@ -6183,6 +6277,18 @@ double opt_solver_listen(OPT_ARGS_NUM)
 #endif
   return CTX::instance()->solver.listen;
 }
+
+double opt_solver_timeout(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->solver.timeout = val;
+#if defined(HAVE_FLTK)
+  if(FlGui::available() && (action & GMSH_GUI))
+    FlGui::instance()->options->solver.value[0]->value(CTX::instance()->solver.timeout);
+#endif
+  return CTX::instance()->solver.timeout;
+}
+
 
 double opt_solver_plugins(OPT_ARGS_NUM)
 {
@@ -6421,6 +6527,20 @@ double opt_view_nb_timestep(OPT_ARGS_NUM)
       FlGui::instance()->graph[i]->checkAnimButtons();
 #endif
   return data->getNumTimeSteps();
+#else
+  return 0.;
+#endif
+}
+
+double opt_view_nb_non_empty_timestep(OPT_ARGS_NUM)
+{
+#if defined(HAVE_POST)
+  GET_VIEW(0.);
+  if(!data) return 0;
+  int n = 0;
+  for(unsigned int i = 0; i < data->getNumTimeSteps(); i++)
+    if(data->hasTimeStep(i)) n++;
+  return n;
 #else
   return 0.;
 #endif
@@ -7975,7 +8095,7 @@ double opt_view_tensor_type(OPT_ARGS_NUM)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->tensorType = (int)val;
-    if(opt->tensorType != 1)
+    if(opt->tensorType > 6 || opt->tensorType < 1)
       opt->tensorType = 1;
     if(view) view->setChanged(true);
   }

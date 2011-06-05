@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -12,30 +12,28 @@
 #include "Context.h"
 
 #if defined(HAVE_OCC)
-#include "Geom2dLProp_CLProps2d.hxx"
-#include "Geom_BezierCurve.hxx"
-#include "Geom_OffsetCurve.hxx"
-#include "Geom_Ellipse.hxx"
-#include "Geom_Parabola.hxx"
-#include "Geom_Hyperbola.hxx"
-#include "Geom_TrimmedCurve.hxx"
-#include "Geom_Circle.hxx"
-#include "Geom_Line.hxx"
-#include "Geom_Conic.hxx"
-#include "BOPTools_Tools.hxx"
+#include <Geom2dLProp_CLProps2d.hxx>
+#include <Geom_BezierCurve.hxx>
+#include <Geom_OffsetCurve.hxx>
+#include <Geom_Ellipse.hxx>
+#include <Geom_Parabola.hxx>
+#include <Geom_Hyperbola.hxx>
+#include <Geom_TrimmedCurve.hxx>
+#include <Geom_Circle.hxx>
+#include <Geom_Line.hxx>
+#include <Geom_Conic.hxx>
+#include <BOPTools_Tools.hxx>
 
 GEdge *getOCCEdgeByNativePtr(GModel *model, TopoDS_Edge toFind)
 {
-  GModel::eiter it =model->firstEdge();
-  for (; it !=model->lastEdge(); it++){
+  GModel::eiter it = model->firstEdge();
+  for (; it != model->lastEdge(); it++){
     OCCEdge *ed = dynamic_cast<OCCEdge*>(*it);
     if (ed){
       if (toFind.IsSame(ed->getTopoDS_Edge())){
-	//	printf("found %d coucou\n",ed->tag());
 	return *it;
       }
       if (toFind.IsSame(ed->getTopoDS_EdgeOld())){
-	//	printf("found %d coucou\n",ed->tag());
 	return *it;
       }
     }
@@ -47,7 +45,6 @@ GEdge *getOCCEdgeByNativePtr(GModel *model, TopoDS_Edge toFind)
 OCCEdge::OCCEdge(GModel *model, TopoDS_Edge edge, int num, GVertex *v1, GVertex *v2)
   : GEdge(model, num, v1, v2), c(edge), trimmed(0)
 {
-  //  printf("NEW OCCEDGE %d\n",num);
   curve = BRep_Tool::Curve(c, s0, s1);
   // build the reverse curve
   c_rev = c;
@@ -97,7 +94,7 @@ SPoint2 OCCEdge::reparamOnFace(const GFace *face, double epar, int dir) const
   const double dx = p1.x()-p2.x();
   const double dy = p1.y()-p2.y();
   const double dz = p1.z()-p2.z();
-  if(sqrt(dx * dx + dy * dy + dz * dz) > 1.e-4 * CTX::instance()->lc){
+  if(sqrt(dx * dx + dy * dy + dz * dz) > 1.e-2 * CTX::instance()->lc && 0){
     // return reparamOnFace(face, epar,-1);      
     Msg::Warning("Reparam on face partially failed for curve %d surface %d at point %g",
                  tag(), face->tag(), epar);

@@ -1,8 +1,8 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
-
+ 
 #include <string.h>
 #include <FL/fl_draw.H>
 #include <FL/fl_ask.H>
@@ -17,6 +17,7 @@
 #include "PView.h"
 #include "PViewData.h"
 #include "OS.h"
+#include "OpenFile.h"
 #include "Options.h"
 #include "Context.h"
 
@@ -128,64 +129,94 @@ void status_xyz1p_cb(Fl_Widget *w, void *data)
                              ctx0->quaternion[2], ctx0->quaternion[3]);
         }
       }
-      else if(!Fl::event_state(FL_SHIFT))
+      else if(!Fl::event_state(FL_SHIFT)){
         ctx->addQuaternionFromAxisAndAngle(axis, -90.);
-      else
+	if (CTX::instance()->camera) ctx->camera.tiltHeadRight();
+      }
+      else{
         ctx->addQuaternionFromAxisAndAngle(axis, 90.);
+	if (CTX::instance()->camera) ctx->camera.tiltHeadLeft();
+      }
     }
     else if(!strcmp(str, "x")){
       // set X-axis pointing out or into (shift) the screen
-      if(!Fl::event_state(FL_SHIFT)){
-        ctx->r[0] = -90.; ctx->r[1] = 0.; ctx->r[2] = -90.;
-      }
+      if (CTX::instance()->camera) {
+	ctx->camera.alongX();}
       else{
-        ctx->r[0] = -90.; ctx->r[1] = 0.; ctx->r[2] = 90.;
+	if(!Fl::event_state(FL_SHIFT)){
+	  ctx->r[0] = -90.; ctx->r[1] = 0.; ctx->r[2] = -90.;
+	}
+	else{
+	  ctx->r[0] = -90.; ctx->r[1] = 0.; ctx->r[2] = 90.;
+	}
+	ctx->setQuaternionFromEulerAngles();
       }
-      ctx->setQuaternionFromEulerAngles();
     }
     else if(!strcmp(str, "y")){
       // set Y-axis pointing out or into (shift) the screen
-      if(!Fl::event_state(FL_SHIFT)){
-        ctx->r[0] = -90.; ctx->r[1] = 0.; ctx->r[2] = 180.;
-      }
+      if (CTX::instance()->camera) {
+	ctx->camera.alongY();}
       else{
-        ctx->r[0] = -90.; ctx->r[1] = 0.; ctx->r[2] = 0.;
+	if(!Fl::event_state(FL_SHIFT)){
+	  ctx->r[0] = -90.; ctx->r[1] = 0.; ctx->r[2] = 180.;
+	}
+	else{
+	  ctx->r[0] = -90.; ctx->r[1] = 0.; ctx->r[2] = 0.;
+	}
+	ctx->setQuaternionFromEulerAngles();
       }
-      ctx->setQuaternionFromEulerAngles();
     }
     else if(!strcmp(str, "z")){ 
       // set Z-axis pointing out or into (shift) the screen
-      if(!Fl::event_state(FL_SHIFT)){
-        ctx->r[0] = 0.; ctx->r[1] = 0.; ctx->r[2] = 0.;
-      }
+      if (CTX::instance()->camera) {
+	ctx->camera.alongZ();}
       else{
-        ctx->r[0] = 0.; ctx->r[1] = 180.; ctx->r[2] = 0.;
+	if(!Fl::event_state(FL_SHIFT)){
+	  ctx->r[0] = 0.; ctx->r[1] = 0.; ctx->r[2] = 0.;
+	}
+	else{
+	  ctx->r[0] = 0.; ctx->r[1] = 180.; ctx->r[2] = 0.;
+	}
+	ctx->setQuaternionFromEulerAngles();
       }
-      ctx->setQuaternionFromEulerAngles();
     }
     else if(!strcmp(str, "1:1")){
+      // if Shift is pressed, reset bounding box around visible
+      // entities
+      if(Fl::event_state(FL_SHIFT))
+        SetBoundingBox(true);
       // reset translation and scaling, or sync translation and
       // scaling with the first window (alt)
-      if(Fl::event_state(FL_ALT)){
-        if(i != 0){
-          drawContext *ctx0 = gls[0]->getDrawContext();
-          for(int j = 0; j < 3; j++){
-            ctx->t[j] = ctx0->t[j];
-            ctx->s[j] = ctx0->s[j];
-          }
-        }
+      if (CTX::instance()->camera) {
+	ctx->camera.lookAtCg();
       }
       else{
-        ctx->t[0] = ctx->t[1] = ctx->t[2] = 0.;
-        ctx->s[0] = ctx->s[1] = ctx->s[2] = 1.;
+	if(Fl::event_state(FL_ALT)){
+	  if(i != 0){
+	    drawContext *ctx0 = gls[0]->getDrawContext();
+	    for(int j = 0; j < 3; j++){
+	      ctx->t[j] = ctx0->t[j];
+	      ctx->s[j] = ctx0->s[j];
+	    }
+	  }
+	}
+	else{
+	  ctx->t[0] = ctx->t[1] = ctx->t[2] = 0.;
+	  ctx->s[0] = ctx->s[1] = ctx->s[2] = 1.;
+	}
       }
     }
-    else if(!strcmp(str, "reset")){ 
-      // reset everything
-      ctx->t[0] = ctx->t[1] = ctx->t[2] = 0.;
-      ctx->s[0] = ctx->s[1] = ctx->s[2] = 1.;
-      ctx->r[0] = ctx->r[1] = ctx->r[2] = 0.;
-      ctx->setQuaternionFromEulerAngles();
+    else if(!strcmp(str, "reset")){
+      if (CTX::instance()->camera) {
+	ctx->camera.init();
+      }
+      else{
+	// reset everything
+	ctx->t[0] = ctx->t[1] = ctx->t[2] = 0.;
+	ctx->s[0] = ctx->s[1] = ctx->s[2] = 1.;
+	ctx->r[0] = ctx->r[1] = ctx->r[2] = 0.;
+	ctx->setQuaternionFromEulerAngles();
+      }
     }
   }
   drawContext::global()->draw();
@@ -346,8 +377,18 @@ static void status_pause_cb(Fl_Widget *w, void *data)
 static void status_rewind_cb(Fl_Widget *w, void *data)
 {
   if(!CTX::instance()->post.animCycle) {
-    for(unsigned int i = 0; i < PView::list.size(); i++)
-      opt_view_timestep(i, GMSH_SET | GMSH_GUI, 0);
+    for(unsigned int i = 0; i < PView::list.size(); i++) {
+      // skip empty steps
+      int numSteps = (int)opt_view_nb_timestep(i, GMSH_GET, 0);
+      int step = 0;
+      while(step < numSteps){
+	if(PView::list[i]->getData()->hasTimeStep(step))
+	  break;
+	else
+	  step++;
+      }
+      opt_view_timestep(i, GMSH_SET | GMSH_GUI, step);
+    }
   }
   else {
     view_in_cycle = 0;
@@ -457,7 +498,8 @@ graphicWindow::graphicWindow(bool main, int numTiles)
   x += sw;  
   butt[3] = new Fl_Button(x, glheight + 2, 2 * FL_NORMAL_SIZE, sht, "1:1");
   butt[3]->callback(status_xyz1p_cb, (void *)"1:1");
-  butt[3]->tooltip("Set unit scale, or sync scale (Alt)");
+  butt[3]->tooltip("Set unit scale, sync scale between viewports (Alt), "
+                   "or reset bounding box around visible entities (Shift)");
   x += 2 * FL_NORMAL_SIZE;  
   butt[8] = new Fl_Button(x, glheight + 2, sw, sht, "@-1gmsh_ortho");
   butt[8]->callback(status_options_cb, (void *)"p");
@@ -557,7 +599,10 @@ graphicWindow::graphicWindow(bool main, int numTiles)
 
   int mode = FL_RGB | FL_DEPTH | (CTX::instance()->db ? FL_DOUBLE : FL_SINGLE);
   if(CTX::instance()->antialiasing) mode |= FL_MULTISAMPLE;
-  //mode |= FL_STEREO;
+  if(CTX::instance()->stereo) { 
+    mode |= FL_DOUBLE;
+    mode |= FL_STEREO;
+  }
   for(unsigned int i = 0; i < gl.size(); i++) gl[i]->mode(mode);
 
   tile->end();
@@ -589,37 +634,37 @@ void graphicWindow::split(openglWindow *g, char how)
     // let's be brutal :-)
     int mode = g->mode();
     openglWindow::setLastHandled(0);
-    tile->clear();
+    tile->clear(); // this really deletes the child opengl windows
     gl.clear();
     openglWindow *g2 = new openglWindow(0, 0, tile->w(), tile->h());
-    g2->mode(mode);
     g2->end();
+    g2->mode(mode);
     gl.push_back(g2);
     tile->add(g2);
     g2->show();
-    return;
   }
-
-  int x1 = g->x();
-  int y1 = g->y();
-  int w1 = (how == 'h') ? g->w() / 2 : g->w();
-  int h1 = (how == 'h') ? g->h() : g->h() / 2;
-
-  int x2 = (how == 'h') ? (g->x() + w1) : g->x();
-  int y2 = (how == 'h') ? g->y() : (g->y() + h1);
-  int w2 = (how == 'h') ? (g->w() - w1) : g->w();
-  int h2 = (how == 'h') ? g->h() : (g->h() - h1);
-
-  openglWindow *g2 = new openglWindow(0, 0, w2, h2);
-  g2->mode(g->mode());
-  g2->end();
-
-  gl.push_back(g2);
-  tile->add(g2);
-  g2->show();
-
-  g->resize(x1, y1, w1, h1);
-  g2->resize(x2, y2, w2, h2);
+  else{
+    int x1 = g->x();
+    int y1 = g->y();
+    int w1 = (how == 'h') ? g->w() / 2 : g->w();
+    int h1 = (how == 'h') ? g->h() : g->h() / 2;
+    
+    int x2 = (how == 'h') ? (g->x() + w1) : g->x();
+    int y2 = (how == 'h') ? g->y() : (g->y() + h1);
+    int w2 = (how == 'h') ? (g->w() - w1) : g->w();
+    int h2 = (how == 'h') ? g->h() : (g->h() - h1);
+    
+    openglWindow *g2 = new openglWindow(0, 0, w2, h2);
+    g2->end();
+    g2->mode(g->mode());
+    
+    gl.push_back(g2);
+    tile->add(g2);
+    g2->show();
+    
+    g->resize(x1, y1, w1, h1);
+    g2->resize(x2, y2, w2, h2);
+  }
 }
 
 void graphicWindow::setAnimButtons(int mode)

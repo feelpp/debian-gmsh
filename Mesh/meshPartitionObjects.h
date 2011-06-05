@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -11,6 +11,7 @@
 #include "MElement.h"
 #include "GmshMessage.h"
 #include "Context.h"
+#include "fullMatrix.h"
 
 
 /*******************************************************************************
@@ -90,12 +91,16 @@ class Graph
                                         // vertices.
   std::vector<int> vwgts;               // Weights assigned for each 
                                         // vertex
+  std::vector<int> adjwgts;             // Weights assigned for each 
+                                        // edge
   std::vector<int> section;             // For separate partitioning of
                                         // different parts of the mesh
   std::vector<int> partition;           // The partitions output from the
                                         // partitioner
   std::vector<MElement*> element;       // The element corresponding to each
                                         // graph vertex in 'xadj'
+  fullMatrix<int> *loads;                // Matrix of loads on each partition
+                                        
  private:
   unsigned cIndex;                      // An index for created graph vertices
                                         // (used externally)
@@ -133,6 +138,7 @@ class Graph
     xadj.resize(_totalGrVert + 1);
     adjncy.reserve(2*totalGrEdge);
     vwgts.resize(_totalGrVert);
+    adjwgts.reserve(2*totalGrEdge);
     partition.resize(_totalGrVert);
     element.resize(_totalGrVert);
     c2w = new int[_totalGrVert];
@@ -148,12 +154,52 @@ class Graph
     // Translated vertex numbers start from 1
     c2w[grVertMapIt->second.index] = i + 1;
   }
+  void computeLoads(int numParts, int numCon){
+    loads=new fullMatrix<int> (numParts,numCon);
+    for(int i=0; i<numParts;i++){
+      for(int j=0; j<partition.size(); j++){
+        if(partition[j]==i){
+          for(int k=0; k<numCon;k++){
+            (*loads)(i, k)+=vwgts[j*numCon+k];
+          }
+        }
+      }
+    }
+  }
+  void checkLoads(int numParts,  int numCon){
+    printf("******************************************************* \n");
+    for(int i=0; i<numParts;i++){
+      printf("------- PARTITION %d: [", i+1);
+      for(int j=0; j<numCon; j++){
+        printf(" %d", (*loads)(i, j));
+      }
+      printf("] -------\n");
+    }
+    printf("******************************************************* \n");
+  }
   void fillWeights(std::vector<int> wgts)
   {
     int num = 0;
     for(std::vector<int>::iterator it = wgts.begin(); it != wgts.end(); it++){
       vwgts[num]= 1; //*it;
        num++;
+    }
+  }
+  // Add multiple weights on vertices of the graph given in a map between original element Numbers and their corresponding vector of weights 
+  void fillWithMultipleWeights(int ncon, std::map<int, std::vector<int> > weightMap)
+  {
+    std::vector<MElement*>::iterator eIt;
+    vwgts.resize(element.size()*ncon);
+    adjwgts.resize(adjncy.size());
+    int localElNum=0;
+    for(eIt=element.begin();eIt !=element.end();eIt++){
+      for(int i=0; i<ncon; i++){
+        vwgts[localElNum*ncon+i]=weightMap[(*eIt)->getNum()][i];
+      }
+      for(int j=xadj[localElNum];j<xadj[localElNum+1];j++){
+        adjwgts[j]+=weightMap[(*eIt)->getNum()][0];
+      }
+      localElNum+=1;
     }
   }
 

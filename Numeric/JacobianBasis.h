@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -9,23 +9,25 @@
 #include <map>
 #include <vector>
 #include "fullMatrix.h"
-
-class JacobianBasis
-{
-  public:
-    int numLagPts;
-    int numDivisions;
-    fullMatrix<double> exposants; //exposants of Bezier FF
-    fullMatrix<double> points; //sampling point
-    fullMatrix<double> matrixLag2Bez;
-    fullMatrix<double> gradShapeMatX;
-    fullMatrix<double> gradShapeMatY;
-    fullMatrix<double> gradShapeMatZ;
-    fullMatrix<double> divisor;
+class bezierBasis {
+ private :
+  static std::map<int, bezierBasis> _bbs;
+ public :
+  int numLagPts;
+  int numDivisions;
+  fullMatrix<double> exposants; //exposants of Bezier FF
+  fullMatrix<double> points; //sampling point
+  fullMatrix<double> matrixLag2Bez, matrixBez2Lag;
+  fullMatrix<double> divisor;
+  static const bezierBasis *find(int);
 };
 
-class JacobianBases
-{
+class JacobianBasis {
+ public :
+  const bezierBasis *bezier;
+  fullMatrix<double> gradShapeMatX;
+  fullMatrix<double> gradShapeMatY;
+  fullMatrix<double> gradShapeMatZ;
  private:
   static std::map<int, JacobianBasis> fs;
  public:

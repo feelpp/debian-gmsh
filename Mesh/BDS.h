@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -440,7 +440,7 @@ class BDS_Mesh
   void add_geom(int degree, int tag);
   BDS_GeomEntity *get_geom(int p1, int p2);
   // 2D operators
-  BDS_Edge *recover_edge(int p1, int p2, std::set<EdgeToRecover> *e2r=0,
+  BDS_Edge *recover_edge(int p1, int p2, bool &_fatal, std::set<EdgeToRecover> *e2r=0,
                          std::set<EdgeToRecover> *not_recovered=0);
   BDS_Edge *recover_edge_fast(BDS_Point *p1, BDS_Point *p2);
   bool swap_edge(BDS_Edge*, const BDS_SwapEdgeTest &theTest);

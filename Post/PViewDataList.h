@@ -1,5 +1,5 @@
 
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -54,11 +54,11 @@ class PViewDataList : public PViewData {
                 std::vector<double> &list, int nblist);
   void _getString(int dim, int i, int timestep, std::string &str, 
                   double &x, double &y, double &z, double &style);
-  void _getRawData(int idxtype, std::vector<double> **l, int **ne, int *nc, int *nn);
+  int _getRawData(int idxtype, std::vector<double> **l, int **ne, int *nc, int *nn);
  public:
   PViewDataList();
   ~PViewDataList(){}
-  bool finalize(bool computeMinMax=true);
+  bool finalize(bool computeMinMax=true, const std::string &interpolationScheme="");
   int getNumTimeSteps(){ return NbTimeStep; }
   double getTime(int step);
   double getMin(int step=-1, bool onlyVisible=false);
@@ -110,7 +110,7 @@ class PViewDataList : public PViewData {
   bool readPOS(FILE *fp, double version, bool binary);
   bool writePOS(std::string fileName, bool binary=false, bool parsed=true,
                 bool append=false);
-  bool writeMSH(std::string fileName, bool binary=false);
+  virtual bool writeMSH(std::string fileName, bool binary=false, bool savemesh=true);
 };
 
 #endif

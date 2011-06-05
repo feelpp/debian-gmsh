@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -12,8 +12,6 @@
 #include "OCCRegion.h"
 
 #if defined(HAVE_OCC)
-
-
 
 OCCRegion::OCCRegion(GModel *m, TopoDS_Solid _s, int num)
   : GRegion(m, num), s(_s)
@@ -126,4 +124,5 @@ GRegion *getOCCRegionByNativePtr(GModel *model, TopoDS_Solid toFind)
   }
   return 0;
 }
+
 #endif

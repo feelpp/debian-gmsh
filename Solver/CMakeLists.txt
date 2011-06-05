@@ -1,4 +1,4 @@
-# Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+# Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 #
 # See the LICENSE.txt file for license information. Please report all
 # bugs and problems to <gmsh@geuz.org>.
@@ -15,9 +15,11 @@ set(SRC
   multiscaleLaplace.cpp
   function.cpp
   functionDerivator.cpp
-  luaFunction.cpp
   functionSpace.cpp
   filters.cpp
+  sparsityPattern.cpp
+  STensor43.cpp
+  terms.cpp
 )
 
 file(GLOB HDR RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.h) 

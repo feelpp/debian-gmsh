@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -29,6 +29,7 @@
 #include "elasticityTerm.h"
 #include "linearSystemCSR.h"
 #include "linearSystemFull.h"
+#include "linearSystemPETSc.h"
 
 #define SQU(a)      ((a)*(a))
 
@@ -323,6 +324,28 @@ void addOneLayer(const std::vector<MElement*> &v,
   }
 }
 
+
+void _printJacobiansAtNodes (const char * name, std::vector<MElement*> &v)
+{
+  FILE *fd = fopen (name,"w");
+  fprintf(fd,"$MeshFormat\n2 0 8\n$EndMeshFormat\n$ElementNodeData\n1\n\"det J\"\n1\n0.0\n3\n1\n1\n%d\n",v.size());
+  for (int i=0; i<v.size(); i++){
+    const polynomialBasis* pb = v[i]->getFunctionSpace();
+    fprintf(fd,"%d %d",v[i]->getNum(),v[i]->getNumVertices());
+    for (int j=0; j < v[i]->getNumVertices(); j++){
+      const double _u = pb->points(j,0);
+      const double _v = pb->points(j,1);
+      const double _w = pb->points(j,2);
+      double jac[3][3];
+      double J = v[i]->getJacobian (_u,_v,_w, jac);
+      fprintf(fd," %g",J);    
+    }
+    fprintf(fd,"\n");    
+  }
+  fprintf(fd,"$EndElementNodeData\n");
+  fclose(fd);
+}
+
 void highOrderSmoother::smooth(GFace *gf, bool metric)
 {
   std::vector<MElement*> v;
@@ -331,6 +354,14 @@ void highOrderSmoother::smooth(GFace *gf, bool metric)
   v.insert(v.begin(), gf->quadrangles.begin(),gf->quadrangles.end());
   Msg::Info("Smoothing high order mesh : model face %d (%d elements)", gf->tag(),
             v.size());
+
+  //  gf->model()->writeMSH("before_smoothing.msh");
+  //  _printJacobiansAtNodes ("before_smoothing_jac.msh", v);
+  //  smooth_with_mixed_formulation(v,0.2);
+  //  gf->model()->writeMSH("after_smoothing.msh");
+  //  _printJacobiansAtNodes ("after_smoothing_jac.msh", v);
+  //  return;
+
   if (metric)smooth_metric(v,gf);
   else smooth(v);
 }
@@ -354,8 +385,8 @@ void highOrderSmoother::smooth(GRegion *gr)
 
 
 void highOrderSmoother::optimize(GFace * gf, 
-                                     edgeContainer &edgeVertices,
-                                     faceContainer &faceVertices)
+				 edgeContainer &edgeVertices,
+				 faceContainer &faceVertices)
 {
   //  if (gf->geomType() != GEntity::Plane) return;
 
@@ -371,7 +402,7 @@ void highOrderSmoother::optimize(GFace * gf,
     //    }
     // then try to swap for better configurations  
 
-    smooth(gf, true);
+    //smooth(gf, !CTX::instance()->mesh.highOrderNoMetric);
     
     
     //    for (int i=0;i<100;i++){
@@ -380,7 +411,7 @@ void highOrderSmoother::optimize(GFace * gf,
 	//      printf("%d swaps\n",nbSwap);
     //    }
     
-    // smooth(gf,true);
+     smooth(gf,true);
     // smooth(gf,true);
     // smooth(gf,true);
     // smooth(gf,true);
@@ -447,14 +478,14 @@ void highOrderSmoother::smooth_metric(std::vector<MElement*>  & all, GFace *gf)
   lsys->setPrec(5.e-8);
 #endif
   dofManager<double> myAssembler(lsys);
-  elasticityTerm El(0, 1.0, .48, getTag());
+  elasticityTerm El(0, 1.0, .33, getTag());
   
   std::vector<MElement*> layer, v;
   double minD;
   
-  getDistordedElements(all, 0.5, v, minD);
+  getDistordedElements(all, 0.99, v, minD);
 
-  const int nbLayers = 10; //2, originally :)
+  const int nbLayers = 3; //2, originally :)
   for (int i = 0; i < nbLayers; i++){
     addOneLayer(all, v, layer);
     v.insert(v.end(), layer.begin(), layer.end());
@@ -517,11 +548,11 @@ void highOrderSmoother::smooth_metric(std::vector<MElement*>  & all, GFace *gf)
   
   double dx0 = smooth_metric_(v, gf, myAssembler, verticesToMove, El);
   double dx = dx0;
-  printf(" dx0 = %12.5E\n", dx0);
+  Msg::Debug(" dx0 = %12.5E", dx0);
   int iter = 0;
   while(1){
     double dx2 = smooth_metric_(v, gf, myAssembler, verticesToMove, El);
-    printf(" dx2  = %12.5E\n", dx2);
+    Msg::Debug(" dx2  = %12.5E", dx2);
     if (fabs(dx2 - dx) < 1.e-4 * dx0)break;
     if (iter++ > 2)break;
     dx = dx2;
@@ -560,6 +591,7 @@ double highOrderSmoother::smooth_metric_(std::vector<MElement*>  & v,
 
   if (myAssembler.sizeOfR()){
 
+    // while convergence -------------------------------------------------------
     for (unsigned int i = 0; i < v.size(); i++){
       MElement *e = v[i];
       int nbNodes = e->getNumVertices();
@@ -590,14 +622,16 @@ double highOrderSmoother::smooth_metric_(std::vector<MElement*>  & v,
       }
     }
     myAssembler.systemSolve();
+    // for all element, compute detJ at integration points --> material law
+    // end while convergence -------------------------------------------------------
   
     for (it = verticesToMove.begin(); it != verticesToMove.end(); ++it){
       if ((*it)->onWhat()->dim() == 2){
 	SPoint2 param;
 	reparamMeshVertexOnFace((*it), gf, param);  
 	SPoint2 dparam;
-  myAssembler.getDofValue((*it), 0, getTag(), dparam[0]);
-  myAssembler.getDofValue((*it), 1, getTag(), dparam[1]);
+	myAssembler.getDofValue((*it), 0, getTag(), dparam[0]);
+	myAssembler.getDofValue((*it), 1, getTag(), dparam[1]);
 	SPoint2 newp = param+dparam;
 	dx += newp.x() * newp.x() + newp.y() * newp.y();
 	(*it)->setParameter(0, newp.x());
@@ -610,10 +644,202 @@ double highOrderSmoother::smooth_metric_(std::vector<MElement*>  & v,
   return dx;
 }
 
+
+double highOrderSmoother::apply_incremental_displacement (double max_incr,
+							  std::vector<MElement*> & v,
+							  bool mixed,
+							  double thres,
+							  char *meshName,
+							  std::vector<MElement*> & disto)
+{
+#ifdef HAVE_PETSC
+  // assume that the mesh is OK, yet already curved
+  linearSystemPETSc<double> *lsys = new  linearSystemPETSc<double>;    
+  dofManager<double> myAssembler(lsys);
+  elasticityMixedTerm El_mixed (0, 1.0, .333, getTag());
+  elasticityTerm El (0, 1.0, .333, getTag());
+
+  std::set<MVertex*> _vertices;
+
+  //+++++++++ Boundary Conditions & Numbering +++++++++++++++++++++++++++++++
+  // fix all dof that correspond to vertices on the boundary 
+  // the value is equal 
+  for (unsigned int i = 0; i < v.size(); i++){
+    for (int j = 0; j < v[i]->getNumVertices(); j++){
+      MVertex *vert = v[i]->getVertex(j);
+      _vertices.insert(vert);
+    }
+  }
+
+  //+++++++++ Fix d tr(eps) = 0 +++++++++++++++++++++++++++++++
+  if (mixed){
+    for (unsigned int i = 0; i < disto.size(); i++){
+      for (int j = 0; j < disto[i]->getNumVertices(); j++){
+	MVertex *vert = disto[i]->getVertex(j);
+	myAssembler.fixVertex(vert, 4, getTag(), 0.0);
+      }
+    }
+  }
+
+  for (std::set<MVertex*>::iterator it = _vertices.begin(); it != _vertices.end(); ++it){
+    MVertex *vert = *it;
+    std::map<MVertex*,SVector3>::iterator itt = _targetLocation.find(vert);
+    // impose displacement @ boundary
+    if (vert->onWhat()->geomType() != GEntity::Line && vert->onWhat()->tag() != 1){ // TEST
+      if (itt != _targetLocation.end() && vert->onWhat()->dim() < _dim){
+	myAssembler.fixVertex(vert, 0, getTag(), itt->second.x()-vert->x());
+	myAssembler.fixVertex(vert, 1, getTag(), itt->second.y()-vert->y());
+	myAssembler.fixVertex(vert, 2, getTag(), itt->second.z()-vert->z());
+      }
+      // ensure we do not touch any vertex that is on the boundary
+      else if (vert->onWhat()->dim() < _dim){
+	myAssembler.fixVertex(vert, 0, getTag(), 0);
+	myAssembler.fixVertex(vert, 1, getTag(), 0);
+	myAssembler.fixVertex(vert, 2, getTag(), 0);
+      }
+    }
+    if (_dim == 2)myAssembler.fixVertex(vert, 2, getTag(), 0);
+    // number vertices 
+    myAssembler.numberVertex(vert, 0, getTag());
+    myAssembler.numberVertex(vert, 1, getTag());
+    myAssembler.numberVertex(vert, 2, getTag());
+    if (mixed){
+      myAssembler.numberVertex(vert, 3, getTag());
+      myAssembler.numberVertex(vert, 4, getTag());
+    }
+  }
+
+  //+++++++++ Assembly  & Solve ++++++++++++++++++++++++++++++++++++
+  if (myAssembler.sizeOfR()){
+    // assembly of the elasticity term on the
+    for (unsigned int i = 0; i < v.size(); i++){
+      SElement se(v[i]);
+      if (mixed)El_mixed.addToMatrix(myAssembler, &se);
+      else El.addToMatrix(myAssembler, &se);
+    }
+    // solve the system
+    lsys->systemSolve();
+  }
+  
+  //+++++++++ Move vertices @ maximum ++++++++++++++++++++++++++++++++++++
+  FILE *fd = fopen ("d.msh","w");
+  fprintf(fd,"$MeshFormat\n2 0 8\n$EndMeshFormat\n$NodeData\n1\n\"tr(sigma)\"\n1\n0.0\n3\n1\n3\n%d\n",_vertices.size());
+  for (std::set<MVertex*>::iterator it = _vertices.begin(); it != _vertices.end(); ++it){
+    double ax, ay, az;
+    myAssembler.getDofValue(*it, 0, getTag(), ax);
+    myAssembler.getDofValue(*it, 1, getTag(), ay);
+    myAssembler.getDofValue(*it, 2, getTag(), az);    
+    (*it)->x() += max_incr*ax;
+    (*it)->y() += max_incr*ay;
+    (*it)->z() += max_incr*az;
+    fprintf(fd,"%d %g %g %g\n",(*it)->getIndex(), ax,ay,az);
+  }
+  fprintf(fd,"$EndNodeData\n");
+  fclose(fd);
+
+  //+------------------- Check now if elements are ok ---------------+++++++
+
+  (*_vertices.begin())->onWhat()->model()->writeMSH(meshName);
+
+  /*
+    std::map<MVertex*,double> facts;
+    while(1){
+    int count = 0; 
+    for (unsigned int i = 0; i < v.size(); i++){
+    double disto = v[i]->distoShapeMeasure();
+    if (disto < thres){
+    count ++;
+    for (int j = 0; j < v[i]->getNumVertices(); j++){
+    MVertex *vert = v[i]->getVertex(j);
+    std::map<MVertex*,double>::iterator it = facts.find(vert);
+    if (it == facts.end())facts[vert] = .1;
+    else if (it->second < 1){
+    it->second += .1;
+    double ax, ay, az;
+    myAssembler.getDofValue(vert, 0, getTag(), ax);
+    myAssembler.getDofValue(vert, 1, getTag(), ay);
+    myAssembler.getDofValue(vert, 2, getTag(), az);    
+    vert->x() -= .1*ax;
+    vert->y() -= .1*ay;
+    vert->z() -= .1*az;
+    }
+    }
+    }
+    if (!count)break;
+    Msg::Info("%d elements are negative : reducing displacement",count);
+    }
+  */
+
+  double percentage = max_incr * 100.;
+  while(1){
+    std::vector<MElement*> disto;
+    double minD;
+    getDistordedElements(v, 0.5, disto, minD);    
+    if (minD < thres){
+      percentage -= 10.;
+      for (std::set<MVertex*>::iterator it = _vertices.begin(); it != _vertices.end(); ++it){
+	double ax, ay, az;
+	myAssembler.getDofValue(*it, 0, getTag(), ax);
+	myAssembler.getDofValue(*it, 1, getTag(), ay);
+	myAssembler.getDofValue(*it, 2, getTag(), az);    
+	(*it)->x() -= .1*ax;
+	(*it)->y() -= .1*ay;
+	(*it)->z() -= .1*az;
+      }
+    }
+    else break;
+  }
+    
+  delete lsys;
+  return percentage;
+#endif
+  return 0.0;
+}
+
+int highOrderSmoother::smooth_with_mixed_formulation (std::vector<MElement*> &all, 
+						      double alpha)
+{
+  int ITER = 0;
+  double minD, FACT = 1.0;
+  std::vector<MElement*> disto;
+  // move the points to their straight sided locations
+  for (unsigned int i = 0; i < all.size(); i++)
+    moveToStraightSidedLocation(all[i]);
+  // apply the displacement
+  double percentage = 0.0;
+  while(1){
+    char NN[256];
+    sprintf(NN,"smoothing-%d.msh",ITER++);
+    //double percentage_of_what_is_left = apply_incremental_displacement (1.,all, false, alpha,NN,disto);
+    	  double percentage_of_what_is_left = apply_incremental_displacement (1.,all, true, alpha,NN,all);
+    percentage += (1.-percentage) * percentage_of_what_is_left/100.;
+    Msg::Info("The smoother was able to do %3d percent of the motion",(int)(percentage*100.));
+    if (percentage_of_what_is_left == 0.0) break;
+    else if (percentage_of_what_is_left == 100.)break;
+  }
+
+  getDistordedElements(all, 0.3, disto, minD);    
+  Msg::Info("iter %d : %d elements / %d distorted  min Disto = %g ",ITER,
+	    all.size(), disto.size(), minD);       
+
+  if (0 && percentage < 0.99){
+    char NN[256];
+    sprintf(NN,"smoothing-%d.msh",ITER++);
+    double percentage_of_what_is_left = apply_incremental_displacement (1.0,all, true, alpha,NN,disto);    
+    percentage += (1.-percentage) * percentage_of_what_is_left/100.;
+    Msg::Info("The mixed smoother was able to do %3d percent of the motion",(int)(percentage*100.));
+  }
+  
+  return 1;
+}
+
+
 void highOrderSmoother::smooth(std::vector<MElement*> &all)
 {
-#ifdef HAVE_TAUCS
+#if defined(HAVE_TAUCS)
   linearSystemCSRTaucs<double> *lsys = new linearSystemCSRTaucs<double>;
+#elif defined(HAVE_PETSC)
+  linearSystemPETSc<double> *lsys = new  linearSystemPETSc<double>;    
 #else
   linearSystemCSRGmm<double> *lsys = new linearSystemCSRGmm<double>;
   lsys->setNoisy(1);
@@ -626,14 +852,14 @@ void highOrderSmoother::smooth(std::vector<MElement*> &all)
   std::vector<MElement*> layer, v;
   double minD;
 
-  getDistordedElements(all, 0.5, v, minD);
+  getDistordedElements(all, 0.15, v, minD);
 
-  Msg::Info("%d elements / %d distorted  min Disto = %g\n",
+  Msg::Info("%d elements / %d distorted  min Disto = %g",
              all.size(), v.size(), minD);
 
-  if (!v.size()) return;
+  if (!v.size());
 
-  const int nbLayers = 1;
+  const int nbLayers = 3;
   for (int i = 0; i < nbLayers; i++){
     addOneLayer(all, v, layer);
     v.insert(v.end(), layer.begin(), layer.end());
@@ -850,21 +1076,6 @@ void highOrderSmoother::smooth_cavity(std::vector<MElement*>& cavity,
     //printf("  Moving %d to %g %g %g\n", (*it)->getNum(),_targetLocation[(*it)][0], _targetLocation[(*it)][1],_targetLocation[(*it)][2] );
   }
 
-  /*
-  if (myAssembler.sizeOfR()) {
-    for (unsigned int i = 0; i < cavity.size(); i++) {
-      SElement se(cavity[i]);
-      El.addToMatrix(myAssembler, &se);
-    }
-    lsys->systemSolve();
-  
-   }
-  for (it = verticesToMove.begin(); it != verticesToMove.end(); ++it){
-    it->first->x() += myAssembler.getDofValue(it->first, 0, getTag());
-    it->first->y() += myAssembler.getDofValue(it->first, 1, getTag());
-    it->first->z() += myAssembler.getDofValue(it->first, 2, getTag());
-  }
-  */
   delete lsys;
 }
 
@@ -1535,6 +1746,72 @@ void  highOrderSmoother::smooth_pNpoint(GFace *gf)
 {
   findOptimalLocationsPN(gf,this);
 }
+
+//-------------------------------------------------
+// Assume a GModel that is meshed with high order nodes that
+// are on their final position (at least they all lie on
+// surfaces and curves and the smoother may move them)
+//-------------------------------------------------
+
+highOrderSmoother::highOrderSmoother (GModel *gm)
+  : _tag(111)
+{
+  _clean();
+  // compute straigh sided positions that are actually X,Y,Z positions
+  // that are NOT always on curves and surfaces 
+
+  // compute stright sided positions of vertices that are classified on model edges
+  for(GModel::eiter it = gm->firstEdge(); it != gm->lastEdge(); ++it){    
+    for (int i=0;i<(*it)->lines.size();i++){
+      MLine *l = (*it)->lines[i];
+      int N = l->getNumVertices()-2;
+      SVector3 p0((*it)->lines[i]->getVertex(0)->x(),
+		  (*it)->lines[i]->getVertex(0)->y(),
+		  (*it)->lines[i]->getVertex(0)->z());
+      SVector3 p1((*it)->lines[i]->getVertex(1)->x(),
+		  (*it)->lines[i]->getVertex(1)->y(),
+		  (*it)->lines[i]->getVertex(1)->z());
+      for (int j=1;j<=N;j++){
+	const double xi = (double)j/(N+1);
+	const SVector3 straightSidedPoint = p0 *(1.-xi) + p1*xi;
+	_straightSidedLocation [(*it)->lines[i]->getVertex(j)] = straightSidedPoint;
+      }
+    }
+  }
+
+  // compute stright sided positions of vertices that are classified on model faces
+  for(GModel::fiter it = gm->firstFace(); it != gm->lastFace(); ++it){
+    for (int i=0;i<(*it)->triangles.size();i++){
+      MTriangle *t = (*it)->triangles[i];
+      MFace face = t->getFace(0);
+      const polynomialBasis* fs = t->getFunctionSpace();
+      for (int j=0;j<t->getNumVertices();j++){
+	if (t->getVertex(j)->onWhat() == *it){
+	  const double t1 = fs->points(j, 0);
+	  const double t2 = fs->points(j, 1);
+	  SPoint3 pc = face.interpolate(t1, t2);
+	  _straightSidedLocation [t->getVertex(j)] = 
+	    SVector3(pc.x(),pc.y(),pc.z()); 
+	}
+      }
+    }
+    for (int i=0;i<(*it)->quadrangles.size();i++){
+      MQuadrangle *q = (*it)->quadrangles[i];
+      MFace face = q->getFace(0);
+      const polynomialBasis* fs = q->getFunctionSpace();
+      for (int j=0;j<q->getNumVertices();j++){
+	if (q->getVertex(j)->onWhat() == *it){
+	  const double t1 = fs->points(j, 0);
+	  const double t2 = fs->points(j, 1);
+	  SPoint3 pc = face.interpolate(t1, t2);
+	  _straightSidedLocation [q->getVertex(j)] = 
+	    SVector3(pc.x(),pc.y(),pc.z()); 
+	}
+      }
+    }
+  }
+}
+
 
 #endif
 

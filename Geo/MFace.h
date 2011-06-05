@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -22,7 +22,7 @@ class MFace {
  public:
   MFace() {}
   MFace(MVertex *v0, MVertex *v1, MVertex *v2, MVertex *v3=0);
-  MFace(std::vector<MVertex*> v);
+  MFace(const std::vector<MVertex*> v);
   inline int getNumVertices() const { return _v.size(); }
   inline MVertex *getVertex(const int i) const { return _v[i]; }
   inline MVertex *getSortedVertex(const int i) const { return _v[int(_si[i])]; }

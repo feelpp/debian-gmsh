@@ -1,9 +1,10 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
 #include <string.h>
+#include <inttypes.h>
 #include <FL/Fl_Tabs.H>
 #include <FL/Fl_Scroll.H>
 #include <FL/Fl_Color_Chooser.H>
@@ -25,6 +26,8 @@
 #include "PViewOptions.h"
 #include "OS.h"
 #include "Context.h"
+#include "graphicWindow.h"
+#include "openglWindow.h"
 
 extern StringXColor GeneralOptions_Color[] ;
 extern StringXColor GeometryOptions_Color[] ;
@@ -309,6 +312,31 @@ static void general_options_ok_cb(Fl_Widget *w, void *data)
   opt_general_axes(0, GMSH_SET, o->general.choice[4]->value());
   opt_general_background_gradient(0, GMSH_SET, o->general.choice[5]->value());
 
+  opt_general_eye_sep_ratio(0, GMSH_SET, o->general.value[29]->value());
+  opt_general_focallength_ratio(0, GMSH_SET, o->general.value[30]->value());
+  opt_general_camera_aperture(0, GMSH_SET, o->general.value[31]->value());
+  opt_general_camera_mode(0, GMSH_SET, o->general.butt[18]->value()); 
+  if(opt_general_stereo_mode(0, GMSH_GET, 0) != o->general.butt[17]->value()) {  
+    opt_general_stereo_mode(0, GMSH_SET, o->general.butt[17]->value());
+    // beginning of test to re-allocate gl for stereo: inspired from
+    // "split" method
+    if (CTX::instance()->stereo){
+      openglWindow::setLastHandled(0);
+      for(unsigned int i = 0; i < FlGui::instance()->graph.size(); i++){
+	graphicWindow * graph = FlGui::instance()->graph[i];
+	graph->tile->clear();
+	graph->gl.clear();
+	openglWindow* stereo_gl = new openglWindow(0, 0, graph->tile->w(), graph->tile->h());
+	stereo_gl->mode(FL_RGB | FL_DEPTH | FL_DOUBLE | FL_STEREO);
+	stereo_gl->end();
+	graph->gl.push_back(stereo_gl);
+	graph->tile->add(stereo_gl);
+	stereo_gl->show();
+        Msg::Info("new gl windows for stereo vision!");
+      }
+    }
+  }
+
   if(CTX::instance()->fastRedraw)
     CTX::instance()->post.draw = CTX::instance()->mesh.draw = 0;
   drawContext::global()->draw();
@@ -445,9 +473,10 @@ static void mesh_options_ok_cb(Fl_Widget *w, void *data)
 
   opt_mesh_point_type(0, GMSH_SET, o->mesh.choice[0]->value());
   opt_mesh_algo2d(0, GMSH_SET,
-                  (o->mesh.choice[2]->value() == 0) ? ALGO_2D_MESHADAPT : 
-                  (o->mesh.choice[2]->value() == 1) ? ALGO_2D_DELAUNAY :
-                  ALGO_2D_FRONTAL);
+                  (o->mesh.choice[2]->value() == 1) ? ALGO_2D_MESHADAPT : 
+                  (o->mesh.choice[2]->value() == 2) ? ALGO_2D_DELAUNAY :
+                  (o->mesh.choice[2]->value() == 3) ? ALGO_2D_FRONTAL : 
+                  ALGO_2D_AUTO);
   opt_mesh_algo3d(0, GMSH_SET,
                   (o->mesh.choice[3]->value() == 0) ? ALGO_3D_DELAUNAY : 
                   ALGO_3D_FRONTAL);
@@ -482,6 +511,7 @@ static void solver_options_ok_cb(Fl_Widget *w, void *data)
     ConnectionManager::get(-1)->run("");
 
   opt_solver_socket_name(0, GMSH_SET, o->solver.input[0]->value());
+  opt_solver_timeout(0, GMSH_SET, o->solver.value[0]->value());
 
   if(CTX::instance()->fastRedraw)
     CTX::instance()->post.draw = CTX::instance()->mesh.draw = 0;
@@ -515,7 +545,7 @@ static void post_options_ok_cb(Fl_Widget *w, void *data)
 
 void view_options_cb(Fl_Widget *w, void *data)
 {
-  FlGui::instance()->options->showGroup((int)(long)data + 6);
+  FlGui::instance()->options->showGroup((intptr_t)data + 6);
 }
 
 static void view_options_timestep_cb(Fl_Widget *w, void *data)
@@ -1682,8 +1712,52 @@ optionWindow::optionWindow(int deltaFontSize)
 
       o->end();
     }
+    {
+      Fl_Group *o = new Fl_Group
+        (L + WB, WB + BH, width - 2 * WB, height - 2 * WB - BH, "Camera");
+      o->hide();
+
+      general.butt[18] = new Fl_Check_Button
+        (L + 2 * WB, 2 * WB + 1 * BH, BW, BH, "Enable camera (experimental)");
+      general.butt[18]->type(FL_TOGGLE_BUTTON);
+      general.butt[18]->callback(general_options_ok_cb, (void*)"general_camera");
+
+      general.butt[17] = new Fl_Check_Button
+        (L + 2 * WB, 2 * WB + 2 * BH, BW, BH, "Enable stereo rendering (experimental)");
+      general.butt[17]->type(FL_TOGGLE_BUTTON);
+      general.butt[17]->callback(general_options_ok_cb);
+
+      general.value[29] = new Fl_Value_Input
+        (L + 2 * WB, 2 * WB + 3 * BH, IW, BH, "Eye separation ratio (%)");
+      general.value[29]->minimum(0.1);
+      general.value[29]->maximum(10.);
+      general.value[29]->step(.1);
+      general.value[29]->align(FL_ALIGN_RIGHT);
+      general.value[29]->callback(general_options_ok_cb);
+
+      general.value[30] = new Fl_Value_Input
+        (L + 2 * WB, 2 * WB + 4 * BH, IW, BH, "Focal length ratio (%)");
+      general.value[30]->minimum(0.1);
+      general.value[30]->maximum(10.);
+      general.value[30]->step(.1);
+      general.value[30]->align(FL_ALIGN_RIGHT);
+      general.value[30]->callback(general_options_ok_cb);
+  
+      general.value[31] = new Fl_Value_Input
+        (L + 2 * WB, 2 * WB + 5 * BH, IW, BH, "Camera Aperture (degrees)");
+      general.value[31]->minimum(10.);
+      general.value[31]->maximum(120.);
+      general.value[31]->step(1);
+      general.value[31]->align(FL_ALIGN_RIGHT);
+      general.value[31]->callback(general_options_ok_cb);
+   
+      o->end();
+
+    }
+    //end of new menu for stereo
     o->end();
   }
+
   general.group->end();
 
   // Geometry options
@@ -1711,7 +1785,7 @@ optionWindow::optionWindow(int deltaFontSize)
       b->labeltype(FL_NO_LABEL);
 
       Fl_Box *b2 = new Fl_Box
-        (FL_NO_BOX, L + 2 * WB, 2 * WB + 3 * BH + 1, IW, BH, "Open CASCADE model healing options:");
+        (FL_NO_BOX, L + 2 * WB, 2 * WB + 3 * BH + 1, IW, BH, "Open CASCADE model healing options (experimental):");
       b2->align(FL_ALIGN_INSIDE|FL_ALIGN_LEFT);
 
       geo.butt[11] = new Fl_Check_Button
@@ -1720,17 +1794,17 @@ optionWindow::optionWindow(int deltaFontSize)
       geo.butt[11]->callback(geometry_options_ok_cb);
 
       geo.butt[12] = new Fl_Check_Button
-        (L + 2 * WB, 2 * WB + 5 * BH, BW, BH, "Remove small faces (experimental)");
+        (L + 2 * WB, 2 * WB + 5 * BH, BW, BH, "Remove small faces");
       geo.butt[12]->type(FL_TOGGLE_BUTTON);
       geo.butt[12]->callback(geometry_options_ok_cb);
 
       geo.butt[13] = new Fl_Check_Button
-        (L + 2 * WB, 2 * WB + 6 * BH, BW, BH, "Sew faces (experimental)");
+        (L + 2 * WB, 2 * WB + 6 * BH, BW, BH, "Sew faces");
       geo.butt[13]->type(FL_TOGGLE_BUTTON);
       geo.butt[13]->callback(geometry_options_ok_cb);
 
       geo.butt[15] = new Fl_Check_Button
-        (L + 2 * WB, 2 * WB + 7 * BH, BW, BH, "Cut and merge faces (experimental)");
+        (L + 2 * WB, 2 * WB + 7 * BH, BW, BH, "Cut and merge faces");
       geo.butt[15]->type(FL_TOGGLE_BUTTON);
       geo.butt[15]->callback(geometry_options_ok_cb);
 
@@ -1973,6 +2047,7 @@ optionWindow::optionWindow(int deltaFontSize)
       o->hide();
 
       static Fl_Menu_Item menu_2d_algo[] = {
+        {"Automatic", 0, 0, 0},
         {"MeshAdapt", 0, 0, 0},
         {"Delaunay", 0, 0, 0},
         {"Frontal", 0, 0, 0},
@@ -2019,7 +2094,7 @@ optionWindow::optionWindow(int deltaFontSize)
       mesh.choice[3]->callback(mesh_options_ok_cb);
 
       mesh.choice[1] = new Fl_Choice
-        (L + 2 * WB, 2 * WB + 3 * BH, IW, BH, "Recombination algorithm");
+        (L + 2 * WB, 2 * WB + 3 * BH, IW, BH, "2D Recombination algorithm");
       mesh.choice[1]->menu(menu_recombination_algo);
       mesh.choice[1]->align(FL_ALIGN_RIGHT);
       mesh.choice[1]->callback(mesh_options_ok_cb);
@@ -2420,8 +2495,13 @@ optionWindow::optionWindow(int deltaFontSize)
         solver.input[0]->align(FL_ALIGN_RIGHT);
         solver.input[0]->callback(solver_options_ok_cb);
 
+        solver.value[0] = new Fl_Value_Input
+          (L + 2 * WB, 2 * WB + 2 * BH, IW, BH, "Timeout (s)");
+        solver.value[0]->align(FL_ALIGN_RIGHT);
+        solver.value[0]->callback(solver_options_ok_cb);
+
         solver.butt[0] = new Fl_Check_Button
-          (L + 2 * WB, 2 * WB + 2 * BH, BW, BH, 
+          (L + 2 * WB, 2 * WB + 3 * BH, BW, BH, 
            "Always listen to incoming connection requests");
         solver.butt[0]->type(FL_TOGGLE_BUTTON);
         solver.butt[0]->callback(solver_options_ok_cb);
@@ -3128,6 +3208,11 @@ optionWindow::optionWindow(int deltaFontSize)
       
       static Fl_Menu_Item menu_tensor[] = {
         {"Von-Mises", 0, 0, 0},
+        {"Maximum eigen value", 0, 0, 0},
+        {"Minimum eigen value", 0, 0, 0},
+        {"Eigen vectors", 0, 0, 0},
+        {"Ellipse (2d)", 0, 0, 0},
+        {"Ellipsoid", 0, 0, 0},
         {0}
       };
       view.choice[4] = new Fl_Choice
@@ -3566,6 +3651,20 @@ void optionWindow::activate(const char *what)
     else{
       general.value[26]->deactivate();
       general.value[27]->deactivate();
+    }
+  }
+  else if(!strcmp(what, "general_camera")){
+    if(general.butt[18]->value()){
+      general.butt[17]->activate();
+      general.value[29]->activate();
+      general.value[30]->activate();
+      general.value[31]->activate();
+    }
+    else{
+      general.butt[17]->deactivate();
+      general.value[29]->deactivate();
+      general.value[30]->deactivate();
+      general.value[31]->deactivate();
     }
   }
   else if(!strcmp(what, "geo_transform")){

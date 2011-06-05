@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -165,12 +165,11 @@ class PViewDataGModel : public PViewData {
   DataType _type;
   // cache last element to speed up loops
   MElement *_getElement(int step, int ent, int ele);
-  // helper function to populate the interpolation matrix list
-  void _addInterpolationMatricesForElement(MElement *e);
+  MVertex *_getNode(MElement *e, int nod);
  public:
   PViewDataGModel(DataType type=NodeData);
   ~PViewDataGModel();
-  bool finalize(bool computeMinMax=true);
+  bool finalize(bool computeMinMax=true, const std::string &interpolationScheme="");
   std::string getFileName(int step=-1);
   int getNumTimeSteps();
   double getTime(int step);
@@ -238,8 +237,8 @@ class PViewDataGModel : public PViewData {
   // I/O routines
   bool readMSH(std::string fileName, int fileIndex, FILE *fp, bool binary, 
                bool swap, int step, double time, int partition, 
-               int numComp, int numNodes);
-  bool writeMSH(std::string fileName, bool binary=false);
+               int numComp, int numNodes, const std::string &interpolationScheme);
+  bool writeMSH(std::string fileName, bool binary=false, bool savemesh=true);
   bool readMED(std::string fileName, int fileIndex);
   bool writeMED(std::string fileName);
 };

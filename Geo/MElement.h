@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -19,7 +19,6 @@
 #include "Gauss.h"
 
 class GFace;
-class binding;
 
 // A mesh element.
 class MElement
@@ -75,10 +74,19 @@ class MElement
   // get & set the vertices
   virtual int getNumVertices() const = 0;
   virtual MVertex *getVertex(int num) = 0;
-  virtual void setVertex(int num, MVertex *v) {throw;}
+  void getVertices(std::vector<MVertex*> &verts)
+  {
+    int N = getNumVertices();
+    verts.resize(N);
+    for(int i = 0; i < N; i++) verts[i] = getVertex(i);
+  }
+  virtual void setVertex(int num, MVertex *v) 
+  {
+    Msg::Error("Vertex set not supported for this element");
+  }
 
   // give an MVertex as input and get its local number
-  virtual void getVertexInfo(const MVertex * vertex, int &ithVertex) const 
+  virtual void getVertexInfo(const MVertex *vertex, int &ithVertex) const 
   {
     Msg::Error("Vertex information not available for this element");
   }
@@ -91,9 +99,6 @@ class MElement
 
   // get the vertex using the Nastran BDF ordering
   virtual MVertex *getVertexBDF(int num){ return getVertex(num); }
-
-  // get the vertex using MED ordering
-  virtual MVertex *getVertexMED(int num){ return getVertex(num); }
 
   // get the vertex using DIFF ordering
   virtual MVertex *getVertexDIFF(int num){ return getVertex(num); }
@@ -120,7 +125,7 @@ class MElement
   virtual MEdge getEdge(int num) = 0;
 
   // give an MEdge as input and get its local number and sign
-  virtual void getEdgeInfo(const MEdge & edge, int &ithEdge, int &sign) const 
+  virtual void getEdgeInfo(const MEdge & edge, int &ithEdge, int &sign) const
   {
     Msg::Error("Edge information not available for this element");
   }
@@ -178,11 +183,16 @@ class MElement
   virtual double etaShapeMeasure(){ return 0.; }
   virtual double distoShapeMeasure(){ return 1.0; }
   virtual double angleShapeMeasure() { return 1.0; }
-  
+
   // get the radius of the inscribed circle/sphere if it exists,
   // otherwise get the minimum radius of all the circles/spheres
   // tangent to the most boundaries of the element.
   virtual double getInnerRadius(){ return 0.; }
+  
+  // get the radius of the circumscribed circle/sphere if it exists,
+  // otherwise get the maximum radius of all the circles/spheres
+  // tangent to the most boundaries of the element.
+  virtual double getOuterRadius(){ return 0.; }
 
   // compute the barycenter
   virtual SPoint3 barycenter();
@@ -191,7 +201,7 @@ class MElement
   virtual void revert(){}
 
   // get volume of element
-  virtual double getVolume(){ return 0.; }
+  virtual double getVolume();
 
   // return sign of volume (+1 or -1) for 3D elements (or 0 if element
   // has zero volume)
@@ -210,6 +220,9 @@ class MElement
   // get the function space for the jacobian of the element
   virtual const JacobianBasis* getJacobianFuncSpace(int o=-1) const { return 0; }
 
+  // return parametric coordinates (u,v,w) of a vertex
+  virtual void getNode(int num, double &u, double &v, double &w);
+
   // return the interpolating nodal shape functions evaluated at point
   // (u,v,w) in parametric coordinates (if order == -1, use the
   // polynomial order of the element)
@@ -225,14 +238,32 @@ class MElement
                                      int order=-1);
   const fullMatrix<double> &getGradShapeFunctionsAtIntegrationPoints
     (int integrationOrder, int functionSpaceOrder=-1);
+  const fullMatrix<double> &getShapeFunctionsAtIntegrationPoints
+    (int integrationOrder, int functionSpaceOrder=-1);
   const fullMatrix<double> &getGradShapeFunctionsAtNodes (int functionSpaceOrder=-1);
 
   // return the Jacobian of the element evaluated at point (u,v,w) in
   // parametric coordinates
   double getJacobian(const fullMatrix<double> &gsf, double jac[3][3]);
   double getJacobian(double u, double v, double w, double jac[3][3]);
+  inline double getJacobian(double u, double v, double w, fullMatrix<double> &j){
+    double JAC[3][3];
+    const double detJ = getJacobian (u,v,w,JAC);
+    for (int i=0;i<3;i++){
+      j(i,0) = JAC[i][0];
+      j(i,1) = JAC[i][1];
+      j(i,2) = JAC[i][2];
+    }
+    return detJ;
+  }
   double getPrimaryJacobian(double u, double v, double w, double jac[3][3]);
-  double getJacobianDeterminant(double u, double v, double w);
+  double getJacobianDeterminant(double u, double v, double w)
+  {
+    double jac[3][3]; return getJacobian(u, v, w, jac);
+  }
+  virtual int getNumShapeFunctions(){ return getNumVertices(); }
+  virtual int getNumPrimaryShapeFunctions(){ return getNumPrimaryVertices(); }
+  virtual MVertex *getShapeFunctionNode(int i){ return getVertex(i); }
 
   // get the point in cartesian coordinates corresponding to the point
   // (u,v,w) in parametric coordinates
@@ -241,6 +272,7 @@ class MElement
 
   // invert the parametrisation
   virtual void xyz2uvw(double xyz[3], double uvw[3]);
+  void xyzTouvw(fullMatrix<double> *xu);
 
   // move point between parent and element parametric spaces
   virtual void movePointFromParentSpaceToElementSpace(double &u, double &v, double &w);
@@ -254,9 +286,9 @@ class MElement
   // divergence) at point (u,v,w) in parametric coordinates
   double interpolate(double val[], double u, double v, double w, int stride=1,
                      int order=-1);
-  void interpolateGrad(double val[], double u, double v, double w, double f[3],
+  void interpolateGrad(double val[], double u, double v, double w, double f[],
                        int stride=1, double invjac[3][3]=0, int order=-1);
-  void interpolateCurl(double val[], double u, double v, double w, double f[3],
+  void interpolateCurl(double val[], double u, double v, double w, double f[],
                        int stride=3, int order=-1);
   double interpolateDiv(double val[], double u, double v, double w, int stride=3,
                         int order=-1);
@@ -267,6 +299,10 @@ class MElement
     Msg::Error("No integration points defined for this type of element: %d",
                this->getType());
   }
+  double integrate(double val[], int pOrder, int stride=1, int order=-1);
+  // val[] must contain interpolation data for face/edge vertices of given edge/face
+  double integrateCirc(double val[], int edge, int pOrder, int order=-1);
+  double integrateFlux(double val[], int face, int pOrder, int order=-1);
 
   // IO routines
   virtual void writeMSH(FILE *fp, double version=1.0, bool binary=false,
@@ -307,7 +343,6 @@ class MElement
   static int getInfoMSH(const int typeMSH, const char **const name=0);
   virtual int getNumVerticesForMSH() { return getNumVertices(); }
   virtual int *getVerticesIdForMSH();
-  static void registerBindings(binding *b);
 
   // copy element and parent if any, vertexMap contains the new vertices
   virtual MElement *copy(int &num, std::map<int, MVertex*> &vertexMap,

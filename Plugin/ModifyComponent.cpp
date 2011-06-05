@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -117,7 +117,7 @@ PView *GMSH_ModifyComponentPlugin::execute(PView *view)
       Msg::Error("View[%d] does not exist: using self", otherView);
   }
 
-  PViewData *data2 = v2->getData();
+  PViewData *data2 = getPossiblyAdaptiveData(v2);
 
   if(otherTimeStep < 0 && data2->getNumTimeSteps() != data1->getNumTimeSteps()){
     Msg::Error("Number of time steps don't match: using step 0");
@@ -147,8 +147,6 @@ PView *GMSH_ModifyComponentPlugin::execute(PView *view)
     Msg::Info("Other view based on different grid: interpolating...");
     octree = new OctreePost(v2);
   }
-
-  v1->setChanged(true);
 
   for(int step = 0; step < data1->getNumTimeSteps(); step++){
     if(timeStep >= 0 && timeStep != step) continue;
@@ -207,6 +205,7 @@ PView *GMSH_ModifyComponentPlugin::execute(PView *view)
   if(octree) delete octree;
 
   data1->finalize();
+  v1->setChanged(true);
 
   return v1;
 }

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -19,7 +19,6 @@ class GModel;
 class GMSH_PostPlugin;
 class ConnectionManager;
 
-class binding;
 // A post-processing view.
 class PView{
  private:
@@ -53,10 +52,10 @@ class PView{
         std::vector<double> &x, std::vector<double> &y);
   // construct a new model-based view from a bunch of data
   PView(std::string name, std::string type, GModel *model,
-        std::map<int, std::vector<double> > &data, double time=0., 
+        std::map<int, std::vector<double> > &data, double time=0.,
         int numComp = -1);
   // add a new time step to a given model-based view
-  void addStep(GModel *model, std::map<int, std::vector<double> > &data, 
+  void addStep(GModel *model, std::map<int, std::vector<double> > &data,
                double time=0.,int numComp = -1);
 
   // default destructor
@@ -66,8 +65,8 @@ class PView{
   void deleteVertexArrays();
 
   // get/set the display options
-  PViewOptions *getOptions(){ return _options; }  
-  void setOptions(PViewOptions *val=0);  
+  PViewOptions *getOptions(){ return _options; }
+  void setOptions(PViewOptions *val=0);
 
   // get/set the view data
   PViewData *getData(bool useAdaptiveIfAvailable=false);
@@ -100,7 +99,7 @@ class PView{
   // find view by name or by number (if timeStep >= 0, return view
   // only if it does *not* contain that timestep; if partition >= 0,
   // return view only if it does *not* contain that partition)
-  static PView *getViewByName(std::string name, int timeStep=-1, 
+  static PView *getViewByName(std::string name, int timeStep=-1,
                               int partition=-1);
   static PView *getViewByNum(int num, int timeStep=-1, int partition=-1);
 
@@ -114,28 +113,25 @@ class PView{
   bool write(std::string fileName, int format, bool append=false);
 
   // vertex arrays to draw the elements efficiently
-  VertexArray *va_points, *va_lines, *va_triangles, *va_vectors;
+  VertexArray *va_points, *va_lines, *va_triangles, *va_vectors, *va_ellipses;
 
   // fill the vertex arrays, given the current option and data
   void fillVertexArrays();
 
   // fill a vertex array using a raw stream of bytes
-  static void fillVertexArray(ConnectionManager *remote, int length, 
+  static void fillVertexArray(ConnectionManager *remote, int length,
                               const char *data, int swap);
 
   // smoothed normals
   smooth_normals *normals;
-  static void registerBindings(binding *b);
 };
 
 // this is the maximum number of nodes of elements we actually *draw*
 // (high order elements are always subdivided before drawing)
 #define PVIEW_NMAX 8
-
 void changeCoordinates(PView *p, int ient, int iele,
-                       int numNodes, int type, int numComp, 
-                       double xyz[PVIEW_NMAX][3], double val[PVIEW_NMAX][9]);
-bool isElementVisible(PViewOptions *opt, int dim, int numNodes, 
-                      double xyz[PVIEW_NMAX][3]);
-
+                       int numNodes, int type, int numComp,
+                       double **xyz, double **val);
+bool isElementVisible(PViewOptions *opt, int dim, int numNodes,
+                      double **xyz);
 #endif

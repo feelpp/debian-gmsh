@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -14,7 +14,6 @@
 #include "MLine.h"
 #include "GaussLegendre1D.h"
 #include "Context.h"
-#include "Bindings.h"
 
 GEdge::GEdge(GModel *model, int tag, GVertex *_v0, GVertex *_v1)
   : GEntity(model, tag), _tooSmall(false), v0(_v0), v1(_v1), compound(0)
@@ -90,10 +89,6 @@ void GEdge::resetMeshAttributes()
 void GEdge::addFace(GFace *e)
 {
   l_faces.push_back(e);
-}
-
-void GEdge::addLine (MLine *line){
-  lines.push_back(line);
 }
 
 void GEdge::delFace(GFace *e)
@@ -186,14 +181,15 @@ void GEdge::writeGEO(FILE *fp)
     double umin = bounds.low();
     double umax = bounds.high();
     fprintf(fp, "p%d = newp;\n", tag());
-    for(int i = 1; i < minimumDrawSegments(); i++){
-      double u = umin + (double)i / minimumDrawSegments() * (umax - umin);
+    int N = minimumDrawSegments();
+    for(int i = 1; i < N; i++){
+      double u = umin + (double)i / N * (umax - umin);
       GPoint p = point(u);
       fprintf(fp, "Point(p%d + %d) = {%.16g, %.16g, %.16g};\n", 
               tag(), i, p.x(), p.y(), p.z());
     }
     fprintf(fp, "Spline(%d) = {%d", tag(), getBeginVertex()->tag());
-    for(int i = 1; i < minimumDrawSegments(); i++)
+    for(int i = 1; i < N; i++)
       fprintf(fp, ", p%d + %d", tag(), i);
     fprintf(fp, ", %d};\n", getEndVertex()->tag());
   }
@@ -263,38 +259,83 @@ double GEdge::length(const double &u0, const double &u1, const int nbQuadPoints)
   return L;
 }
 
+/*
+  consider a curve x(t) and a point y
+  
+  use a golden section algorithm that minimizes 
+
+  min_t \|x(t)-y\|   
+
+*/
+
+const double GOLDEN  = (1. + sqrt(5)) / 2.;
+const double GOLDEN2 = 2 - GOLDEN;
+ 
+// x1 and x3 are the current bounds; the minimum is between them.
+// x2 is the center point, which is closer to x1 than to x3
+
+double goldenSectionSearch(const GEdge *ge, const SPoint3 &q, double x1, double x2, double x3, double tau)
+{ 
+  // Create a new possible center in the area between x2 and x3, closer to x2
+  double x4 = x2 + GOLDEN2 * (x3 - x2);
+  
+  // Evaluate termination criterion
+  if (fabs(x3 - x1) < tau * (fabs(x2) + fabs(x4)))
+    return (x3 + x1) / 2;
+  
+  const SVector3 dp4 = q - ge->position(x4);
+  const SVector3 dp2 = q - ge->position(x2);
+  
+  const double d4 = dp4.norm();
+  const double d2 = dp2.norm();
+  
+  if (d4 < d2)
+    return goldenSectionSearch(ge, q, x2, x4, x3, tau);
+  else
+    return goldenSectionSearch(ge,q , x4, x2, x1, tau);
+}
+
 GPoint GEdge::closestPoint(const SPoint3 &q, double &t) const
 {
+
+  //  printf("looking for closest point in curve %d to point %g %g\n",tag(),q.x(),q.y());
+  
+  const int nbSamples = 100;
+  
   double tolerance = 1.e-12;
 
   Range<double> interval = parBounds(0);
   
   double tMin = std::min(interval.high(), interval.low());
   double tMax = std::max(interval.high(), interval.low());
-  double relax = 1.;
-  double dt, dt0, t0;
-  int nb = 10;
-  
-  t = (tMin + tMax) * 0.5;
-  
-  while (relax > 0.1) {
-    int i = 0;
-    t = 0.5 * (tMin + tMax);
-    dt0 = tMax - tMin;
-    dt = dt0;
-    while (dt > tolerance * dt0 && i++ < nb) {
-      t0 = t;
-      dt0 = dt;
-      SVector3 dp = q - position(t);
-      SVector3 derP = firstDer(t);
-      double b = dot(derP, derP);
-      double c = dot(derP, dp);
-      dt = c / b;
-      t = std::max(tMin, std::min(tMax, t0 + relax * dt));
-      dt = fabs(t - t0);
+
+  double DMIN = 1.e22;
+  double topt;
+  const double DT = (tMax-tMin)/(nbSamples-1) ;
+  for (int i=0;i<nbSamples;i++){
+    t = tMin + i * DT;
+    const SVector3 dp = q - position(t);
+    const double D = dp.norm();
+    if (D < DMIN) {
+      topt = t;
+      DMIN = D;
     }
-    if (i > nb)  relax *= 0.5;
   }
+  
+  //  printf("parameter %g as an initial guess (dist = %g)\n",topt,DMIN);
+
+  if (topt == tMin)
+    t = goldenSectionSearch (this, q, topt, topt + DT/2, topt + DT,  1.e-7);
+  else if (topt == tMax)
+    t = goldenSectionSearch (this, q, topt - DT, topt - DT/2 , topt, 1.e-7);
+  else
+    t = goldenSectionSearch (this, q, topt - DT, topt, topt + DT, 1.e-7);
+
+  const SVector3 dp = q - position(t);
+  const double D = dp.norm();
+
+  //  printf("after golden section parameter %g  (dist = %g)\n",t,D);
+  
   return point(t);
 }
 
@@ -352,13 +393,13 @@ bool GEdge::XYZToU(const double X, const double Y, const double Z,
   }
   
   if(relax > 1.e-2) {
-    Msg::Info("point %g %g %g on edge %d : Relaxation factor = %g", 
-              Q.x(), Q.y(), Q.z(), 0.75 * relax);
+    //    Msg::Info("point %g %g %g on edge %d : Relaxation factor = %g", 
+    //              Q.x(), Q.y(), Q.z(), 0.75 * relax);
     return XYZToU(Q.x(), Q.y(), Q.z(), u, 0.75 * relax);
   }
   
-  Msg::Error("Could not converge reparametrisation of point (%e,%e,%e) on edge %d",
-             Q.x(), Q.y(), Q.z(), tag());
+  //  Msg::Error("Could not converge reparametrisation of point (%e,%e,%e) on edge %d",
+  //             Q.x(), Q.y(), Q.z(), tag());
   return false;
 }
 
@@ -377,16 +418,3 @@ void GEdge::replaceEndingPoints (GVertex *replOfv0, GVertex *replOfv1)
   }  
 }
 
-void GEdge::registerBindings(binding *b)
-{
-  classBinding *cb = b->addClass<GEdge>("GEdge");
-  cb->setDescription("A GEdge is a geometrical 1D entity");
-  cb->setParentClass<GEntity>();
-  methodBinding *mb = cb->addMethod("getBeginVertex", &GEdge::getBeginVertex);
-  mb->setDescription("get the begin-vertex of the edge");
-  mb = cb->addMethod("getEndVertex", &GEdge::getEndVertex);
-  mb->setDescription("get the end-vertex of the edge");
-  mb = cb->addMethod("addLine", &GEdge::addLine);
-  mb->setDescription("insert a line mesh element");
-  mb->setArgNames("line", NULL);
-}

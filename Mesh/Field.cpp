@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -22,6 +22,7 @@
 #include "GmshMessage.h"
 #include "Numeric.h"
 #include "mathEvaluator.h"
+#include "BackgroundMesh.h"
 
 #if defined(HAVE_POST)
 #include "OctreePost.h"
@@ -405,7 +406,8 @@ class UTMField : public Field
 
 class LonLatField : public Field
 {
-  int iField;
+  int iField, fromStereo;
+  double stereoRadius;
  public:
   std::string getDescription()
   {
@@ -417,6 +419,13 @@ class LonLatField : public Field
     iField = 1;
     options["IField"] = new FieldOptionInt
       (iField, "Index of the field to evaluate.");
+    fromStereo = 0;
+    stereoRadius = 6371e3;
+    
+    options["FromStereo"] = new FieldOptionInt
+      (fromStereo, "if = 1, the mesh is in stereographic coordinates. xi = 2Rx/(R+z),  eta = 2Ry/(R+z)");
+    options["RadiusStereo"] = new FieldOptionDouble
+      (stereoRadius, "radius of the sphere of the stereograpic coordinates");
   }
   const char *getName()
   {
@@ -426,7 +435,15 @@ class LonLatField : public Field
   {
     Field *field = GModel::current()->getFields()->get(iField);
     if(!field || iField == id) return MAX_LC;
-    return (*field)(atan2(y, x), asin(z / sqrt(x * x + y * y + z * z)), 0);
+    if (fromStereo == 1) {
+      double xi = x;
+      double eta = y;
+      double r2 = stereoRadius * stereoRadius;
+      x = 4 * r2 * xi / ( 4 * r2 + xi * xi + eta * eta);
+      y = 4 * r2 * eta / ( 4 * r2 + xi * xi + eta * eta);
+      z = stereoRadius * (4 * r2 - eta * eta - xi * xi) / ( 4 * r2 + xi * xi + eta * eta);
+    }
+    return (*field)(atan2(y, x), asin(z / stereoRadius), 0);
   }
 };
 
@@ -1330,6 +1347,140 @@ struct AttractorInfo{
   double u,v;
 };
 
+class AttractorAnisoCurveField : public Field {
+  ANNkd_tree *kdtree;
+  ANNpointArray zeronodes;
+  ANNidxArray index;
+  ANNdistArray dist;
+  std::list<int> edges_id;
+  double dMin, dMax, lMinTangent, lMaxTangent, lMinNormal, lMaxNormal;
+  int n_nodes_by_edge;  
+  std::vector<SVector3> tg;
+  public:
+  AttractorAnisoCurveField() : kdtree(0), zeronodes(0)
+  {
+    index = new ANNidx[1];
+    dist = new ANNdist[1];
+    n_nodes_by_edge = 20;
+    update_needed = true;
+    dMin = 0.1;
+    dMax = 0.5;
+    lMinNormal = 0.05;
+    lMinTangent = 0.5;
+    lMaxNormal = 0.5;
+    lMaxTangent = 0.5;
+    options["EdgesList"] = new FieldOptionList
+      (edges_id, "Indices of curves in the geometric model", &update_needed);
+    options["NNodesByEdge"] = new FieldOptionInt
+      (n_nodes_by_edge, "Number of nodes used to discretized each curve",
+       &update_needed);
+    options["dMin"] = new FieldOptionDouble
+      (dMin, "Minimum distance, bellow this distance from the curves, prescribe the minimum mesh sizes.");
+    options["dMax"] = new FieldOptionDouble
+      (dMax, "Maxmium distance, above this distance from the curves, prescribe the maximum mesh sizes.");
+    options["lMinTangent"] = new FieldOptionDouble
+      (lMinTangent, "Minimum mesh size in the direction tangeant to the closest curve.");
+    options["lMaxTangent"] = new FieldOptionDouble
+      (lMaxTangent, "Maximum mesh size in the direction tangeant to the closest curve.");
+    options["lMinNormal"] = new FieldOptionDouble
+      (lMinNormal, "Minimum mesh size in the direction normal to the closest curve.");
+    options["lMaxNormal"] = new FieldOptionDouble
+      (lMaxNormal, "Maximum mesh size in the direction normal to the closest curve.");
+  }
+  virtual bool isotropic () const {return false;}
+  ~AttractorAnisoCurveField()
+  {
+    if(kdtree) delete kdtree;
+    if(zeronodes) annDeallocPts(zeronodes);
+    delete[]index;
+    delete[]dist;
+  }
+  const char *getName()
+  {
+    return "AttractorAnisoCurve";
+  }
+  std::string getDescription()
+  {
+    return "Compute the distance from the nearest curve in a list. Then the mesh "
+           "size can be specified independently in the direction normal to the curve "
+           "and in the direction parallel to the curve (Each curve "
+           "is replaced by NNodesByEdge equidistant nodes and the distance from those "
+           "nodes is computed.)";
+  }
+  void update() {
+    if(zeronodes) {
+      annDeallocPts(zeronodes);
+      delete kdtree;
+    }
+    int totpoints = n_nodes_by_edge * edges_id.size();
+    if(totpoints){
+      zeronodes = annAllocPts(totpoints, 3);
+    }
+    tg.resize(totpoints);
+    int k = 0;
+    for(std::list<int>::iterator it = edges_id.begin();
+        it != edges_id.end(); ++it) {
+      Curve *c = FindCurve(*it);
+      if(c) {
+        for(int i = 0; i < n_nodes_by_edge; i++) {
+          double u = (double)i / (n_nodes_by_edge - 1);
+          Vertex V = InterpolateCurve(c, u, 0);
+          zeronodes[k][0] = V.Pos.X;
+          zeronodes[k][1] = V.Pos.Y;
+          zeronodes[k][2] = V.Pos.Z;
+          Vertex V2 = InterpolateCurve(c, u, 1);
+          tg[k] = SVector3(V2.Pos.X, V2.Pos.Y, V2.Pos.Z);
+          tg[k].normalize();
+          k++;
+        }
+      }
+      else {
+        GEdge *e = GModel::current()->getEdgeByTag(*it);
+        if(e) {
+          for(int i = 0; i < n_nodes_by_edge; i++) {
+            double u = (double)i / (n_nodes_by_edge - 1);
+            Range<double> b = e->parBounds(0);
+            double t = b.low() + u * (b.high() - b.low());
+            GPoint gp = e->point(t);
+            SVector3 d = e->firstDer(t);
+            zeronodes[k][0] = gp.x();
+            zeronodes[k][1] = gp.y();
+            zeronodes[k][2] = gp.z();
+            tg[k] = d;
+            tg[k].normalize();
+            k++;
+          }
+        }
+      }
+    }
+    kdtree = new ANNkd_tree(zeronodes, totpoints, 3);
+    update_needed = false;
+  }
+  void operator() (double x, double y, double z, SMetric3 &metr, GEntity *ge=0)
+  {
+    if(update_needed)
+      update();
+    double xyz[3] = { x, y, z };
+    kdtree->annkSearch(xyz, 1, index, dist);
+    double d = sqrt(dist[0]);
+    double lTg = d < dMin ? lMinTangent : d > dMax ? lMaxTangent : lMinTangent + (lMaxTangent - lMinTangent) * (d - dMin) / (dMax - dMin);
+    double lN = d < dMin ? lMinNormal : d > dMax ? lMaxNormal : lMinNormal + (lMaxNormal - lMinNormal) * (d - dMin) / (dMax - dMin);
+    SVector3 t = tg[index[0]];
+    SVector3 n0 = crossprod(t, fabs(t(0)) > fabs(t(1)) ? SVector3(0,1,0) : SVector3(1,0,0));
+    SVector3 n1 = crossprod(t, n0);
+    metr = SMetric3(1/lTg/lTg, 1/lN/lN, 1/lN/lN, t, n0, n1);
+  }
+  virtual double operator() (double X, double Y, double Z, GEntity *ge=0)
+  {
+    if(update_needed)
+      update();
+    double xyz[3] = { X, Y, Z };
+    kdtree->annkSearch(xyz, 1, index, dist);
+    double d = sqrt(dist[0]);
+    return std::max(d, 0.05);
+  }
+};
+
 class AttractorField : public Field
 {
   ANNkd_tree *kdtree;
@@ -1338,6 +1489,8 @@ class AttractorField : public Field
   ANNdistArray dist;
   std::list<int> nodes_id, edges_id, faces_id;
   std::vector<AttractorInfo> _infos;
+  int _xFieldId, _yFieldId, _zFieldId;
+  Field *_xField, *_yField, *_zField;
   int n_nodes_by_edge;  
  public:
   AttractorField() : kdtree(0), zeronodes(0)
@@ -1356,6 +1509,10 @@ class AttractorField : public Field
       (faces_id, "Indices of surfaces in the geometric model (Warning, this feature "
        "is still experimental. It might (read: will probably) give wrong results "
        "for complex surfaces)", &update_needed);
+    _xFieldId = _yFieldId = _zFieldId = -1;
+    options["FieldX"] = new FieldOptionInt(_xFieldId, "Id of the field to use as x coordinate.", &update_needed);
+    options["FieldY"] = new FieldOptionInt(_yFieldId, "Id of the field to use as y coordinate.", &update_needed);
+    options["FieldZ"] = new FieldOptionInt(_zFieldId, "Id of the field to use as z coordinate.", &update_needed);
   }
   ~AttractorField()
   {
@@ -1375,6 +1532,12 @@ class AttractorField : public Field
       "is replaced by NNodesByEdge equidistant nodes and the distance from those "
       "nodes is computed.";
   }
+  void getCoord(double x, double y, double z, double &cx, double &cy, double &cz, GEntity *ge = NULL) {
+    cx = _xField ? (*_xField)(x, y, z, ge) : x;
+    cy = _yField ? (*_yField)(x, y, z, ge) : y;
+    cz = _zField ? (*_zField)(x, y, z, ge) : z;
+  }
+
   std::pair<AttractorInfo,SPoint3> getAttractorInfo() const 
   {
     return std::make_pair(_infos[index[0]], SPoint3(zeronodes[index[0]][0],
@@ -1383,6 +1546,10 @@ class AttractorField : public Field
   }
   virtual double operator() (double X, double Y, double Z, GEntity *ge=0)
   {
+    _xField = _xFieldId >= 0 ? (GModel::current()->getFields()->get(_xFieldId)) : NULL;
+    _yField = _yFieldId >= 0 ? (GModel::current()->getFields()->get(_yFieldId)) : NULL;
+    _zField = _zFieldId >= 0 ? (GModel::current()->getFields()->get(_zFieldId)) : NULL;
+
     if(update_needed) {
       if(zeronodes) {
         annDeallocPts(zeronodes);
@@ -1399,16 +1566,14 @@ class AttractorField : public Field
           it != nodes_id.end(); ++it) {
         Vertex *v = FindPoint(*it);
         if(v) {
-          zeronodes[k][0] = v->Pos.X;
-          zeronodes[k][1] = v->Pos.Y;
-          zeronodes[k++][2] = v->Pos.Z;
+          getCoord(v->Pos.X, v->Pos.Y, v->Pos.Z, zeronodes[k][0], zeronodes[k][1], zeronodes[k][2]);
+          k++;
         }
         else {
           GVertex *gv = GModel::current()->getVertexByTag(*it);
           if(gv) {
-            zeronodes[k][0] = gv->x();
-            zeronodes[k][1] = gv->y();
-            zeronodes[k++][2] = gv->z();
+            getCoord(gv->x(), gv->y(), gv->z(), zeronodes[k][0], zeronodes[k][1], zeronodes[k][2], gv);
+            k++;
           }
         }
       }
@@ -1419,9 +1584,7 @@ class AttractorField : public Field
           for(int i = 0; i < n_nodes_by_edge; i++) {
             double u = (double)i / (n_nodes_by_edge - 1);
             Vertex V = InterpolateCurve(c, u, 0);
-            zeronodes[k][0] = V.Pos.X;
-            zeronodes[k][1] = V.Pos.Y;
-            zeronodes[k][2] = V.Pos.Z;
+            getCoord(V.Pos.X, V.Pos.Y, V.Pos.Z, zeronodes[k][0], zeronodes[k][1], zeronodes[k][2]);
 	    _infos[k++] = AttractorInfo(*it,1,u,0);
           }
         }
@@ -1433,9 +1596,7 @@ class AttractorField : public Field
               Range<double> b = e->parBounds(0);
               double t = b.low() + u * (b.high() - b.low());
               GPoint gp = e->point(t);
-              zeronodes[k][0] = gp.x();
-              zeronodes[k][1] = gp.y();
-              zeronodes[k][2] = gp.z();
+              getCoord(gp.x(), gp.y(), gp.z(), zeronodes[k][0], zeronodes[k][1], zeronodes[k][2], e);
 	      _infos[k++] = AttractorInfo(*it,1,u,0);
             }
           }
@@ -1453,9 +1614,7 @@ class AttractorField : public Field
               double u = (double)i / (n_nodes_by_edge - 1);
               double v = (double)j / (n_nodes_by_edge - 1);
               Vertex V = InterpolateSurface(s, u, v, 0, 0);
-              zeronodes[k][0] = V.Pos.X;
-              zeronodes[k][1] = V.Pos.Y;
-              zeronodes[k][2] = V.Pos.Z;
+              getCoord(V.Pos.X, V.Pos.Y, V.Pos.Z, zeronodes[k][0], zeronodes[k][1], zeronodes[k][2]);
 	      _infos[k++] = AttractorInfo(*it,2,u,v);
             }
           }
@@ -1472,9 +1631,7 @@ class AttractorField : public Field
                 double t1 = b1.low() + u * (b1.high() - b1.low());
                 double t2 = b2.low() + v * (b2.high() - b2.low());
                 GPoint gp = f->point(t1, t2);
-                zeronodes[k][0] = gp.x();
-                zeronodes[k][1] = gp.y();
-                zeronodes[k][2] = gp.z();
+                getCoord(gp.x(), gp.y(), gp.z(), zeronodes[k][0], zeronodes[k][1], zeronodes[k][2], f);
 		_infos[k++] = AttractorInfo(*it,2,u,v);
               }
             }
@@ -1484,7 +1641,8 @@ class AttractorField : public Field
       kdtree = new ANNkd_tree(zeronodes, totpoints, 3);
       update_needed = false;
     }
-    double xyz[3] = { X, Y, Z };
+    double xyz[3];
+    getCoord(X, Y, Z, xyz[0], xyz[1], xyz[2], ge);
     kdtree->annkSearch(xyz, 1, index, dist);
     return sqrt(dist[0]);
   }
@@ -1553,9 +1711,15 @@ public:
     // (dist/hwall)*(ratio-1) + 1 = ratio^{m}
     // lc =  dist*(ratio-1) + hwall 
     const double ll1   = dist*(ratio-1) + hwall_n;
-    const double lc_n  = std::min(ll1,hfar);
+    double lc_n  = std::min(ll1,hfar);
     const double ll2   = dist*(ratio-1) + hwall_t;
-    const double lc_t  = std::min(lc_n*CTX::instance()->mesh.anisoMax, std::min(ll2,hfar));
+    double lc_t  = std::min(lc_n*CTX::instance()->mesh.anisoMax, std::min(ll2,hfar));
+
+    if (backgroundMesh::current()){
+      const double lcBG = backgroundMesh::current()->operator() (x,y,z);
+      lc_n = std::min(lc_n, lcBG);
+      lc_t = std::min(lc_t, lcBG);
+    }
 
     SVector3 t1,t2,t3;
     double L1,L2,L3;
@@ -1565,8 +1729,22 @@ public:
       std::pair<AttractorInfo,SPoint3> pp = cc->getAttractorInfo();
       if (pp.first.dim ==1){
 	GEdge *e = GModel::current()->getEdgeByTag(pp.first.ent);
+
+
+	// the tangent size at this point is the size of the
+	// 1D mesh at this point !
+	// hack : use curvature
+	if(CTX::instance()->mesh.lcFromCurvature){
+	  double Crv = e->curvature(pp.first.u);
+	  double lc = Crv > 0 ? 2 * M_PI / Crv / CTX::instance()->mesh.minCircPoints : 1.e-22;
+	  const double ll2b   = dist*(ratio-1) + lc;
+	  double lc_tb  = std::min(lc_n*CTX::instance()->mesh.anisoMax, std::min(ll2b,hfar));
+	  lc_t = std::min(lc_t,lc_tb);
+	}
+
+
 	if (dist < hwall_n){
-	  L1 = lc_t; 
+	  L1 = lc_t;
 	  L2 = lc_n;
 	  L3 = lc_n;
 	  t1 = e->firstDer(pp.first.u);
@@ -1583,7 +1761,7 @@ public:
 	  //	  printf("hfar = %g lc = %g dir %g %g \n",hfar,lc,t1.x(),t1.y());
 	}
 	else {
-	  L1 = lc_t; 
+	  L1 = lc_t;
 	  L2 = lc_n;
 	  L3 = lc_t;
 	  GPoint p = e->point(pp.first.u);
@@ -1675,6 +1853,7 @@ FieldManager::FieldManager()
   map_type_name["MathEvalAniso"] = new FieldFactoryT<MathEvalFieldAniso>();
 #if defined(HAVE_ANN)
   map_type_name["Attractor"] = new FieldFactoryT<AttractorField>();
+  map_type_name["AttractorAnisoCurve"] = new FieldFactoryT<AttractorAnisoCurveField>();
 #endif
   map_type_name["MaxEigenHessian"] = new FieldFactoryT<MaxEigenHessianField>();
   background_field = -1;

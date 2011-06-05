@@ -1,4 +1,4 @@
-# Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+# Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 #
 # See the LICENSE.txt file for license information. Please report all
 # bugs and problems to <gmsh@geuz.org>.
@@ -12,7 +12,7 @@ set(SRC
       meshGFaceTransfinite.cpp meshGFaceExtruded.cpp 
       meshGFaceBamg.cpp meshGFaceBDS.cpp meshGFaceDelaunayInsertion.cpp 
       meshGFaceLloyd.cpp meshGFaceOptimize.cpp 
-      meshGFaceQuadrilateralize.cpp meshGFaceBoundaryLayer.cpp 
+      meshGFaceQuadrilateralize.cpp
     meshGRegion.cpp 
       meshGRegionDelaunayInsertion.cpp meshGRegionTransfinite.cpp 
       meshGRegionExtruded.cpp  meshGRegionCarveHole.cpp 
@@ -23,7 +23,9 @@ set(SRC
     BDS.cpp 
     HighOrder.cpp 
       highOrderSmoother.cpp 
-    meshPartition.cpp 
+      highOrderTools.cpp 
+    meshPartition.cpp
+    meshPartitionOptions.cpp
     meshRefine.cpp
     multiscalePartition.cpp
 )

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -23,6 +23,12 @@ bool MVertexLessThanLexicographic::operator()(const MVertex *v1, const MVertex *
   if(v1->y() - v2->y() >  tolerance) return true;
   if(v1->y() - v2->y() < -tolerance) return false;
   if(v1->z() - v2->z() >  tolerance) return true;
+  return false;
+}
+
+bool MVertexLessThanNum::operator()(const MVertex *v1, const MVertex *v2) const
+{
+  if(v1->getNum() < v2->getNum()) return true;
   return false;
 }
 
@@ -227,12 +233,20 @@ void MVertex::writeBDF(FILE *fp, int format, double scalingFactor)
   }
 }
 
+void MVertex::writeINP(FILE *fp, double scalingFactor)
+{
+  if(_index < 0) return; // negative index vertices are never saved
+
+  fprintf(fp, "%d, %.16g, %.16g, %.16g\n", _index, x() * scalingFactor,
+          y() * scalingFactor, z() * scalingFactor);
+}
+
 void MVertex::writeDIFF(FILE *fp, bool binary, double scalingFactor)
 {
   if(_index < 0) return; // negative index vertices are never saved
 
   fprintf(fp, " %d ( %25.16E , %25.16E , %25.16E )",
-          getIndex(), x() * scalingFactor, y() * scalingFactor, z() * scalingFactor);
+          _index, x() * scalingFactor, y() * scalingFactor, z() * scalingFactor);
 }
 
 std::set<MVertex*, MVertexLessThanLexicographic>::iterator 
@@ -411,35 +425,4 @@ bool reparamMeshVertexOnEdge(const MVertex *v, const GEdge *ge, double &param)
   
   if(param < 1.e6) return true;
   return false;
-}
-
-#include "Bindings.h"
-
-void MVertex::registerBindings(binding *b)
-{
-  classBinding *cb = b->addClass<MVertex>("MVertex");
-  cb->setDescription("A mesh vertex.");
-  methodBinding *cm;
-  cm = cb->addMethod("getNum",&MVertex::getNum);
-  cm->setDescription("Return the immutable vertex number.");
-  //the cast is epxlicitely given because there are 2 MVertex::x function
-  cm = cb->addMethod("x", (double (MVertex::*)() const) &MVertex::x);
-  cm->setDescription("Return the x-coordinate.");
-  cm = cb->addMethod("y", (double (MVertex::*)() const) &MVertex::y);
-  cm->setDescription("Return the y-coordinate.");
-  cm = cb->addMethod("z", (double (MVertex::*)() const) &MVertex::z);
-  cm->setDescription("Return the z-coordinate.");
-  cm = cb->addMethod("setXYZ", &MVertex::setXYZ);
-  cm->setDescription("set the coordinates");
-  cm->setArgNames("x", "y", "z",NULL);
-  cm = cb->setConstructor<MVertex,double,double,double>();
-  cm->setArgNames("x", "y", "z", NULL);
-  cm->setDescription("Create a new mesh vertex at (x,y,z).");
-  cm = cb->addMethod("getNum", &MVertex::getNum);
-  cm->setDescription("return the invariant vertex id");
-  cm = cb->addMethod("getPolynomialOrder", &MVertex::getPolynomialOrder);
-  cm->setDescription("return the polynomial order of vertex");
-  cm = cb->addMethod("setPolynomialOrder", &MVertex::setPolynomialOrder);
-  cm->setDescription("assign the polynomial order of vertex");
-  cm->setArgNames("order",NULL);
 }

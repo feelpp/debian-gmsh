@@ -16,7 +16,9 @@ class Field {
   virtual double operator() (double x, double y, double z){ return 0.; }
 };
 #endif
-
+#if defined(_MSC_VER)
+inline double round(double x) { return floor(x + 0.5); }
+#endif
 class GMSH_GSHHSPlugin : public GMSH_PostPlugin
 {
 public:
@@ -541,7 +543,7 @@ public:
       }
       return i1;
     }
-    int orientation(iterator i0, iterator i1,bool reverse_stereo)
+    int orientation(iterator i0, iterator i1,bool reverse_stereo=false)
     {
       if(next(i0)==i1)
         return 0;
@@ -559,7 +561,7 @@ public:
       }while(p!=i1);
       i0->to_stereo(x[2],y[2],reverse_stereo);
       alpha+=get_angle(x[0],y[0],x[1],y[1],x[2],y[2]);
-      return (int)(alpha/(M_PI*2));
+	  return (int)round(alpha/(M_PI*2));
     }
     int length(iterator i0,iterator i1)
     {
@@ -681,7 +683,7 @@ public:
   bool loop_check_close_points_self(loop *l,box &b)
   {
     bool result=false;
-    bool reverse_stereo=(l->orientation(l->begin(),--l->end(),false)<0);
+    int orientation = l->orientation(l->begin(), --l->end());
     for(loop::iterator i=l->begin();i!=l->end();){
       double d[2]={i->min_dist*1.001,i->min_dist*1.001};
       point *cp[2];
@@ -694,11 +696,11 @@ public:
           for(ii=i;ii!=l->end() && ii!=id1;ii++);
           not_a_loop= ii==l->end()?0:1;
         }
-        if(not_a_loop!=0 && (l->orientation(i,id1,reverse_stereo)==-1 || l->length(i,id1)<3)){
+        if(not_a_loop!=0 && (l->orientation(i,id1)!=orientation || l->length(i,id1)<3)){
           i=l->remove_range(i,id1);
           result=true;
         }
-        if(not_a_loop!=1 && (l->orientation(id1,i,reverse_stereo)==-1 || l->length(id1,i)<3)){
+        if(not_a_loop!=1 && (l->orientation(id1,i)!=orientation || l->length(id1,i)<3)){
           i=l->remove_range(id1,i);
           result=true;
         }else
@@ -798,9 +800,11 @@ public:
       loop_buff.str("");
       first_point_in_loop = ip;
     }
+    int _write_polar_sphere;
   public:
-    GeoEarthImport(const std::string _filename, bool  write_polar_sphere,double radius)
+    GeoEarthImport(const std::string _filename, int  write_polar_sphere,double radius)
     {
+      _write_polar_sphere = write_polar_sphere;
       filename = _filename;
       file=new std::ofstream(filename.c_str());
       loop_buff.precision(16);
@@ -811,7 +815,7 @@ public:
       buff << "ILL = newll;\n";
       buff << "IS = news;\n";
       buff << "IFI = newf;\n";
-      if(write_polar_sphere){
+      if(write_polar_sphere > 0){
         buff << "Point ( IP + " << ip++ << " ) = {0, 0, 0 };\n";
         buff << "Point ( IP + " << ip++ <<" ) = {0, 0,"<<radius<<"};\n";
         buff << "PolarSphere ( IS + " << is++ << " ) = {IP , IP+1};\n";
@@ -830,6 +834,9 @@ public:
     {
       double r=sqrt(point.x()*point.x()+point.y()*point.y()+point.z()*point.z());
       SPoint2 stereo(-point.x() / (r + point.z()), -point.y() / (r + point.z()));
+      if (_write_polar_sphere == -2){
+        stereo = SPoint2(2 * r * point.x() / (r + point.z()), 2 * r * point.y() / (r + point.z()));
+      }
       loop_buff << "Point ( IP + " << ip++ << " ) = {" << stereo.
         x() << ", " << stereo.y() << ", " << 0 << " };\n";
     }
@@ -950,7 +957,7 @@ std::string GMSH_GSHHSPlugin::getHelp() const
     "field(IField) are merged and inner corners which form an "
     "angle < pi/3 are removed.\n\n"
     "The output is always in stereographic coordinates, if "
-    "the \"WritePolarSphere\" option is not 0, a sphere is "
+    "the \"WritePolarSphere\" option is greater than 0, a sphere is "
     "added to the geo file.\n\n"
     "WARNING: this plugin is still experimental and needs "
     "polishing and error-handling. In particular, it will "
@@ -990,7 +997,7 @@ PView *GMSH_GSHHSPlugin::execute(PView * v)
   double utm_equatorial_radius=(double)GSHHSOptions_Number[2].def;
   double utm_polar_radius=(double)GSHHSOptions_Number[3].def;
   double radius=(double)GSHHSOptions_Number[4].def;
-  bool write_polar_sphere = (bool)GSHHSOptions_Number[5].def;
+  int write_polar_sphere = (int)GSHHSOptions_Number[5].def;
   double straits_factor = (double)GSHHSOptions_Number[6].def;
   coordinate_lonlat lonlat(radius);
   coordinate_lonlat_degrees lonlat_degrees(radius);

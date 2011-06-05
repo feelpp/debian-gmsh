@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -10,6 +10,7 @@
 #include <vector>
 #include <set>
 #include "SBoundingBox3d.h"
+#include "Camera.h"
 
 #if defined(WIN32)
 #include <windows.h>
@@ -47,6 +48,7 @@ class drawTransformScaled : public drawTransform {
  private:
   double _mat[3][3];
   double _tra[3];
+
  public:
   drawTransformScaled(double mat[3][3], double tra[3]=0)
     : drawTransform()
@@ -76,7 +78,7 @@ class drawTransformScaled : public drawTransform {
     z += _tra[2];
   }
 };
-
+ 
 // global drawing functions, which need to be redefined for each
 // widget toolkit (FLTK, Qt, etc.)
 class drawContextGlobal {
@@ -109,6 +111,7 @@ class drawContext {
   int _bgImageSize[2];
 
  public:
+  Camera camera;
   double r[3]; // current Euler angles (in degrees!) 
   double t[3], s[3]; // current translation and scale 
   double quaternion[4]; // current quaternion used for "trackball" rotation
@@ -121,7 +124,6 @@ class drawContext {
                               // at the time of the last InitPosition() call
   enum RenderMode {GMSH_RENDER=1, GMSH_SELECT=2, GMSH_FEEDBACK=3};
   int render_mode; // current rendering mode
-
  public:
   drawContext(drawTransform *transform=0);
   ~drawContext();
@@ -179,6 +181,8 @@ class drawContext {
   void drawGeom();
   void drawMesh();
   void drawPost();
+  void drawBackgroundGradient();
+  void drawBackgroundImage();
   void drawText2d();
   void drawGraph2d();
   void drawAxis(double xmin, double ymin, double zmin,
@@ -190,6 +194,7 @@ class drawContext {
                 std::string label[3], SBoundingBox3d &bb, int mikado);
   void drawAxes();
   void drawSmallAxes();
+  void drawTrackball();
   void drawScales();
   void drawString(const std::string &s, const std::string &font_name, int font_enum, 
                   int font_size, int align);
@@ -198,6 +203,8 @@ class drawContext {
   void drawStringRight(const std::string &s);
   void drawString(const std::string &s, double style);
   void drawSphere(double R, double x, double y, double z, int n1, int n2, int light);
+  void drawEllipsoid(double x, double y, double z, float v0[3], float v1[3], float v2[3], int light);
+  void drawEllipse(double x, double y, double z, float v0[3], float v1[3], int light);
   void drawSphere(double size, double x, double y, double z, int light);
   void drawCylinder(double width, double *x, double *y, double *z, int light);
   void drawTaperedCylinder(double width, double val1, double val2, 

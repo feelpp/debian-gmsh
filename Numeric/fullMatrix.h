@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -11,7 +11,6 @@
 #include "GmshConfig.h"
 #include "GmshMessage.h"
 
-class binding;
 template <class scalar> class fullMatrix;
 
 // An abstract interface for vectors of scalar
@@ -46,6 +45,15 @@ class fullVector
   inline const scalar * getDataPtr() const { return _data; }
   inline scalar operator () (int i)  const { return _data[i]; }
   inline scalar & operator () (int i)      { return _data[i]; }
+  // set
+  inline void set(int r, scalar v){
+    #ifdef _DEBUG
+    if (r >= _r || r < 0)
+      Msg::Fatal("invalid index to access fullVector : %i (size = %i)",
+                 r, _r);
+    #endif
+    (*this)(r) = v;
+  }
 
   // operations
   inline scalar norm() const
@@ -54,8 +62,8 @@ class fullVector
     for(int i = 0; i < _r; ++i) n += _data[i] * _data[i];
     return sqrt(n);
   }
-  bool resize(int r)  
-  { 
+  bool resize(int r)
+  {
     if (_r < r) {
       if (_data) delete[] _data;
       _r = r;
@@ -72,16 +80,16 @@ class fullVector
   }
   inline void scale(const scalar s)
   {
-    if(s == 0.) 
+    if(s == 0.)
       for(int i = 0; i < _r; ++i) _data[i] = 0.;
     else if (s == -1.)
       for(int i = 0; i < _r; ++i) _data[i] = -_data[i];
-    else 
+    else
       for(int i = 0; i < _r; ++i) _data[i] *= s;
   }
   inline void setAll(const scalar &m)
   {
-    for(int i = 0; i < _r; i++) _data[i] = m;
+    for(int i = 0; i < _r; i++) set(i,m);
   }
   inline void setAll(const fullVector<scalar> &m)
   {
@@ -106,7 +114,7 @@ class fullVector
   }
 
   // printing and file treatment
-  void print(const char *name="") const 
+  void print(const char *name="") const
   {
     printf("Printing vector %s:\n", name);
     printf("  ");
@@ -117,11 +125,11 @@ class fullVector
   }
   void binarySave (FILE *f) const
   {
-    fwrite (_data, sizeof(scalar), _r, f); 
+    fwrite (_data, sizeof(scalar), _r, f);
   }
   void binaryLoad (FILE *f)
   {
-    if(fread (_data, sizeof(scalar), _r, f) != _r) return; 
+    if(fread (_data, sizeof(scalar), _r, f) != _r) return;
   }
 };
 
@@ -180,10 +188,10 @@ class fullMatrix
   {
     #ifdef _DEBUG
     if (r >= _r || r < 0 || c >= _c || c < 0)
-      Msg::Fatal("invalid index to access fullMatrix : %i %i (size = %i %i)", 
+      Msg::Fatal("invalid index to access fullMatrix : %i %i (size = %i %i)",
                  r, c, _r, _c);
     #endif
-    return (*this)(r, c); 
+    return (*this)(r, c);
   }
 
   // operations
@@ -193,13 +201,13 @@ class fullMatrix
       Msg::Fatal("invalid index to access fullMatrix : %i %i (size = %i %i)",
                  r, c, _r, _c);
     #endif
-    (*this)(r, c) = v; 
+    (*this)(r, c) = v;
   }
   inline scalar norm() const
   {
     scalar n = 0.;
-    for(int i = 0; i < _r; ++i) 
-      for(int j = 0; j < _c; ++j) 
+    for(int i = 0; i < _r; ++i)
+      for(int j = 0; j < _c; ++j)
 	n += (*this)(i, j) * (*this)(i, j);
     return sqrt(n);
   }
@@ -241,31 +249,21 @@ class fullMatrix
     _own_data = false;
     _data = original._data + c_start * _r;
   }
-  void setAsShapeProxy(fullMatrix<scalar> &original, int nbRow, int nbCol)
-  {
-    if(_data && _own_data)
-      delete [] _data;
-    _c = nbCol;
-    _r = nbRow;
-    if(_c*_r != original._c*original._r)
-      Msg::Error("Trying to reshape a fullMatrix without conserving the "
-                 "total number of entries");
-    _own_data = false;
-    _data = original._data;
-  }
   fullMatrix<scalar> & operator = (const fullMatrix<scalar> &other)
   {
     if(this != &other){
-      _r = other._r; 
-      _c = other._c;
-      if (_data && _own_data) delete[] _data;
-      if ((_r == 0) || (_c == 0))
-        _data=0;
-      else{
-        _data = new scalar[_r * _c];
-        _own_data=true;
-        for(int i = 0; i < _r * _c; ++i) _data[i] = other._data[i];
+      if (_r != other._r || _c != other._c) {
+        _r = other._r;
+        _c = other._c;
+        if (_data && _own_data) delete[] _data;
+        if ((_r == 0) || (_c == 0))
+          _data=0;
+        else{
+          _data = new scalar[_r * _c];
+          _own_data=true;
+        }
       }
+      for(int i = 0; i < _r * _c; ++i) _data[i] = other._data[i];
     }
     return *this;
   }
@@ -293,7 +291,7 @@ class fullMatrix
     #endif
     return _data[i + _r * j];
   }
-  void copy(const fullMatrix<scalar> &a, int i0, int ni, int j0, int nj, 
+  void copy(const fullMatrix<scalar> &a, int i0, int ni, int j0, int nj,
             int desti0, int destj0)
   {
     for(int i = i0, desti = desti0; i < i0 + ni; i++, desti++)
@@ -302,12 +300,14 @@ class fullMatrix
   }
   void copy(const fullMatrix<scalar> &a)
   {
-    if(_data && _own_data)
-      delete [] _data;
-    _r = a._r;
-    _c = a._c;
-    _data = new scalar[_r * _c];
-    _own_data = true;
+    if (_r != a._r || _c != a._c) {
+      if(_data && _own_data)
+        delete [] _data;
+      _r = a._r;
+      _c = a._c;
+      _data = new scalar[_r * _c];
+      _own_data = true;
+    }
     setAll(a);
   }
   void mult_naive(const fullMatrix<scalar> &b, fullMatrix<scalar> &c) const
@@ -329,7 +329,15 @@ class fullMatrix
   {
     for (int i = 0; i < _r * _c; i++) _data[i] *= a._data[i];
   }
-  void gemm_naive(const fullMatrix<scalar> &a, const fullMatrix<scalar> &b, 
+  void axpy(const fullMatrix<scalar> &x, scalar alpha=1.)
+#if !defined(HAVE_BLAS)
+  {
+    int n = _r * _c;
+    for (int i = 0; i < n; i++) _data[i] += alpha * x._data[i];
+  }
+#endif
+  ;
+  void gemm_naive(const fullMatrix<scalar> &a, const fullMatrix<scalar> &b,
                   scalar alpha=1., scalar beta=1.)
   {
     fullMatrix<scalar> temp(a.size1(), b.size2());
@@ -338,7 +346,7 @@ class fullMatrix
     scale(beta);
     add(temp);
   }
-  void gemm(const fullMatrix<scalar> &a, const fullMatrix<scalar> &b, 
+  void gemm(const fullMatrix<scalar> &a, const fullMatrix<scalar> &b,
             scalar alpha=1., scalar beta=1.)
 #if !defined(HAVE_BLAS)
   {
@@ -346,11 +354,11 @@ class fullMatrix
   }
 #endif
   ;
-  inline void setAll(const scalar &m) 
+  inline void setAll(const scalar &m)
   {
     for(int i = 0; i < _r * _c; i++) _data[i] = m;
   }
-  inline void setAll(const fullMatrix<scalar> &m) 
+  inline void setAll(const fullMatrix<scalar> &m)
   {
     for(int i = 0; i < _r * _c; i++) _data[i] = m._data[i];
   }
@@ -364,17 +372,17 @@ class fullMatrix
   }
 #endif
   ;
-  inline void add(const double &a) 
+  inline void add(const double &a)
   {
     for(int i = 0; i < _r * _c; ++i) _data[i] += a;
   }
-  inline void add(const fullMatrix<scalar> &m) 
+  inline void add(const fullMatrix<scalar> &m)
   {
     for(int i = 0; i < size1(); i++)
       for(int j = 0; j < size2(); j++)
         (*this)(i, j) += m(i, j);
   }
-  inline void add(const fullMatrix<scalar> &m, const double &a) 
+  inline void add(const fullMatrix<scalar> &m, const double &a)
   {
     for(int i = 0; i < size1(); i++)
       for(int j = 0; j < size2(); j++)
@@ -390,7 +398,16 @@ class fullMatrix
   }
 #endif
   ;
-  inline fullMatrix<scalar> transpose()
+  void multAddy(const fullVector<scalar> &x, fullVector<scalar> &y) const
+#if !defined(HAVE_BLAS)
+  {
+    for(int i = 0; i < _r; i++)
+      for(int j = 0; j < _c; j++)
+        y._data[i] += (*this)(i, j) * x(j);
+  }
+#endif
+  ;
+  inline fullMatrix<scalar> transpose() const
   {
     fullMatrix<scalar> T(size2(), size1());
     for(int i = 0; i < size1(); i++)
@@ -445,7 +462,7 @@ class fullMatrix
   }
 #endif
   ;
-  fullMatrix<scalar> cofactor(int i, int j) const 
+  fullMatrix<scalar> cofactor(int i, int j) const
   {
     int ni = size1();
     int nj = size2();
@@ -473,7 +490,7 @@ class fullMatrix
 #endif
   ;
 
-  void print(const std::string name = "") const 
+  void print(const std::string name = "", const std::string format = "%12.5E ") const
   {
     printf("Printing matrix %s:\n", name.c_str());
     int ni = size1();
@@ -481,13 +498,62 @@ class fullMatrix
     for(int I = 0; I < ni; I++){
       printf("  ");
       for(int J = 0; J < nj; J++){
-        printf("%12.5E ", (*this)(I, J));
+        printf(format.c_str(), (*this)(I, J));
       }
       printf("\n");
     }
   }
 
-  static void registerBindings(binding *b);
-};
+// specific functions for dgshell
+  void mult_naiveBlock(const fullMatrix<scalar> &b, const int ncol, const int fcol, const int alpha, const int beta, fullVector<scalar> &c, const int row=0) const
+  {
+    if(beta != 1)
+      c.scale(beta);
+    for(int j = fcol; j < fcol+ncol; j++)
+      for(int k = 0; k < _c ; k++)
+          c._data[j] += alpha*(*this)(row, k) * b(k, j);
+  }
+  void multOnBlock(const fullMatrix<scalar> &b, const int ncol, const int fcol, const int alpha, const int beta, fullVector<scalar> &c) const
+#if !defined(HAVE_BLAS)
+  {
+    mult_naiveBlock(b,ncol,fcol,alpha,beta,c);
+  }
+#endif
+  ;
 
+  void multWithATranspose(const fullVector<scalar> &x, const int alpha_, const int beta_, fullVector<scalar> &y) const
+#if !defined(HAVE_BLAS)
+  {
+    y.scale(beta_);
+    for(int j = 0; j < _c; j++)
+      for(int i = 0; i < _r; i++)
+        y._data[j] += (*this)(i, j) * x(i);
+  }
+#endif
+  ;
+
+  void copyOneColumn(const fullVector<scalar> &x, const int ind) const
+  {
+    int cind = _c*ind;
+    for(int i = 0; i < _r; i++)
+     _data[cind+i] = x(i);
+  }
+
+  void gemmWithAtranspose(const fullMatrix<scalar> &a, const fullMatrix<scalar> &b,
+            scalar alpha=1., scalar beta=1.)
+#if !defined(HAVE_BLAS)
+  {
+    Msg::Error("gemmWithAtranspose is only available with blas. If blas is not installed please transpose a before used gemm_naive");
+  }
+#endif
+  ;
+
+  void reshape(int nbRows, int nbColumns){
+    if (nbRows*nbColumns != size1()*size2())
+      Msg::Error("Invalid reshape, total number of entries must be equal");
+    _r = nbRows;
+    _c = nbColumns;
+  }
+
+};
 #endif

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -228,6 +228,7 @@ GEdge *OCCFactory::addCircleArc(GModel *gm, const arcCreationMethod &method,
   gp_Pnt aP3(end->x(), end->y(), end->z());
   TopoDS_Edge occEdge;
 
+
   OCCVertex *occv1 = dynamic_cast<OCCVertex*>(start);
   OCCVertex *occv2 = dynamic_cast<OCCVertex*>(end);
 
@@ -241,7 +242,7 @@ GEdge *OCCFactory::addCircleArc(GModel *gm, const arcCreationMethod &method,
   }
   else if (method == GModelFactory::CENTER_START_END){
     Standard_Real Radius = aP1.Distance(aP2);
-    gce_MakeCirc MC(aP1,gce_MakePln(aP1, aP2, aP3).Value(), Radius);
+    gce_MakeCirc MC(aP2,gce_MakePln(aP1, aP2, aP3).Value(), Radius);
     const gp_Circ& Circ = MC.Value();
     Standard_Real Alpha1 = ElCLib::Parameter(Circ, aP1);
     Standard_Real Alpha2 = ElCLib::Parameter(Circ, aP3);
@@ -347,6 +348,37 @@ GEdge *OCCFactory::addNURBS(GModel *gm, GVertex *start, GVertex *end,
   return 0;
 }
 
+/*
+GEdge *OCCFactory::addBezierSurface(GModel *gm, 
+				    std::vector<GEdge *> & wires, // four edges indeed
+				    std::vector<std::vector<double> > points)
+{
+
+  TColgp_Array2OfPnt ctrlPoints(1, nbControlPoints + 2);
+  int index = 1;
+  ctrlPoints.SetValue(index++, gp_Pnt(start->x(), start->y(), start->z()));  
+  for (int i = 0; i < nbControlPoints; i++) {
+    gp_Pnt aP(points[i][0],points[i][1],points[i][2]);
+    ctrlPoints.SetValue(index++, aP);
+  }
+ 
+  
+  BRepBuilderAPI_MakeFace aGenerator (aBezierSurface);
+  BRepBuilderAPI_MakeWire wire_maker;
+  for (unsigned j = 0; j < wires.size(); j++) {
+    GEdge *ge = wires[j];
+    OCCEdge *occe = dynamic_cast<OCCEdge*>(ge);
+    if (occe){
+      wire_maker.Add(occe->getTopoDS_Edge());
+    }
+  }
+  TopoDS_Wire myWire = wire_maker.Wire();
+  aGenerator.Add (myWire);
+  aGenerator.Build();
+  TopoDS_Shape aResult = aGenerator.Shape();
+  return gm->_occ_internals->addFaceToModel(gm, TopoDS::Face(aResult));
+}
+*/
 GEntity *OCCFactory::revolve(GModel *gm, GEntity* base,
                              std::vector<double> p1, 
                              std::vector<double> p2, double angle)

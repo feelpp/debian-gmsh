@@ -29,6 +29,9 @@ struct PointRecord {
   DPoint where;
   DListPeek adjacent;
   void *data;
+  int flag; //0:to be kept, 1:to be removed
+  int identificator;
+  std::vector<void*> vicinity;
   PointRecord() : adjacent(0), data (0) {}
 };
 
@@ -60,7 +63,6 @@ class DocRecord{
  private:
   int _hullSize;
   PointNumero *_hull;
-  STriangle *_adjacencies;
   PointNumero Predecessor(PointNumero a, PointNumero b);
   PointNumero Successor(PointNumero a, PointNumero b);
   int FixFirst(PointNumero x, PointNumero f);
@@ -76,15 +78,16 @@ class DocRecord{
   int Insert(PointNumero a, PointNumero b);
   int DListDelete(DListPeek *dlist, PointNumero oldPoint);
   int Delete(PointNumero a, PointNumero b);
-  PointNumero *ConvertDlistToArray(DListPeek *dlist, int *n);
-  int ConvertDListToTriangles();
   void ConvertDListToVoronoiData();
+  int ConvertDListToTriangles();
   void RemoveAllDList();
   int BuildDelaunay();
   int CountPointsOnHull();
   void ConvexHull();
  public:
+  STriangle *_adjacencies;
   int numPoints;        // number of points
+  int size_points;
   PointRecord *points;  // points to triangulate
   int numTriangles;     // number of triangles
   Triangle *triangles;  // 2D results
@@ -102,7 +105,53 @@ class DocRecord{
   void printMedialAxis(Octree *_octree, std::string, GFace *gf=NULL, GEdge *ge=NULL);
   double Lloyd (int);
   void voronoiCell (PointNumero pt, std::vector<SPoint2> &pts) const;
-  static void registerBindings(binding *b);
+ 
+  std::set<std::pair<void*,void*> > boundaryEdges;
+
+  void addBoundaryEdge(void* p1,void* p2){
+    void* a = (p1 < p2) ? p1 : p2;
+	void* b = (p1 > p2) ? p1 : p2;
+	boundaryEdges.insert(std::make_pair(a,b));
+  }
+  
+  bool lookForBoundaryEdge(void* p1,void* p2){
+    void* a = (p1 < p2) ? p1 : p2;
+	void* b = (p1 > p2) ? p1 : p2;
+	std::set<std::pair<void*,void*> >::iterator it = boundaryEdges.find(std::make_pair(a,b));
+	return it!=boundaryEdges.end();
+  } 	
+ 
+  void recur_tag_triangles(int,std::set<int>&,std::map<std::pair<void*,void*>,std::pair<int,int> >&);
+  std::set<int> tagInterior(double,double);
+  void concave(double,double,GFace*);
+  bool contain(int,int,int);
+  void add(int,int);
+  	
+  void initialize();
+  bool remove_point(int);
+  void remove_all();
+  void add_point(double,double,GFace*);
+	
+  std::set<std::pair<void*,void*> > mesh_edges;
+	
+  void add_edge(void* p1,void* p2){
+    void* a = (p1 < p2) ? p1 : p2;
+	void* b = (p1 > p2) ? p1 : p2;
+	mesh_edges.insert(std::make_pair(a,b));
+  }
+	
+  bool find_edge(void* p1,void* p2){
+    void* a = (p1 < p2) ? p1 : p2;
+	void* b = (p1 > p2) ? p1 : p2;
+	std::set<std::pair<void*,void*> >::iterator it = mesh_edges.find(std::make_pair(a,b));
+	return it!=mesh_edges.end();
+  } 	
+	
+  void build_edges();
+  void clear_edges();
+  bool delaunay_conformity(GFace*);		
+	
+  PointNumero *ConvertDlistToArray(DListPeek *dlist, int *n);
 };
 
 void centroidOfOrientedBox(std::vector<SPoint2> &pts,

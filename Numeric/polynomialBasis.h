@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -65,26 +65,43 @@ inline double pow_int(const double &a, const int &n)
   }
 }
 
-class binding;
-
-// presently those function spaces are only for simplices and quads;
-// should be extended to other elements like hexes
 class polynomialBasis
 {
+  // integrationOrder, closureId => df/dXi
+  mutable std::map<int,std::vector<fullMatrix<double> > > _dfAtFace;
  public:
-  //for now the only implemented polynomial basis are nodal poly basis, we use the type of the corresponding gmsh element as type
-  int type;
-  typedef std::vector<std::vector<int> > clCont;
-  clCont closures;
+  // for now the only implemented polynomial basis are nodal poly
+  // basis, we use the type of the corresponding gmsh element as type
+  int type, parentType, order, dimension;
+  bool serendip;
+  class closure : public std::vector<int> {
+    public: 
+    int type;
+  };
+  typedef std::vector<closure> clCont;
+  // closures is the list of the nodes of each face, in the order of
+  // the polynomialBasis of the face; fullClosures is mapping of the
+  // nodes of the element that rotates the element so that the
+  // considered face becomes the first one in the right orientation;
+  // For element, like prisms that have different kind of faces,
+  // fullCLosure[i] rotates the element so that the considered face
+  // becomes the closureRef[i]-th face (the first tringle or the first
+  // quad face)
+  clCont closures, fullClosures;
+  std::vector<int> closureRef;
   fullMatrix<double> points;
   fullMatrix<double> monomials;
   fullMatrix<double> coefficients;
   int numFaces;
-  // for a given face/edge, with both a sign and a rotation,
-  // give an ordered list of nodes on this face/edge
+  // for a given face/edge, with both a sign and a rotation, give an
+  // ordered list of nodes on this face/edge
   inline const std::vector<int> &getClosure(int id) const
   {
     return closures[id];
+  }
+  inline const std::vector<int> &getFullClosure(int id) const
+  {
+    return fullClosures[id];
   }
   inline int getClosureId(int iEl, int iSign=1, int iRot=0) const
   {
@@ -100,7 +117,7 @@ class polynomialBasis
   }
   inline void f(double u, double v, double w, double *sf) const
   {
-    double p[256];
+    double p[1256];
     evaluateMonomials(u, v, w, p);
     for (int i = 0; i < coefficients.size1(); i++) {
       sf[i] = 0;
@@ -109,17 +126,30 @@ class polynomialBasis
       }
     }
   }
-  // I would favour this interface that allows optimizations (not
-  // implemented) and is easier to bind
-  inline void f(fullMatrix<double> &coord, fullMatrix<double> &sf)
+  inline void f(fullMatrix<double> &coord, fullMatrix<double> &sf) const
   {
-    double p[256];
+    double p[1256];
     sf.resize (coord.size1(), coefficients.size1());
     for (int iPoint=0; iPoint< coord.size1(); iPoint++) {
       evaluateMonomials(coord(iPoint,0), coord(iPoint,1), coord(iPoint,2), p);
       for (int i = 0; i < coefficients.size1(); i++)
         for (int j = 0; j < coefficients.size2(); j++)
           sf(iPoint,i) += coefficients(i, j) * p[j];
+    }
+  }
+  inline void df(fullMatrix<double> &coord, fullMatrix<double> &dfm) const
+  {
+    double dfv[1256][3];
+    dfm.resize (coefficients.size1(), coord.size1() * 3, false);
+    int ii = 0;
+    for (int iPoint=0; iPoint< coord.size1(); iPoint++) {
+      df(coord(iPoint,0), coord(iPoint, 1), coord(iPoint, 2), dfv);
+      for (int i = 0; i < coefficients.size1(); i++) {
+        dfm(i, iPoint * 3 + 0) = dfv[i][0];
+        dfm(i, iPoint * 3 + 1) = dfv[i][1];
+        dfm(i, iPoint * 3 + 2) = dfv[i][2];
+        ++ii;
+      }
     }
   }
   inline void df(double u, double v, double w, double grads[][3]) const
@@ -262,7 +292,9 @@ class polynomialBasis
       break;
     }
   }
-  static void registerBindings(binding *b);
+  const fullMatrix<double> &getGradientAtFaceIntegrationPoints(int integrationOrder,
+                                                               int closureId) const;
+  static int getTag(int parentTag, int order, bool serendip = false);
 };
 
 class polynomialBases

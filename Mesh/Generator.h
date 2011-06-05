@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -15,5 +15,6 @@ void OptimizeMesh(GModel *m);
 void OptimizeMeshNetgen(GModel *m);
 void RefineMesh(GModel *m, bool linear, bool splitIntoQuads=false,
                 bool splitIntoHexas=false);
+void RecombineMesh(GModel *m);
 
 #endif

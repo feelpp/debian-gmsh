@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -23,7 +23,7 @@
 #define  f16  0.0718316452676693
 #define  g16  0.4042339134672644
 
-/* constants for 17-p9oint rule */
+/* constants for 17-point rule */
 #define  a17  0.0314030927894235
 #define  b17  0.0111730972876738
 #define  c17  0.00754759872721232

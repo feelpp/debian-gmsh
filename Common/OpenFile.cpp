@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -18,7 +18,6 @@
 #include "OS.h"
 #include "StringUtils.h"
 #include "GeomMeshMatcher.h"
-#include "LuaBindings.h"
 
 #if defined(HAVE_PARSER)
 #include "Parser.h"
@@ -31,6 +30,7 @@
 #if defined(HAVE_POST)
 #include "PView.h"
 #include "PViewData.h"
+#include "PViewOptions.h"
 #endif
 
 #if defined(HAVE_FLTK)
@@ -92,17 +92,18 @@ void SetBoundingBox(double xmin, double xmax,
     CTX::instance()->cg[i] = 0.5 * (CTX::instance()->min[i] + CTX::instance()->max[i]);
 }
 
-void SetBoundingBox()
+void SetBoundingBox(bool aroundVisible)
 {
   if(CTX::instance()->forcedBBox) return;
 
-  SBoundingBox3d bb = GModel::current()->bounds();
+  SBoundingBox3d bb = GModel::current()->bounds(aroundVisible);
   
 #if defined(HAVE_POST)
   if(bb.empty()) {
     for(unsigned int i = 0; i < PView::list.size(); i++)
       if(!PView::list[i]->getData()->getBoundingBox().empty())
-        bb += PView::list[i]->getData()->getBoundingBox();
+        if(!aroundVisible || PView::list[i]->getOptions()->visible)
+          bb += PView::list[i]->getData()->getBoundingBox();
   }
 #endif
   
@@ -260,6 +261,10 @@ int MergeFile(std::string fileName, bool warnIfMissing)
       return MergeFile(noExt);
     }
   }
+
+  // force reading msh file even if wrong extension if the header
+  // matches
+  // if(!strncmp(header, "$MeshFormat", 11)) ext = "";
   
   CTX::instance()->geom.draw = 0; // don't try to draw the model while reading
 
@@ -295,6 +300,9 @@ int MergeFile(std::string fileName, bool warnIfMissing)
   }
   else if(ext == ".mesh" || ext == ".MESH"){
     status = GModel::current()->readMESH(fileName);
+  }
+  else if(ext == ".diff" || ext == ".DIFF"){
+    status = GModel::current()->readDIFF(fileName);
   }
   else if(ext == ".med" || ext == ".MED" || ext == ".mmed" || ext == ".MMED" ||
           ext == ".rmed" || ext == ".RMED"){
@@ -332,16 +340,14 @@ int MergeFile(std::string fileName, bool warnIfMissing)
   }
 #endif
 #endif
-#if defined(HAVE_LUA)
-  else if(ext == ".lua" || ext == ".LUA") {
-    status = binding::instance()->readFile(fileName.c_str());
-  }
-#endif
-  else if(ext == ".ply2"){
+  else if(ext == ".ply2" || ext == ".PLY2"){
     status = GModel::current()->readPLY2(fileName);
   }
-  else if(ext == ".ply"){
+  else if(ext == ".ply" || ext == ".PLY"){
     status = GModel::current()->readPLY(fileName);
+  }
+  else if(ext == ".geom" || ext == ".GEOM"){
+    status = GModel::current()->readGEOM(fileName);
   }
   else {
     CTX::instance()->geom.draw = 1;
@@ -350,10 +356,11 @@ int MergeFile(std::string fileName, bool warnIfMissing)
        !strncmp(header, "$MeshFormat", 11) || !strncmp(header, "$Comments", 9)) {
       // mesh matcher
       if(CTX::instance()->geom.matchGeomAndMesh && !GModel::current()->empty()){
+	GModel* tmp2 = GModel::current();
         GModel* tmp = new GModel();
         tmp->readMSH(fileName);
-        if(GeomMeshMatcher::instance()->match(GModel::current(), tmp))
-          fileName = "out.msh";
+        if(GeomMeshMatcher::instance()->match(tmp2, tmp))
+	  fileName = "out.msh";
         delete tmp;
       }
       status = GModel::current()->readMSH(fileName);

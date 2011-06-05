@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -159,6 +159,8 @@ class GEdge : public GEntity {
 
   // get bounds of parametric coordinate 
   virtual Range<double> parBounds(int i) const = 0;
+  inline double getLowerBound() const{ return parBounds(0).low();};
+  inline double getUpperBound() const{ return parBounds(0).high();};
   
   // return the point on the face closest to the given point
   virtual GPoint closestPoint(const SPoint3 &queryPoint, double &param) const;
@@ -178,6 +180,16 @@ class GEdge : public GEntity {
   // gluing
   void replaceEndingPoints(GVertex *, GVertex *);
 
+  //get bounds
+  inline double getLowBound() const {  
+    Range<double> bounds = parBounds(0);
+    return bounds.low();
+  }
+  inline double getHighBound() const {  
+    Range<double> bounds = parBounds(0);
+    return bounds.high();
+  }
+
   struct {
     char Method;
     double coeffTransfinite;
@@ -196,9 +208,7 @@ class GEdge : public GEntity {
   
   std::vector<MLine*> lines;
 
-  void addLine(MLine *line);
-
-  static void registerBindings(binding *b);
+  void addLine(MLine *line){ lines.push_back(line); }
 };
 
 #endif

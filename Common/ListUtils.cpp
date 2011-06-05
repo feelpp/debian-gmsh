@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -12,6 +12,7 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/types.h>
+#include <inttypes.h>
 #include "MallocUtils.h"
 #include "ListUtils.h"
 #include "TreeUtils.h"
@@ -198,7 +199,7 @@ int List_PSuppress(List_T * liste, int index)
     return (0);
 
   liste->n--;
-  len = liste->n - (((long)ptr - (long)liste->array) / liste->size);
+  len = liste->n - (((intptr_t)ptr - (intptr_t)liste->array) / liste->size);
   if(len > 0)
     memmove(ptr, ptr + liste->size, len * liste->size);
   return (1);

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -41,6 +41,7 @@ int GuessFileFormatFromFileName(std::string fileName)
   else if(ext == ".med")  return FORMAT_MED;
   else if(ext == ".ir3")  return FORMAT_IR3;
   else if(ext == ".mesh") return FORMAT_MESH;
+  else if(ext == ".mail") return FORMAT_MAIL;
   else if(ext == ".bdf")  return FORMAT_BDF;
   else if(ext == ".diff") return FORMAT_DIFF;
   else if(ext == ".inp")  return FORMAT_INP;
@@ -86,6 +87,7 @@ std::string GetDefaultFileName(int format)
   case FORMAT_MED:  name += ".med"; break;
   case FORMAT_IR3:  name += ".ir3"; break;
   case FORMAT_MESH: name += ".mesh"; break;
+  case FORMAT_MAIL: name += ".mail"; break;
   case FORMAT_BDF:  name += ".bdf"; break;
   case FORMAT_DIFF: name += ".diff"; break;
   case FORMAT_INP:  name += ".inp"; break;
@@ -225,6 +227,11 @@ void CreateOutputFile(std::string fileName, int format)
     GModel::current()->writeMESH
       (fileName, CTX::instance()->mesh.saveElementTagType, 
        CTX::instance()->mesh.saveAll, CTX::instance()->mesh.scalingFactor);
+    break;
+
+  case FORMAT_MAIL:
+    GModel::current()->writeMAIL
+      (fileName, CTX::instance()->mesh.saveAll, CTX::instance()->mesh.scalingFactor);
     break;
 
   case FORMAT_IR3:
@@ -455,7 +462,8 @@ void CreateOutputFile(std::string fileName, int format)
       int numViews = (int)opt_post_nb_views(0, GMSH_GET, 0), numSteps = 0;
       for(int i = 0; i < numViews; i++){
         if(opt_view_visible(i, GMSH_GET, 0))
-          numSteps = std::max(numSteps, (int)opt_view_nb_timestep(i, GMSH_GET, 0));
+          numSteps = std::max(numSteps,
+                              (int)opt_view_nb_non_empty_timestep(i, GMSH_GET, 0));
       }
       std::vector<std::string> frames;
       for(int i = 0; i < (CTX::instance()->post.animCycle ? numViews : numSteps); i++){

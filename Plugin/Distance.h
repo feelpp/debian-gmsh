@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -26,6 +26,7 @@ class GMSH_DistancePlugin : public GMSH_PostPlugin
   int _maxDim;
   PViewDataList *_data;
  public:
+  std::map<MVertex*,double > _distance_map;
   GMSH_DistancePlugin(); 
   std::string getName() const { return "Distance"; }
   std::string getShortHelp() const

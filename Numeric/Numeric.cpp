@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -522,7 +522,7 @@ void FindCubicRoots(const double coef[4], double real[3], double imag[3])
   double d = coef[0];
 
   if(!a || !d){
-    Msg::Error("Degenerate cubic: use a second degree solver!");
+    //    Msg::Error("Degenerate cubic: use a second degree solver!");
     return;
   }
 

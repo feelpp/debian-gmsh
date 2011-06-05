@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -10,8 +10,7 @@
 #include "GmshConfig.h"
 #include "GmshMessage.h"
 #include "linearSystem.h"
-
-class binding;
+#include "sparsityPattern.h"
 
 typedef int INDEX_TYPE ;
 typedef struct {
@@ -29,10 +28,12 @@ int  CSRList_Nbr(CSRList_T *liste);
 template <class scalar>
 class linearSystemCSR : public linearSystem<scalar> {
  protected:
+  bool _entriesPreAllocated;
   bool sorted;
   char *something;
   CSRList_T *_a, *_ai, *_ptr, *_jptr;
   std::vector<scalar> *_b, *_x;
+  sparsityPattern _sparsity; // only used for pre-allocation, does not store the sparsity once allocated
  public:
   linearSystemCSR()
     : sorted(false), _a(0), _b(0), _x(0) {}
@@ -46,8 +47,14 @@ class linearSystemCSR : public linearSystem<scalar> {
   {
     allocate(0);
   }
+  virtual void insertInSparsityPattern (int i, int j) {
+    _sparsity.insertEntry (i,j);
+  }
+  virtual void preAllocateEntries ();
   virtual void addToMatrix(int il, int ic, const scalar &val) 
   {
+    if (!_entriesPreAllocated)
+      preAllocateEntries();
     INDEX_TYPE  *jptr  = (INDEX_TYPE*) _jptr->array;
     INDEX_TYPE  *ptr   = (INDEX_TYPE*) _ptr->array;
     INDEX_TYPE  *ai    = (INDEX_TYPE*) _ai->array;
@@ -55,7 +62,30 @@ class linearSystemCSR : public linearSystem<scalar> {
 
     INDEX_TYPE  position = jptr[il];
 
-    if(something[il]) {
+    if (sorted) { // use bisection and direct adressing if sorted
+      int p0 = jptr[il];
+      int p1 = jptr[il+1];
+      while (p1-p0 > 20) {
+        position = ((p0+p1)/2);
+        if (ai[position] > ic)
+          p1 = position;
+        else  if (ai[position] < ic)
+          p0 = position + 1;
+        else {
+          a[position] += val;
+          return;
+        }
+      }
+      for (position = p0; position < p1; position++) {
+        if (ai[position] >= ic) {
+          if (ai[position] == ic){
+            a[position] += val;
+            return;
+          }
+          break;
+        }
+      }
+    } else if(something[il]) {
       while(1){
         if(ai[position] == ic){
           a[position] += val;
@@ -147,7 +177,6 @@ class linearSystemCSRGmm : public linearSystemCSR<scalar> {
   }
 #endif
   ;
-  static void registerBindings(binding *b);
 };
 
 template <class scalar>
@@ -157,8 +186,13 @@ class linearSystemCSRTaucs : public linearSystemCSR<scalar> {
   virtual ~linearSystemCSRTaucs(){}
   virtual void addToMatrix(int il, int ic, const double &val)
   {
-    if (il <= ic)
+    if (il <= ic) {
       linearSystemCSR<scalar>::addToMatrix(il, ic, val);
+    }
+  }
+  virtual void insertInSparsityPattern(int il, int ic) {
+    if (il <= ic)
+      linearSystemCSR<scalar>::insertInSparsityPattern(il,ic);
   }
   virtual int systemSolve()
 #if !defined(HAVE_TAUCS)

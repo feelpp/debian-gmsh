@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -17,9 +17,11 @@
 
 template <class scalar>
 class linearSystemGmm : public linearSystem<scalar> {
+ protected:
+  std::vector<scalar> *_x; // the nonLinearSystemGmm has to access to this vector
+  std::vector<scalar> *_b; // idem
  private:
   gmm::row_matrix<gmm::wsvector<scalar> > *_a;
-  std::vector<scalar> *_b, *_x;
   double _prec;
   int _noisy, _gmres;
  public:

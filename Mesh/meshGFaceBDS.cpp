@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -414,12 +414,14 @@ void swapEdgePass(GFace *gf, BDS_Mesh &m, int &nb_swap)
     // result = 0  => whatever
     // result = 1  => oblige to swap because the quality is greatly improved
     if (!(*it)->deleted){
-      double qual = CTX::instance()->mesh.algo2d == ALGO_2D_MESHADAPT_OLD ? 1 : 5;
-      int result = edgeSwapTestQuality(*it,qual);
-      if (CTX::instance()->mesh.algo2d == ALGO_2D_MESHADAPT_OLD)
-        { if (m.swap_edge(*it, BDS_SwapEdgeTestQuality(true)))nb_swap++; }
-      else if ( result >= 0 && edgeSwapTestDelaunay(*it,gf))
-        { if (m.swap_edge(*it, BDS_SwapEdgeTestQuality(false))) nb_swap++; }
+      double qual = (CTX::instance()->mesh.algo2d == ALGO_2D_MESHADAPT_OLD) ? 1 : 5;
+      int result = edgeSwapTestQuality(*it, qual);
+      if (CTX::instance()->mesh.algo2d == ALGO_2D_MESHADAPT_OLD){
+        if (m.swap_edge(*it, BDS_SwapEdgeTestQuality(true))) nb_swap++; 
+      }
+      else if (result >= 0 && edgeSwapTestDelaunay(*it, gf)){
+        if (m.swap_edge(*it, BDS_SwapEdgeTestQuality(false))) nb_swap++;
+      }
     }
     ++it;
   }  
@@ -556,7 +558,8 @@ void splitEdgePass(GFace *gf, BDS_Mesh &m, double MAXE_, int &nb_split)
              (coord * e->p1->u + (1 - coord) * e->p2->u)*m.scalingU,
              (coord * e->p1->v + (1 - coord) * e->p2->v)*m.scalingV,
              mid->X,mid->Y,mid->Z);
-          mid->lc() = 0.5 * (e->p1->lc() +  e->p2->lc());
+	  //          mid->lc() = exp(0.5 * (log(e->p1->lc()) +  log(e->p2->lc())));
+	  mid->lc() = 0.5 * (e->p1->lc() +  e->p2->lc());
         }
         if(!m.split_edge(e, mid)) m.del_point(mid);
         else nb_split++;

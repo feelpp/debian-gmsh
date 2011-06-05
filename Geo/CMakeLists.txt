@@ -1,4 +1,4 @@
-# Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+# Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 #
 # See the LICENSE.txt file for license information. Please report all
 # bugs and problems to <gmsh@geuz.org>.
@@ -15,12 +15,13 @@ set(SRC
   ACISEdge.cpp
   ACISFace.cpp
   GModel.cpp
-  GModelFactory.cpp
+    GModelVertexArrays.cpp
+    GModelFactory.cpp
     GModelIO_Geo.cpp
     GModelIO_Mesh.cpp
-    GModelIO_OCC.cpp
-    GModelIO_ACIS.cpp
+    GModelIO_OCC.cpp 
       OCC_Connect.cpp
+    GModelIO_ACIS.cpp
     GModelIO_Fourier.cpp
     GModelIO_CGNS.cpp
     GModelIO_MED.cpp

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -379,11 +379,14 @@ void RefineMesh(GModel *m, bool linear, bool splitIntoQuads, bool splitIntoHexas
     Subdivide(*it);
   for(GModel::fiter it = m->firstFace(); it != m->lastFace(); ++it){
     Subdivide(*it, splitIntoQuads, splitIntoHexas, faceVertices);
-    for(int i = 0; i < CTX::instance()->mesh.nbSmoothing; i++) 
-      laplaceSmoothing(*it);    
+    if (splitIntoQuads){
+      recombineIntoQuads(*it,true,true);
+    }
   }
   for(GModel::riter it = m->firstRegion(); it != m->lastRegion(); ++it)
     Subdivide(*it, splitIntoHexas, faceVertices);
+
+
 
   double t2 = Cpu();
   Msg::StatusBar(2, true, "Done refining mesh (%g s)", t2 - t1);

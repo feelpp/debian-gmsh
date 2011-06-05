@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -83,7 +83,7 @@ StringXString GeneralOptions_String[] = {
 #elif defined(__APPLE__)
     "open -t %s" ,
 #else
-    "emacs '%s' &" ,
+    "sensible-editor '%s' &" ,
 #endif
     "System command to launch a text editor" },
   { F|S, "TmpFileName" , opt_general_tmp_filename , ".gmsh-tmp" ,
@@ -95,7 +95,7 @@ StringXString GeneralOptions_String[] = {
 #elif defined(__APPLE__)
     "open %s" ,
 #else
-    "firefox %s &" ,
+    "sensible-browser %s &" ,
 #endif
     "System command to launch a web browser" },
 
@@ -126,7 +126,7 @@ StringXString SolverOptions_String[] = {
     "Name of solver 0" },
   { F|O, "Help0" , opt_solver_help0 , 
     "A General environment for the treatment of Discrete Problems\n\n"
-    "Copyright (C) 1997-2010 Patrick Dular and Christophe Geuzaine\n\n"
+    "Copyright (C) 1997-2011 Patrick Dular and Christophe Geuzaine\n\n"
     "Visit http://www.geuz.org/getdp/ for more info",
     "Help string for solver 0" },
   { F|O, "Executable0" , opt_solver_executable0 , 
@@ -506,6 +506,14 @@ StringXNumber GeneralOptions_Number[] = {
     "Y position (in pixels) of background image (< 0: measure from bottom edge; "
     ">= 1e5: centered)" },
 
+  { F|O, "Camera" , opt_general_camera_mode, 0. ,
+    "Enable camera view mode" },
+  { F|O, "CameraAperture" , opt_general_camera_aperture, 40. ,
+    "Camera aperture in degrees" },
+  { F|O, "CameraEyeSeparationRatio" , opt_general_eye_sep_ratio, 1.5 ,
+    "Eye separation ratio in % for stereo rendering" },
+  { F|O, "CameraFocalLengthRatio" , opt_general_focallength_ratio, 1.0 ,
+    "Camera Focal length ratio" },
   { F,   "Clip0A" , opt_general_clip0a , 1.0 ,
     "First coefficient in equation for clipping plane 0 (`A' in `AX+BY+CZ+D=0')" },
   { F,   "Clip0B" , opt_general_clip0b , 0.0 , 
@@ -536,7 +544,7 @@ StringXNumber GeneralOptions_Number[] = {
     "Second coefficient in equation for clipping plane 3" },
   { F,   "Clip3C" , opt_general_clip3c , 0.0 , 
     "Third coefficient in equation for clipping plane 3" },
-  { F,   "Clip3D" , opt_general_clip3d , 0.0 , 
+  { F,   "Clip3D" , opt_general_clip3d , 1.0 , 
     "Fourth coefficient in equation for clipping plane 3" },
   { F,   "Clip4A" , opt_general_clip4a , 0.0 , 
     "First coefficient in equation for clipping plane 4" },
@@ -544,7 +552,7 @@ StringXNumber GeneralOptions_Number[] = {
     "Second coefficient in equation for clipping plane 4" },
   { F,   "Clip4C" , opt_general_clip4c , 0.0 , 
     "Third coefficient in equation for clipping plane 4" },
-  { F,   "Clip4D" , opt_general_clip4d , 0.0 , 
+  { F,   "Clip4D" , opt_general_clip4d , 1.0 , 
     "Fourth coefficient in equation for clipping plane 4" },
   { F,   "Clip5A" , opt_general_clip5a , 0.0 , 
     "First coefficient in equation for clipping plane 5" },
@@ -552,7 +560,7 @@ StringXNumber GeneralOptions_Number[] = {
     "Second coefficient in equation for clipping plane 5" },
   { F,   "Clip5C" , opt_general_clip5c , -1.0 , 
     "Third coefficient in equation for clipping plane 5" },
-  { F,   "Clip5D" , opt_general_clip5d , 0.0 , 
+  { F,   "Clip5D" , opt_general_clip5d , 1.0 , 
     "Fourth coefficient in equation for clipping plane 5" },
   { F,   "ClipFactor" , opt_general_clip_factor , 5.0 , 
     "Near and far clipping plane distance factor (decrease value for better "
@@ -570,7 +578,6 @@ StringXNumber GeneralOptions_Number[] = {
     "planes window" }, 
   { F|O, "ClipWholeElements" , opt_general_clip_whole_elements , 0. , 
     "Clip whole elements" },
-
   { F|O, "ColorScheme", opt_general_color_scheme , 1. ,
     "Default color scheme (0=dark, 1=light or 2=grayscale)" },
   { F|O, "ConfirmOverwrite" , opt_general_confirm_overwrite, 1. , 
@@ -582,6 +589,8 @@ StringXNumber GeneralOptions_Number[] = {
     "Vertical position (in pixels) of the upper left corner of the contextual "
     "windows" }, 
 
+  { F|O, "DisplayBorderFactor" , opt_general_display_border_factor , 1./3. ,
+    "Border factor for model display (0: model fits window size exactly)" },
   { F|O, "DoubleBuffer" , opt_general_double_buffer , 1. ,
     "Use a double buffered graphic window (on Unix, should be set to 0 when "
     "working on a remote host without GLX)" },
@@ -592,7 +601,7 @@ StringXNumber GeneralOptions_Number[] = {
     "Enable expert mode (to disable all the messages meant for inexperienced "
     "users)" },
 
-  { F|O, "FastRedraw" , opt_general_fast_redraw, 0. ,
+ { F|O, "FastRedraw" , opt_general_fast_redraw, 0. ,
     "Draw simplified model while rotating, panning and zooming" },
   { F|S, "FieldPositionX" , opt_general_field_position0 , 650. , 
     "Horizontal position (in pixels) of the upper left corner of the field window" }, 
@@ -832,7 +841,7 @@ StringXNumber GeneralOptions_Number[] = {
   { F|S, "StatisticsPositionY" , opt_general_statistics_position1 , 150. , 
     "Vertical position (in pixels) of the upper left corner of the statistic"
     " window" }, 
-  { F|O, "Stereo" , opt_general_stereo , 0. ,
+  { F|O, "Stereo" , opt_general_stereo_mode , 0. ,
     "Use stereo rendering" },
   { F|S, "SystemMenuBar" , opt_general_system_menu_bar , 1. , 
     "Use the system menu bar on Mac OS X?" }, 
@@ -843,6 +852,8 @@ StringXNumber GeneralOptions_Number[] = {
     "Show tooltips in the user interface" },
   { F|O, "Trackball" , opt_general_trackball , 1. ,
     "Use trackball rotation mode" },
+  { F|O, "TrackballHyperbolicSheet" , opt_general_trackball_hyperbolic_sheet , 1. ,
+    "Use hyperbolic sheet away from trackball center for z-rotations" },
   { F,   "TrackballQuaternion0" , opt_general_quaternion0 , 0.0 , 
     "First trackball quaternion component (used if General.Trackball=1)" }, 
   { F,   "TrackballQuaternion1" , opt_general_quaternion1 , 0.0 , 
@@ -919,20 +930,20 @@ StringXNumber GeometryOptions_Number[] = {
   { F|O, "NumSubEdges" , opt_geometry_num_sub_edges , 20. ,
     "Number of edge subdivisions between control points when displaying curves" }, 
 
-  { F|O, "OCCFixSmallEdges" , opt_geometry_occ_fix_small_edges , 1. , 
+  { F|O, "OCCFixSmallEdges" , opt_geometry_occ_fix_small_edges , 0. , 
     "Fix small edges in STEP, IGES and BRep models" },
-  { F|O, "OCCFixSmallFaces" , opt_geometry_occ_fix_small_faces , 1. , 
+  { F|O, "OCCFixSmallFaces" , opt_geometry_occ_fix_small_faces , 0. , 
     "Fix small faces in STEP, IGES and BRep models" },
   { F|O, "OCCSewFaces" , opt_geometry_occ_sew_faces , 0. , 
     "Sew faces in STEP, IGES and BRep models" },
   { F|O, "OCCConnectFaces" , opt_geometry_occ_connect_faces , 0. , 
     "Cut and connect faces in STEP, IGES and BRep models" },
   { F,   "OffsetX" , opt_geometry_offset0 , 0. , 
-    "Model diplay offset along X-axis (in model coordinates)" },
+    "Model display offset along X-axis (in model coordinates)" },
   { F,   "OffsetY" , opt_geometry_offset1 , 0. , 
-    "Model diplay offset along Y-axis (in model coordinates)" },
+    "Model display offset along Y-axis (in model coordinates)" },
   { F,   "OffsetZ" , opt_geometry_offset2 , 0. , 
-    "Model diplay offset along Z-axis (in model coordinates)" },
+    "Model display offset along Z-axis (in model coordinates)" },
   { F|O, "OldCircle" , opt_geometry_old_circle , 0. , 
     "Use old circle description (compatibility option for old Gmsh geometries)" },
   { F|O, "OldNewReg" , opt_geometry_old_newreg , 1. , 
@@ -999,8 +1010,8 @@ StringXNumber GeometryOptions_Number[] = {
 } ;
 
 StringXNumber MeshOptions_Number[] = {
-  { F|O, "Algorithm" , opt_mesh_algo2d , ALGO_2D_MESHADAPT ,
-    "2D mesh algorithm (1=MeshAdapt, 5=Delaunay, 6=Frontal)" }, 
+  { F|O, "Algorithm" , opt_mesh_algo2d , ALGO_2D_AUTO ,
+    "2D mesh algorithm (1=MeshAdapt, 2=Automatic, 5=Delaunay, 6=Frontal, 7=bamg)" }, 
   { F|O, "Algorithm3D" , opt_mesh_algo3d , 
 #if defined(HAVE_TETGEN)
     ALGO_3D_DELAUNAY ,
@@ -1013,7 +1024,7 @@ StringXNumber MeshOptions_Number[] = {
   { F|O, "AnisoMax" , opt_mesh_aniso_max, 1.e33,
     "Maximum anisotropy of the mesh" },
   { F|O, "AllowSwapAngle" , opt_mesh_allow_swap_edge_angle , 10.0 ,
-    "Treshold angle (in degrees) between faces normals under which we allow "
+    "Threshold angle (in degrees) between faces normals under which we allow "
     "an edge swap" }, 
 
   { F|O, "BdfFieldFormat" , opt_mesh_bdf_field_format , 1. , 
@@ -1099,6 +1110,9 @@ StringXNumber MeshOptions_Number[] = {
 
   { F|O, "Hexahedra" , opt_mesh_hexahedra , 1. , 
     "Display mesh hexahedra?" },
+  { F|O, "HighOrderNoMetric" , opt_mesh_hom_no_metric , 0. , 
+    "Don't use metric computation to create high-order meshes." },
+
 
   { F|O, "LabelSampling" , opt_mesh_label_sampling , 1. , 
     "Label sampling rate (display one label every `LabelSampling' elements)" },
@@ -1138,6 +1152,8 @@ StringXNumber MeshOptions_Number[] = {
     "Version of the MSH file format to use" },
   { F|O, "MshFilePartitioned" , opt_mesh_msh_file_partitioned , 0. , 
     "Split MSH file by mesh partition" },
+  { F|O, "MultiplePassesMeshes" , opt_mesh_multiple_passes , 0. , 
+    "Do a first simple mesh and use it for complex background meshes (curvatures...)" },
   
   { F|O, "PartitionHexWeight"     , opt_mesh_partition_hex_weight , 1 , 
     "Weight of hexahedral element for METIS load balancing" },
@@ -1266,6 +1282,8 @@ StringXNumber MeshOptions_Number[] = {
     "Display faces of surface mesh?" },
   { F|O, "SurfaceNumbers" , opt_mesh_surfaces_num , 0. , 
     "Display surface mesh element numbers?" },
+  { F|O, "SwitchElementTags", opt_mesh_switch_elem_tags, 0. ,
+    "Invert elementary and physical tags when reading the mesh"},
 
   { F|O, "Tangents" , opt_mesh_tangents , 0.0 , 
     "Display size of tangent vectors (in pixels)" }, 
@@ -1330,6 +1348,9 @@ StringXNumber SolverOptions_Number[] = {
     "Automatically display messages produced by solver 3" },
   { F|O, "PopupMessages4" , opt_solver_popup_messages4 , 1. ,
     "Automatically display messages produced by solver 4" },
+
+  { F|O, "Timeout" , opt_solver_timeout , 5. ,
+    "Time (in seconds) before closing the socket if no connection is happening." },
 
   { 0, 0 , 0 , 0. , 0 }
 } ;

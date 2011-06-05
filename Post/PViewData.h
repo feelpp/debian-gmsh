@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -19,7 +19,8 @@ class GModel;
 class GEntity;
 class MElement;
 class nameData;
-class binding;
+
+typedef std::map<int, std::vector<fullMatrix<double>*> > interpolationMatrices;
 
 // The abstract interface to post-processing view data.
 class PViewData {
@@ -37,7 +38,9 @@ class PViewData {
   // adaptive visualization data
   adaptiveData *_adaptive;
   // interpolation matrices, indexed by the type of element
-  std::map<int, std::vector<fullMatrix<double>*> > _interpolation;
+  interpolationMatrices _interpolation;
+  // global map of "named" interpolation matrices
+  static std::map<std::string, interpolationMatrices> _interpolationSchemes;
 
  public:
   PViewData();
@@ -48,7 +51,8 @@ class PViewData {
   virtual void setDirty(bool val){ _dirty = val; }
 
   // finalize the view data (compute min/max, etc.)
-  virtual bool finalize(bool computeMinMax=true);
+  virtual bool finalize(bool computeMinMax=true,
+                        const std::string &interpolationScheme="");
 
   // get/set name
   virtual std::string getName(){ return _name; }
@@ -134,10 +138,6 @@ class PViewData {
   virtual void getValue(int step, int ent, int ele, int nod, int comp, double &val){}
   virtual void setValue(int step, int ent, int ele, int nod, int comp, double val);
 
-  double getValueBinding(int step, int ent, int ele, int nod, int comp);
-  void getAllValuesForElementBinding(int step, int ent, int ele, fullMatrix<double> &m);
-  void getAllNodesForElementBinding(int step, int ent, int ele, fullMatrix<double> &m);
-
   // return a scalar value (same as value for scalars, norm for
   // vectors, etc.) associated with the node-th node from the ele-th
   // element in the ent-th entity
@@ -200,7 +200,12 @@ class PViewData {
                                 const fullMatrix<double> &coefGeo, 
                                 const fullMatrix<double> &expGeo);
   int getInterpolationMatrices(int type, std::vector<fullMatrix<double>*> &p);
-  inline bool haveInterpolationMatrices(){ return !_interpolation.empty(); }
+  bool haveInterpolationMatrices(int type=0);
+
+  // access to global interpolation schemes
+  static void removeInterpolationScheme(const std::string &name);
+  static void addMatrixToInterpolationScheme(const std::string &name, int type,
+                                             fullMatrix<double> &mat);
 
   // smooth the data in the view (makes it C0)
   virtual void smooth();
@@ -221,10 +226,8 @@ class PViewData {
   virtual bool writeTXT(std::string fileName);
   virtual bool writePOS(std::string fileName, bool binary=false, bool parsed=true,
                         bool append=false);
-  virtual bool writeMSH(std::string fileName, bool binary=false);
+  virtual bool writeMSH(std::string fileName, bool binary=false, bool savemesh=true);
   virtual bool writeMED(std::string fileName);
-
-  static void registerBindings(binding *b);
 };
 
 class nameData{

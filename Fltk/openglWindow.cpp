@@ -1,8 +1,9 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
+#include <stdio.h>
 #include "openglWindow.h"
 #include "graphicWindow.h"
 #include "manipWindow.h"
@@ -14,12 +15,12 @@
 #include "MElement.h"
 #include "Numeric.h"
 #include "FlGui.h"
+#include "drawContext.h"
 #include "Context.h"
-
+ 
 static void lassoZoom(drawContext *ctx, mousePosition &click1, mousePosition &click2)
 {
-  if(click1.win[0] == click2.win[0] || click1.win[1] == click2.win[1])
-    return;
+  if(click1.win[0] == click2.win[0] || click1.win[1] == click2.win[1]) return;
 
   ctx->s[0] *= (double)ctx->viewport[2] / (click2.win[0] - click1.win[0]);
   ctx->s[1] *= (double)ctx->viewport[3] / (click2.win[1] - click1.win[1]);
@@ -33,7 +34,7 @@ static void lassoZoom(drawContext *ctx, mousePosition &click1, mousePosition &cl
 
   ctx->initPosition();
   drawContext::global()->draw();
-  FlGui::instance()->manip->update();
+  FlGui::instance()->manip->update();  
 }
 
 openglWindow::openglWindow(int x, int y, int w, int h, const char *l)
@@ -51,7 +52,7 @@ openglWindow::openglWindow(int x, int y, int w, int h, const char *l)
 
 openglWindow::~openglWindow()
 { 
-  delete _ctx; 
+  delete _ctx;
 }
 
 void openglWindow::_drawScreenMessage()
@@ -165,12 +166,15 @@ void openglWindow::draw()
       CTX::instance()->mesh.draw = 0;
       CTX::instance()->post.draw = 0;
     }
+    
     glClearColor
       ((GLclampf)(CTX::instance()->unpackRed(CTX::instance()->color.bg) / 255.),
        (GLclampf)(CTX::instance()->unpackGreen(CTX::instance()->color.bg) / 255.),
        (GLclampf)(CTX::instance()->unpackBlue(CTX::instance()->color.bg) / 255.), 
        0.0F);
+    
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+    
     _ctx->draw3d();
     glColor4ubv((GLubyte *) & CTX::instance()->color.fg);
     glPointSize((float)CTX::instance()->geom.pointSize);
@@ -191,12 +195,81 @@ void openglWindow::draw()
        (GLclampf)(CTX::instance()->unpackBlue(CTX::instance()->color.bg) / 255.), 
        0.0F);
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-    _ctx->draw3d();
-    _ctx->draw2d();
-    _drawScreenMessage();
-    _drawBorder();
+   
+    if(CTX::instance()->camera && !CTX::instance()->stereo){
+      Camera *cam = &(_ctx->camera);
+      if (!cam->on) cam->init();
+      cam->giveViewportDimension(_ctx->viewport[2],_ctx->viewport[3]);  
+      glMatrixMode(GL_PROJECTION);
+      glLoadIdentity();
+      glFrustum(cam->glFleft, cam->glFright, cam->glFbottom,
+                cam->glFtop, cam->glFnear, cam->glFfar); 
+      glMatrixMode(GL_MODELVIEW);
+      glLoadIdentity();
+      glDrawBuffer(GL_BACK);
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+      glLoadIdentity();
+      gluLookAt(cam->position.x,cam->position.y,cam->position.z,
+		cam->target.x,cam->target.y,cam->target.z,
+		cam->up.x,cam->up.y,cam->up.z);      
+      _ctx->draw3d();
+      _ctx->draw2d();
+      _drawScreenMessage();
+      _drawBorder();
+      //    glPushMatrix();
+    }
+    else if(CTX::instance()->stereo){
+      Camera *cam = &(_ctx->camera);
+      if(!cam->on) cam->init();
+      cam->giveViewportDimension(_ctx->viewport[2], _ctx->viewport[3]);
+      XYZ eye = cam->eyesep / 2.0 * cam->right;
+      // right eye
+      glMatrixMode(GL_PROJECTION);
+      glLoadIdentity();
+      double left   = - cam->screenratio * cam->wd2 - 0.5 * cam->eyesep * cam->ndfl;
+      double right  =   cam->screenratio * cam->wd2 - 0.5 * cam->eyesep * cam->ndfl;
+      double top    =   cam->wd2;
+      double bottom = - cam->wd2;
+      glFrustum(left, right, bottom, top, cam->glFnear, cam->glFfar);
+      glMatrixMode(GL_MODELVIEW);
+      glDrawBuffer(GL_BACK_RIGHT);
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+      glLoadIdentity();
+      gluLookAt(cam->position.x+eye.x, cam->position.y+eye.y, cam->position.z+eye.z,
+                cam->target.x+eye.x, cam->target.y+eye.y, cam->target.z+eye.z,
+                cam->up.x,  cam->up.y, cam->up.z); 
+      _ctx->draw3d();
+      _ctx->draw2d();
+      _drawScreenMessage();
+      _drawBorder();
+      // left eye
+      glMatrixMode(GL_PROJECTION);
+      glLoadIdentity();
+      left   = - cam->screenratio * cam->wd2 + 0.5 * cam->eyesep * cam->ndfl;
+      right  =   cam->screenratio * cam->wd2 + 0.5 * cam->eyesep * cam->ndfl;
+      top    =   cam->wd2;
+      bottom = - cam->wd2;
+      glFrustum(left, right, bottom, top, cam->glFnear, cam->glFfar);
+      
+      glMatrixMode(GL_MODELVIEW);
+      glDrawBuffer(GL_BACK_LEFT);
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+      glLoadIdentity();
+      gluLookAt(cam->position.x-eye.x, cam->position.y-eye.y, cam->position.z-eye.z,
+                cam->target.x-eye.x, cam->target.y-eye.y, cam->target.z-eye.z,
+                cam->up.x, cam->up.y, cam->up.z); 
+      _ctx->draw3d();
+      _ctx->draw2d();
+      _drawScreenMessage();
+      _drawBorder();
+    }
+    else{
+      _ctx->draw3d();
+      _ctx->draw2d();
+      _drawScreenMessage();
+      _drawBorder();
+    }
   }
-
   _lock = false;
 }
 
@@ -245,7 +318,26 @@ int openglWindow::handle(int event)
           _trySelectionXYWH[3] = (int)fabs(_click.win[1] - _curr.win[1]);
         }
         else{
-          lassoZoom(_ctx, _click, _curr);
+	  if (CTX::instance()->camera){
+	    Camera * cam = &(_ctx->camera);      
+	    double dy = fabs(-_click.win[1] + _curr.win[1]);
+	    double dx = fabs(-_click.win[0] + _curr.win[0]);
+	    double factx = w() / fabs(dx);
+	    double facty = h() / fabs(dy);
+	    double fact = .8 * std::min(factx, facty);
+	    double x_med = (_click.win[0] + _curr.win[0]) / 2.;
+	    double y_med = (_click.win[1] + _curr.win[1]) / 2.;
+	    double theta_x = .96 * cam->radians * (w() / 2 - x_med) * 2. / h();
+	    double theta_y = .96 * cam->radians * (h() / 2 - y_med) * 2. / h();
+	    cam->moveRight(theta_x); 
+	    cam->moveUp(theta_y); 
+	    _ctx->camera.zoom(fact);
+	    _ctx->camera.update();
+	    redraw();
+	  }
+	  else{
+	    lassoZoom(_ctx, _click, _curr);
+	  }
         }
       }
       else if(CTX::instance()->mouseSelection){
@@ -261,9 +353,9 @@ int openglWindow::handle(int event)
             (Fl::event_button() == 1 && Fl::event_state(FL_SHIFT))) {
       if(!lassoMode && Fl::event_state(FL_CTRL)) {
         // make zoom isotropic
-        _ctx->s[1] = _ctx->s[0];
-        _ctx->s[2] = _ctx->s[0];
-        redraw();
+	_ctx->s[1] = _ctx->s[0];
+	_ctx->s[2] = _ctx->s[0];
+	redraw();
       }
       else if(lassoMode) {
         lassoMode = false;
@@ -304,7 +396,7 @@ int openglWindow::handle(int event)
     }
     _click.set(_ctx, Fl::event_x(), Fl::event_y());
     _prev.set(_ctx, Fl::event_x(), Fl::event_y());
-    FlGui::instance()->manip->update();
+   FlGui::instance()->manip->update();
     return 1;
 
   case FL_RELEASE:
@@ -322,11 +414,19 @@ int openglWindow::handle(int event)
     {
       double dy = Fl::event_dy();
       double fact = (5. * CTX::instance()->zoomFactor * fabs(dy) + h()) / (double)h();
-      _ctx->s[0] *= ((dy > 0) ? fact : 1./fact);
-      _ctx->s[1] = _ctx->s[0];
-      _ctx->s[2] = _ctx->s[0];
-      _prev.recenter(_ctx);
-      redraw();
+      if (CTX::instance()->camera){
+	fact = ((dy > 0) ? fact : 1. / fact);
+	_ctx->camera.zoom(fact);
+       	_ctx->camera.update();
+	redraw();	
+      }
+      else{
+	_ctx->s[0] *= ((dy > 0) ? fact : 1./fact);
+	_ctx->s[1] = _ctx->s[0];
+	_ctx->s[2] = _ctx->s[0];
+	_prev.recenter(_ctx);
+	redraw();	
+      }
     }
     FlGui::instance()->manip->update();
     return 1;
@@ -348,6 +448,7 @@ int openglWindow::handle(int event)
           _trySelectionXYWH[2] = 5;
           _trySelectionXYWH[3] = 5;
         }
+	// (m1) and (!shift) and (!alt)  => rotation
         else if(Fl::event_button() == 1 && 
                 !Fl::event_state(FL_SHIFT) && !Fl::event_state(FL_ALT)) {
           if(CTX::instance()->useTrackball)
@@ -360,22 +461,49 @@ int openglWindow::handle(int event)
             _ctx->r[0] += ((fabs(dx) > fabs(dy)) ? 0. : 180. * dy / (double)h());
           }
         }
+	// m2 or (m1 and shift) => zoom (only move in y is used)
+	// but start point is the center of the homothety
         else if(Fl::event_button() == 2 ||
                 (Fl::event_button() == 1 && Fl::event_state(FL_SHIFT))) {
-          if(fabs(dy) > fabs(dx)) {
-            double fact = (CTX::instance()->zoomFactor * fabs(dy) + h()) / (double)h();
-            _ctx->s[0] *= ((dy > 0) ? fact : 1./fact);
-            _ctx->s[1] = _ctx->s[0];
-            _ctx->s[2] = _ctx->s[0];
-            _click.recenter(_ctx);
-          }
-          else if(!CTX::instance()->useTrackball)
-            _ctx->r[2] += -180. * dx / (double)w();
+	  // isotrop zoom in camera mode
+	  if (CTX::instance()->camera){
+	    double dy= (int)_curr.win[1] - (int)_prev.win[1];
+	    double fact = (CTX::instance()->zoomFactor * fabs(dy) + (double)h()) /
+              (double)h();
+	    fact= ((dy > 0) ? fact : 1./fact);
+	    _ctx->camera.zoom(fact);
+	    _ctx->camera.update();
+	    redraw();
+	  }	
+	  else{          
+            // move in y greater than move in x
+	    if(fabs(dy) > fabs(dx)) {
+	      double fact = (CTX::instance()->zoomFactor * fabs(dy) + h()) / (double)h();
+	      _ctx->s[0] *= ((dy > 0) ? fact : 1./fact);
+	      _ctx->s[1] = _ctx->s[0];
+	      _ctx->s[2] = _ctx->s[0];
+	      _click.recenter(_ctx);
+	    }
+	    else if(!CTX::instance()->useTrackball)
+	      _ctx->r[2] += -180. * dx / (double)w();
+	  }
         }
-        else {
-          _ctx->t[0] += (_curr.wnr[0] - _click.wnr[0]);
-          _ctx->t[1] += (_curr.wnr[1] - _click.wnr[1]);
-          _ctx->t[2] = 0.;
+        // other case => translation
+	else {
+	  if (CTX::instance()->camera){
+	    Camera * cam= &(_ctx->camera);      
+	    double theta_x = cam->radians * (-(double)_prev.win[0] + 
+                                             (double)_curr.win[0]) * 2. / h();
+	    double theta_y = cam->radians * (-(double)_prev.win[1] +
+                                             (double)_curr.win[1]) * 2. / h();
+	    cam->moveRight(theta_x); 
+	    cam->moveUp(theta_y); 
+	  }	
+	  else{          
+	    _ctx->t[0] += (_curr.wnr[0] - _click.wnr[0]);
+	    _ctx->t[1] += (_curr.wnr[1] - _click.wnr[1]);
+	    _ctx->t[2] = 0.;
+	  }
         }
         CTX::instance()->drawRotationCenter = 1;
         if(CTX::instance()->fastRedraw) {
@@ -399,7 +527,7 @@ int openglWindow::handle(int event)
       // find line in real space corresponding to current cursor position
       double p[3], d[3];
       _ctx->unproject(_curr.win[0], _curr.win[1], p, d);
-      // fin closest point to the center of gravity
+      // find closest point to the center of gravity
       double r[3] = {CTX::instance()->cg[0] - p[0], CTX::instance()->cg[1] - p[1], 
                      CTX::instance()->cg[2] - p[2]}, t;
       prosca(r, d, &t);

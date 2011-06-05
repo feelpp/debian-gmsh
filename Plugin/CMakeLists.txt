@@ -1,4 +1,4 @@
-# Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+# Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 #
 # See the LICENSE.txt file for license information. Please report all
 # bugs and problems to <gmsh@geuz.org>.
@@ -24,7 +24,8 @@ set(SRC
   HarmonicToTime.cpp ModulusPhase.cpp
   HomologyComputation.cpp
   Distance.cpp ExtractEdges.cpp NearestNeighbor.cpp
-  AnalyseCurvedMesh.cpp
+  AnalyseCurvedMesh.cpp FieldFromAmplitudePhase.cpp
+  Bubbles.cpp
 )
 
 file(GLOB HDR RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.h) 

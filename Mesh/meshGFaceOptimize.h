@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -14,6 +14,7 @@
 #include "STensor3.h"
 
 class GFace;
+class GVertex;
 class MVertex;
 
 class edge_angle {
@@ -30,15 +31,35 @@ class edge_angle {
 typedef std::map<MVertex*, std::vector<MElement*> > v2t_cont;
 typedef std::map<MEdge, std::pair<MElement*, MElement*>, Less_Edge> e2t_cont;
 
-template <class T> void buildVertexToElement(std::vector<T*> &eles, v2t_cont &adj);
+template <class T> void buildVertexToElement(std::vector<T*> &eles, v2t_cont &adj){
+  for(unsigned int i = 0; i < eles.size(); i++){
+    T *t = eles[i];
+    for(int j = 0; j < t->getNumVertices(); j++){
+      MVertex *v = t->getVertex(j);
+      v2t_cont :: iterator it = adj.find(v);
+      if(it == adj.end()){
+        std::vector<MElement*> one;
+        one.push_back(t);
+        adj[v] = one;
+      }
+      else{
+        it->second.push_back(t);
+      }
+    }
+  }
+}
 template <class T> void buildEdgeToElement(std::vector<T*> &eles, e2t_cont &adj);
 
 void buildVertexToTriangle(std::vector<MTriangle*> &, v2t_cont &adj);
 void buildEdgeToTriangle(std::vector<MTriangle*> &, e2t_cont &adj);
 void buildListOfEdgeAngle(e2t_cont adj, std::vector<edge_angle> &edges_detected,
                           std::vector<edge_angle> &edges_lonly);
-void laplaceSmoothing(GFace *gf);
+void buildEdgeToElements(std::vector<MElement*> &tris, e2t_cont &adj);
+
+void laplaceSmoothing(GFace *gf, int niter=1);
+/*
 void edgeSwappingLawson(GFace *gf);
+*/
 
 enum swapCriterion {SWCR_DEL, SWCR_QUAL, SWCR_NORM, SWCR_CLOSE};
 enum splitCriterion {SPCR_CLOSE, SPCR_QUAL, SPCR_ALLWAYS};
@@ -50,20 +71,20 @@ int edgeSwapPass(GFace *gf,
                  const std::vector<double> &Vs,
                  const std::vector<double> &vSizes, 
                  const std::vector<double> &vSizesBGM);
-int edgeSplitPass(double maxLC, GFace *gf, 
+/*int edgeSplitPass(double maxLC, GFace *gf, 
                   std::set<MTri3*, compareTri3Ptr> &allTris,
                   const splitCriterion &cr,   
                   std::vector<double> &Us,
                   std::vector<double> &Vs,
                   std::vector<double> &vSizes ,
                   std::vector<double> &vSizesBGM);
-void removeFourTrianglesNodes(GFace *gf, bool replace_by_quads);
 int edgeCollapsePass(double minLC, GFace *gf, 
                      std::set<MTri3*, compareTri3Ptr> &allTris,
                      std::vector<double> &Us,
                      std::vector<double> &Vs,
                      std::vector<double> &vSizes ,
-                     std::vector<double> &vSizesBGM);
+                     std::vector<double> &vSizesBGM);*/
+void removeFourTrianglesNodes(GFace *gf, bool replace_by_quads);
 void buildMeshGenerationDataStructures(GFace *gf, 
                                        std::set<MTri3*, compareTri3Ptr> &AllTris,
                                        std::vector<double> &vSizes,
@@ -73,7 +94,10 @@ void buildMeshGenerationDataStructures(GFace *gf,
                                        std::vector<double> &Vs);
 void transferDataStructure(GFace *gf, std::set<MTri3*, compareTri3Ptr> &AllTris,
                            std::vector<double> &Us, std::vector<double> &Vs);
-void recombineIntoQuads(GFace *gf);
+void recombineIntoQuads(GFace *gf, 
+			bool topologicalOpti   = true, 
+			bool nodeRepositioning = true);
+void recombineIntoQuadsIterative(GFace *gf);
 
 struct swapquad{
   int v[4];
@@ -104,6 +128,23 @@ struct swapquad{
     v[3] = v4;
     std::sort(v, v + 4);
   }
+};
+
+class Temporary{
+  private :
+	static double w1,w2,w3;
+	static std::vector<SVector3> gradients;
+	void read_data(std::string);
+	static SVector3 compute_normal(MElement*);
+	static SVector3 compute_other_vector(MElement*);
+	static SVector3 compute_gradient(MElement*);
+  public :
+	Temporary();
+	~Temporary();
+	void quadrilaterize(std::string,double,double,double);
+	static double compute_total_cost(double,double);
+	static void select_weights(double,double,double);
+	static double compute_alignment(const MEdge&,MElement*,MElement*);
 };
 
 #endif
