@@ -4,7 +4,27 @@ Source: http://www.geuz.org/gmsh/#Download
 Files: *
 Copyright: 1997-2011 Christophe Geuzaine <geuzaine@acm.caltech.edu>
                      Jean-Francois Remacle <remacle@gce.ucl.ac.be>
-License: GPL-2+
+License: GPL-2+, with the following exception:
+ The copyright holders of Gmsh give you permission to combine Gmsh
+ with code included in the standard release of TetGen (from Hang Si),
+ Netgen (from Joachim Sch"oberl), Chaco (from Bruce Hendrickson and
+ Robert Leland at Sandia National Laboratories) and METIS (from
+ George Karypis at the University of Minnesota) under their
+ respective licenses. You may copy and distribute such a system
+ following the terms of the GNU GPL for Gmsh and the licenses of the
+ other code concerned, provided that you include the source code of
+ that other code when and as the GNU GPL requires distribution of
+ source code.
+ .
+ Note that people who make modified versions of Gmsh are not
+ obligated to grant this special exception for their modified
+ versions; it is their choice whether to do so. The GNU General
+ Public License gives permission to release a modified version
+ without this exception; this exception also makes it possible to
+ release a modified version which carries forward this exception.
+ .
+ End of exception.
+ .
  This program is free software; you can redistribute it
  and/or modify it under the terms of the GNU General Public
  License as published by the Free Software Foundation; either
@@ -30,10 +50,28 @@ Copyright: 1997-2010 Christophe Prud'homme <prudhomm@debian.org>
                 2010 Christophe Trophime <christophe.trophime@grenoble.cnrs.fr>
                 2011 Anton Gladky <gladky.anton@gmail.com>
 License: GPL-2+
- The full text see above.
+ This program is free software; you can redistribute it
+ and/or modify it under the terms of the GNU General Public
+ License as published by the Free Software Foundation; either
+ version 2 of the License, or any later version.
+ .
+ This program is distributed in the hope that it will be
+ useful, but WITHOUT ANY WARRANTY; without even the implied
+ warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+ PURPOSE.  See the GNU General Public License for more
+ details.
+ .
+ You should have received a copy of the GNU General Public
+ License along with this package; if not, write to the Free
+ Software Foundation, Inc., 51 Franklin St, Fifth Floor,
+ Boston, MA  02110-1301 USA
+ .
+ On Debian systems, the full text of the GNU General Public
+ License version 2 can be found in the file
+ `/usr/share/common-licenses/GPL-2'.
 
 Files: contrib/Chaco/*
-Copyright: 1997-2010 
+Copyright: 1997-2011 Sandia Corporation
 License: LGPL-2.1
  This software was developed by Bruce Hendrickson and Robert Leland
  at Sandia National Laboratories under US Department of Energy
@@ -44,6 +82,13 @@ License: LGPL-2.1
  defined as Gmsh_printf to write through a Gmsh Msg::Info.  All other
  modifications are tagged by 'Gmsh' and 'Gmsh - end'
  .
+ On Debian systems, the full text of the GNU LESSER GENERAL PUBLIC 
+ LICENSE version 2.1 can be found in the file
+ `/usr/share/common-licenses/LGPL-2.1'.
+
+Files: contrib/Netgen/*
+Copyright: 1997-2011 Dr. Joachim Schöberl <js@jku.at> 
+License: LGPL-2.1
  On Debian systems, the full text of the GNU LESSER GENERAL PUBLIC 
  LICENSE version 2.1 can be found in the file
  `/usr/share/common-licenses/LGPL-2.1'.
