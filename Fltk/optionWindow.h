@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -7,6 +7,7 @@
 #define _OPTION_WINDOW_H_
 
 #include <FL/Fl_Window.H>
+#include <FL/Fl_Value_Slider.H>
 #include <FL/Fl_Hold_Browser.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Return_Button.H>
@@ -20,6 +21,8 @@
 #include "spherePositionWidget.h"
 #include "colorbarWindow.h"
 
+
+
 #define NUM_FONTS 14
 extern Fl_Menu_Item menu_font_names[];
 
@@ -28,6 +31,7 @@ class optionWindow{
   Fl_Window *win;
   Fl_Hold_Browser *browser;
   Fl_Return_Button *redraw;
+
   struct{
     Fl_Group *group;
     Fl_Check_Button *butt[21];
@@ -98,5 +102,5 @@ void mesh_options_cb(Fl_Widget *w, void *data);
 void solver_options_cb(Fl_Widget *w, void *data);
 void post_options_cb(Fl_Widget *w, void *data);
 void view_options_cb(Fl_Widget *w, void *data);
-
 #endif
+

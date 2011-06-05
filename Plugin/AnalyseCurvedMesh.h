@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -38,7 +38,7 @@ class GMSH_AnalyseCurvedMeshPlugin : public GMSH_PostPlugin
   //int checkJacobian(MElement *, int depth);
   //int *checkJacobian2(MElement *const *, int numEl, int depth);
   int *checkJacobian(MElement *const *, int numEl, int depth, int method);
-  int division(const JacobianBasis *, const fullVector<double> &, int depth);
+  int division(const bezierBasis *, const fullVector<double> &, int depth);
 };
 
 #endif

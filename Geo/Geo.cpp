@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -875,6 +875,80 @@ PhysicalGroup *FindPhysicalGroup(int num, int type)
   return NULL;
 }
 
+static void GetAllEntityNumbers(int dim, std::set<int> &nums)
+{
+  GModel *m = GModel::current();
+  switch(dim){
+  case 0:
+    {
+      List_T *l = Tree2List(m->getGEOInternals()->Points);
+      Vertex *p;
+      for(int i = 0; i < List_Nbr(l); i++){
+        List_Read(l, i, &p);
+        nums.insert(p->Num);
+      }
+      List_Delete(l);
+      for(GModel::viter it = m->firstVertex(); it != m->lastVertex(); it++)
+        nums.insert((*it)->tag());
+    }
+    break;
+  case 1:
+    {
+      List_T *l = Tree2List(m->getGEOInternals()->Curves);
+      Curve *p;
+      for(int i = 0; i < List_Nbr(l); i++){
+        List_Read(l, i, &p);
+        if(p->Num >= 0)
+          nums.insert(p->Num);
+      }
+      List_Delete(l);
+      for(GModel::eiter it = m->firstEdge(); it != m->lastEdge(); it++){
+        if((*it)->tag() >= 0)
+          nums.insert((*it)->tag());
+      }
+    }
+    break;
+  case 2:
+    {
+      List_T *l = Tree2List(m->getGEOInternals()->Surfaces);
+      Surface *p;
+      for(int i = 0; i < List_Nbr(l); i++){
+        List_Read(l, i, &p);
+        nums.insert(p->Num);
+      }
+      List_Delete(l);
+      for(GModel::fiter it = m->firstFace(); it != m->lastFace(); it++)
+        nums.insert((*it)->tag());
+    }
+    break;
+  case 3:
+    {
+      List_T *l = Tree2List(m->getGEOInternals()->Volumes);
+      Volume *p;
+      for(int i = 0; i < List_Nbr(l); i++){
+        List_Read(l, i, &p);
+        nums.insert(p->Num);
+      }
+      List_Delete(l);
+      for(GModel::riter it = m->firstRegion(); it != m->lastRegion(); it++)
+        nums.insert((*it)->tag());
+    }
+    break;
+  }
+}
+
+List_T *GetAllEntityNumbers(int dim)
+{
+  std::set<int> nums;
+  GetAllEntityNumbers(dim, nums);
+  List_T *l = List_Create(nums.size(), 1, sizeof(double));
+  for(std::set<int>::iterator it = nums.begin(); it != nums.end(); it++){
+    double a = *it;
+    List_Add(l, &a);
+  }
+  return l;
+}
+
 static void CopyVertex(Vertex *v, Vertex *vv)
 {
   vv->lc = v->lc;
@@ -1062,7 +1136,7 @@ static void DeletePoint(int ip)
     List_Read(Curves, i, &c);
     for(int j = 0; j < List_Nbr(c->Control_Points); j++) {
       if(!compareVertex(List_Pointer(c->Control_Points, j), &v)){
-                                        List_Delete(Curves);
+        List_Delete(Curves);
         return;
       }
     }
@@ -1259,14 +1333,10 @@ void VisibilityShape(int Type, int Num, int Mode)
   switch (Type) {
   case MSH_POINT:
   case MSH_POINT_FROM_GMODEL:
-    if((v = FindPoint(Num)))
-      v->Visible = Mode;
-    else{
+    {
+      if((v = FindPoint(Num))) v->Visible = Mode;
       GVertex *gv = GModel::current()->getVertexByTag(Num);
-      if(gv)
-        gv->setVisibility(Mode);
-      else
-        Msg::Warning("Unknown point %d (use '*' to hide/show all points)", Num);
+      if(gv) gv->setVisibility(Mode);
     }
     break;
   case MSH_SEGM_LINE:
@@ -1281,14 +1351,10 @@ void VisibilityShape(int Type, int Num, int Mode)
   case MSH_SEGM_DISCRETE:
   case MSH_SEGM_COMPOUND:
   case MSH_SEGM_FROM_GMODEL:
-    if((c = FindCurve(Num)))
-      c->Visible = Mode;
-    else{
+    {
+      if((c = FindCurve(Num))) c->Visible = Mode;
       GEdge *ge = GModel::current()->getEdgeByTag(Num);
-      if(ge)
-        ge->setVisibility(Mode);
-      else
-        Msg::Warning("Unknown line %d (use '*' to hide/show all lines)", Num);
+      if(ge) ge->setVisibility(Mode);
     }
     break;
   case MSH_SURF_TRIC:
@@ -1297,28 +1363,20 @@ void VisibilityShape(int Type, int Num, int Mode)
   case MSH_SURF_DISCRETE:
   case MSH_SURF_COMPOUND:
   case MSH_SURF_FROM_GMODEL:
-    if((s = FindSurface(Num)))
-      s->Visible = Mode;
-    else{
+    {
+      if((s = FindSurface(Num))) s->Visible = Mode;
       GFace *gf = GModel::current()->getFaceByTag(Num);
-      if(gf)
-        gf->setVisibility(Mode);
-      else
-        Msg::Warning("Unknown surface %d (use '*' to hide/show all surfaces)", Num);
+      if(gf) gf->setVisibility(Mode);
     }
     break;
   case MSH_VOLUME:
   case MSH_VOLUME_DISCRETE:
   case MSH_VOLUME_COMPOUND:
   case MSH_VOLUME_FROM_GMODEL:
-    if((V = FindVolume(Num)))
-      V->Visible = Mode;
-    else{
+    {
+      if((V = FindVolume(Num))) V->Visible = Mode;
       GRegion *gr = GModel::current()->getRegionByTag(Num);
-      if(gr)
-        gr->setVisibility(Mode);
-      else
-        Msg::Warning("Unknown volume %d (use '*' to hide/show all volumes)", Num);
+      if(gr) gr->setVisibility(Mode);
     }
     break;
   default:
@@ -1886,6 +1944,7 @@ void BoundaryShapes(List_T *shapes, List_T *shapesBoundary, bool combined)
     switch (O.Type) {
     case MSH_POINT:
     case MSH_POINT_BND_LAYER:
+    case MSH_POINT_FROM_GMODEL:
       return;
       break;
     case MSH_SEGM_LINE:
@@ -1918,6 +1977,27 @@ void BoundaryShapes(List_T *shapes, List_T *shapesBoundary, bool combined)
           Msg::Error("Unknown curve %d", O.Num);
       }
       break;
+    case MSH_SEGM_FROM_GMODEL:
+      {
+        GEdge *ge = GModel::current()->getEdgeByTag(O.Num);
+        if(ge){
+          if(ge->getBeginVertex()){
+            Shape sh;
+            sh.Type = MSH_POINT_FROM_GMODEL;
+            sh.Num = ge->getBeginVertex()->tag();
+            List_Add(shapesBoundary, &sh);
+          }
+          if(ge->getEndVertex()){
+            Shape sh;
+            sh.Type = MSH_POINT_FROM_GMODEL;
+            sh.Num = ge->getEndVertex()->tag();
+            List_Add(shapesBoundary, &sh);
+          }
+        }
+        else
+          Msg::Error("Unknown curve %d", O.Num);
+      }
+      break;
     case MSH_SURF_PLAN:
     case MSH_SURF_REGL:
     case MSH_SURF_TRIC:
@@ -1938,6 +2018,22 @@ void BoundaryShapes(List_T *shapes, List_T *shapesBoundary, bool combined)
           Msg::Error("Unknown surface %d", O.Num);
       }
       break;
+    case MSH_SURF_FROM_GMODEL:
+      {
+        GFace *gf = GModel::current()->getFaceByTag(O.Num);
+        if(gf){
+          std::list<GEdge*> edges(gf->edges());
+          for(std::list<GEdge*>::iterator it = edges.begin(); it != edges.end(); it++){
+            Shape sh;
+            sh.Type = MSH_SEGM_FROM_GMODEL;
+            sh.Num = (*it)->tag();
+            List_Add(shapesBoundary, &sh);
+          }
+        }
+        else
+          Msg::Error("Unknown surface %d", O.Num);
+      }
+      break;
     case MSH_VOLUME:
       {
         Volume *v = FindVolume(O.Num);
@@ -1948,6 +2044,22 @@ void BoundaryShapes(List_T *shapes, List_T *shapesBoundary, bool combined)
             Shape sh;
             sh.Type = s->Typ;
             sh.Num = s->Num;
+            List_Add(shapesBoundary, &sh);
+          }
+        }
+        else
+          Msg::Error("Unknown volume %d", O.Num);
+      }
+      break;
+    case MSH_VOLUME_FROM_GMODEL:
+      {
+        GRegion *gr = GModel::current()->getRegionByTag(O.Num);
+        if(gr){
+          std::list<GFace*> faces(gr->faces());
+          for(std::list<GFace*>::iterator it = faces.begin(); it != faces.end(); it++){
+            Shape sh;
+            sh.Type = MSH_SURF_FROM_GMODEL;
+            sh.Num = (*it)->tag();
             List_Add(shapesBoundary, &sh);
           }
         }
@@ -2061,12 +2173,12 @@ static int Extrude_ProtudePoint(int type, int ip,
     break;
   case BOUNDARY_LAYER:
     chapeau->Typ = MSH_POINT_BND_LAYER;
+    if(e) chapeau->boundaryLayerIndex = e->mesh.BoundaryLayerIndex;
     c = Create_Curve(NEWLINE(), MSH_SEGM_BND_LAYER, 1, NULL, NULL, -1, -1, 0., 1.);
     c->Control_Points = List_Create(2, 1, sizeof(Vertex *));
     c->Extrude = new ExtrudeParams;
     c->Extrude->fill(type, T0, T1, T2, A0, A1, A2, X0, X1, X2, alpha);
-    if(e)
-      c->Extrude->mesh = e->mesh;
+    if(e) c->Extrude->mesh = e->mesh;
     List_Add(c->Control_Points, &pv);
     List_Add(c->Control_Points, &chapeau);
     c->beg = pv;
@@ -2227,8 +2339,19 @@ static int Extrude_ProtudeCurve(int type, int ic,
     break;
   case BOUNDARY_LAYER:
     chapeau->Typ = MSH_SEGM_BND_LAYER;
-    if(chapeau->beg) chapeau->beg->Typ = MSH_POINT_BND_LAYER;
-    if(chapeau->end) chapeau->end->Typ = MSH_POINT_BND_LAYER;
+    if(chapeau->beg){
+      chapeau->beg->Typ = MSH_POINT_BND_LAYER;
+      if(e) chapeau->beg->boundaryLayerIndex = e->mesh.BoundaryLayerIndex;
+    }
+    if(chapeau->end){
+      chapeau->end->Typ = MSH_POINT_BND_LAYER;
+      if(e) chapeau->end->boundaryLayerIndex = e->mesh.BoundaryLayerIndex;
+    }
+    for(int i = 0; i < List_Nbr(chapeau->Control_Points); i++){
+      Vertex *v;
+      List_Read(chapeau->Control_Points, i, &v);
+      if(e) v->boundaryLayerIndex = e->mesh.BoundaryLayerIndex;
+    }
     revpc = FindCurve(-chapeau->Num);
     if(revpc) revpc->Typ = MSH_SEGM_BND_LAYER;
     break;
@@ -2441,8 +2564,19 @@ static int Extrude_ProtudeSurface(int type, int is,
       c->Typ = MSH_SEGM_BND_LAYER;
       c = FindCurve(-c->Num);
       c->Typ = MSH_SEGM_BND_LAYER;
-      if(c->beg) c->beg->Typ = MSH_POINT_BND_LAYER;
-      if(c->end) c->end->Typ = MSH_POINT_BND_LAYER;
+      if(c->beg){
+        c->beg->Typ = MSH_POINT_BND_LAYER;
+        if(e) c->beg->boundaryLayerIndex = e->mesh.BoundaryLayerIndex;
+      }
+      if(c->end){
+        c->end->Typ = MSH_POINT_BND_LAYER;
+        if(e) c->end->boundaryLayerIndex = e->mesh.BoundaryLayerIndex;
+      }
+      for(int i = 0; i < List_Nbr(c->Control_Points); i++){
+        Vertex *v;
+        List_Read(c->Control_Points, i, &v);
+        if(e) v->boundaryLayerIndex = e->mesh.BoundaryLayerIndex;
+      }
     }
     break;
   case ROTATE:
@@ -2652,7 +2786,11 @@ static int compareTwoPoints(const void *a, const void *b)
   Vertex *q = *(Vertex **)a;
   Vertex *w = *(Vertex **)b;
 
-  if(q->Typ != w->Typ) return q->Typ - w->Typ;
+  if(q->Typ != w->Typ) 
+    return q->Typ - w->Typ;
+
+  if(q->boundaryLayerIndex != w->boundaryLayerIndex) 
+    return q->boundaryLayerIndex - w->boundaryLayerIndex;
 
   return comparePosition(a, b);
 }
@@ -2699,7 +2837,6 @@ static int compareTwoCurves(const void *a, const void *b)
         return comp;
     }
   }
-
   return 0;
 }
 

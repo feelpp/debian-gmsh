@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -48,6 +48,8 @@
 #include "GSHHS.h"
 #include "HomologyComputation.h"
 #include "ExtractEdges.h"
+#include "FieldFromAmplitudePhase.h"
+#include "Bubbles.h"
 
 // for testing purposes only :-)
 #undef HAVE_DLOPEN
@@ -219,6 +221,10 @@ void PluginManager::registerDefaultPlugins()
                       ("GSHHS", GMSH_RegisterGSHHSPlugin()));
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("ExtractEdges", GMSH_RegisterExtractEdgesPlugin()));
+    allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
+                      ("FieldFromAmplitudePhase", GMSH_RegisterFieldFromAmplitudePhasePlugin()));
+    allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
+                      ("Bubbles", GMSH_RegisterBubblesPlugin()));
 #if defined(HAVE_TETGEN)
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("Tetrahedralize", GMSH_RegisterTetrahedralizePlugin()));

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <inttypes.h>
 #include <time.h>
 #include <FL/Fl_Box.H>
 #include <FL/fl_ask.H>
@@ -81,32 +82,16 @@ static void file_new_cb(Fl_Widget *w, void *data)
 #if defined(HAVE_NATIVE_FILE_CHOOSER)
 #  define TT "\t"
 #  define NN "\n"
-#  if defined(__APPLE__)
-#    define SEPARATOR_IN    " " TT "*" NN
-#    define SEPARATOR_OUT  {" " TT "*.*", _save_auto},
-#  else
-#    define SEPARATOR_IN
-#    define SEPARATOR_OUT
-#  endif
 #else
 #  define TT " ("
 #  define NN ")\t"
-#  define SEPARATOR_IN
-#  define SEPARATOR_OUT
 #endif
 
 static const char *input_formats =
   "All Files" TT "*" NN
-  SEPARATOR_IN
   "Gmsh Geometry" TT "*.geo" NN
-#if defined(HAVE_LUA)
-  "Gmsh LUA Script" TT "*.lua" NN
-#endif
   "Gmsh Mesh" TT "*.msh" NN
   "Gmsh Post-processing View" TT "*.pos" NN
-#if defined(HAVE_ACIS) || defined(HAVE_OCC)
-  SEPARATOR_IN
-#endif
 #if defined(HAVE_ACIS)
   "ACIS Model" TT "*.sat" NN
 #endif
@@ -115,7 +100,6 @@ static const char *input_formats =
   "IGES Model" TT "*.{igs,iges}" NN
   "STEP Model" TT "*.{stp,step}" NN
 #endif
-  SEPARATOR_IN
   "Diffpack 3D Mesh" TT "*.diff" NN
   "I-deas Universal Mesh" TT "*.unv" NN
 #if defined(HAVE_MED)
@@ -128,7 +112,6 @@ static const char *input_formats =
   "VTK Mesh" TT "*.vtk" NN
   "VRML Surface Mesh" TT "*.{wrl,vrml}" NN
   "PLY2 Surface Mesh" TT "*.{ply2}" NN
-  SEPARATOR_IN
   "BMP" TT "*.bmp" NN
 #if defined(HAVE_LIBJPEG)
   "JPEG" TT "*.{jpg,jpeg}" NN
@@ -245,6 +228,7 @@ static void file_window_cb(Fl_Widget *w, void *data)
   else if(str == "split_u"){
     FlGui::instance()->splitCurrentOpenglWindow('u');
   }
+  drawContext::global()->draw();
 }
 
 static int _save_msh(const char *name){ return mshFileDialog(name); }
@@ -263,6 +247,8 @@ static int _save_med(const char *name){ return genericMeshFileDialog
     (name, "MED Options", FORMAT_MED, false, false); }
 static int _save_mesh(const char *name){ return genericMeshFileDialog
     (name, "MESH Options", FORMAT_MESH, false, true); }
+static int _save_mail(const char *name){ return genericMeshFileDialog
+    (name, "MAIL Options", FORMAT_MAIL, false, false); }
 static int _save_bdf(const char *name){ return bdfFileDialog(name); }
 static int _save_p3d(const char *name){ return genericMeshFileDialog
     (name, "P3D Options", FORMAT_P3D, false, false); }
@@ -305,6 +291,7 @@ static int _save_auto(const char *name)
   case FORMAT_VTK  : return _save_vtk(name);
   case FORMAT_MED  : return _save_med(name);
   case FORMAT_MESH : return _save_mesh(name);
+  case FORMAT_MAIL : return _save_mail(name);
   case FORMAT_BDF  : return _save_bdf(name);
   case FORMAT_DIFF : return _save_diff(name);
   case FORMAT_INP  : return _save_inp(name);
@@ -339,12 +326,10 @@ static void file_save_as_cb(Fl_Widget *w, void *data)
 {
   static patXfunc formats[] = {
     {"Guess From Extension" TT "*.*", _save_auto},
-    SEPARATOR_OUT
     {"Gmsh Mesh" TT "*.msh", _save_msh},
     {"Gmsh Mesh Statistics" TT "*.pos", _save_pos},
     {"Gmsh Options" TT "*.opt", _save_options},
     {"Gmsh Unrolled Geometry" TT "*.geo", _save_geo},
-    SEPARATOR_OUT
     {"Abaqus INP Mesh" TT "*.inp", _save_inp},
 #if defined(HAVE_LIBCGNS)
     {"CGNS (Experimental)" TT "*.cgns", _save_cgns},
@@ -356,13 +341,13 @@ static void file_save_as_cb(Fl_Widget *w, void *data)
     {"MED File" TT "*.med", _save_med},
 #endif
     {"Medit INRIA Mesh" TT "*.mesh", _save_mesh},
+    {"CEA Triangulation" TT "*.mail", _save_mail},
     {"Nastran Bulk Data File" TT "*.bdf", _save_bdf},
     {"Plot3D Structured Mesh" TT "*.p3d", _save_p3d},
     {"STL Surface Mesh" TT "*.stl", _save_stl},
     {"VRML Surface Mesh" TT "*.wrl", _save_vrml},
     {"VTK Mesh" TT "*.vtk", _save_vtk},
     {"PLY2 Mesh" TT "*.ply2", _save_ply2},
-    SEPARATOR_OUT
     {"Encapsulated PostScript" TT "*.eps", _save_eps},
     {"GIF" TT "*.gif", _save_gif},
 #if defined(HAVE_LIBJPEG)
@@ -413,8 +398,6 @@ static void file_save_as_cb(Fl_Widget *w, void *data)
 
 #undef TT
 #undef NN
-#undef SEPARATOR_IN
-#undef SEPARATOR_OUT
 
 static void file_options_save_cb(Fl_Widget *w, void *data)
 {
@@ -633,7 +616,7 @@ static void help_online_cb(Fl_Widget *w, void *data)
   SystemCall(ReplaceSubString("%s", "http://geuz.org/gmsh/doc/texinfo/", prog));
 }
 
-static void help_about_cb(Fl_Widget *w, void *data)
+void help_about_cb(Fl_Widget *w, void *data)
 {
   FlGui::instance()->about->win->show();
 }
@@ -1823,13 +1806,15 @@ static void mesh_change_order_cb(Fl_Widget *w, void *data)
 
 static void mesh_degree_cb(Fl_Widget *w, void *data)
 {
-  if((long)data == 2)
+  int degree = (intptr_t)data;
+  if(degree == 2)
     SetOrderN(GModel::current(), 2, CTX::instance()->mesh.secondOrderLinear, 
               CTX::instance()->mesh.secondOrderIncomplete);
-  else if ((long)data == 1)
+  else if (degree == 1)
     SetOrder1(GModel::current());
   else // For now, use the same options as for second order meshes
-    SetOrderN(GModel::current(), (long)data, CTX::instance()->mesh.secondOrderLinear, 
+    SetOrderN(GModel::current(), degree, 
+	      CTX::instance()->mesh.secondOrderLinear, 
               CTX::instance()->mesh.secondOrderIncomplete);
   CTX::instance()->mesh.changed |= (ENT_LINE | ENT_SURFACE | ENT_VOLUME);
   drawContext::global()->draw();
@@ -2081,7 +2066,7 @@ static void mesh_define_compound_entity_cb(Fl_Widget *w, void *data)
 
 static void view_toggle_cb(Fl_Widget *w, void *data)
 {
-  int num = (int)(long)data;
+  int num = (intptr_t)data;
   opt_view_visible(num, GMSH_SET,
                    FlGui::instance()->menu->toggle[num]->value());
   drawContext::global()->draw();
@@ -2120,7 +2105,7 @@ static void view_reload(int index)
 
 static void view_reload_cb(Fl_Widget *w, void *data)
 {
-  view_reload((int)(long)data);
+  view_reload((intptr_t)data);
   drawContext::global()->draw();
 }
 
@@ -2143,7 +2128,7 @@ static void view_remove_other_cb(Fl_Widget *w, void *data)
 {
   if(PView::list.empty()) return;
   for(int i = PView::list.size() - 1; i >= 0; i--)
-    if(i != (long)data) delete PView::list[i];
+    if(i != (intptr_t)data) delete PView::list[i];
   FlGui::instance()->updateViews();
   drawContext::global()->draw();
 }
@@ -2185,7 +2170,7 @@ static void view_remove_empty_cb(Fl_Widget *w, void *data)
 
 static void view_remove_cb(Fl_Widget *w, void *data)
 {
-  delete PView::list[(int)(long)data];
+  delete PView::list[(intptr_t)data];
   FlGui::instance()->updateViews();
   drawContext::global()->draw();
 }
@@ -2210,49 +2195,49 @@ static void view_save_as(int index, const char *title, int format)
 
 static void view_save_ascii_cb(Fl_Widget *w, void *data)
 {
-  view_save_as((int)(long)data, "Save As ASCII View", 0);
+  view_save_as((intptr_t)data, "Save As ASCII View", 0);
 }
 
 static void view_save_binary_cb(Fl_Widget *w, void *data)
 {
-  view_save_as((int)(long)data, "Save As Binary View", 1);
+  view_save_as((intptr_t)data, "Save As Binary View", 1);
 }
 
 static void view_save_parsed_cb(Fl_Widget *w, void *data)
 {
-  view_save_as((int)(long)data, "Save As Parsed View", 2);
+  view_save_as((intptr_t)data, "Save As Parsed View", 2);
 }
 
 static void view_save_stl_cb(Fl_Widget *w, void *data)
 {
-  view_save_as((int)(long)data, "Save As STL Triangulation", 3);
+  view_save_as((intptr_t)data, "Save As STL Triangulation", 3);
 }
 
 static void view_save_txt_cb(Fl_Widget *w, void *data)
 {
-  view_save_as((int)(long)data, "Save As Raw Text", 4);
+  view_save_as((intptr_t)data, "Save As Raw Text", 4);
 }
 
 static void view_save_msh_cb(Fl_Widget *w, void *data)
 {
-  view_save_as((int)(long)data, "Save As Gmsh Mesh", 5);
+  view_save_as((intptr_t)data, "Save As Gmsh Mesh", 5);
 }
 
 static void view_save_med_cb(Fl_Widget *w, void *data)
 {
-  view_save_as((int)(long)data, "Save As MED file", 6);
+  view_save_as((intptr_t)data, "Save As MED file", 6);
 }
 
 static void view_alias_cb(Fl_Widget *w, void *data)
 {
-  new PView(PView::list[(int)(long)data], false);
+  new PView(PView::list[(intptr_t)data], false);
   FlGui::instance()->updateViews();
   drawContext::global()->draw();
 }
 
 static void view_alias_with_options_cb(Fl_Widget *w, void *data)
 {
-  new PView(PView::list[(int)(long)data], true);
+  new PView(PView::list[(intptr_t)data], true);
   FlGui::instance()->updateViews();
   drawContext::global()->draw();
 }
@@ -2303,14 +2288,14 @@ static void view_all_visible_cb(Fl_Widget *w, void *data)
 {
   for(unsigned int i = 0; i < PView::list.size(); i++)
     opt_view_visible(i, GMSH_SET | GMSH_GUI, 
-                     (long)data < 0 ? !opt_view_visible(i, GMSH_GET, 0) :
-                     (long)data > 0 ? 1 : 0);
+                     (intptr_t)data < 0 ? !opt_view_visible(i, GMSH_GET, 0) :
+                     (intptr_t)data > 0 ? 1 : 0);
   drawContext::global()->draw();
 }
 
 static void view_applybgmesh_cb(Fl_Widget *w, void *data)
 {
-  int index =  (int)(long)data;
+  int index =  (intptr_t)data;
   if(index >= 0 && index < (int)PView::list.size()){
     GModel::current()->getFields()->setBackgroundMesh(index);
   }
@@ -2433,8 +2418,12 @@ static Fl_Menu_Item sysbar_table[] = {
     {"Mouse Actions",        0, (Fl_Callback *)help_mouse_cb, 0},
     {"Keyboard Shortcuts",   0, (Fl_Callback *)help_short_cb, 0},
     {"Command Line Options", 0, (Fl_Callback *)help_command_line_cb, 0},
+#if (FL_MAJOR_VERSION == 1) && (FL_MINOR_VERSION == 3)
+    {"Current Options",      0, (Fl_Callback *)status_options_cb, (void*)"?"},
+#else
     {"Current Options",      0, (Fl_Callback *)status_options_cb, (void*)"?", FL_MENU_DIVIDER},
     {"About Gmsh",           0, (Fl_Callback *)help_about_cb, 0},
+#endif
     {0},
   {0}
 };
@@ -2662,7 +2651,7 @@ contextItem menu_mesh[] = {
     {""} 
   };  
   contextItem menu_mesh_degree[] = {
-    {"1Mesh> Set order"} ,
+    {"1Mesh>Set order"} ,
     {"1",  (Fl_Callback *)mesh_degree_cb, (void*)1},
     {"2",  (Fl_Callback *)mesh_degree_cb, (void*)2},
     {"3",  (Fl_Callback *)mesh_degree_cb, (void*)3},

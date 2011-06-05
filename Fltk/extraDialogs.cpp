@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -165,8 +165,8 @@ int meshSizeEditor()
     if(CTX::instance()->nonModalWindows) editor->window->set_non_modal();
     editor->sa = new Release_Slider(0, 0, 200, 20);
     editor->sa->type(FL_HOR_NICE_SLIDER);
-    editor->sa->minimum(0.05);
-    editor->sa->maximum(5);
+    editor->sa->minimum(0.01);
+    editor->sa->maximum(2.5);
     editor->sa->callback(mesh_size_factor);
     editor->window->border(0);
     editor->window->end();
@@ -178,7 +178,9 @@ int meshSizeEditor()
   if(editor->window->non_modal() && !editor->window->shown())
     editor->window->show(); // fix ordering
   editor->window->show();
-  return 0;
+    return 0;
+
+  return CTX::instance()->mesh.lcFactor;
 }
 
 // Model chooser

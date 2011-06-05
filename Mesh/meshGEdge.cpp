@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -19,66 +19,6 @@ typedef struct {
   int Num;
   double t, lc, p;
 } IntPoint;
-
-struct xi2lc {
-  double xi, lc;
-  xi2lc(const double &_xi, const double _lc)
-    : xi(_xi), lc(_lc)
-  { 
-  }
-  bool operator < (const xi2lc &other) const
-  {
-    return xi < other.xi; 
-  }
-};
-
-static std::vector<xi2lc> interpLc;
-
-static void buildInterpLc(const std::vector<IntPoint> &lcPoints)
-{
-  IntPoint p;
-  interpLc.clear();
-  for(unsigned int i = 0; i < lcPoints.size(); i++){
-    p = lcPoints[i];
-    interpLc.push_back(xi2lc(p.t, p.lc));
-  }
-}
-
-static double F_Lc_usingInterpLc(GEdge *ge, double t)
-{
-  std::vector<xi2lc>::iterator it = std::lower_bound(interpLc.begin(),
-                                                     interpLc.end(), xi2lc(t, 0));
-  double t1 = it->xi;
-  double l1 = it->lc;
-  it++;
-  if(it == interpLc.end()) return l1;
-  double t2 = it->xi;
-  double l2 = it->lc;
-  double l = l1 + ((t - t1) / (t2 - t1)) * (l2 - l1);
-  return l;
-}
-
-static double F_Lc_usingInterpLcBis(GEdge *ge, double t)
-{
-  GPoint p = ge->point(t);
-  double lc_here;
-
-  Range<double> bounds = ge->parBounds(0);
-  double t_begin = bounds.low();
-  double t_end = bounds.high();
-
-  SVector3 der = ge->firstDer(t);
-  const double d = norm(der);
-
-  if(t == t_begin)
-    lc_here = BGM_MeshSize(ge->getBeginVertex(), t, 0, p.x(), p.y(), p.z());
-  else if(t == t_end)
-    lc_here = BGM_MeshSize(ge->getEndVertex(), t, 0, p.x(), p.y(), p.z());
-  else
-    lc_here = BGM_MeshSize(ge, t, 0, p.x(), p.y(), p.z());
-
-  return d / lc_here;
-}
 
 static double F_Lc(GEdge *ge, double t)
 {
@@ -122,7 +62,7 @@ static double F_Lc_aniso(GEdge *ge, double t)
 
   SVector3 der = ge->firstDer(t);
 
-  double lSquared = dot (der,lc_here,der);
+  double lSquared = dot(der, lc_here, der);
 
   //  der.normalize();
   //  printf("in the function %g n %g %g\n", sqrt(lSquared),der.x(),der.y());
@@ -346,18 +286,18 @@ void meshGEdge::operator() (GEdge *ge)
   ge->setLength(length);
   Points.clear();
 
-  if(length == 0. && CTX::instance()->mesh.toleranceEdgeLength == 0.)
-    Msg::Error("Curve %d has a zero length", ge->tag());
-  else if (length == 0.)
-    Msg::Debug("Curve %d has a zero length", ge->tag());
-
   if(length < CTX::instance()->mesh.toleranceEdgeLength)
     ge->setTooSmall(true);
 
   // Integrate detJ/lc du 
   double a;
   int N;
-  if (ge->degenerate(0)){
+  if(length == 0. && CTX::instance()->mesh.toleranceEdgeLength == 0.){
+    Msg::Error("Curve %d has a zero length", ge->tag());
+    a = 0;
+    N = 1;
+  }
+  else if(ge->degenerate(0)){
     a = 0.;
     N = 1;
   }
@@ -367,27 +307,20 @@ void meshGEdge::operator() (GEdge *ge)
     N = ge->meshAttributes.nbPointsTransfinite;
   }
   else{
-    if(CTX::instance()->mesh.lcIntegrationPrecision > 1.e-2){
-      std::vector<IntPoint> lcPoints;
-      Integration(ge, t_begin, t_end, F_Lc_usingInterpLcBis, lcPoints, 
-                  CTX::instance()->mesh.lcIntegrationPrecision);
-      buildInterpLc(lcPoints);
-      a = Integration(ge, t_begin, t_end, F_Lc_usingInterpLc, Points, 1.e-8);
-    }
-    else{
-      if (CTX::instance()->mesh.algo2d == ALGO_2D_BAMG) 
-	a = Integration(ge, t_begin, t_end, F_Lc_aniso, Points,
-			CTX::instance()->mesh.lcIntegrationPrecision);
-      else
-	a = Integration(ge, t_begin, t_end, F_Lc, Points,
-			CTX::instance()->mesh.lcIntegrationPrecision);
-    }
+    if (CTX::instance()->mesh.algo2d == ALGO_2D_BAMG) 
+      a = Integration(ge, t_begin, t_end, F_Lc_aniso, Points,
+                      CTX::instance()->mesh.lcIntegrationPrecision);
+    else
+      a = Integration(ge, t_begin, t_end, F_Lc, Points,
+                      CTX::instance()->mesh.lcIntegrationPrecision);
     N = std::max(ge->minimumMeshSegments() + 1, (int)(a + 1.));
   }
-  
-  if(CTX::instance()->mesh.algoRecombine == 1 && N%2 == 0) N++;
 
-  //  printFandPrimitive(ge->tag(),Points);
+  // force odd number of points for if blossom is used for
+  // recombination
+  if(CTX::instance()->mesh.algoRecombine == 1 && N % 2 == 0) N++;
+
+  // printFandPrimitive(ge->tag(),Points);
 
   // if the curve is periodic and if the begin vertex is identical to
   // the end vertex and if this vertex has only one model curve
@@ -415,7 +348,7 @@ void meshGEdge::operator() (GEdge *ge)
     IntPoint P1, P2;
     mesh_vertices.resize(N - 2);
     while(NUMP < N - 1) {
-      P1 = Points[count-1];
+      P1 = Points[count - 1];
       P2 = Points[count];
       const double d = (double)NUMP * b;
       if((fabs(P2.p) >= fabs(d)) && (fabs(P1.p) < fabs(d))) {

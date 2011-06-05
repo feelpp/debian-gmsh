@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -24,9 +24,7 @@ static void *CSRMalloc(size_t size)
 
 static void *CSRRealloc(void *ptr, size_t size)
 {
-  if (!size) return(NULL);
-  ptr = realloc(ptr, size);
-  return(ptr);
+  return realloc(ptr, size);
 }
 
 static void CSRList_Realloc(CSRList_T *liste, int n)
@@ -44,6 +42,13 @@ static void CSRList_Realloc(CSRList_T *liste, int n)
       liste->array = temp;
     }
   }
+}
+
+static void CSRList_Resize_strict(CSRList_T *liste, int n)
+{
+  liste->array = (char *)CSRRealloc(liste->array, n * liste->size);
+  liste->n = n;
+  liste->nmax = n;
 }
 
 static CSRList_T *CSRList_Create(int n, int incr, int size)
@@ -85,6 +90,49 @@ void CSRList_Add(CSRList_T *liste, const void *data)
 int CSRList_Nbr(CSRList_T *liste)
 {
   return(liste->n);
+}
+
+template<>
+void linearSystemCSR<double>::preAllocateEntries ()
+{
+  if (_entriesPreAllocated) return;
+  if (_sparsity.getNbRows() == 0) return;
+  INDEX_TYPE nnz = 0;
+  int nbRows = _b->size();
+  for (int i = 0; i < nbRows; i++){
+    int nInRow;
+    _sparsity.getRow (i, nInRow);
+    nnz += nInRow;
+  }
+  CSRList_Resize_strict (_ai, nnz);
+  CSRList_Resize_strict (_ptr, nnz);
+  INDEX_TYPE *jptr = (INDEX_TYPE*) _jptr->array;
+  INDEX_TYPE *ai = (INDEX_TYPE*) _ai->array;
+  INDEX_TYPE *ptr = (INDEX_TYPE*) _ptr->array;
+  jptr[0] = 0;
+  nnz = 0;
+  for (int i = 0; i < nbRows; i++){
+    int nInRow;
+    const int *row = _sparsity.getRow (i, nInRow);
+    for (int j = 0; j < nInRow; j++) {
+      ai[nnz] = row[j];
+      ptr[nnz] = nnz+1;
+      nnz ++;
+    }
+    if (nInRow != 0)
+      ptr[nnz - 1] = 0;
+    jptr[i + 1] = nnz;
+    something[i] = (nInRow == 0 ? 0 : 1);
+  }
+  _entriesPreAllocated = true;
+  sorted = true;
+  _sparsity.clear();
+  // we do this after _sparsity.clear so that the peak memory usage is reduced
+  CSRList_Resize_strict (_a, nnz);
+  double *a = ( double * ) _a->array;
+  for (int i = 0; i < nnz; i++) {
+    a[i] = 0.;
+  }
 }
 
 template<>
@@ -272,7 +320,8 @@ void sortColumns_(int NbLines, int nnz, INDEX_TYPE *ptr, INDEX_TYPE *jptr,
     for (int j = jptr[i]; j < jptr[i + 1] - 1; j++){
       ptr[j] = j + 1;
     }
-    //    ptr[jptr[i + 1]] = 0;
+    if (jptr[i + 1] != jptr[i])
+      ptr[jptr[i + 1] - 1] = 0;
   }
 
   delete[] count;
@@ -289,18 +338,6 @@ void linearSystemCSR<double>::getMatrix(INDEX_TYPE*& jptr,INDEX_TYPE*& ai,double
                  ai, a);
   sorted = true;
 }
-
-#include "Bindings.h"
-
-template<>
-  void linearSystemCSRGmm<double>::registerBindings(binding *b)
-  {
-    classBinding *cb = b->addClass< linearSystemCSRGmm<double> >("linearSystemCSRGmmdouble");
-    cb->setDescription("Sparse matrix representation.");
-    methodBinding *cm;
-    cm = cb->setConstructor<linearSystemCSRGmm<double> >();
-    cm->setDescription("Build an empty container");
-  }
 
 #if defined(HAVE_GMM)
 

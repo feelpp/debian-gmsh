@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -205,8 +205,6 @@ void statisticsWindow::compute(bool elementQuality)
   // meanAngle  = meanAngle / count;
   // printf("Angles = min=%g av=%g \n", minAngle, meanAngle);
   //hack emi
-
-  
   //Emi hack - MESH DEGREE VERTICES
   // std::vector<GEntity*> entities;
   // std::set<MEdge, Less_Edge> edges;

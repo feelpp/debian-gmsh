@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -23,7 +23,6 @@
  *   0-----------1
  *
  */
-class binding;
 class MQuadrangle : public MElement {
  protected:
   MVertex *_v[4];
@@ -39,13 +38,14 @@ class MQuadrangle : public MElement {
     v[2] = _v[2];
     v[3] = _v[3];
   }
+void projectInMeanPlane(double *xn, double *yn);
  public :
   MQuadrangle(MVertex *v0, MVertex *v1, MVertex *v2, MVertex *v3, int num=0, int part=0)
     : MElement(num, part)
   {
     _v[0] = v0; _v[1] = v1; _v[2] = v2; _v[3] = v3;
   }
-  MQuadrangle(std::vector<MVertex*> &v, int num=0, int part=0)
+  MQuadrangle(const std::vector<MVertex*> &v, int num=0, int part=0)
     : MElement(num, part)
   {
     for(int i = 0; i < 4; i++) _v[i] = v[i];
@@ -56,11 +56,6 @@ class MQuadrangle : public MElement {
   virtual int getNumVertices() const { return 4; }
   virtual MVertex *getVertex(int num){ return _v[num]; }
   virtual void setVertex(int num, MVertex *v){_v[num]=v;}
-  virtual MVertex *getVertexMED(int num)
-  {
-    static const int map[4] = {0, 3, 2, 1};
-    return getVertex(map[num]);
-  }
   virtual MVertex *getVertexDIFF(int num)
   {
     static const int map[4] = {0, 1, 3, 2};
@@ -122,6 +117,17 @@ class MQuadrangle : public MElement {
   virtual const char *getStringForINP() const { return "C2D4"; }
   virtual const polynomialBasis* getFunctionSpace(int o=-1) const;
   virtual const JacobianBasis* getJacobianFuncSpace(int o=-1) const;
+  virtual void getNode(int num, double &u, double &v, double &w)
+  {
+    w = 0.;
+    switch(num) {
+    case 0 : u = -1.; v = -1.; break;
+    case 1 : u =  1.; v = -1.; break;
+    case 2 : u =  1.; v =  1.; break;
+    case 3 : u = -1.; v =  1.; break;
+    default: u =  0.; v =  0.; break;
+    }
+  }
   virtual void revert()
   {
     MVertex *tmp = _v[1]; _v[1] = _v[3]; _v[3] = tmp;
@@ -141,6 +147,7 @@ class MQuadrangle : public MElement {
   // planar, we compute the mean plane due to the least-square
   // criterion.
   virtual double getInnerRadius();
+  virtual double getOuterRadius();
  private:
   int edges_quad(const int edge, const int vert) const
   {
@@ -152,9 +159,6 @@ class MQuadrangle : public MElement {
     };
     return e[edge][vert];
   }
-
- public:
-  static void registerBindings(binding *b);
 };
 
 /*
@@ -180,7 +184,7 @@ class MQuadrangle8 : public MQuadrangle {
     _vs[0] = v4; _vs[1] = v5; _vs[2] = v6; _vs[3] = v7;
     for(int i = 0; i < 4; i++) _vs[i]->setPolynomialOrder(2);
   }
-  MQuadrangle8(std::vector<MVertex*> &v, int num=0, int part=0)
+  MQuadrangle8(const std::vector<MVertex*> &v, int num=0, int part=0)
     : MQuadrangle(v, num, part)
   {
     for(int i = 0; i < 4; i++) _vs[i] = v[4 + i];
@@ -193,11 +197,6 @@ class MQuadrangle8 : public MQuadrangle {
   virtual MVertex *getVertexUNV(int num)
   {
     static const int map[8] = {0, 4, 1, 5, 2, 6, 3, 7};
-    return getVertex(map[num]);
-  }
-  virtual MVertex *getVertexMED(int num)
-  {
-    static const int map[8] = {0, 3, 2, 1, 7, 6, 5, 4};
     return getVertex(map[num]);
   }
   virtual MVertex *getVertexDIFF(int num)
@@ -238,6 +237,10 @@ class MQuadrangle8 : public MQuadrangle {
     tmp = _vs[0]; _vs[0] = _vs[3]; _vs[3] = tmp;
     tmp = _vs[1]; _vs[1] = _vs[2]; _vs[2] = tmp;
   }
+  virtual void getNode(int num, double &u, double &v, double &w)
+  {
+    num < 4 ? MQuadrangle::getNode(num, u, v, w) : MElement::getNode(num, u, v, w);
+  }
 };
 
 /*
@@ -263,7 +266,7 @@ class MQuadrangle9 : public MQuadrangle {
     _vs[0] = v4; _vs[1] = v5; _vs[2] = v6; _vs[3] = v7; _vs[4] = v8;
     for(int i = 0; i < 5; i++) _vs[i]->setPolynomialOrder(2);
   }
-  MQuadrangle9(std::vector<MVertex*> &v, int num=0, int part=0)
+  MQuadrangle9(const std::vector<MVertex*> &v, int num=0, int part=0)
     : MQuadrangle(v, num, part)
   {
     for(int i = 0; i < 5; i++) _vs[i] = v[4 + i];
@@ -310,6 +313,10 @@ class MQuadrangle9 : public MQuadrangle {
     tmp = _vs[0]; _vs[0] = _vs[3]; _vs[3] = tmp;
     tmp = _vs[1]; _vs[1] = _vs[2]; _vs[2] = tmp;
   }
+  virtual void getNode(int num, double &u, double &v, double &w)
+  {
+    num < 4 ? MQuadrangle::getNode(num, u, v, w) : MElement::getNode(num, u, v, w);
+  }
 };
 
 /*
@@ -334,12 +341,12 @@ class MQuadrangleN : public MQuadrangle {
   const char _order;
  public:
   MQuadrangleN(MVertex *v0, MVertex *v1, MVertex *v2, MVertex *v3,
-             std::vector<MVertex*> &v, char order, int num=0, int part=0)
+             const std::vector<MVertex*> &v, char order, int num=0, int part=0)
     : MQuadrangle(v0, v1, v2, v3, num, part), _vs(v), _order(order)
   {
     for(unsigned int i = 0; i < _vs.size(); i++) _vs[i]->setPolynomialOrder(_order);
   }
-  MQuadrangleN(std::vector<MVertex*> &v, char order, int num=0, int part=0)
+  MQuadrangleN(const std::vector<MVertex*> &v, char order, int num=0, int part=0)
     : MQuadrangle(v[0], v[1], v[2], v[3], num, part), _order(order)
   {
     for(unsigned int i = 4; i < v.size(); i++) _vs.push_back(v[i]);
@@ -400,6 +407,10 @@ class MQuadrangleN : public MQuadrangle {
     inv.insert(inv.begin(), _vs.rbegin(), _vs.rend());
     _vs = inv;
   }
+  virtual void getNode(int num, double &u, double &v, double &w)
+  {
+    num < 4 ? MQuadrangle::getNode(num, u, v, w) : MElement::getNode(num, u, v, w);
+  }
 };
 
 template <class T>
@@ -426,7 +437,7 @@ struct compareMQuadrangleLexicographic
 {
   bool operator () (MQuadrangle *t1, MQuadrangle *t2) const
   {
-    MVertex *_v1[] = {t1->getVertex(0), t1->getVertex(1), 
+    MVertex *_v1[] = {t1->getVertex(0), t1->getVertex(1),
                       t1->getVertex(2), t1->getVertex(3)};
     MVertex *_v2[] = {t2->getVertex(0), t2->getVertex(1),
                       t2->getVertex(2), t2->getVertex(3)};

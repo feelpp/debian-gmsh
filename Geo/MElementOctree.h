@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -15,11 +15,12 @@ class MElement;
 class MElementOctree{
  private:
   Octree *_octree;
+  GModel *_gm;
  public:
   MElementOctree(GModel *);
   MElementOctree(std::vector<MElement*> &);
   ~MElementOctree();
-  MElement *find(double x, double y, double z);
+  MElement *find(double x, double y, double z, int dim = -1, bool strict = false);
   Octree *getInternalOctree(){ return _octree; }
 };
 

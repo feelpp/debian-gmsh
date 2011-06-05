@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -93,17 +93,17 @@ static void buildASetOfEquivalentMeshVertices(GFace *gf,
   }
 }
 
-struct geomTresholdVertexEquivalence 
+struct geomThresholdVertexEquivalence 
 {
   // Initial MVertex associated to one given MVertex
   std::map<GVertex*, MVertex*> backward_map;
   // initiate the forward and backward maps
-  geomTresholdVertexEquivalence(GModel *g);  
+  geomThresholdVertexEquivalence(GModel *g);  
   // restores the initial state
-  ~geomTresholdVertexEquivalence ();
+  ~geomThresholdVertexEquivalence ();
 };
 
-geomTresholdVertexEquivalence::geomTresholdVertexEquivalence(GModel *g)
+geomThresholdVertexEquivalence::geomThresholdVertexEquivalence(GModel *g)
 {
   std::multimap<MVertex*, MVertex*> equivalenceMap;
   for (GModel::fiter it = g->firstFace(); it != g->lastFace(); ++it)
@@ -147,7 +147,7 @@ geomTresholdVertexEquivalence::geomTresholdVertexEquivalence(GModel *g)
   }
 }
 
-geomTresholdVertexEquivalence::~geomTresholdVertexEquivalence()
+geomThresholdVertexEquivalence::~geomThresholdVertexEquivalence()
 {
   // restore the initial data
   for (std::map<GVertex*, MVertex*>::iterator it = backward_map.begin();
@@ -433,7 +433,7 @@ static void Mesh2D(GModel *m)
     (*it)->meshStatistics.status = GFace::PENDING;
 
   // skip short mesh edges
-  //geomTresholdVertexEquivalence inst(m);
+  //geomThresholdVertexEquivalence inst(m);
 
   // boundary layers are special: their generation (including vertices
   // and curve meshes) is global as it depends on a smooth normal
@@ -448,16 +448,17 @@ static void Mesh2D(GModel *m)
     
     int nIter = 0;
     while(1){
-      meshGFace mesher;
       int nbPending = 0;
       for(std::set<GFace*>::iterator it = f.begin(); it != f.end(); ++it){
         if ((*it)->meshStatistics.status == GFace::PENDING){
+	  meshGFace mesher (true, CTX::instance()->mesh.multiplePasses);
           mesher(*it);
           nbPending++;
         }
       }
       for(std::set<GFace*>::iterator it = cf.begin(); it != cf.end(); ++it){
         if ((*it)->meshStatistics.status == GFace::PENDING){
+	  meshGFace mesher (true, CTX::instance()->mesh.multiplePasses);
           mesher(*it);
           nbPending++;
         }
@@ -565,6 +566,22 @@ void AdaptMesh(GModel *m)
 
   double t2 = Cpu();
   Msg::StatusBar(2, true, "Done adaptating 3D mesh (%g s)", t2 - t1);
+}
+
+void RecombineMesh(GModel *m)
+{
+  Msg::StatusBar(2, true, "Recombining 2D mesh...");
+  double t1 = Cpu();
+  
+  for(GModel::fiter it = m->firstFace(); it != m->lastFace(); ++it){
+    GFace *gf = *it;
+    recombineIntoQuads(gf);
+  }
+
+  CTX::instance()->mesh.changed = ENT_ALL;
+
+  double t2 = Cpu();
+  Msg::StatusBar(2, true, "Done recombining 2D mesh (%g s)", t2 - t1);
 }
 
 void GenerateMesh(GModel *m, int ask)

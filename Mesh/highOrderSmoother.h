@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -38,10 +38,16 @@ class highOrderSmoother
   void moveTo(MVertex *v, const std::map<MVertex*,SVector3> &) const;
 public:  
   highOrderSmoother(int dim) : _tag(111), _dim(dim) {_clean();}
+  highOrderSmoother(GModel *gm);
   void add(MVertex * v, const SVector3 &d ) {
     _straightSidedLocation[v] = d;
     _targetLocation[v]        = SPoint3(v->x(),v->y(),v->z());
   }  
+  int smooth_with_mixed_formulation(std::vector<MElement*> & , 
+				    double alpha);
+  double apply_incremental_displacement (double max_incr, std::vector<MElement*> & v,
+					 bool mixed, double thres, char *meshName,
+					 std::vector<MElement*> & disto);
   void smooth(std::vector<MElement*> & );
   double smooth_metric_(std::vector<MElement*> &, GFace *gf,
                         dofManager<double> &myAssembler,

@@ -14,9 +14,8 @@ class dgDataCacheMap;
 class function;
 class functionConstant;
 class functionReplace;
-struct functionReplaceCache;
+class functionReplaceCache;
 class MElement;
-class binding;
 
 // An abstract interface to functions
 class function {
@@ -73,8 +72,8 @@ class function {
   static functionConstant *getTime();
   static functionConstant *getDT();
   static function *getSolution();
+  static function *getCoordinates();
   static function *getSolutionGradient();
-  static function *getParametricCoordinates();
   static function *getNormals();
   void printDep()
   {
@@ -82,9 +81,6 @@ class function {
          it != dependencies.end(); it++)
       printf("%i %p\n", it->iMap, it->f);
   }
-
-  // bindings
-  static void registerBindings(binding *b);
 };
 
 
@@ -108,6 +104,23 @@ class functionSolution : public function {
       _instance = new functionSolution();
     return _instance;
   }
+};
+
+class functionSolutionGradient : public function {
+  static functionSolutionGradient *_instance;
+  // constructor is private only 1 instance can exists, call get to
+  // access the instance
+  functionSolutionGradient();
+ public:
+  void call(dataCacheMap *m, fullMatrix<double> &sol);
+  static function *get();
+};
+
+class functionReplaceCache {
+  public:
+  dataCacheMap *map;
+  std::vector <dataCacheDouble*> toReplace;
+  std::vector <dataCacheDouble*> toCompute;
 };
 
 class functionReplace {
@@ -181,9 +194,14 @@ class dataCacheDouble {
   {
     return (_iDependOn.find(&other)!=_iDependOn.end());
   }
+  inline std::vector<dataCacheDouble*> & getDirectDependencies() { return _directDependencies; }
 };
 
 class dataCacheMap {
+  const function *_functionSolution, *_functionSolutionGradient, *_functionCoordinates;
+  //handle function solution and funciton solution gradient
+  //we should get rid of them
+  const function * _translate (const function *) const;
  public:
   dataCacheMap  *_parent;
   std::list<dataCacheMap*> _children;
@@ -191,9 +209,10 @@ class dataCacheMap {
   int _nbEvaluationPoints;
   std::map<const function*, dataCacheDouble*> _cacheDoubleMap;
   std::set<dataCacheDouble*> _allDataCaches;
-  std::set<dataCacheDouble*> _toInvalidateOnElement;
+  std::vector<dataCacheDouble*> _toInvalidateOnElement;
   MElement *_element;
   dataCacheMap() {
+    _functionSolution = _functionSolutionGradient = _functionCoordinates = NULL;
     _nbEvaluationPoints = 0;
     _parent=NULL;
   }
@@ -202,7 +221,7 @@ class dataCacheMap {
   {
     _allDataCaches.insert(data);
     if(invalidatedOnElement)
-      _toInvalidateOnElement.insert(data);
+      _toInvalidateOnElement.push_back(data);
   }
   virtual dgDataCacheMap *asDgDataCacheMap() 
   {
@@ -219,11 +238,11 @@ class dataCacheMap {
   {
     _secondaryCaches.push_back(s);
   }
-  dataCacheDouble &get(const function *f, dataCacheDouble *caller=0);
+  dataCacheDouble *get(const function *f, dataCacheDouble *caller=0, bool createIfNotPresent = true);
   virtual void setElement(MElement *element)
   {
     _element=element;
-    for(std::set<dataCacheDouble*>::iterator it=_toInvalidateOnElement.begin(); 
+    for(std::vector<dataCacheDouble*>::iterator it=_toInvalidateOnElement.begin(); 
         it!= _toInvalidateOnElement.end(); it++) {
       (*it)->_valid=false;
     }
@@ -240,6 +259,13 @@ class dataCacheMap {
     m->_nbEvaluationPoints = 0;
     return m;
   }
+  inline void setFunctionCoordinates(const function *functionCoordinates) {
+    _functionCoordinates = functionCoordinates;
+  }
+  inline void setSolutionFunction(const function *functionSolution, const function *functionSolutionGradient) {
+    _functionSolution = functionSolution;
+    _functionSolutionGradient = functionSolutionGradient;
+  }
   void setNbEvaluationPoints(int nbEvaluationPoints);
   inline int getNbEvaluationPoints() { return _nbEvaluationPoints; }
 };
@@ -248,29 +274,29 @@ class dataCacheMap {
 class functionConstant : public function {
  public:
   fullMatrix<double> _source;
-  void call(dataCacheMap *m, fullMatrix<double> &val)
-  {
-    for (int i=0; i<val.size1(); i++)
-      for (int j=0; j<_source.size1(); j++)
-        val(i,j)=_source(j,0);
-  }
-  functionConstant(std::vector<double> source) : function(source.size())
-  {
-    _source = fullMatrix<double>(source.size(),1);
-    for (size_t i=0; i<source.size(); i++)
-      _source(i,0) = source[i];
-  }
+  void call(dataCacheMap *m, fullMatrix<double> &val);
+  functionConstant(std::vector<double> source);
+  functionConstant(double source);
   void set(double val); 
 };
 
-functionConstant *functionConstantNew(const std::vector<double>&);
-functionConstant *functionConstantNew(double);
-
+class functionC : public function {
+  std::vector<fullMatrix<double> > args;
+  void (*callback)(void);
+  public:
+  static void buildLibrary(std::string code, std::string filename) ;
+	static void buildLibraryFromFile(const std::string cfilename, const std::string libfilename);
+  void call (dataCacheMap *m, fullMatrix<double> &val) ;
+  functionC (std::string file, std::string symbol, int nbCol, 
+             std::vector<const function *> dependencies);
+};
+function *functionLevelsetNew (const function *f0, const double valMin, const double valPlus);
+function *functionLevelsetSmoothNew (const function *f0, const double valMin, const double valPlus, const double E);
 function *functionSumNew (const function *f0, const function *f1);
+function *functionMinusNew (const function *f0, const function *f1);
 function *functionProdNew (const function *f0, const function *f1);
 function *functionScaleNew (const function *f0, const double s);
 function *functionExtractCompNew (const function *f0, const int iComp);
-
-function *getFunctionCoordinates();
-
+function *functionCatCompNew(std::vector<const function *> fArray);
+function *functionMeanNew(const function *f0);
 #endif

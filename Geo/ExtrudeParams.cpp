@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -7,7 +7,8 @@
 #include "Geo.h"
 #include "ExtrudeParams.h"
 
-smooth_data* ExtrudeParams::normals = 0;
+smooth_data* ExtrudeParams::normals[2] = {0, 0};
+std::vector<SPoint3> ExtrudeParams::normalsCoherence;
 
 static void Projette(double p[3], double mat[3][3])
 {
@@ -25,6 +26,8 @@ ExtrudeParams::ExtrudeParams(int ModeEx) : elementMap(this)
   geo.Source = -1;
   mesh.ExtrudeMesh = false;
   mesh.Recombine = false;
+  mesh.ViewIndex = -1;
+  mesh.BoundaryLayerIndex = 0;
 }
 
 void ExtrudeParams::fill(int type,
@@ -93,7 +96,9 @@ void ExtrudeParams::Extrude(double t, double &x, double &y, double &z)
     z += dz;
     break;
   case BOUNDARY_LAYER:
-    if(normals) normals->get(x, y, z, 3, n);
+    if(mesh.BoundaryLayerIndex >= 0 && mesh.BoundaryLayerIndex <= 1 &&
+       normals[mesh.BoundaryLayerIndex])
+      normals[mesh.BoundaryLayerIndex]->get(x, y, z, 3, n);
     x += n[0] * t;
     y += n[1] * t;
     z += n[2] * t;
@@ -122,7 +127,7 @@ double ExtrudeParams::u(int iLayer, int iElemLayer)
 
 ExtrudeParams::ExtrusionElementMap::ExtrusionElementMap(ExtrudeParams*const parent)
 {
- _parent = parent;
+  _parent = parent;
 }
 
 std::vector<MElement*>* ExtrudeParams::
@@ -133,6 +138,7 @@ ExtrusionElementMap::getExtrudedElems(MElement* source)
     return &(it->second);
   return NULL;
 }
+
 void ExtrudeParams::ExtrusionElementMap::clear()
 {
   _extrudedElements.clear();
@@ -150,15 +156,14 @@ ExtrusionElementMap::addExtrudedElem(MElement* source, MElement* extrudedElem)
   if(it != _extrudedElements.end())
     it->second.push_back(extrudedElem);
   else {
-   std::vector<MElement*>* vec = new std::vector<MElement*>();
-   int totalNbElems = 0;
-   for (int i = 0;i<_parent->mesh.NbLayer;i++)
-     totalNbElems += _parent->mesh.NbElmLayer[i];
-   vec->reserve(totalNbElems);
-   vec->push_back(extrudedElem);
-   _extrudedElements.insert(std::pair<MElement*,std::vector<MElement*> >(source,*vec));
+    int totalNbElems = 0;
+    for (int i = 0; i <_parent->mesh.NbLayer;i++)
+      totalNbElems += _parent->mesh.NbElmLayer[i];
+    // This expression automatically creates the new map key
+    std::vector<MElement*> *vec = &(_extrudedElements[source]);
+    vec->reserve( totalNbElems );
+    vec->push_back( extrudedElem );
   }
-  SPoint3 np = extrudedElem->barycenter(), sp = source->barycenter();
 }
 
 // Propagates the partition information from the source elements to
@@ -179,11 +184,11 @@ ExtrusionElementMap::propagatePartitionInformation(std::vector<int> *partitionSi
       continue;
     }
     std::vector<MElement*> extrudedElements = (*columnit).second;
-    for(unsigned int iE = 0;iE < extrudedElements.size();iE++) {
+    for(unsigned int iE = 0; iE < extrudedElements.size(); iE++) {
       if(extrudedElements[iE]) {
         extrudedElements[iE]->setPartition(sourceElem->getPartition());
         if (partitionSizes)
-          ++(*partitionSizes)[sourceElem->getPartition()-1];
+          ++(*partitionSizes)[sourceElem->getPartition() - 1];
       }
     }
   }

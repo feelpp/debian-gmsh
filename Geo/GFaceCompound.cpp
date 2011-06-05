@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -611,14 +611,16 @@ void GFaceCompound::one2OneMap() const
 
 bool GFaceCompound::parametrize() const
 {
- 
+
  if (_compound.size() > 1) coherencePatches();
  
   bool paramOK = true;
   if(oct) return paramOK; 
   if(trivial()) return paramOK;
 
-  coordinates.clear(); 
+  if (_mapping != RBF)
+    coordinates.clear(); 
+  
   computeNormals();  
 
   if(allNodes.empty()) buildAllNodes();
@@ -628,6 +630,7 @@ bool GFaceCompound::parametrize() const
     
   // Laplace parametrization
   if (_mapping == HARMONIC){
+    printf("Parametrizing surface %d with 'harmonic map' \n", tag());
     Msg::Debug("Parametrizing surface %d with 'harmonic map'", tag()); 
     fillNeumannBCS();
     parametrize(ITERU,HARMONIC); 
@@ -650,15 +653,16 @@ bool GFaceCompound::parametrize() const
       Msg::Warning("!!! Overlap: parametrization switched to 'FE conformal' map");
       noOverlap = parametrize_conformal();
     }
-    // if (!noOverlap) {
-       //   Msg::Warning("!!! Overlap: parametrization switched to 'nonLIN conformal' map");
-       //   noOverlap = parametrize_conformal_nonLinear() ;
-    //}
     if (!noOverlap || !checkOrientation(0) ){
       Msg::Warning("$$$ Flipping: parametrization switched to 'harmonic' map");
       parametrize(ITERU,HARMONIC); 
       parametrize(ITERV,HARMONIC);
     }
+  }
+  // Radial-Basis Function parametrization
+  else if (_mapping == RBF){
+    printf("Parametrizing surface %d with 'RBF' \n", tag());
+    Msg::Debug("Parametrizing surface %d with 'RBF''", tag());
   }
 
   buildOct();  
@@ -681,6 +685,12 @@ bool GFaceCompound::parametrize() const
   }
 
   return paramOK;
+}
+
+void GFaceCompound::setParam(std::map<MVertex*, SPoint3> rbf_param) const{
+  
+  coordinates  = rbf_param;
+  
 }
 
 void GFaceCompound::getBoundingEdges()
@@ -1009,14 +1019,14 @@ SPoint2 GFaceCompound::getCoordinates(MVertex *v) const
         vR = ge->mesh_vertices[j];
         vR->getParameter(0,tR);
         if(!vR->getParameter(0,tR)) {
-          Msg::Error("vertex vr %p not MedgeVertex \n", vR);
+          Msg::Error("vertex vr %p not MedgeVertex", vR);
           Msg::Exit(1);
         }
         if(tLoc > tL && tLoc < tR){
           found = true;
           itR = coordinates.find(vR);
           if(itR == coordinates.end()){
-            Msg::Error("vertex %p (%g %g %g) not found\n", vR, vR->x(), vR->y(), vR->z());
+            Msg::Error("vertex %p (%g %g %g) not found", vR, vR->x(), vR->y(), vR->z());
             Msg::Exit(1);
           }
           break;
@@ -1046,7 +1056,6 @@ SPoint2 GFaceCompound::getCoordinates(MVertex *v) const
 
 void GFaceCompound::parametrize(iterationStep step, typeOfMapping tom) const
 {  
-  
   dofManager<double> myAssembler(_lsys);
   
   // EMI-test for paper Dong: fix only 2 vertices
@@ -1608,7 +1617,7 @@ void GFaceCompound::computeNormals() const
 
 double GFaceCompound::curvatureMax(const SPoint2 &param) const
 {
-
+  
   if(!oct) parametrize();
 
   if(trivial()){
@@ -1718,7 +1727,7 @@ GPoint GFaceCompound::point(double par1, double par2) const
     //     b102 = (2*lt->v3 + lt->v1-w31*n3)*0.333;
     //     b201 = (2*lt->v1 + lt->v3-w13*n1)*0.333;
 
-    //tagged PN trinagles (sigma=1)
+    //tagged PN triangles (sigma=1)
     double theta = 0.0;
     SVector3 d1 = lt->v1+.33*(1-theta)*(lt->v2-lt->v1);
     SVector3 d2 = lt->v2+.33*(1-theta)*(lt->v1-lt->v2);
@@ -1756,7 +1765,7 @@ GPoint GFaceCompound::point(double par1, double par2) const
 
 Pair<SVector3,SVector3> GFaceCompound::firstDer(const SPoint2 &param) const
 {
-  
+ 
   if(!oct) parametrize();
   
   if(trivial())
@@ -2248,7 +2257,7 @@ int GFaceCompound::genusGeom() const
 
 void GFaceCompound::printStuff(int iNewton) const
 {
-  if( !CTX::instance()->mesh.saveAll) return;  
+  //if( !CTX::instance()->mesh.saveAll) return;  
  
   std::list<GFace*>::const_iterator it = _compound.begin();
  

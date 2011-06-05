@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -107,6 +107,19 @@ double MElement::rhoShapeMeasure()
     return 0.;
 }
 
+void MElement::getNode(int num, double &u, double &v, double &w)
+{
+  // only for MElements that don't have a lookup table for this
+  // (currently only 1st order elements have)
+  double uvw[3];
+  MVertex* ver = getVertex(num);
+  double xyz[3] = {ver->x(), ver->y(), ver->z()};
+  xyz2uvw(xyz, uvw);
+  u = uvw[0];
+  v = uvw[1];
+  w = uvw[2];
+}
+
 void MElement::getShapeFunctions(double u, double v, double w, double s[], int o)
 {
   const polynomialBasis* fs = getFunctionSpace(o);
@@ -146,6 +159,19 @@ SPoint3 MElement::barycenter()
   return p;
 }
 
+double MElement::getVolume()
+{
+  int npts;
+  IntPt *pts;
+  getIntegrationPoints(getDim() * (getPolynomialOrder() - 1), &npts, &pts);
+  double vol = 0.;
+  for (int i = 0; i < npts; i++){
+    vol += getJacobianDeterminant(pts[i].pt[0], pts[i].pt[1], pts[i].pt[2])
+      * pts[i].weight;    
+  }
+  return vol;
+}
+
 int MElement::getVolumeSign()
 {
   double v = getVolume();
@@ -156,6 +182,7 @@ int MElement::getVolumeSign()
 
 bool MElement::setVolumePositive()
 {
+  if(getDim() < 3) return true;
   int s = getVolumeSign();
   if(s < 0) revert();
   if(!s) return false;
@@ -202,8 +229,8 @@ static double _computeDeterminantAndRegularize(MElement *ele, double jac[3][3])
       norme(b);
       prodve(a, b, c);
       norme(c);
-      jac[0][1] = b[0]; jac[1][1] = b[1]; jac[2][1] = b[2];
-      jac[0][2] = c[0]; jac[1][2] = c[1]; jac[2][2] = c[2];
+      jac[1][0] = b[0]; jac[1][1] = b[1]; jac[1][2] = b[2];
+      jac[2][0] = c[0]; jac[2][1] = c[1]; jac[2][2] = c[2];
       break;
     }
   case 2:
@@ -242,10 +269,10 @@ double MElement::getJacobian(double u, double v, double w, double jac[3][3])
   jac[1][0] = jac[1][1] = jac[1][2] = 0.;
   jac[2][0] = jac[2][1] = jac[2][2] = 0.;
 
-  double gsf[256][3];
+  double gsf[1256][3];
   getGradShapeFunctions(u, v, w, gsf);
-  for (int i = 0; i < getNumVertices(); i++) {
-    const MVertex* v = getVertex(i);
+  for (int i = 0; i < getNumShapeFunctions(); i++) {
+    const MVertex *v = getShapeFunctionNode(i);
     double* gg = gsf[i];
     for (int j = 0; j < 3; j++) {
       jac[j][0] += v->x() * gg[j];
@@ -253,14 +280,7 @@ double MElement::getJacobian(double u, double v, double w, double jac[3][3])
       jac[j][2] += v->z() * gg[j];
     }
   }
-
   return _computeDeterminantAndRegularize(this, jac);
-}
-
-//binded
-double MElement::getJacobianDeterminant(double u, double v, double w) {
-  double jac[3][3];
-  return getJacobian(u,v,w,jac);
 }
 
 double MElement::getJacobian(const fullMatrix<double> &gsf, double jac[3][3])
@@ -269,15 +289,14 @@ double MElement::getJacobian(const fullMatrix<double> &gsf, double jac[3][3])
   jac[1][0] = jac[1][1] = jac[1][2] = 0.;
   jac[2][0] = jac[2][1] = jac[2][2] = 0.;
 
-  for (int i = 0; i < getNumVertices(); i++) {
-    const MVertex* v = getVertex(i);
+  for (int i = 0; i < getNumShapeFunctions(); i++) {
+    const MVertex *v = getShapeFunctionNode(i);
     for (int j = 0; j < 3; j++) {
       jac[j][0] += v->x() * gsf(i, j);
       jac[j][1] += v->y() * gsf(i, j);
       jac[j][2] += v->z() * gsf(i, j);
     }
   }
-
   return _computeDeterminantAndRegularize(this, jac);
 }
 
@@ -287,10 +306,10 @@ double MElement::getPrimaryJacobian(double u, double v, double w, double jac[3][
   jac[1][0] = jac[1][1] = jac[1][2] = 0.;
   jac[2][0] = jac[2][1] = jac[2][2] = 0.;
 
-  double gsf[256][3];
+  double gsf[1256][3];
   getGradShapeFunctions(u, v, w, gsf, 1);
-  for(int i = 0; i < getNumPrimaryVertices(); i++) {
-    const MVertex* v = getVertex(i);
+  for(int i = 0; i < getNumPrimaryShapeFunctions(); i++) {
+    const MVertex *v = getShapeFunctionNode(i);
     double* gg = gsf[i];
     for (int j = 0; j < 3; j++) {
       jac[j][0] += v->x() * gg[j];
@@ -305,10 +324,10 @@ double MElement::getPrimaryJacobian(double u, double v, double w, double jac[3][
 void MElement::pnt(double u, double v, double w, SPoint3 &p)
 {
   double x = 0., y = 0., z = 0.;
-  double sf[256];
+  double sf[1256];
   getShapeFunctions(u, v, w, sf);
-  for (int j = 0; j < getNumVertices(); j++) {
-    const MVertex* v = getVertex(j);
+  for (int j = 0; j < getNumShapeFunctions(); j++) {
+    const MVertex *v = getShapeFunctionNode(j);
     x += sf[j] * v->x();
     y += sf[j] * v->y();
     z += sf[j] * v->z();
@@ -319,10 +338,10 @@ void MElement::pnt(double u, double v, double w, SPoint3 &p)
 void MElement::primaryPnt(double u, double v, double w, SPoint3 &p)
 {
   double x = 0., y = 0., z = 0.;
-  double sf[256];
+  double sf[1256];
   getShapeFunctions(u, v, w, sf, 1);
-  for (int j = 0; j < getNumPrimaryVertices(); j++) {
-    const MVertex* v = getVertex(j);
+  for (int j = 0; j < getNumPrimaryShapeFunctions(); j++) {
+    const MVertex *v = getShapeFunctionNode(j);
     x += sf[j] * v->x();
     y += sf[j] * v->y();
     z += sf[j] * v->z();
@@ -343,10 +362,10 @@ void MElement::xyz2uvw(double xyz[3], double uvw[3])
     double jac[3][3];
     if(!getJacobian(uvw[0], uvw[1], uvw[2], jac)) break;
     double xn = 0., yn = 0., zn = 0.;
-    double sf[256];
+    double sf[1256];
     getShapeFunctions(uvw[0], uvw[1], uvw[2], sf);
-    for (int i = 0; i < getNumVertices(); i++) {
-      MVertex *v = getVertex(i);
+    for (int i = 0; i < getNumShapeFunctions(); i++) {
+      MVertex *v = getShapeFunctionNode(i);
       xn += v->x() * sf[i];
       yn += v->y() * sf[i];
       zn += v->z() * sf[i];
@@ -394,23 +413,23 @@ double MElement::interpolate(double val[], double u, double v, double w, int str
 {
   double sum = 0;
   int j = 0;
-  double sf[256];
+  double sf[1256];
   getShapeFunctions(u, v, w, sf, order);
-  for(int i = 0; i < getNumVertices(); i++){
+  for(int i = 0; i < getNumShapeFunctions(); i++){
     sum += val[j] * sf[i];
     j += stride;
   }
   return sum;
 }
 
-void MElement::interpolateGrad(double val[], double u, double v, double w, double f[3],
+void MElement::interpolateGrad(double val[], double u, double v, double w, double f[],
                                int stride, double invjac[3][3], int order)
 {
   double dfdu[3] = {0., 0., 0.};
   int j = 0;
-  double gsf[256][3];
+  double gsf[1256][3];
   getGradShapeFunctions(u, v, w, gsf, order);
-  for(int i = 0; i < getNumVertices(); i++){
+  for(int i = 0; i < getNumShapeFunctions(); i++){
     dfdu[0] += val[j] * gsf[i][0];
     dfdu[1] += val[j] * gsf[i][1];
     dfdu[2] += val[j] * gsf[i][2];
@@ -427,7 +446,7 @@ void MElement::interpolateGrad(double val[], double u, double v, double w, doubl
   }
 }
 
-void MElement::interpolateCurl(double val[], double u, double v, double w, double f[3],
+void MElement::interpolateCurl(double val[], double u, double v, double w, double f[],
                                int stride, int order)
 {
   double fx[3], fy[3], fz[3], jac[3][3], inv[3][3];
@@ -451,6 +470,144 @@ double MElement::interpolateDiv(double val[], double u, double v, double w,
   interpolateGrad(&val[1], u, v, w, fy, stride, inv, order);
   interpolateGrad(&val[2], u, v, w, fz, stride, inv, order);
   return fx[0] + fy[1] + fz[2];
+}
+
+double MElement::integrate(double val[], int pOrder, int stride, int order)
+{
+  int npts; IntPt *gp;
+  getIntegrationPoints(pOrder, &npts, &gp);
+  double sum = 0;
+  for (int i = 0; i < npts; i++){
+    double u = gp[i].pt[0];
+    double v = gp[i].pt[1];
+    double w = gp[i].pt[2];
+    double weight = gp[i].weight;
+    double detuvw = getJacobianDeterminant(u, v, w);
+    sum += interpolate(val, u, v, w, stride, order)*weight*detuvw;
+  }
+  return sum;
+}
+
+static int getTriangleType (int order)
+{
+  switch(order) {
+  case 0 : return MSH_TRI_1;
+  case 1 : return MSH_TRI_3;
+  case 2 : return MSH_TRI_6;
+  case 3 : return MSH_TRI_10;
+  case 4 : return MSH_TRI_15;
+  case 5 : return MSH_TRI_21;
+  case 6 : return MSH_TRI_28;
+  case 7 : return MSH_TRI_36;
+  case 8 : return MSH_TRI_45;
+  case 9 : return MSH_TRI_55;
+  case 10 : return MSH_TRI_66;
+  default : Msg::Error("triangle order %i unknown", order); return 0;
+  }
+}
+
+static int getQuadType (int order)
+{
+  switch(order) {
+  case 0 : return MSH_QUA_1;
+  case 1 : return MSH_QUA_4;
+  case 2 : return MSH_QUA_9;
+  case 3 : return MSH_QUA_16;
+  case 4 : return MSH_QUA_25;
+  case 5 : return MSH_QUA_36;
+  case 6 : return MSH_QUA_49;
+  case 7 : return MSH_QUA_64;
+  case 8 : return MSH_QUA_81;
+  case 9 : return MSH_QUA_100;
+  case 10 : return MSH_QUA_121;
+  default : Msg::Error("quad order %i unknown", order); return 0;
+  }
+}
+
+static int getLineType (int order)
+{
+  switch(order) {
+  case 0 : return MSH_LIN_1;
+  case 1 : return MSH_LIN_2;
+  case 2 : return MSH_LIN_3;
+  case 3 : return MSH_LIN_4;
+  case 4 : return MSH_LIN_5;
+  case 5 : return MSH_LIN_6;
+  case 6 : return MSH_LIN_7;
+  case 7 : return MSH_LIN_8;
+  case 8 : return MSH_LIN_9;
+  case 9 : return MSH_LIN_10;
+  case 10 : return MSH_LIN_11;
+  default : Msg::Error("line order %i unknown", order); return 0;
+  }
+}
+
+double MElement::integrateCirc(double val[], int edge, int pOrder, int order)
+{
+  if(edge > getNumEdges() - 1){
+    Msg::Error("No edge %d for this element", edge);
+    return 0;
+  }
+  
+  std::vector<MVertex*> v;
+  getEdgeVertices(edge, v);
+  MElementFactory f;
+  int type = getLineType(getPolynomialOrder());
+  MElement* ee = f.create(type, v);
+  
+  double intv[3];
+  for(int i = 0; i < 3; i++){
+    intv[i] = ee->integrate(&val[i], pOrder, 3, order);
+  }  
+  delete ee;
+  
+  double t[3] = {v[1]->x() - v[0]->x(), v[1]->y() - v[0]->y(), v[1]->z() - v[0]->z()};
+  norme(t);
+  double result;
+  prosca(t, intv, &result);
+  return result;
+}
+
+double MElement::integrateFlux(double val[], int face, int pOrder, int order)
+{
+  if(face > getNumFaces() - 1){
+    Msg::Error("No face %d for this element", face);
+    return 0;
+  }
+  std::vector<MVertex*> v;
+  getFaceVertices(face, v);
+  MElementFactory f;
+  int type = 0;
+  switch(getType()) {
+  case TYPE_TRI : type = getTriangleType(getPolynomialOrder()); break;
+  case TYPE_TET : type = getTriangleType(getPolynomialOrder()); break;
+  case TYPE_QUA : type = getQuadType(getPolynomialOrder());     break;
+  case TYPE_HEX : type = getQuadType(getPolynomialOrder());     break;
+  case TYPE_PYR : 
+    if(face < 4) type = getTriangleType(getPolynomialOrder());
+    else type = getQuadType(getPolynomialOrder());
+    break;
+  case TYPE_PRI :
+    if(face < 2) type = getTriangleType(getPolynomialOrder());
+    else type = getQuadType(getPolynomialOrder());
+    break;
+  default: type = 0; break;
+  }
+  MElement* fe = f.create(type, v);
+
+  double intv[3];
+  for(int i = 0; i < 3; i++){
+    intv[i] = fe->integrate(&val[i], pOrder, 3, order);
+  }
+  delete fe;
+
+  double n[3];
+  normal3points(v[0]->x(), v[0]->y(), v[0]->z(),
+                v[1]->x(), v[1]->y(), v[1]->z(),
+                v[2]->x(), v[2]->y(), v[2]->z(), n);
+  double result;
+  prosca(n, intv, &result);
+  return result;
 }
 
 void MElement::writeMSH(FILE *fp, double version, bool binary, int num,
@@ -809,76 +966,90 @@ void MElement::writeINP(FILE *fp, int num)
 int MElement::getInfoMSH(const int typeMSH, const char **const name)
 {
   switch(typeMSH){
-  case MSH_PNT    : if(name) *name = "Point";           return 1;
-  case MSH_LIN_2  : if(name) *name = "Line 2";          return 2;
-  case MSH_LIN_3  : if(name) *name = "Line 3";          return 2 + 1;
-  case MSH_LIN_4  : if(name) *name = "Line 4";          return 2 + 2;
-  case MSH_LIN_5  : if(name) *name = "Line 5";          return 2 + 3;
-  case MSH_LIN_6  : if(name) *name = "Line 6";          return 2 + 4;
-  case MSH_LIN_7  : if(name) *name = "Line 7";          return 2 + 5;
-  case MSH_LIN_8  : if(name) *name = "Line 8";          return 2 + 6;
-  case MSH_LIN_9  : if(name) *name = "Line 9";          return 2 + 7;
-  case MSH_LIN_10 : if(name) *name = "Line 10";         return 2 + 8;
-  case MSH_LIN_11 : if(name) *name = "Line 11";         return 2 + 9;
-  case MSH_LIN_B  : if(name) *name = "Line Border";     return 2;
-  case MSH_LIN_C  : if(name) *name = "Line Child";      return 2;
-  case MSH_TRI_3  : if(name) *name = "Triangle 3";      return 3;
-  case MSH_TRI_6  : if(name) *name = "Triangle 6";      return 3 + 3;
-  case MSH_TRI_9  : if(name) *name = "Triangle 9";      return 3 + 6;
-  case MSH_TRI_10 : if(name) *name = "Triangle 10";     return 3 + 6 + 1;
-  case MSH_TRI_12 : if(name) *name = "Triangle 12";     return 3 + 9;
-  case MSH_TRI_15 : if(name) *name = "Triangle 15";     return 3 + 9 + 3;
-  case MSH_TRI_15I: if(name) *name = "Triangle 15I";    return 3 + 12;
-  case MSH_TRI_21 : if(name) *name = "Triangle 21";     return 3 + 12 + 6;
-  case MSH_TRI_28 : if(name) *name = "Triangle 28";     return 3 + 15 + 10;
-  case MSH_TRI_36 : if(name) *name = "Triangle 36";     return 3 + 18 + 15;
-  case MSH_TRI_45 : if(name) *name = "Triangle 45";     return 3 + 21 + 21;
-  case MSH_TRI_55 : if(name) *name = "Triangle 55";     return 3 + 24 + 28;
-  case MSH_TRI_66 : if(name) *name = "Triangle 66";     return 3 + 27 + 36;
-  case MSH_TRI_18 : if(name) *name = "Triangle 18";     return 3 + 15;
-  case MSH_TRI_21I: if(name) *name = "Triangle 21I";    return 3 + 18;
-  case MSH_TRI_24 : if(name) *name = "Triangle 24";     return 3 + 21;
-  case MSH_TRI_27 : if(name) *name = "Triangle 27";     return 3 + 24;
-  case MSH_TRI_30 : if(name) *name = "Triangle 30";     return 3 + 27;
-  case MSH_TRI_B  : if(name) *name = "Triangle Border"; return 3;
-  case MSH_QUA_4  : if(name) *name = "Quadrilateral 4"; return 4;
-  case MSH_QUA_8  : if(name) *name = "Quadrilateral 8"; return 4 + 4;
-  case MSH_QUA_9  : if(name) *name = "Quadrilateral 9"; return 9;
-  case MSH_QUA_16 : if(name) *name = "Quadrilateral 16"; return 16;
-  case MSH_QUA_25 : if(name) *name = "Quadrilateral 25"; return 25;
-  case MSH_QUA_36 : if(name) *name = "Quadrilateral 36"; return 36;
-  case MSH_QUA_49 : if(name) *name = "Quadrilateral 49"; return 49;
-  case MSH_QUA_64 : if(name) *name = "Quadrilateral 64"; return 64;
-  case MSH_QUA_81 : if(name) *name = "Quadrilateral 81"; return 81;
-  case MSH_QUA_100: if(name) *name = "Quadrilateral 100"; return 100;
-  case MSH_QUA_121: if(name) *name = "Quadrilateral 121"; return 121;
-  case MSH_QUA_12 : if(name) *name = "Quadrilateral 12"; return 12;
-  case MSH_QUA_16I: if(name) *name = "Quadrilateral 16I"; return 16;
-  case MSH_QUA_20 : if(name) *name = "Quadrilateral 20"; return 20;
-  case MSH_POLYG_ : if(name) *name = "Polygon";         return 0;
-  case MSH_POLYG_B: if(name) *name = "Polygon Border";  return 0;
-  case MSH_TET_4  : if(name) *name = "Tetrahedron 4";   return 4;
-  case MSH_TET_10 : if(name) *name = "Tetrahedron 10";  return 4 + 6;
-  case MSH_TET_20 : if(name) *name = "Tetrahedron 20";  return 4 + 12 + 4;
-  case MSH_TET_34 : if(name) *name = "Tetrahedron 34";  return 4 + 18 + 12 + 0;
-  case MSH_TET_35 : if(name) *name = "Tetrahedron 35";  return 4 + 18 + 12 + 1;
-  case MSH_TET_52 : if(name) *name = "Tetrahedron 52";  return 4 + 24 + 24 + 0;
-  case MSH_TET_56 : if(name) *name = "Tetrahedron 56";  return 4 + 24 + 24 + 4;
-  case MSH_TET_84 : if(name) *name = "Tetrahedron 84";  return (7*8*9)/6;
+  case MSH_PNT     : if(name) *name = "Point";            return 1;
+  case MSH_LIN_2   : if(name) *name = "Line 2";           return 2;
+  case MSH_LIN_3   : if(name) *name = "Line 3";           return 2 + 1;
+  case MSH_LIN_4   : if(name) *name = "Line 4";           return 2 + 2;
+  case MSH_LIN_5   : if(name) *name = "Line 5";           return 2 + 3;
+  case MSH_LIN_6   : if(name) *name = "Line 6";           return 2 + 4;
+  case MSH_LIN_7   : if(name) *name = "Line 7";           return 2 + 5;
+  case MSH_LIN_8   : if(name) *name = "Line 8";           return 2 + 6;
+  case MSH_LIN_9   : if(name) *name = "Line 9";           return 2 + 7;
+  case MSH_LIN_10  : if(name) *name = "Line 10";          return 2 + 8;
+  case MSH_LIN_11  : if(name) *name = "Line 11";          return 2 + 9;
+  case MSH_LIN_B   : if(name) *name = "Line Border";      return 2;
+  case MSH_LIN_C   : if(name) *name = "Line Child";       return 2;
+  case MSH_TRI_3   : if(name) *name = "Triangle 3";       return 3;
+  case MSH_TRI_6   : if(name) *name = "Triangle 6";       return 3 + 3;
+  case MSH_TRI_9   : if(name) *name = "Triangle 9";       return 3 + 6;
+  case MSH_TRI_10  : if(name) *name = "Triangle 10";      return 3 + 6 + 1;
+  case MSH_TRI_12  : if(name) *name = "Triangle 12";      return 3 + 9;
+  case MSH_TRI_15  : if(name) *name = "Triangle 15";      return 3 + 9 + 3;
+  case MSH_TRI_15I : if(name) *name = "Triangle 15I";     return 3 + 12;
+  case MSH_TRI_21  : if(name) *name = "Triangle 21";      return 3 + 12 + 6;
+  case MSH_TRI_28  : if(name) *name = "Triangle 28";      return 3 + 15 + 10;
+  case MSH_TRI_36  : if(name) *name = "Triangle 36";      return 3 + 18 + 15;
+  case MSH_TRI_45  : if(name) *name = "Triangle 45";      return 3 + 21 + 21;
+  case MSH_TRI_55  : if(name) *name = "Triangle 55";      return 3 + 24 + 28;
+  case MSH_TRI_66  : if(name) *name = "Triangle 66";      return 3 + 27 + 36;
+  case MSH_TRI_18  : if(name) *name = "Triangle 18";      return 3 + 15;
+  case MSH_TRI_21I : if(name) *name = "Triangle 21I";     return 3 + 18;
+  case MSH_TRI_24  : if(name) *name = "Triangle 24";      return 3 + 21;
+  case MSH_TRI_27  : if(name) *name = "Triangle 27";      return 3 + 24;
+  case MSH_TRI_30  : if(name) *name = "Triangle 30";      return 3 + 27;
+  case MSH_TRI_B   : if(name) *name = "Triangle Border";  return 3;
+  case MSH_QUA_4   : if(name) *name = "Quadrilateral 4";  return 4;
+  case MSH_QUA_8   : if(name) *name = "Quadrilateral 8";  return 4 + 4;
+  case MSH_QUA_9   : if(name) *name = "Quadrilateral 9";  return 9;
+  case MSH_QUA_16  : if(name) *name = "Quadrilateral 16"; return 16;
+  case MSH_QUA_25  : if(name) *name = "Quadrilateral 25"; return 25;
+  case MSH_QUA_36  : if(name) *name = "Quadrilateral 36"; return 36;
+  case MSH_QUA_49  : if(name) *name = "Quadrilateral 49"; return 49;
+  case MSH_QUA_64  : if(name) *name = "Quadrilateral 64"; return 64;
+  case MSH_QUA_81  : if(name) *name = "Quadrilateral 81"; return 81;
+  case MSH_QUA_100 : if(name) *name = "Quadrilateral 100";return 100;
+  case MSH_QUA_121 : if(name) *name = "Quadrilateral 121";return 121;
+  case MSH_QUA_12  : if(name) *name = "Quadrilateral 12"; return 12;
+  case MSH_QUA_16I : if(name) *name = "Quadrilateral 16I";return 16;
+  case MSH_QUA_20  : if(name) *name = "Quadrilateral 20"; return 20;
+  case MSH_POLYG_  : if(name) *name = "Polygon";          return 0;
+  case MSH_POLYG_B : if(name) *name = "Polygon Border";   return 0;
+  case MSH_TET_4   : if(name) *name = "Tetrahedron 4";    return 4;
+  case MSH_TET_10  : if(name) *name = "Tetrahedron 10";   return 4 + 6;
+  case MSH_TET_20  : if(name) *name = "Tetrahedron 20";   return 4 + 12 + 4;
+  case MSH_TET_34  : if(name) *name = "Tetrahedron 34";   return 4 + 18 + 12 + 0;
+  case MSH_TET_35  : if(name) *name = "Tetrahedron 35";   return 4 + 18 + 12 + 1;
+  case MSH_TET_52  : if(name) *name = "Tetrahedron 52";   return 4 + 24 + 24 + 0;
+  case MSH_TET_56  : if(name) *name = "Tetrahedron 56";   return 4 + 24 + 24 + 4;
+  case MSH_TET_84  : if(name) *name = "Tetrahedron 84";   return (7*8*9)/6;
   case MSH_TET_120 : if(name) *name = "Tetrahedron 120";  return (8*9*10)/6;
   case MSH_TET_165 : if(name) *name = "Tetrahedron 165";  return (9*10*11)/6;
   case MSH_TET_220 : if(name) *name = "Tetrahedron 220";  return (10*11*12)/6;
   case MSH_TET_286 : if(name) *name = "Tetrahedron 286";  return (11*12*13)/6;
-  case MSH_HEX_8  : if(name) *name = "Hexahedron 8";    return 8;
-  case MSH_HEX_20 : if(name) *name = "Hexahedron 20";   return 8 + 12;
-  case MSH_HEX_27 : if(name) *name = "Hexahedron 27";   return 8 + 12 + 6 + 1;
-  case MSH_PRI_6  : if(name) *name = "Prism 6";         return 6;
-  case MSH_PRI_15 : if(name) *name = "Prism 15";        return 6 + 9;
-  case MSH_PRI_18 : if(name) *name = "Prism 18";        return 6 + 9 + 3;
-  case MSH_PYR_5  : if(name) *name = "Pyramid 5";       return 5;
-  case MSH_PYR_13 : if(name) *name = "Pyramid 13";      return 5 + 8;
-  case MSH_PYR_14 : if(name) *name = "Pyramid 14";      return 5 + 8 + 1;
-  case MSH_POLYH_ : if(name) *name = "Polyhedron";      return 0;
+  case MSH_HEX_8   : if(name) *name = "Hexahedron 8";     return 8;
+  case MSH_HEX_20  : if(name) *name = "Hexahedron 20";    return 8 + 12;
+  case MSH_HEX_27  : if(name) *name = "Hexahedron 27";    return 8 + 12 + 6 + 1;
+  case MSH_HEX_64  : if(name) *name = "Hexahedron 64";    return 64;
+  case MSH_HEX_125 : if(name) *name = "Hexahedron 125";   return 125;
+  case MSH_HEX_216 : if(name) *name = "Hexahedron 216";   return 216;
+  case MSH_HEX_343 : if(name) *name = "Hexahedron 343";   return 343;
+  case MSH_HEX_512 : if(name) *name = "Hexahedron 512";   return 512;
+  case MSH_HEX_729 : if(name) *name = "Hexahedron 729";   return 729;
+  case MSH_HEX_1000: if(name) *name = "Hexahedron 1000";  return 1000;
+  case MSH_HEX_56  : if(name) *name = "Hexahedron 56";    return 56;
+  case MSH_HEX_98  : if(name) *name = "Hexahedron 98";    return 98;
+  case MSH_HEX_152 : if(name) *name = "Hexahedron 152";   return 152;
+  case MSH_HEX_222 : if(name) *name = "Hexahedron 222";   return 222;
+  case MSH_HEX_296 : if(name) *name = "Hexahedron 296";   return 296;
+  case MSH_HEX_386 : if(name) *name = "Hexahedron 386";   return 386;
+  case MSH_HEX_488 : if(name) *name = "Hexahedron 488";   return 488;
+  case MSH_PRI_6   : if(name) *name = "Prism 6";          return 6;
+  case MSH_PRI_15  : if(name) *name = "Prism 15";         return 6 + 9;
+  case MSH_PRI_18  : if(name) *name = "Prism 18";         return 6 + 9 + 3;
+  case MSH_PYR_5   : if(name) *name = "Pyramid 5";        return 5;
+  case MSH_PYR_13  : if(name) *name = "Pyramid 13";       return 5 + 8;
+  case MSH_PYR_14  : if(name) *name = "Pyramid 14";       return 5 + 8 + 1;
+  case MSH_POLYH_  : if(name) *name = "Polyhedron";       return 0;
   default:
     Msg::Error("Unknown type of element %d", typeMSH);
     if(name) *name = "Unknown";
@@ -970,116 +1141,130 @@ MElement *MElementFactory::create(int type, std::vector<MVertex*> &v,
                                   MElement *d1, MElement *d2)
 {
   switch (type) {
-  case MSH_PNT:    return new MPoint(v, num, part);
-  case MSH_LIN_2:  return new MLine(v, num, part);
-  case MSH_LIN_3:  return new MLine3(v, num, part);
-  case MSH_LIN_4:  return new MLineN(v, num, part);
-  case MSH_LIN_5:  return new MLineN(v, num, part);
-  case MSH_LIN_6:  return new MLineN(v, num, part);
-  case MSH_LIN_7:  return new MLineN(v, num, part);
-  case MSH_LIN_8:  return new MLineN(v, num, part);
-  case MSH_LIN_9:  return new MLineN(v, num, part);
-  case MSH_LIN_10: return new MLineN(v, num, part);
-  case MSH_LIN_11: return new MLineN(v, num, part);
-  case MSH_LIN_B:  return new MLineBorder(v, num, part, d1, d2);
-  case MSH_LIN_C:  return new MLineChild(v, num, part, owner, parent);
-  case MSH_TRI_3:  return new MTriangle(v, num, part);
-  case MSH_TRI_6:  return new MTriangle6(v, num, part);
-  case MSH_TRI_9:  return new MTriangleN(v, 3, num, part);
-  case MSH_TRI_10: return new MTriangleN(v, 3, num, part);
-  case MSH_TRI_12: return new MTriangleN(v, 4, num, part);
-  case MSH_TRI_15: return new MTriangleN(v, 4, num, part);
-  case MSH_TRI_15I:return new MTriangleN(v, 5, num, part);
-  case MSH_TRI_21: return new MTriangleN(v, 5, num, part);
-  case MSH_TRI_28: return new MTriangleN(v, 6, num, part);
-  case MSH_TRI_36: return new MTriangleN(v, 7, num, part);
-  case MSH_TRI_45: return new MTriangleN(v, 8, num, part);
-  case MSH_TRI_55: return new MTriangleN(v, 9, num, part);
-  case MSH_TRI_66: return new MTriangleN(v,10, num, part);
-  case MSH_TRI_B:  return new MTriangleBorder(v, num, part, d1, d2);
-  case MSH_QUA_4:  return new MQuadrangle(v, num, part);
-  case MSH_QUA_8:  return new MQuadrangle8(v, num, part);
-  case MSH_QUA_9:  return new MQuadrangle9(v, num, part);
-  case MSH_QUA_12: return new MQuadrangleN(v, 3, num, part);
-  case MSH_QUA_16: return new MQuadrangleN(v, 3, num, part);
-  case MSH_QUA_25: return new MQuadrangleN(v, 4, num, part);
-  case MSH_QUA_36: return new MQuadrangleN(v, 5, num, part);
-  case MSH_QUA_49: return new MQuadrangleN(v, 6, num, part);
-  case MSH_QUA_64: return new MQuadrangleN(v, 7, num, part);
-  case MSH_QUA_81: return new MQuadrangleN(v, 8, num, part);
-  case MSH_QUA_100:return new MQuadrangleN(v, 9, num, part);
-  case MSH_QUA_121:return new MQuadrangleN(v, 10, num, part);
-  case MSH_POLYG_: return new MPolygon(v, num, part, owner, parent);
-  case MSH_POLYG_B:return new MPolygonBorder(v, num, part, d1, d2);
-  case MSH_TET_4:  return new MTetrahedron(v, num, part);
-  case MSH_TET_10: return new MTetrahedron10(v, num, part);
-  case MSH_HEX_8:  return new MHexahedron(v, num, part);
-  case MSH_HEX_20: return new MHexahedron20(v, num, part);
-  case MSH_HEX_27: return new MHexahedron27(v, num, part);
-  case MSH_PRI_6:  return new MPrism(v, num, part);
-  case MSH_PRI_15: return new MPrism15(v, num, part);
-  case MSH_PRI_18: return new MPrism18(v, num, part);
-  case MSH_PYR_5:  return new MPyramid(v, num, part);
-  case MSH_PYR_13: return new MPyramid13(v, num, part);
-  case MSH_PYR_14: return new MPyramid14(v, num, part);
-  case MSH_TET_20: return new MTetrahedronN(v, 3, num, part);
-  case MSH_TET_34: return new MTetrahedronN(v, 3, num, part);
-  case MSH_TET_35: return new MTetrahedronN(v, 4, num, part);
-  case MSH_TET_52: return new MTetrahedronN(v, 5, num, part);
-  case MSH_TET_56: return new MTetrahedronN(v, 5, num, part);
-  case MSH_TET_84: return new MTetrahedronN(v, 6, num, part);
+  case MSH_PNT:     return new MPoint(v, num, part);
+  case MSH_LIN_2:   return new MLine(v, num, part);
+  case MSH_LIN_3:   return new MLine3(v, num, part);
+  case MSH_LIN_4:   return new MLineN(v, num, part);
+  case MSH_LIN_5:   return new MLineN(v, num, part);
+  case MSH_LIN_6:   return new MLineN(v, num, part);
+  case MSH_LIN_7:   return new MLineN(v, num, part);
+  case MSH_LIN_8:   return new MLineN(v, num, part);
+  case MSH_LIN_9:   return new MLineN(v, num, part);
+  case MSH_LIN_10:  return new MLineN(v, num, part);
+  case MSH_LIN_11:  return new MLineN(v, num, part);
+  case MSH_LIN_B:   return new MLineBorder(v, num, part, d1, d2);
+  case MSH_LIN_C:   return new MLineChild(v, num, part, owner, parent);
+  case MSH_TRI_3:   return new MTriangle(v, num, part);
+  case MSH_TRI_6:   return new MTriangle6(v, num, part);
+  case MSH_TRI_9:   return new MTriangleN(v, 3, num, part);
+  case MSH_TRI_10:  return new MTriangleN(v, 3, num, part);
+  case MSH_TRI_12:  return new MTriangleN(v, 4, num, part);
+  case MSH_TRI_15:  return new MTriangleN(v, 4, num, part);
+  case MSH_TRI_15I: return new MTriangleN(v, 5, num, part);
+  case MSH_TRI_21:  return new MTriangleN(v, 5, num, part);
+  case MSH_TRI_28:  return new MTriangleN(v, 6, num, part);
+  case MSH_TRI_36:  return new MTriangleN(v, 7, num, part);
+  case MSH_TRI_45:  return new MTriangleN(v, 8, num, part);
+  case MSH_TRI_55:  return new MTriangleN(v, 9, num, part);
+  case MSH_TRI_66:  return new MTriangleN(v,10, num, part);
+  case MSH_TRI_B:   return new MTriangleBorder(v, num, part, d1, d2);
+  case MSH_QUA_4:   return new MQuadrangle(v, num, part);
+  case MSH_QUA_8:   return new MQuadrangle8(v, num, part);
+  case MSH_QUA_9:   return new MQuadrangle9(v, num, part);
+  case MSH_QUA_12:  return new MQuadrangleN(v, 3, num, part);
+  case MSH_QUA_16:  return new MQuadrangleN(v, 3, num, part);
+  case MSH_QUA_25:  return new MQuadrangleN(v, 4, num, part);
+  case MSH_QUA_36:  return new MQuadrangleN(v, 5, num, part);
+  case MSH_QUA_49:  return new MQuadrangleN(v, 6, num, part);
+  case MSH_QUA_64:  return new MQuadrangleN(v, 7, num, part);
+  case MSH_QUA_81:  return new MQuadrangleN(v, 8, num, part);
+  case MSH_QUA_100: return new MQuadrangleN(v, 9, num, part);
+  case MSH_QUA_121: return new MQuadrangleN(v, 10, num, part);
+  case MSH_POLYG_:  return new MPolygon(v, num, part, owner, parent);
+  case MSH_POLYG_B: return new MPolygonBorder(v, num, part, d1, d2);
+  case MSH_TET_4:   return new MTetrahedron(v, num, part);
+  case MSH_TET_10:  return new MTetrahedron10(v, num, part);
+  case MSH_HEX_8:   return new MHexahedron(v, num, part);
+  case MSH_HEX_20:  return new MHexahedron20(v, num, part);
+  case MSH_HEX_27:  return new MHexahedron27(v, num, part);
+  case MSH_PRI_6:   return new MPrism(v, num, part);
+  case MSH_PRI_15:  return new MPrism15(v, num, part);
+  case MSH_PRI_18:  return new MPrism18(v, num, part);
+  case MSH_PYR_5:   return new MPyramid(v, num, part);
+  case MSH_PYR_13:  return new MPyramid13(v, num, part);
+  case MSH_PYR_14:  return new MPyramid14(v, num, part);
+  case MSH_TET_20:  return new MTetrahedronN(v, 3, num, part);
+  case MSH_TET_34:  return new MTetrahedronN(v, 3, num, part);
+  case MSH_TET_35:  return new MTetrahedronN(v, 4, num, part);
+  case MSH_TET_52:  return new MTetrahedronN(v, 5, num, part);
+  case MSH_TET_56:  return new MTetrahedronN(v, 5, num, part);
+  case MSH_TET_84:  return new MTetrahedronN(v, 6, num, part);
   case MSH_TET_120: return new MTetrahedronN(v, 7, num, part);
   case MSH_TET_165: return new MTetrahedronN(v, 8, num, part);
   case MSH_TET_220: return new MTetrahedronN(v, 9, num, part);
   case MSH_TET_286: return new MTetrahedronN(v, 10, num, part);
-  case MSH_POLYH_: return new MPolyhedron(v, num, part, owner, parent);
-  default:         return 0;
+  case MSH_POLYH_:  return new MPolyhedron(v, num, part, owner, parent);
+  case MSH_HEX_56:  return new MHexahedronN(v, 3, num, part);
+  case MSH_HEX_64:  return new MHexahedronN(v, 3, num, part);
+  case MSH_HEX_125: return new MHexahedronN(v, 4, num, part);
+  case MSH_HEX_216: return new MHexahedronN(v, 5, num, part);
+  case MSH_HEX_343: return new MHexahedronN(v, 6, num, part);
+  case MSH_HEX_512: return new MHexahedronN(v, 7, num, part);
+  case MSH_HEX_729: return new MHexahedronN(v, 8, num, part);
+  case MSH_HEX_1000:return new MHexahedronN(v, 9, num, part);
+  default:          return 0;
   }
 }
 
-/*const fullMatrix<double> &MElement::getShapeFunctionsAtIntegrationPoints (int integrationOrder, int functionSpaceOrder) {
-  static std::map <std::pair<int,int>, fullMatrix<double> > F;
-  const polynomialBasis *fs = getFunctionSpace (functionSpaceOrder);
-  fullMatrix<double> &mat = F [std::make_pair(fs->type, integrationOrder)];
-  if (mat.size1()!=0) return mat;
-  int npts;
-  IntPt *pts;
-  getIntegrationPoints (integrationOrder, &npts, &pts);
-  mat.resize (fs->points.size1(), npts);
-  double f[512];
-  for (int i = 0; i < npts; i++) {
-    fs->f (pts[i].pt[0], pts[i].pt[1], pts[i].pt[2], f);
-    for (int j = 0; j < fs->points.size1(); j++) {
-      mat (i, j) = f[j];
-    }
-  }
-  return mat;
-}*/
-
-const fullMatrix<double> &MElement::getGradShapeFunctionsAtIntegrationPoints (int integrationOrder, int functionSpaceOrder) {
+const fullMatrix<double> &MElement::
+getGradShapeFunctionsAtIntegrationPoints(int integrationOrder, int functionSpaceOrder)
+{
   static std::map <std::pair<int,int>, fullMatrix<double> > DF;
-  const polynomialBasis *fs = getFunctionSpace (functionSpaceOrder);
-  fullMatrix<double> &mat = DF [std::make_pair(fs->type, integrationOrder)];
-  if (mat.size1()!=0) return mat;
+  const polynomialBasis *fs = getFunctionSpace(functionSpaceOrder);
+  fullMatrix<double> &mat = DF[std::make_pair(fs->type, integrationOrder)];
+  if (mat.size1() != 0) return mat;
   int npts;
   IntPt *pts;
-  getIntegrationPoints (integrationOrder, &npts, &pts);
-  mat.resize (fs->points.size1(), npts*3);
+  getIntegrationPoints(integrationOrder, &npts, &pts);
+  mat.resize(fs->points.size1(), npts*3);
   double df[512][3];
   for (int i = 0; i < npts; i++) {
-    fs->df (pts[i].pt[0], pts[i].pt[1], pts[i].pt[2], df);
+    fs->df(pts[i].pt[0], pts[i].pt[1], pts[i].pt[2], df);
     for (int j = 0; j < fs->points.size1(); j++) {
-      mat (j, i*3+0) = df[j][0];
-      mat (j, i*3+1) = df[j][1];
-      mat (j, i*3+2) = df[j][2];
+      mat(j, i*3+0) = df[j][0];
+      mat(j, i*3+1) = df[j][1];
+      mat(j, i*3+2) = df[j][2];
     }
   }
   return mat;
 }
-const fullMatrix<double> &MElement::getGradShapeFunctionsAtNodes (int functionSpaceOrder) {
-  static std::map <int, fullMatrix<double> > DF;
+
+const fullMatrix<double> &MElement::
+getShapeFunctionsAtIntegrationPoints (int integrationOrder, int functionSpaceOrder)
+{
+  static std::map <std::pair<int,int>, fullMatrix<double> > F;
   const polynomialBasis *fs = getFunctionSpace (functionSpaceOrder);
-  fullMatrix<double> &mat = DF [fs->type];
+  fullMatrix<double> &mat = F[std::make_pair(fs->type, integrationOrder)];
+  if (mat.size1() != 0) return mat;
+  int npts;
+  IntPt *pts;
+  getIntegrationPoints(integrationOrder, &npts, &pts);
+  mat.resize(fs->points.size1(), npts*3);
+  double f[512];
+  for (int i = 0; i < npts; i++) {
+    fs->f(pts[i].pt[0], pts[i].pt[1], pts[i].pt[2], f);
+    for (int j = 0; j < fs->points.size1(); j++) {
+      mat(j, i) = f[j];
+    }
+  }
+  return mat;
+}
+
+const fullMatrix<double> &MElement::getGradShapeFunctionsAtNodes(int functionSpaceOrder)
+{
+  static std::map <int, fullMatrix<double> > DF;
+  const polynomialBasis *fs = getFunctionSpace(functionSpaceOrder);
+  fullMatrix<double> &mat = DF[fs->type];
   if (mat.size1()!=0) return mat;
   const fullMatrix<double> &points = fs->points;
   mat.resize (points.size1(), points.size1()*3);
@@ -1087,42 +1272,19 @@ const fullMatrix<double> &MElement::getGradShapeFunctionsAtNodes (int functionSp
   for (int i = 0; i < points.size1(); i++) {
     fs->df (points(i,0), points(i,1), points(i,2), df);
     for (int j = 0; j < points.size1(); j++) {
-      mat (j, i*3+0) = df[j][0];
-      mat (j, i*3+1) = df[j][1];
-      mat (j, i*3+2) = df[j][2];
+      mat(j, i*3+0) = df[j][0];
+      mat(j, i*3+1) = df[j][1];
+      mat(j, i*3+2) = df[j][2];
     }
   }
   return mat;
 }
 
-#include "Bindings.h"
-
-void MElement::registerBindings(binding *b)
+void MElement::xyzTouvw(fullMatrix<double> *xu)
 {
-  classBinding *cb = b->addClass<MElement>("MElement");
-  cb->setDescription("A mesh element.");
-  methodBinding *cm;
-  cm = cb->addMethod("getNum",&MElement::getNum);
-  cm->setDescription("return the tag of the element");
-  cm = cb->addMethod("getNumVertices", &MElement::getNumVertices);
-  cm->setDescription("get the number of vertices of this element");
-  cm = cb->addMethod("getVertex", &MElement::getVertex);
-  cm->setDescription("return the i-th vertex of this element");
-  cm->setArgNames("i",NULL);
-  cm = cb->addMethod("getType", &MElement::getType);
-  cm->setDescription("get the type of the element");
-  cm = cb->addMethod("getTypeForMSH", &MElement::getTypeForMSH);
-  cm->setDescription("get the gmsh type of the element");
-  cm = cb->addMethod("getPartition", &MElement::getPartition);
-  cm->setDescription("get the partition to which the element belongs");
-  cm = cb->addMethod("setPartition", &MElement::setPartition);
-  cm->setDescription("set the partition to which the element belongs");
-  cm->setArgNames("iPartition",NULL);
-  cm = cb->addMethod("getPolynomialOrder", &MElement::getPolynomialOrder);
-  cm->setDescription("return the polynomial order the element");
-  cm = cb->addMethod("getDim", &MElement::getDim);
-  cm->setDescription("return the geometrical dimension of the element");
-  cm = cb->addMethod("getJacobianDeterminant", &MElement::getJacobianDeterminant);
-  cm->setDescription("return the jacobian of the determinant of the transformation");
-  cm->setArgNames("u","v","w",NULL);
+  double _xyz[3] = {(*xu)(0,0),(*xu)(0,1),(*xu)(0,2)}, _uvw[3];
+  xyz2uvw(_xyz, _uvw);
+  (*xu)(1,0) = _uvw[0];
+  (*xu)(1,1) = _uvw[1];
+  (*xu)(1,2) = _uvw[2];
 }

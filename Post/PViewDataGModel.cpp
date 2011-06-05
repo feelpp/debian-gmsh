@@ -1,9 +1,10 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
 #include "PViewDataGModel.h"
+#include "MPoint.h"
 #include "MLine.h"
 #include "MTriangle.h"
 #include "MQuadrangle.h"
@@ -25,7 +26,64 @@ PViewDataGModel::~PViewDataGModel()
   for(unsigned int i = 0; i < _steps.size(); i++) delete _steps[i];
 }
 
-bool PViewDataGModel::finalize(bool computeMinMax)
+static MElement *_getOneElementOfGivenType(GModel *m, int type)
+{
+  switch(type){
+  case TYPE_PNT:
+    for(GModel::viter it = m->firstVertex(); it != m->lastVertex(); it++){
+      if((*it)->points.size()) return (*it)->points[0];
+    }
+    break;
+  case TYPE_LIN: 
+    for(GModel::eiter it = m->firstEdge(); it != m->lastEdge(); it++){
+      if((*it)->lines.size()) return (*it)->lines[0];
+    }
+    break;
+  case TYPE_TRI:
+    for(GModel::fiter it = m->firstFace(); it != m->lastFace(); it++){
+      if((*it)->triangles.size()) return (*it)->triangles[0];
+    }
+    break;
+  case TYPE_QUA:
+    for(GModel::fiter it = m->firstFace(); it != m->lastFace(); it++){
+      if((*it)->quadrangles.size()) return (*it)->quadrangles[0];
+    }
+    break;
+  case TYPE_POLYG:
+    for(GModel::fiter it = m->firstFace(); it != m->lastFace(); it++){
+      if((*it)->polygons.size()) return (*it)->polygons[0];
+    }
+    break;
+  case TYPE_TET:
+    for(GModel::riter it = m->firstRegion(); it != m->lastRegion(); it++){
+      if((*it)->tetrahedra.size()) return (*it)->tetrahedra[0];
+    }
+    break;
+  case TYPE_HEX:
+    for(GModel::riter it = m->firstRegion(); it != m->lastRegion(); it++){
+      if((*it)->hexahedra.size()) return (*it)->hexahedra[0];
+    }
+    break;
+  case TYPE_PRI:
+    for(GModel::riter it = m->firstRegion(); it != m->lastRegion(); it++){
+      if((*it)->prisms.size()) return (*it)->prisms[0];
+    }
+    break;
+  case TYPE_PYR:
+    for(GModel::riter it = m->firstRegion(); it != m->lastRegion(); it++){
+      if((*it)->pyramids.size()) return (*it)->pyramids[0];
+    }
+    break;
+  case TYPE_POLYH:
+    for(GModel::riter it = m->firstRegion(); it != m->lastRegion(); it++){
+      if((*it)->polyhedra.size()) return (*it)->polyhedra[0];
+    }
+    break;
+  }
+  return 0;
+}
+
+bool PViewDataGModel::finalize(bool computeMinMax, const std::string &interpolationScheme)
 {
   if(computeMinMax){
     _min = VAL_INF;
@@ -64,50 +122,71 @@ bool PViewDataGModel::finalize(bool computeMinMax)
     }
   }
 
-  // add interpolation data for known element types (this might be
-  // overidden later)
-  for(int step = 0; step < getNumTimeSteps(); step++){
-    GModel *m = _steps[step]->getModel();
-    for(GModel::eiter it = m->firstEdge(); it != m->lastEdge(); it++){
-      if((*it)->lines.size())
-        _addInterpolationMatricesForElement((*it)->lines[0]);
-    }
-    for(GModel::fiter it = m->firstFace(); it != m->lastFace(); it++){
-      if((*it)->triangles.size())
-        _addInterpolationMatricesForElement((*it)->triangles[0]);
-      if((*it)->quadrangles.size())
-        _addInterpolationMatricesForElement((*it)->quadrangles[0]);
-      if((*it)->polygons.size())
-        _addInterpolationMatricesForElement((*it)->polygons[0]);
-    }
-    for(GModel::riter it = m->firstRegion(); it != m->lastRegion(); it++){
-      if((*it)->tetrahedra.size())
-        _addInterpolationMatricesForElement((*it)->tetrahedra[0]);
-      if((*it)->hexahedra.size())
-        _addInterpolationMatricesForElement((*it)->hexahedra[0]);
-      if((*it)->prisms.size())
-        _addInterpolationMatricesForElement((*it)->prisms[0]);
-      if((*it)->pyramids.size())
-        _addInterpolationMatricesForElement((*it)->pyramids[0]);
-      if((*it)->polyhedra.size())
-        _addInterpolationMatricesForElement((*it)->polyhedra[0]);
-    }
-  }
+  // set up interpolation matrices
+  if(!haveInterpolationMatrices()){
 
+    GModel *model = _steps[0]->getModel();
+    
+    // if an interpolation scheme is explicitly provided, use it
+    if(interpolationScheme.size()){
+      interpolationMatrices m = _interpolationSchemes[interpolationScheme];
+      if(m.size())
+        Msg::Info("Setting interpolation matrices from scheme '%s'", 
+                  interpolationScheme.c_str());
+      else
+        Msg::Error("Could not find interpolation scheme '%s'", 
+                   interpolationScheme.c_str());
+      for(interpolationMatrices::iterator it = m.begin(); it != m.end(); it++){
+        if(it->second.size() == 2){
+          // use provided interpolation matrices for field interpolation
+          // and use geometrical interpolation matrices from the mesh if
+          // the mesh is curved
+          MElement *e = _getOneElementOfGivenType(model, it->first);
+          if(e && e->getPolynomialOrder() > 1 && e->getFunctionSpace()){
+            const polynomialBasis *fs = e->getFunctionSpace();
+            setInterpolationMatrices(it->first, *(it->second[0]), *(it->second[1]),
+                                     fs->coefficients, fs->monomials);
+          }
+          else
+            setInterpolationMatrices(it->first, *(it->second[0]), *(it->second[1]));
+        }
+        else if(it->second.size() == 4){
+          // use provided matrices for field and geometry
+          Msg::Warning("You should not specify the geometrical interpolation "
+                       "in ElementNodeData: the geometry is completely determined "
+                       "by the mesh element type. This feature will be removed");
+          setInterpolationMatrices(it->first, *it->second[0], *it->second[1],
+                                   *it->second[2], *it->second[3]);
+        }
+        else
+          Msg::Error("Wrong number of interpolation matrices (%d) for scheme '%s'",
+                     (int)it->second.size(), interpolationScheme.c_str());
+      }
+    }
+    
+    // if we don't have interpolation matrices for a given element type,
+    // assume isoparametric elements
+    int types[] = {TYPE_PNT, TYPE_LIN, TYPE_TRI, TYPE_QUA, TYPE_TET, TYPE_HEX,
+                   TYPE_PRI, TYPE_PYR, TYPE_POLYG, TYPE_POLYH};
+    for(int i = 0; i < sizeof(types) / sizeof(types[0]); i++){
+      if(!haveInterpolationMatrices(types[i])){
+        MElement *e = _getOneElementOfGivenType(model, types[i]);
+        if(e){
+          const polynomialBasis *fs = e->getFunctionSpace();
+          if(fs){
+            if(e->getPolynomialOrder() > 1)
+              setInterpolationMatrices(types[i], fs->coefficients, fs->monomials,
+                                       fs->coefficients, fs->monomials);
+            else
+              setInterpolationMatrices(types[i], fs->coefficients, fs->monomials);
+          }
+        }
+      }
+    }
+
+  }
+  
   return PViewData::finalize();
-}
-
-void PViewDataGModel::_addInterpolationMatricesForElement(MElement *e)
-{
-  int type = e->getType();
-  const polynomialBasis *fs = e->getFunctionSpace();
-  if(fs){
-    if(e->getPolynomialOrder() > 1)
-      setInterpolationMatrices(type, fs->coefficients, fs->monomials,
-                               fs->coefficients, fs->monomials);
-    else
-      setInterpolationMatrices(type, fs->coefficients, fs->monomials);
-  }
 }
 
 MElement *PViewDataGModel::_getElement(int step, int ent, int ele)
@@ -353,24 +432,38 @@ int PViewDataGModel::getNumNodes(int step, int ent, int ele)
     return _steps[step]->getGaussPoints(e->getTypeForMSH()).size() / 3;
   }
   else{
+    if(e->getNumChildren())
+      return e->getNumChildren() * e->getChild(0)->getNumVertices();
     if(isAdaptive())
       return e->getNumVertices();
-    else
-      return e->getNumPrimaryVertices();
+    return e->getNumPrimaryVertices();
   }
+}
+
+MVertex *PViewDataGModel::_getNode(MElement *e, int nod)
+{
+  MVertex *v;
+  if(!e->getNumChildren())
+    v = e->getVertex(nod);
+  else {
+    int nbV = e->getChild(0)->getNumVertices();
+    v = e->getChild((int)(nod / nbV))->getVertex(nod % nbV);
+  }
+  return v;
 }
 
 int PViewDataGModel::getNode(int step, int ent, int ele, int nod,
                              double &x, double &y, double &z)
 {
   MElement *e = _getElement(step, ent, ele);
+  MVertex *v = _getNode(e, nod);
   if(_type == GaussPointData){
     std::vector<double> &p(_steps[step]->getGaussPoints(e->getTypeForMSH()));
     if(p[0] == 1.e22){
       // hack: the points are the element vertices
-      x = e->getVertex(nod)->x();
-      y = e->getVertex(nod)->y();
-      z = e->getVertex(nod)->z();
+      x = v->x();
+      y = v->y();
+      z = v->z();
     }
     else{
       double vx[8], vy[8], vz[8];
@@ -386,7 +479,6 @@ int PViewDataGModel::getNode(int step, int ent, int ele, int nod,
     return 0;
   }
   else{
-    MVertex *v = e->getVertex(nod);
     x = v->x();
     y = v->y();
     z = v->z();
@@ -397,7 +489,8 @@ int PViewDataGModel::getNode(int step, int ent, int ele, int nod,
 void PViewDataGModel::setNode(int step, int ent, int ele, int nod,
                               double x, double y, double z)
 {
-  MVertex *v = _getElement(step, ent, ele)->getVertex(nod);
+  MElement *e = _getElement(step, ent, ele);
+  MVertex *v = _getNode(e, nod);
   v->x() = x;
   v->y() = y;
   v->z() = z;
@@ -405,7 +498,8 @@ void PViewDataGModel::setNode(int step, int ent, int ele, int nod,
 
 void PViewDataGModel::tagNode(int step, int ent, int ele, int nod, int tag)
 {
-  MVertex *v = _getElement(step, ent, ele)->getVertex(nod);
+  MElement *e = _getElement(step, ent, ele);
+  MVertex *v = _getNode(e, nod);
   v->setIndex(tag);
 }
 
@@ -416,7 +510,11 @@ int PViewDataGModel::getNumComponents(int step, int ent, int ele)
 
 int PViewDataGModel::getNumValues(int step, int ent, int ele)
 {
-  if(_type == ElementNodeData || _type == NodeData){
+  if(_type == ElementNodeData){
+    MElement *e = _getElement(step, ent, ele);
+    return _steps[step]->getMult(e->getNum()) * getNumComponents(step, ent, ele);
+  }
+  else if(_type == NodeData){
     return getNumNodes(step, ent, ele) * getNumComponents(step, ent, ele);
   }
   else if(_type == ElementData){
@@ -438,7 +536,8 @@ void PViewDataGModel::getValue(int step, int ent, int ele, int idx, double &val)
     int numcomp = _steps[step]->getNumComponents();
     int nod = idx / numcomp;
     int comp = idx % numcomp;
-    val = _steps[step]->getData(e->getVertex(nod)->getNum())[comp];
+    int num = _getNode(e, nod)->getNum();
+    val = _steps[step]->getData(num)[comp];
   }
   else{
     Msg::Error("getValue(index) should not be used on this type of view");
@@ -450,7 +549,10 @@ void PViewDataGModel::getValue(int step, int ent, int ele, int nod, int comp, do
   MElement *e = _getElement(step, ent, ele);
   switch(_type){
   case NodeData:
-    val = _steps[step]->getData(e->getVertex(nod)->getNum())[comp];
+    {
+      int num = _getNode(e, nod)->getNum();
+      val = _steps[step]->getData(num)[comp];
+    }
     break;
   case ElementNodeData:
   case GaussPointData:
@@ -468,7 +570,10 @@ void PViewDataGModel::setValue(int step, int ent, int ele, int nod, int comp, do
   MElement *e = _getElement(step, ent, ele);
   switch(_type){
   case NodeData:
-    _steps[step]->getData(e->getVertex(nod)->getNum())[comp] = val;
+    {
+      int num = _getNode(e, nod)->getNum();
+      _steps[step]->getData(num)[comp] = val;
+    }
     break;
   case ElementNodeData:
   case GaussPointData:
@@ -504,7 +609,8 @@ void PViewDataGModel::smooth()
     GModel *m = _steps[step]->getModel();
     int numComp = _steps[step]->getNumComponents();
     _steps2.push_back(new stepData<double>(m, numComp, _steps[step]->getFileName(),
-                                           _steps[step]->getFileIndex()));
+                                           _steps[step]->getFileIndex(), 
+                                           _steps[step]->getTime()));
     std::map<int, int> nodeConnect;
     for(int ent = 0; ent < getNumEntities(step); ent++){
       for(int ele = 0; ele < getNumElements(step, ent); ele++){
@@ -593,8 +699,8 @@ bool PViewDataGModel::skipElement(int step, int ent, int ele, bool checkVisibili
   MElement *e = _getElement(step, ent, ele);
   if(checkVisibility && !e->getVisibility()) return true;
   if(_type == NodeData){
-    for(int i = 0; i < e->getNumVertices(); i++)
-      if(!sd->getData(e->getVertex(i)->getNum())) return true;
+    for(int i = 0; i < getNumNodes(step, ent, ele); i++)
+      if(!sd->getData(_getNode(e, i)->getNum())) return true;
   }
   else{
     if(!sd->getData(e->getNum())) return true;

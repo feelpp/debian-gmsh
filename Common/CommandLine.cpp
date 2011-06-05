@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -59,6 +59,7 @@ void PrintUsage(const char *name)
   Msg::Direct("  -1, -2, -3            Perform 1D, 2D or 3D mesh generation, then exit");
   Msg::Direct("  -refine               Perform uniform mesh refinement, then exit");
   Msg::Direct("  -part int             Partition after batch mesh generation");
+  Msg::Direct("  -partWeight <tri|quad|tet|prism|hex> = int    Weight of a triangle/... during partitioning");
   Msg::Direct("  -renumber             Renumber the mesh elements after batch mesh generation");
   Msg::Direct("  -saveall              Save all elements (discard physical group definitions)");
   Msg::Direct("  -o file               Specify output file name");
@@ -70,6 +71,7 @@ void PrintUsage(const char *name)
   Msg::Direct("  -order int            Set mesh order (1, ..., 5)");
   Msg::Direct("  -optimize[_netgen]    Optimize quality of tetrahedral elements");
   Msg::Direct("  -optimize_hom         Optimize higher order meshes (in 2D)");
+  Msg::Direct("  -hom_nometric         Don't use the metric-based high-order mesh generation.");
   Msg::Direct("  -optimize_lloyd       Optimize 2D meshes using Lloyd algorithm");
   Msg::Direct("  -clscale float        Set global mesh element size scaling factor");
   Msg::Direct("  -clmin float          Set minimum mesh element size");
@@ -78,11 +80,12 @@ void PrintUsage(const char *name)
   Msg::Direct("  -smoothRatio float    Set smoothing ration between mesh sizes at nodes of a same edge (only used in bamg)");
   Msg::Direct("  -clcurv               Automatically compute element sizes from curvatures");
   Msg::Direct("  -epslc1d              Set the accuracy of the evaluation of the LCFIELD for 1D mesh");
-  Msg::Direct("  -swapangle            Set the treshold angle (in degree) between two adjacent faces");
+  Msg::Direct("  -swapangle            Set the threshold angle (in degree) between two adjacent faces");
   Msg::Direct("                          below which a swap is allowed");
   Msg::Direct("  -rand float           Set random perturbation factor");
   Msg::Direct("  -bgm file             Load background mesh from file");
   Msg::Direct("  -check                Perform various consistency checks on mesh");
+  Msg::Direct("  -mpass int            Do several passes on the mesh for complex backround fields");
 #if defined(HAVE_FLTK)
   Msg::Direct("Post-processing options:");
   Msg::Direct("  -link int             Select link mode between views (0, 1, 2, 3, 4)");
@@ -98,9 +101,6 @@ void PrintUsage(const char *name)
   Msg::Direct("  -                     Parse input files, then exit");
 #if defined(HAVE_FLTK)
   Msg::Direct("  -a, -g, -m, -s, -p    Start in automatic, geometry, mesh, solver or post-processing mode");
-#endif
-#if defined(HAVE_LUA)
-  Msg::Direct("  -lua                  Start an interactive lua session");
 #endif
   Msg::Direct("  -pid                  Print process id on stdout");
   Msg::Direct("  -listen               Always listen to incoming connection requests");
@@ -187,6 +187,43 @@ void GetOptions(int argc, char *argv[])
         else
           Msg::Fatal("Missing number");
       }
+      else if (!strcmp(argv[i] + 1,"partWeight")) {
+        i++;
+        bool check = true;
+        opt_mesh_partition_partitioner(0,GMSH_SET,2);     // set Metis partitioner 
+        opt_mesh_partition_metis_algorithm(0,GMSH_SET,3); // set partGraphKWay w/ weights
+        while (check) {
+          if (argv[i]) {
+            if (!strcmp(argv[i],"triangle")) {
+              i++;
+              opt_mesh_partition_tri_weight(0,GMSH_SET,atoi(argv[i]));
+            }
+            else if (!strcmp(argv[i],"quad")) {
+              i++;
+              opt_mesh_partition_qua_weight(0,GMSH_SET,atoi(argv[i]));
+            }
+            else if (!strcmp(argv[i],"tet")) {
+              i++;
+              opt_mesh_partition_tet_weight(0,GMSH_SET,atoi(argv[i]));
+            }
+            else if (!strcmp(argv[i],"prism")) {
+              i++;
+              opt_mesh_partition_pri_weight(0,GMSH_SET,atoi(argv[i]));
+            }
+            else if (!strcmp(argv[i],"pyramid")) {
+              i++;
+              opt_mesh_partition_pyr_weight(0,GMSH_SET,atoi(argv[i]));
+            }
+            else if (!strcmp(argv[i],"hex")) {
+              i++;
+              opt_mesh_partition_hex_weight(0,GMSH_SET,atoi(argv[i]));
+            }
+            else check = false;
+            i++;
+          }
+          else check = false;
+        }
+      }
       else if(!strcmp(argv[i] + 1, "new")) {
         CTX::instance()->files.push_back("-new");
         i++;
@@ -220,6 +257,10 @@ void GetOptions(int argc, char *argv[])
         CTX::instance()->mesh.saveAll = 1;
         i++;
       }
+      else if(!strcmp(argv[i] + 1, "switch_tags")) {
+        CTX::instance()->mesh.switchElementTags = 1;
+        i++;
+      }
       else if(!strcmp(argv[i] + 1, "optimize")) {
         CTX::instance()->mesh.optimize = 1;
         i++;
@@ -231,6 +272,10 @@ void GetOptions(int argc, char *argv[])
       else if(!strcmp(argv[i] + 1, "optimize_hom")) {
         i++;
         opt_mesh_smooth_internal_edges(0, GMSH_SET, 1);
+      }
+      else if(!strcmp(argv[i] + 1, "hom_nometric")) {
+        i++;
+        opt_mesh_hom_no_metric(0, GMSH_SET, 1);
       }
       else if(!strcmp(argv[i] + 1, "optimize_lloyd")) {
         i++;
@@ -394,6 +439,16 @@ void GetOptions(int argc, char *argv[])
         else
           Msg::Fatal("Missing number");
       }
+      else if(!strcmp(argv[i] + 1, "mpass")) {
+        i++;
+        if(argv[i]) {
+          CTX::instance()->mesh.multiplePasses = atoi(argv[i++]);
+          if(CTX::instance()->mesh.multiplePasses <= 0)
+            Msg::Fatal("Number of Mesh Passes must be > 0");
+        }
+        else
+          Msg::Fatal("Missing number");
+      }
       else if(!strcmp(argv[i] + 1, "edgelmin")) {
         i++;
         if(argv[i]) {
@@ -420,7 +475,7 @@ void GetOptions(int argc, char *argv[])
         if(argv[i]) {
           CTX::instance()->mesh.allowSwapEdgeAngle = atof(argv[i++]);
           if(CTX::instance()->mesh.allowSwapEdgeAngle <= 0.0)
-            Msg::Fatal("Treshold angle for edge swap must be > 0");
+            Msg::Fatal("Threshold angle for edge swap must be > 0");
         }
         else
           Msg::Fatal("Missing number");
@@ -477,7 +532,9 @@ void GetOptions(int argc, char *argv[])
       else if(!strcmp(argv[i] + 1, "algo")) {
         i++;
         if(argv[i]) {
-          if(!strncmp(argv[i], "meshadapt", 9) || !strncmp(argv[i], "iso", 3))
+          if(!strncmp(argv[i], "auto", 4))
+            CTX::instance()->mesh.algo2d = ALGO_2D_AUTO;
+          else if(!strncmp(argv[i], "meshadapt", 9) || !strncmp(argv[i], "iso", 3))
             CTX::instance()->mesh.algo2d = ALGO_2D_MESHADAPT;
           else if(!strncmp(argv[i], "bds", 3))
             CTX::instance()->mesh.algo2d = ALGO_2D_MESHADAPT_OLD;
@@ -488,7 +545,7 @@ void GetOptions(int argc, char *argv[])
           else if(!strncmp(argv[i], "bamg",4))
             CTX::instance()->mesh.algo2d = ALGO_2D_BAMG;
           else if(!strncmp(argv[i], "del3d", 5) || !strncmp(argv[i], "tetgen", 6))
-            CTX::instance()->mesh.algo2d = ALGO_3D_DELAUNAY;
+            CTX::instance()->mesh.algo3d = ALGO_3D_DELAUNAY;
           else if(!strncmp(argv[i], "front3d", 7) || !strncmp(argv[i], "netgen", 6))
             CTX::instance()->mesh.algo3d = ALGO_3D_FRONTAL;
           else
@@ -571,7 +628,7 @@ void GetOptions(int argc, char *argv[])
       }
       else if(!strcmp(argv[i] + 1, "help") || !strcmp(argv[i] + 1, "-help")) {
         fprintf(stderr, "Gmsh, a 3D mesh generator with pre- and post-processing facilities\n");
-        fprintf(stderr, "Copyright (C) 1997-2010 Christophe Geuzaine and Jean-Francois Remacle\n");
+        fprintf(stderr, "Copyright (C) 1997-2011 Christophe Geuzaine and Jean-Francois Remacle\n");
         PrintUsage(argv[0]);
         Msg::Exit(0);
       }
@@ -664,12 +721,6 @@ void GetOptions(int argc, char *argv[])
           CTX::instance()->display = argv[i++];
         else
           Msg::Fatal("Missing argument");
-      }
-#endif
-#if defined (HAVE_LUA)
-      else if(!strcmp(argv[i] + 1, "lua")) {
-        i++;
-        CTX::instance()->batch = -4;
       }
 #endif
 #if defined(__APPLE__)

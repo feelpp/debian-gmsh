@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -18,7 +18,7 @@ void ClearProject();
 void SetBoundingBox(double xmin, double xmax,
                     double ymin, double ymax, 
                     double zmin, double zmax);
-void SetBoundingBox();
+void SetBoundingBox(bool aroundVisible=false);
 void AddToTemporaryBoundingBox(double x, double y, double z);
 
 #endif

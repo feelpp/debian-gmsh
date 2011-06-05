@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -11,7 +11,7 @@
 #include <slepceps.h>
 
 eigenSolver::eigenSolver(dofManager<double> *manager, std::string A,
-                         std::string B, bool hermitian) 
+                         std::string B, bool hermitian)
   : _A(0), _B(0), _hermitian(hermitian)
 {
   if(A.size()){
@@ -23,6 +23,8 @@ eigenSolver::eigenSolver(dofManager<double> *manager, std::string A,
     if(!_B) Msg::Error("Could not find PETSc system '%s'", B.c_str());
   }
 }
+
+eigenSolver::eigenSolver(linearSystemPETSc<double> *A,linearSystemPETSc<double> *B, bool hermitian) : _A(A), _B(B), _hermitian(hermitian){}
 
 bool eigenSolver::solve(int numEigenValues, std::string which)
 {
@@ -55,7 +57,7 @@ bool eigenSolver::solve(int numEigenValues, std::string which)
   _try(EPSSetDimensions(eps, numEigenValues, PETSC_DECIDE, PETSC_DECIDE));
   _try(EPSSetTolerances(eps, 1.e-7, 20));//1.e-6 50
   //_try(EPSSetType(eps, EPSKRYLOVSCHUR)); //default
-  _try(EPSSetType(eps, EPSARNOLDI)); 
+  _try(EPSSetType(eps, EPSARNOLDI));
   //_try(EPSSetType(eps, EPSARPACK));
   //_try(EPSSetType(eps, EPSPOWER));
 

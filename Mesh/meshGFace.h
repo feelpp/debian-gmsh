@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -17,15 +17,16 @@ class GFaceCompound;
 // Create the mesh of the face
 class meshGFace {
   const bool repairSelfIntersecting1dMesh;
+  int twoPassesMesh;
  public :
-  meshGFace (bool r = true, bool s = false) : repairSelfIntersecting1dMesh(r){}
+  meshGFace (bool r = true, int t = 0) : repairSelfIntersecting1dMesh(r), twoPassesMesh(t){}
   void operator () (GFace *);
 };
 
 // Destroy the mesh of the face
 class deMeshGFace {
  public :
-  deMeshGFace (bool s = false){}
+  deMeshGFace (){}
   void operator () (GFace *);
 };
 
@@ -45,7 +46,6 @@ void findTransfiniteCorners(GFace *gf, std::vector<MVertex*> &corners);
 int MeshTransfiniteSurface(GFace *gf);
 int MeshExtrudedSurface(GFace *gf, std::set<std::pair<MVertex*, MVertex*> > 
                         *constrainedEdges=0);
-int MeshBoundaryLayerSurface(GFace *gf);
 void partitionAndRemesh(GFaceCompound *gf);
 bool checkMeshCompound(GFaceCompound *gf, std::list<GEdge*> &edges);
 

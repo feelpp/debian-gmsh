@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -72,8 +72,9 @@ class Vertex {
   // vertex in the gmshSurface it belongs to.
   gmshSurface *geometry;
   SPoint2  pntOnGeometry;
+  int boundaryLayerIndex;
   Vertex(double X=0., double Y=0., double Z=0., double l=1., double W=1.)
-    : Num(0), Visible(1), lc(l), u(0.), w(W), geometry(0)
+    : Num(0), Visible(1), lc(l), u(0.), w(W), geometry(0), boundaryLayerIndex(0)
   {
     Typ = MSH_POINT;
     Pos.X = X;
@@ -270,6 +271,7 @@ SurfaceLoop *FindSurfaceLoop(int inum);
 Volume *FindVolume(int inum);
 LevelSet *FindLevelSet(int inum);
 PhysicalGroup *FindPhysicalGroup(int inum, int type);
+List_T *GetAllEntityNumbers(int dim);
 
 void TranslateShapes(double X,double Y,double Z, List_T *shapes);
 void DilatShapes(double X,double Y,double Z, double A, List_T *shapes);

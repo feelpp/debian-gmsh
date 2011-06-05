@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -15,11 +15,15 @@ class GEntity;
 class GEdge;
 class GFace;
 class MVertex;
-class binding;
 
 class MVertexLessThanLexicographic{
  public:
   static double tolerance;
+  bool operator()(const MVertex *v1, const MVertex *v2) const;
+};
+
+class MVertexLessThanNum{
+ public:
   bool operator()(const MVertex *v1, const MVertex *v2) const;
 };
 
@@ -67,10 +71,9 @@ class MVertex{
   inline double & x() { return _x; }
   inline double & y() { return _y; }
   inline double & z() { return _z; }
-  // cannot use the reference to set the value in the bindings
-  inline void setXYZ(double x, double y, double z) { _x = x; _y = y; _z = z; }
 
   inline SPoint3 point() const { return SPoint3(_x, _y, _z); }
+  inline void setXYZ(double x, double y, double z) { _x = x; _y = y; _z = z; }
 
   // get/set the parent entity
   inline GEntity* onWhat() const { return _ge; }
@@ -113,8 +116,8 @@ class MVertex{
                 bool bigEndian=false);
   void writeMESH(FILE *fp, double scalingFactor=1.0);
   void writeBDF(FILE *fp, int format=0, double scalingFactor=1.0);
+  void writeINP(FILE *fp, double scalingFactor=1.0);
   void writeDIFF(FILE *fp, bool binary, double scalingFactor=1.0);
-  static void registerBindings(binding *b);
 };
 
 class MEdgeVertex : public MVertex{

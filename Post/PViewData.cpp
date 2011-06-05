@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -8,6 +8,8 @@
 #include "Numeric.h"
 #include "GmshMessage.h"
 
+std::map<std::string, interpolationMatrices> PViewData::_interpolationSchemes;
+
 PViewData::PViewData()
   : _dirty(true), _fileIndex(0), _adaptive(0)
 {
@@ -16,13 +18,13 @@ PViewData::PViewData()
 PViewData::~PViewData()
 {
   if(_adaptive) delete _adaptive;
-  for(std::map<int, std::vector<fullMatrix<double>*> >::iterator it = _interpolation.begin();
+  for(interpolationMatrices::iterator it = _interpolation.begin();
       it != _interpolation.end(); it++)
     for(unsigned int i = 0; i < it->second.size(); i++)
       delete it->second[i];
 }
 
-bool PViewData::finalize(bool computeMinMax)
+bool PViewData::finalize(bool computeMinMax, const std::string &interpolationScheme)
 { 
   _dirty = false;
   return true;
@@ -116,6 +118,32 @@ int PViewData::getInterpolationMatrices(int type, std::vector<fullMatrix<double>
   return 0;
 }
 
+bool PViewData::haveInterpolationMatrices(int type)
+{ 
+  if(!type) 
+    return !_interpolation.empty();
+  else
+    return _interpolation.count(type) ? true : false;
+}
+
+void PViewData::removeInterpolationScheme(const std::string &name)
+{
+  std::map<std::string, interpolationMatrices>::iterator it = _interpolationSchemes.find(name);
+  if(it != _interpolationSchemes.end()){
+    for(interpolationMatrices::iterator it2 = it->second.begin();
+        it2 != it->second.end(); it2++)
+      for(unsigned int i = 0; i < it2->second.size(); i++)
+        delete it2->second[i];
+    _interpolationSchemes.erase(it);
+  }
+}
+
+void PViewData::addMatrixToInterpolationScheme(const std::string &name, int type,
+                                               fullMatrix<double> &mat)
+{
+  _interpolationSchemes[name][type].push_back(new fullMatrix<double>(mat));
+}
+
 void PViewData::smooth()
 {
   Msg::Error("Smoothing is not implemented for this type of data");
@@ -131,83 +159,4 @@ bool PViewData::combineSpace(nameData &nd)
 { 
   Msg::Error("Combine space is not implemented for this type of data");
   return false; 
-}
-
-double PViewData::getValueBinding(int step, int ent, int ele, int nod, int comp)
-{
-  double val;
-  getValue(step,ent,ele,nod,comp,val);
-  return val;
-}
-
-void PViewData::getAllValuesForElementBinding(int step, int ent, int ele, 
-                                              fullMatrix<double> &m)
-{
-  for (int i = 0; i < m.size1(); i++)
-    for (int j = 0; j < m.size2(); j++)
-      getValue(step, ent, ele, i, j, m(i, j));
-}
-
-void PViewData::getAllNodesForElementBinding(int step, int ent, int ele,
-                                             fullMatrix<double> &m)
-{
-  for (int i = 0; i < m.size1(); i++)
-    getNode(step, ent, ele, i, m(i, 0), m(i, 1), m(i, 2));
-}
-
-#include "Bindings.h"
-void PViewData::registerBindings(binding *b)
-{
-  classBinding *cb = b->addClass<PViewData>("PViewData");
-  cb->setDescription("The data of a post-processing view");
-  methodBinding *cm;
-  cm = cb->addMethod("getNumEntities",&PViewData::getNumEntities);
-  cm->setArgNames("step",NULL);
-  cm->setDescription("return the number of entities for a given time step "
-                     "(-1 for default)");
-  cm = cb->addMethod("getNumElements",&PViewData::getNumElements);
-  cm->setArgNames("step","entity",NULL);
-  cm->setDescription("return the number of entities for a given time step "
-                     "(-1 for default) for a given entity (-1 for all)");
-  cm = cb->addMethod("getNumTriangles",&PViewData::getNumTriangles);
-  cm->setArgNames("step",NULL);
-  cm->setDescription("return the number of triangles for a given time step "
-                     "(-1 for default)");
-
-  cm = cb->addMethod("getNumNodes",&PViewData::getNumNodes);
-  cm->setArgNames("step","entity","element",NULL);
-  cm->setDescription("return the number of nodes of one element of an entity "
-                     "of a time step (-1 for default time step)");
-
-  cm = cb->addMethod("getElement",&PViewData::getElement);
-  cm->setArgNames("step","entity","i",NULL);
-  cm->setDescription("return the i-th element of the given entity");
-
-  cm = cb->addMethod("getNumValues",&PViewData::getNumValues);
-  cm->setArgNames("step","entity","element",NULL);
-  cm->setDescription("return the number of values of one element of an entity "
-                     "of a time step (-1 for default time step)");
-
-  cm = cb->addMethod("getNumComponents",&PViewData::getNumComponents);
-  cm->setArgNames("step","entity","element",NULL);
-  cm->setDescription("return the number of components of one element of an entity "
-                     "of a time step (-1 for default time step)");
-
-  cm = cb->addMethod("getValue",&PViewData::getValueBinding);
-  cm->setArgNames("step","entity","element","node","component",NULL);
-  cm->setDescription("return one of the values");
-
-  cm = cb->addMethod("getAllValuesForElement",&PViewData::getAllValuesForElementBinding);
-  cm->setArgNames("step","entity","element","values",NULL);
-  cm->setDescription("resize and fill a fullMatrix with all values from the element.");
-
-  cm = cb->addMethod("getAllNodesForElement",&PViewData::getAllNodesForElementBinding);
-  cm->setArgNames("step","entity","element","coordinates",NULL);
-  cm->setDescription("resize fill a fullMatrix with all coordinates of the nodes "
-                     "of the element");
-
-  cm = cb->addMethod("getDimension",&PViewData::getDimension);
-  cm->setArgNames("step","entity","element",NULL);
-  cm->setDescription("return the geometrical dimension of the element-th element "
-                     "in the enttity-th entity");
 }

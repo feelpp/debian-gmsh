@@ -1,7 +1,7 @@
 //
 // C++ Interface: quadratureRules
 //
-// Description: 
+// Description:
 //
 //
 // Author:  <Eric Bechet>, (C) 2009
@@ -19,51 +19,60 @@
 
 class QuadratureBase
 {
-  public : 
+  public :
   virtual ~QuadratureBase(){}
-  virtual int getIntPoints(MElement *e,IntPt **GP) =0;
+  virtual int getIntPoints(MElement *e, IntPt **GP) =0;
 };
 
+// For rigid contact no need of Gauss'integration
+// but to use classcal get function in term npts and IntPt are needed
+// so use a empty gaussQuadrature rule
+class QuadratureVoid : public QuadratureBase
+{
+ public:
+  QuadratureVoid() : QuadratureBase(){}
+  ~QuadratureVoid(){}
+  int getIntPoints(MElement *e, IntPt **GP){GP=NULL; return 0;}
+} ;
 
 class GaussQuadrature : public QuadratureBase
 {
- public : 
-  enum IntegCases {Other,Val,Grad,ValVal,GradGrad};
+ public :
+  enum IntegCases {Other, Val, Grad, ValVal, GradGrad};
  private :
   int order;
   IntegCases info;
- public : 
-  GaussQuadrature(int order_=0):order(order_),info(Other) {}
-  GaussQuadrature(IntegCases info_):order(0),info(info_) {}
+ public :
+  GaussQuadrature(int order_ = 0) : order(order_), info(Other) {}
+  GaussQuadrature(IntegCases info_) : order(0), info(info_) {}
   virtual ~GaussQuadrature(){}
-  int getIntPoints(MElement *e,IntPt **GP)
+  virtual int getIntPoints(MElement *e, IntPt **GP)
   {
     int integrationOrder;
     int npts;
-    int geoorder=e->getPolynomialOrder();    
+    int geoorder = e->getPolynomialOrder();
     switch(info)
     {
     case Other :
       integrationOrder = order;
       break;
     case Val :
-      integrationOrder=geoorder+1;
+      integrationOrder = geoorder + 1;
       break;
     case Grad :
-      integrationOrder=geoorder;
+      integrationOrder = geoorder;
       break;
     case ValVal :
-      integrationOrder=2*geoorder;
+      integrationOrder = 2 * geoorder;
       break;
     case GradGrad :
-      integrationOrder=3*(geoorder-1)+1;
+      integrationOrder = 3 * (geoorder - 1) + 1;
       break;
-    default : integrationOrder=1;
+    default : integrationOrder = 1;
     }
     e->getIntegrationPoints(integrationOrder, &npts, GP);
     return npts;
   }
 };
-
 
 #endif //_QUADRATURERULES_H_

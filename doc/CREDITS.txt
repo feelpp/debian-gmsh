@@ -1,4 +1,4 @@
-             Gmsh is copyright (C) 1997-2010
+             Gmsh is copyright (C) 1997-2011
 
                    Christophe Geuzaine
                  <cgeuzaine at ulg.ac.be>
@@ -19,9 +19,10 @@ connection), Matt Gundry (Plot3d mesh format), Matti Pellikka
 (Homology), Nicolas Tardieu (Netgen), Pascale Noyret (MED mesh
 format), Pierre Badel (root finding and minimization), Ruth Sabariego
 (pyramids), Stephen Guzik (CGNS and partitioners), Bastien Gorissen
-(parallel remote), Eric Bechet (solver). See comments in the sources
-for more information. If we forgot to list your contributions please
-send us an email!
+(parallel remote), Eric Bechet (solver), Gilles Marckmann (camera and
+stero mode), Ashish Negi (Salome/Netgen CAD healing). See comments in
+the sources for more information. If we forgot to list your
+contributions please send us an email!
 
 The AVL tree code (Common/avl.*) and the YUV image code
 (Graphics/gl2yuv.*) are copyright (C) 1988-1993, 1995 The Regents of
@@ -126,4 +127,4 @@ Michel Benhamou, Tom De Vuyst, Kris Van den Abeele, Simon Vun, Simon
 Corbin, Thomas De-Soza, Marcus Drosson, Antoine Dechaume, Jose Paulo
 Moitinho de Almeida, Thomas Pinchard, Corrado Chisari, Axel Hackbarth,
 Peter Wainwright, Jiri Hnidek, Thierry Thomas, Konstantinos Poulios,
-Laurent Van Miegroet, Shahrokh Ghavamian.
+Laurent Van Miegroet, Shahrokh Ghavamian, Geordie McBain.

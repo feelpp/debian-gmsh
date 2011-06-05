@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -30,6 +30,7 @@ static void computeMeshMetricsForBamg(GFace *gf, int numV,
                                       double *mm11, double *mm12, double *mm22,
                                       int iter)
 {
+
   //  char name[245];
   //  sprintf(name,"bgmBamg-%d-%d.pos",gf->tag(),iter);
   //  if (iter < 2){
@@ -66,6 +67,7 @@ static void computeMeshMetricsForBamg(GFace *gf, int numV,
 
 static void meshGFaceBamg_(GFace *gf, int iter, bool initialMesh)
 {
+
   std::set<MVertex*> all;
   std::map<int,MVertex*> recover;
   for (unsigned int i = 0; i < gf->triangles.size(); i++){

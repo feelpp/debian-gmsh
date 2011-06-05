@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -22,7 +22,7 @@
 #define OPT_ARGS_STR   int num, int action, std::string val
 #define OPT_ARGS_NUM   int num, int action, double val
 #define OPT_ARGS_COL   int num, int action, unsigned int val
-
+ 
 // STRINGS
 
 std::string opt_general_axes_label0(OPT_ARGS_STR);
@@ -294,6 +294,7 @@ double opt_general_scale0(OPT_ARGS_NUM);
 double opt_general_scale1(OPT_ARGS_NUM);
 double opt_general_scale2(OPT_ARGS_NUM);
 double opt_general_clip_factor(OPT_ARGS_NUM);
+double opt_general_display_border_factor(OPT_ARGS_NUM);
 double opt_general_point_size(OPT_ARGS_NUM);
 double opt_general_line_width(OPT_ARGS_NUM);
 double opt_general_shine(OPT_ARGS_NUM);
@@ -339,16 +340,21 @@ double opt_general_small_axes_size(OPT_ARGS_NUM);
 double opt_general_quadric_subdivisions(OPT_ARGS_NUM);
 double opt_general_double_buffer(OPT_ARGS_NUM);
 double opt_general_antialiasing(OPT_ARGS_NUM);
-double opt_general_stereo(OPT_ARGS_NUM);
 double opt_general_alpha_blending(OPT_ARGS_NUM);
 double opt_general_vector_type(OPT_ARGS_NUM);
 double opt_general_arrow_head_radius(OPT_ARGS_NUM);
 double opt_general_arrow_stem_length(OPT_ARGS_NUM);
 double opt_general_arrow_stem_radius(OPT_ARGS_NUM);
 double opt_general_trackball(OPT_ARGS_NUM);
+double opt_general_trackball_hyperbolic_sheet(OPT_ARGS_NUM);
 double opt_general_rotation_center_cg(OPT_ARGS_NUM);
 double opt_general_zoom_factor(OPT_ARGS_NUM);
 double opt_general_expert_mode(OPT_ARGS_NUM);
+double opt_general_stereo_mode(OPT_ARGS_NUM);
+double opt_general_camera_mode(OPT_ARGS_NUM);
+double opt_general_eye_sep_ratio(OPT_ARGS_NUM);
+double opt_general_focallength_ratio(OPT_ARGS_NUM);
+double opt_general_camera_aperture(OPT_ARGS_NUM);
 double opt_general_clip0a(OPT_ARGS_NUM);
 double opt_general_clip0b(OPT_ARGS_NUM);
 double opt_general_clip0c(OPT_ARGS_NUM);
@@ -533,11 +539,13 @@ double opt_mesh_mesh_only_visible(OPT_ARGS_NUM);
 double opt_mesh_min_circ_points(OPT_ARGS_NUM);
 double opt_mesh_allow_swap_edge_angle(OPT_ARGS_NUM);
 double opt_mesh_min_curv_points(OPT_ARGS_NUM);
+double opt_mesh_multiple_passes(OPT_ARGS_NUM);
 double opt_mesh_order(OPT_ARGS_NUM);
 double opt_mesh_smooth_internal_edges(OPT_ARGS_NUM);
 double opt_mesh_second_order_experimental(OPT_ARGS_NUM);
 double opt_mesh_second_order_linear(OPT_ARGS_NUM);
 double opt_mesh_second_order_incomplete(OPT_ARGS_NUM);
+double opt_mesh_hom_no_metric(OPT_ARGS_NUM);
 double opt_mesh_dual(OPT_ARGS_NUM);
 double opt_mesh_voronoi(OPT_ARGS_NUM);
 double opt_mesh_draw_skin_only(OPT_ARGS_NUM);
@@ -546,6 +554,7 @@ double opt_mesh_save_element_tag_type(OPT_ARGS_NUM);
 double opt_mesh_save_parametric(OPT_ARGS_NUM);
 double opt_mesh_save_groups_of_nodes(OPT_ARGS_NUM);
 double opt_mesh_color_carousel(OPT_ARGS_NUM);
+double opt_mesh_switch_elem_tags(OPT_ARGS_NUM);
 double opt_mesh_zone_definition(OPT_ARGS_NUM);
 double opt_mesh_nb_nodes(OPT_ARGS_NUM);
 double opt_mesh_nb_triangles(OPT_ARGS_NUM);
@@ -579,6 +588,7 @@ double opt_mesh_partition_metis_refine_algorithm(OPT_ARGS_NUM);
 double opt_mesh_partition_by_extrusion(OPT_ARGS_NUM);
 double opt_mesh_clip(OPT_ARGS_NUM);
 double opt_solver_listen(OPT_ARGS_NUM);
+double opt_solver_timeout(OPT_ARGS_NUM);
 double opt_solver_plugins(OPT_ARGS_NUM);
 double opt_solver_client_server(OPT_ARGS_NUM);
 double opt_solver_client_server0(OPT_ARGS_NUM);
@@ -608,6 +618,7 @@ double opt_post_plugins(OPT_ARGS_NUM);
 double opt_post_nb_views(OPT_ARGS_NUM);
 double opt_post_file_format(OPT_ARGS_NUM);
 double opt_view_nb_timestep(OPT_ARGS_NUM);
+double opt_view_nb_non_empty_timestep(OPT_ARGS_NUM);
 double opt_view_timestep(OPT_ARGS_NUM);
 double opt_view_min(OPT_ARGS_NUM);
 double opt_view_max(OPT_ARGS_NUM);

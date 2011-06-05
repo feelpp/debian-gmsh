@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -26,7 +26,8 @@ class eigenSolver{
   void _try(int ierr) const { CHKERRABORT(PETSC_COMM_WORLD, ierr); }
  public:
   eigenSolver(dofManager<double> *manager, std::string A,
-              std::string B="", bool hermitian=false);
+              std::string B="", bool hermitian=true);
+  eigenSolver(linearSystemPETSc<double> *A,linearSystemPETSc<double>* B = NULL, bool hermitian=true);
   bool solve(int numEigenValues=0, std::string which="");
   int getNumEigenValues(){ return _eigenValues.size(); }
   std::complex<double> getEigenValue(int num){ return _eigenValues[num]; }
@@ -34,13 +35,14 @@ class eigenSolver{
 };
 
 #else
-
+#include "linearSystemPETSc.h"
 class eigenSolver{
  private:
   std::vector<std::complex<double> > _dummy;
  public:
   eigenSolver(dofManager<double> *manager, std::string A,
               std::string B="", bool hermitian=false){}
+  eigenSolver(linearSystemPETSc<double> *A,linearSystemPETSc<double>* B = NULL, bool hermitian=false){}
   bool solve(int numEigenValues=0, std::string which="")
   {
     Msg::Error("Eigen solver requires SLEPc");

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -35,10 +35,6 @@
 #include "drawContext.h"
 #endif
 
-#if defined(HAVE_LUA)
-#include "LuaBindings.h"
-#endif
-
 int GmshInitialize(int argc, char **argv)
 {
   // we need at least one model during option parsing
@@ -56,7 +52,7 @@ int GmshInitialize(int argc, char **argv)
 
   // Make sure we have enough resources (stack)
   CheckResources();
-  
+
 #if defined(HAVE_PLUGINS)
   // Initialize the default plugins
   PluginManager::instance()->registerDefaultPlugins();
@@ -76,7 +72,7 @@ int GmshSetMessageHandler(GmshMessage *callback)
 }
 
 int GmshSetBoundingBox(double xmin, double xmax,
-                       double ymin, double ymax, 
+                       double ymin, double ymax,
                        double zmin, double zmax)
 {
   SetBoundingBox(xmin, xmax, ymin, ymax, zmin, zmax);
@@ -131,7 +127,7 @@ int GmshFinalize()
 
 int GmshBatch()
 {
-  Msg::Info("Running '%s' [%d node(s), max. %d thread(s)]", 
+  Msg::Info("Running '%s' [%d node(s), max. %d thread(s)]",
             Msg::GetCommandLineArgs().c_str(),
             Msg::GetCommSize(), Msg::GetMaxThreads());
   Msg::Info("Started on %s", Msg::GetLaunchDate().c_str());
@@ -154,12 +150,6 @@ int GmshBatch()
   }
 #endif
 
-#if defined(HAVE_LUA)
-  if(CTX::instance()->batch == -4){
-    binding::instance()->interactiveSession();
-  }
-  else 
-#endif 
   if(CTX::instance()->batch == -3){
     GmshRemote();
   }
@@ -167,7 +157,7 @@ int GmshBatch()
     GModel::current()->checkMeshCoherence(CTX::instance()->geom.tolerance);
   }
   else if(CTX::instance()->batch == -1){
-    CreateOutputFile(CTX::instance()->outputFileName, 
+    CreateOutputFile(CTX::instance()->outputFileName,
                      CTX::instance()->outputFileName.empty() ? FORMAT_GEO :
                      FORMAT_AUTO);
   }
@@ -228,7 +218,7 @@ int GmshFLTK(int argc, char **argv)
     else
       MergeFile(CTX::instance()->files[i]);
   }
-  
+
   if(CTX::instance()->post.combineTime){
     PView::combine(true, 2, CTX::instance()->post.combineRemoveOrig);
     FlGui::instance()->updateViews();
@@ -256,9 +246,6 @@ int GmshFLTK(int argc, char **argv)
     else
       Msg::Error("Invalid background mesh (no view)");
   }
-
-  // draw the scene
-  drawContext::global()->draw();
 
   // listen to external solvers
   if(CTX::instance()->solver.listen){

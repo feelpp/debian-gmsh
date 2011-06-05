@@ -1,5 +1,5 @@
 \input texinfo.tex @c -*-texinfo-*-
-@c Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+@c Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 @c
 @c See the LICENSE.txt file for license information. Please report all
 @c bugs and problems to <gmsh@geuz.org>.
@@ -920,8 +920,6 @@ Specify display
 Parse input files, then exit
 @item -a, -g, -m, -s, -p
 Start in automatic, geometry, mesh, solver or post-processing mode
-@item -lua
-Start an interactive lua session
 @item -pid
 Print pid on stdout
 @item -listen
@@ -1327,21 +1325,25 @@ List of expressions are also widely used, and are defined as:
   Point @{ @var{expression} @} |
   @var{transform} |
   @var{extrude}
+  Point @{ @var{expression} @} |
+  Point|Line|Surface|Volume "*" |
 @c  @var{duplicata} - already implemented: should we explain this?
 @end example
 
-The second case in this last definition permits to create a list containing
-the range of numbers comprised between two @w{@var{expression}s}, with a
-unit incrementation step. The third case also permits to create a list
-containing the range of numbers comprised between two @w{@var{expression}s},
-but with a positive or negative incrementation step equal to the third
-@var{expression}. The fourth case permits to reference an expression list.
-The fifth case permits to reference an expression sublist (whose elements
-are those corresponding to the indices provided by the
-@var{expression-list}). The sixth case permits to retrieve the coordinates
-of a given geometry point (@pxref{Points}). The last two cases permit to
-retrieve the indices of entities created through geometrical transformations
-and extrusions (see @ref{Transformations}, and @ref{Extrusions}).
+The second case in this last definition permits to create a list
+containing the range of numbers comprised between two
+@w{@var{expression}s}, with a unit incrementation step. The third case
+also permits to create a list containing the range of numbers comprised
+between two @w{@var{expression}s}, but with a positive or negative
+incrementation step equal to the third @var{expression}. The fourth case
+permits to reference an expression list.  The fifth case permits to
+reference an expression sublist (whose elements are those corresponding
+to the indices provided by the @var{expression-list}).  The next two
+cases permit to retrieve the indices of entities created through
+geometrical transformations and extrusions (see @ref{Transformations},
+and @ref{Extrusions}). The last two cases permit to retrieve the
+coordinates of a given geometry point (@pxref{Points}), or to retrieve
+the id numbers of all points, lines, surfaces or volumes in the model.
 
 To see the practical use of such expressions, have a look at the first
 couple of examples in @ref{Tutorial}. Note that, in order to lighten the
@@ -1936,7 +1938,13 @@ Deletes the current options and revert to the default values.
 Deletes the expression @var{string}.
 
 @item Mesh @var{expression};
-Generate @var{expression}-D mesh.
+Generates @var{expression}-D mesh.
+
+@item RefineMesh;
+Refines the current mesh by splitting all elements. If
+@code{Mesh.SecondOrderLinear} is set, the new vertices are inserted by
+linear interpolatinon. Otherwise they are snapped on the actual
+geometry.
 
 @item Print @var{char-expression};
 Prints the graphic window in a file named @var{char-expression}, using
@@ -2240,7 +2248,7 @@ identification numbers to specify reverse orientation). (Surface loops are
 used to create volumes: see @ref{Volumes}.)
 
 
-@item Compound Surface ( @var{expression} ) = @{ @var{expression-list} @} < Boundary @{ @{ @var{expression-list} @}, @{ @var{expression-list} @}, @{ @var{expression-list} @}, @{ @var{expression-list} @} @} > < Harmonic | Conformal | Harmonic_NoSplit | Conformal_NoSplit >;
+@item Compound Surface ( @var{expression} ) = @{ @var{expression-list} @} < Boundary @{ @{ @var{expression-list} @}, @{ @var{expression-list} @}, @{ @var{expression-list} @}, @{ @var{expression-list} @} @} > ;
 Creates a compound surface from several elementary surfaces.  When
 meshed, a compound surface will be reparametrized as a single surface,
 whose mesh can thus cross internal boundaries. Compound surfaces are
@@ -2248,10 +2256,10 @@ mostly useful for remeshing discrete models; see ``J.-F. Remacle,
 C. Geuzaine, G. Compere and E. Marchandise, @emph{High Quality Surface
 Remeshing Using Harmonic Maps}, International Journal for Numerical
 Methods in Engineering, 2009'' for details as well as the wiki for more
-examples.  The @var{expression} inside the parentheses is the compound surface's identification number; the
-mandatory @var{expression-list} on the right hand side contains the
-identification number of the elementary surfaces that should be
-reparametrized as a single surface.
+examples.  The @var{expression} inside the parentheses is the compound
+surface's identification number; the mandatory @var{expression-list} on
+the right hand side contains the identification number of the elementary
+surfaces that should be reparametrized as a single surface.
 
 @item Physical Surface ( @var{expression} | @var{char-expression} ) = @{ @var{expression-list} @};
 Creates a physical surface. The @var{expression} inside the parentheses
@@ -2612,6 +2620,11 @@ choice. When high element quality is important, the ``Frontal''
 algorithm should be tried. For very large meshes of plane surfaces the
 ``Delaunay'' algorithm is the fastest.
 
+The ``Automatic'' algorithm tries to select the best algorithm
+automatically for each surface in the model. As of Gmsh 2.5, the
+``Automatic'' algorithm selects ``Delaunay'' for plane surfaces and
+``MeshAdapt'' for all other surfaces.
+
 In 3D two unstructured algorithms are available:
 
 @enumerate
@@ -2879,8 +2892,11 @@ Extrudes both the geometry and the mesh using a combined translation and
 rotation (@pxref{Extrusions}). The @var{layers} option is defined as
 above.
 
-@item Extrude @{ Surface @{ @var{expression-list} @}; @var{layers} @}
-Extrudes a boundary layer along the normals of the specified surfaces.
+@item Extrude @{ Surface @{ @var{expression-list} @}; @var{layers} < Using Index[@var{expr}]; > < Using View[@var{expr}]; > @}
+Extrudes a boundary layer from the specified surfaces. If no view is
+specified, the boundary layer is created using gouraud-shaped (smoothed)
+normal field. Specifying a boundary layer index allows to extrude
+several independent boundary layers (with independent normal smoothing).
 
 @item Transfinite Line @{ @var{expression-list} @} | "*" = @var{expression} < Using Progression | Bump @var{expression} >;
 Selects the lines in @var{expression-list} to be meshed with the 1D
@@ -3565,7 +3581,15 @@ $ElementNodeData
 @dots{}
 @var{elm-number} @var{number-of-nodes-per-element} @var{value} @dots{}
 @dots{}
-$ElementEndNodeData
+$EndElementNodeData
+$InterpolationScheme
+"@var{name}"
+@var{number-of-element-topologies}
+@var{elm-topology}
+@var{number-of-interpolation-matrices}
+@var{num-rows} @var{num-columns} @var{value} @dots{}
+@dots{}
+$EndInterpolationScheme
 @end example
 
 @noindent
@@ -3691,6 +3715,12 @@ internal to the edge)
 @item 31
 56-node fifth order tetrahedron (4 nodes associated with the vertices,
 24 with the edges, 24 with the faces, 4 in the volume)
+@item 92
+64-node third order hexahedron (8 nodes associated with the vertices, 24
+with the edges, 24 with the faces, 8 in the volume)
+@item 93 
+125-node fourth order hexahedron (8 nodes associated with the vertices, 36
+with the edges, 54 with the faces, 27 in the volume)
 @end table
 See below for the ordering of the nodes.
 
@@ -3709,8 +3739,10 @@ the nodes is given in @ref{Node ordering}.
 
 @item @var{number-of-string-tags}
 gives the number of string tags that follow. By default the first
-@var{string-tag} is interpreted as the name of the post-processing view.
-@c todo: and the second as the name of the interpolation scheme?
+@var{string-tag} is interpreted as the name of the post-processing view
+and the second as the name of the interpolation scheme. The
+interpolation scheme is provided in the @code{$InterpolationScheme}
+section (see below). 
 
 @item @var{number-of-real-tags}
 gives the number of real number tags that follow. By default the first
@@ -3735,6 +3767,23 @@ there are @var{ncomp} values per node (resp. per element), where
 @var{ncomp} is the number of field components. For
 @code{ElementNodeData} views, there are @var{ncomp} times
 @var{number-of-nodes-per-elements} values per element.
+
+@item @var{number-of-element-topologies}
+is the number of element topologies for which interpolation matrices are
+provided
+
+@item @var{elm-topology}
+is the id tag of a given element topology: 1 for points, 2 for lines, 3
+for triangles, 4 for quadrangles, 5 for tetrahedra, 6 for pyramids, 7
+for prisms, 8 for hexahedra, 9 for polygons and 10 for polyhedra.
+
+@item @var{number-of-interpolation-matrices} 
+is the number of interpolation matrices provided for this element
+topology. Currently you should provide 2 matrices, i.e., the matrices
+that specify how to interpolate the data (they have the same meaning as
+in @ref{Post-processing commands}).  The matrices are specified by 2
+integers (@var{num-rows} and @var{num-columns}) followed by the values.
+
 @end table
 
 Below is a small example (a mesh consisting of two quadrangles with an
@@ -3776,6 +3825,7 @@ $NodeData
 6 0.4
 $EndNodeData 
 @end smallexample
+
 
 @c -------------------------------------------------------------------------
 @c MSH binary file format
@@ -3892,9 +3942,18 @@ for(i = 0; i < number_of_triangles; i++)@{
 @c -------------------------------------------------------------------------
 
 @node Node ordering, Legacy formats, MSH binary file format, File formats
+
 @section Node ordering
 
 @cindex Nodes, ordering
+
+Historically, Gmsh developpers have started by implementing linear elements (lines,
+triangles, quads, tets, prisms and hexes). Then, second and sometimes third
+order elements have been hardcoded. We here distinguish ``low order elements'' that
+have been hardcoded initially and ``high order elements'' that have been coded in
+a general fashion, theoretically valid for any order.  
+
+@subsection Low order elements
 
 For all mesh and post-processing file formats, the reference elements
 are defined as follows.
@@ -4038,17 +4097,25 @@ Pyramid:                     Pyramid13:                   Pyramid14:
 @end group
 @end smallexample
 
-The nodes of a curved element are numbered in the following order:
+@subsection High order elements
+
+The node ordering of a higher order (possibly curved) element is compatible with the numbering
+of low order element (it is a generalization). We number nodes in the following order:
 @itemize --
-@item the element principal vertices;
+@item the element principal or corner vertices;
 @item the internal nodes for each edge;
 @item the internal nodes for each face;
 @item the volume internal nodes.
 @end itemize
 
-The numbering for face and volume internal nodes is recursive, i.e., the
-numbering follows that of the nodes of an embedded face/volume. The
-higher order nodes are assumed to be equispaced on the element.
+The numbering for internal nodes is recursive, ie. the numbering follows
+that of the nodes of an embedded edge/face/volume of lower order. The
+higher order nodes are assumed to be equispaced. Edges and faces are
+numbered following the lowest order template that generates a single
+high-order on this edge/face. Furthermore, an edge is oriented from the
+vertex with the lowest to the highest index. The orientation of a face
+is such that the computed normal points outward; the starting point is
+the vertex with the lowest index.
 
 @c -------------------------------------------------------------------------
 @c Legacy formats

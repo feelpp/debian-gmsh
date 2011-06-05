@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -25,7 +25,7 @@ PViewDataList::PViewDataList()
   for(int i = 0; i < 24; i++) _index[i] = 0;
 }
 
-bool PViewDataList::finalize(bool computeMinMax)
+bool PViewDataList::finalize(bool computeMinMax, const std::string &interpolationScheme)
 {
   BBox.reset();
   Min = VAL_INF;
@@ -740,7 +740,7 @@ bool PViewDataList::combineTime(nameData &nd)
   return finalize();
 }
 
-void PViewDataList::_getRawData(int idxtype, std::vector<double> **l, int **ne, 
+int PViewDataList::_getRawData(int idxtype, std::vector<double> **l, int **ne, 
                                 int *nc, int *nn)
 {
   int type = 0;
@@ -777,6 +777,7 @@ void PViewDataList::_getRawData(int idxtype, std::vector<double> **l, int **ne,
     int nim = getInterpolationMatrices(type, im);
     if(nim == 4) *nn = im[2]->size1();
   }
+  return type;
 }
 
 void PViewDataList::setOrder2(int type)

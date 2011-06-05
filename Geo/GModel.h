@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -27,7 +27,7 @@ class FieldManager;
 class CGNSOptions;
 class gLevelset;
 class discreteFace;
-class binding;
+class discreteRegion;
 class MElementOctree;
 class GModelFactory;
 
@@ -117,8 +117,6 @@ class GModel
   std::set<GEdge*, GEntityLessThan> edges;
   std::set<GVertex*, GEntityLessThan> vertices;
 
-  void insertRegion (GRegion*);
-
   // map between the pair <dimension, elementary or physical number>
   // and an optional associated name
   std::map<std::pair<int, int>, std::string> physicalNames, elementaryNames;
@@ -206,13 +204,14 @@ class GModel
   GFace *getFaceByTag(int n) const;
   GEdge *getEdgeByTag(int n) const;
   GVertex *getVertexByTag(int n) const;
+  std::vector<int> getEdgesByStringTag(const std::string tag);
 
-  // for lua bindings, temporary solution while iterator are not binded
+  // for python, temporary solution while iterator are not binded
   std::vector<GRegion*> bindingsGetRegions();
   std::vector<GFace*> bindingsGetFaces();
   std::vector<GEdge*> bindingsGetEdges();
   std::vector<GVertex*> bindingsGetVertices();
-
+  
   // add/remove an entity in the model
   void add(GRegion *r) { regions.insert(r); }
   void add(GFace *f) { faces.insert(f); }
@@ -282,7 +281,7 @@ class GModel
   void setSelection(int val);
 
   // the bounding box
-  SBoundingBox3d bounds();
+  SBoundingBox3d bounds(bool aroundVisible=false);
 
   // return the mesh status for the entire model
   int getMeshStatus(bool countDiscrete=true);
@@ -295,7 +294,7 @@ class GModel
   int getNumMeshElements(unsigned c[5]);
 
   // access a mesh element by coordinates (using an octree search)
-  MElement *getMeshElementByCoord(SPoint3 &p);
+  MElement *getMeshElementByCoord(SPoint3 &p, int dim = -1);
 
   // access a mesh element by tag, using the element cache
   MElement *getMeshElementByTag(int n);
@@ -351,13 +350,30 @@ class GModel
 
   // create topology from mesh
   void createTopologyFromMesh();
+  void createTopologyFromRegions(std::vector<discreteRegion*> &discRegions);
   void createTopologyFromFaces(std::vector<discreteFace*> &pFaces);
+  void makeDiscreteRegionsSimplyConnected();
+  void makeDiscreteFacesSimplyConnected();
 
   // a container for smooth normals
   smooth_normals *normals;
 
   // mesh the model
   int mesh(int dimension);
+
+  // make the mesh a high order mesh at order N
+  // linear is 1 if the high order points are not placed on the geometry of the model 
+  // incomplete is 1 if incomplete basis are used
+  int setOrderN(int order, int linear, int incomplete);
+
+  // refine the mesh by splitting all elements
+  int refineMesh(int linear);
+
+  // create partition boundaries
+  void createPartitionBoundaries(int createGhostCells);
+
+  // fill the vertex arrays, given the current option and data
+  void fillVertexArrays();
 
   // reclassify a mesh i.e. use an angle threshold to tag edges faces and regions
   void detectEdges(double _tresholdAngle);
@@ -366,8 +382,7 @@ class GModel
   // glue entities in the model (assume a tolerance eps and merge
   // vertices that are too close, then merge edges, faces and
   // regions). Warning: the gluer changes the geometric model, so that
-  // some pointers could become invalid. FIXME: using references to
-  // some tables of pointers for bindings e.g. could be better.
+  // some pointers could become invalid.
   void glue(double eps);
 
   // change the entity creation factory
@@ -388,7 +403,6 @@ class GModel
                    double angle);
   GEntity *extrude(GEntity *e, std::vector<double> p1, std::vector<double> p2);
   GEntity *addPipe(GEntity *e, std::vector<GEdge *>  edges);
-  void createBoundaryLayer(std::vector<GEntity *> e, double h);
 
   void addRuledFaces(std::vector<std::vector<GEdge *> > edges);
   GFace *addFace(std::vector<GEdge *> edges, std::vector< std::vector<double > > points);
@@ -405,9 +419,9 @@ class GModel
                    double radius2);
 
   // boolean operators acting on 2 models
-  GModel *computeBooleanUnion(GModel *tool, int createNewModel);
-  GModel *computeBooleanIntersection(GModel *tool, int createNewModel);
-  GModel *computeBooleanDifference(GModel *tool, int createNewModel);
+  GModel *computeBooleanUnion(GModel *tool, int createNewModel=0);
+  GModel *computeBooleanIntersection(GModel *tool, int createNewModel=0);
+  GModel *computeBooleanDifference(GModel *tool, int createNewModel=0);
 
   // build a new GModel by cutting the elements crossed by the levelset ls
   // if cutElem is set to false, split the model without cutting the elements
@@ -442,6 +456,10 @@ class GModel
     _associateEntityWithMeshVertices();
   }
 
+  // "automatic" IO based on Gmsh global functions
+  void load(std::string fileName);
+  void save(std::string fileName);
+
   // Gmsh native CAD format (readGEO is static, since it can create
   // multiple models)
   static int readGEO(const std::string &name);
@@ -474,9 +492,6 @@ class GModel
   int writePartitionedMSH(const std::string &baseName, bool binary=false,
                           bool saveAll=false, bool saveParametric=false,
                           double scalingFactor=1.0);
-  int writeDistanceMSH(const std::string &name, double version=2.2, bool binary=false,
-                       bool saveAll=false, bool saveParametric=false,
-                       double scalingFactor=1.0);
 
   // Iridium file format
   int writeIR3(const std::string &name, int elementTagType,
@@ -549,10 +564,11 @@ class GModel
   int writeINP(const std::string &name, bool saveAll=false, 
                double scalingFactor=1.0);
 
-  void save(std::string fileName);
-  void load(std::string fileName);
-
-  static void registerBindings(binding *b);
+  // Geomview mesh
+  int readGEOM(const std::string &name);
+  
+  // CEA triangulation
+  int writeMAIL(const std::string &name, bool saveAll, double scalingFactor);
 };
 
 #endif

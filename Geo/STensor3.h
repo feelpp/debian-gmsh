@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -33,7 +33,7 @@ class SMetric3 {
   void setMat(const fullMatrix<double> & mat)
   {
     for (int i = 0; i < 3; i++)
-      for (int j = i; j < 3; j++)
+      for (int j = 0; j < 3; j++)
         _val[getIndex(i, j)] = mat(i, j);
   }
   SMetric3(const SMetric3& m)
@@ -100,6 +100,13 @@ class SMetric3 {
     SMetric3 ithis;
     ithis.setMat(m);
     return ithis;
+  }
+  double determinant () const
+  {
+    fullMatrix<double> m(3,3);
+    getMat(m);
+    double det = m.determinant();
+    return det;
   }
   SMetric3 operator + (const SMetric3 &other) const
   {
@@ -229,6 +236,7 @@ class STensor3 {
     ithis.setMat(m);
     return ithis;
   }
+
   STensor3 operator + (const STensor3 &other) const
   {
     STensor3 res(*this);

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -29,7 +29,7 @@ void PView::_init(int num)
   _changed = true;
   _aliasOf = 0;
   _eye = SPoint3(0., 0., 0.);
-  va_points = va_lines = va_triangles = va_vectors = 0;
+  va_points = va_lines = va_triangles = va_vectors = va_ellipses = 0;
   normals = 0;
   list.push_back(this);
   for(unsigned int i = 0; i < list.size(); i++) list[i]->setIndex(i);
@@ -179,6 +179,7 @@ void PView::deleteVertexArrays()
   if(va_lines) delete va_lines; va_lines = 0;
   if(va_triangles) delete va_triangles; va_triangles = 0;
   if(va_vectors) delete va_vectors; va_vectors = 0;
+  if(va_ellipses) delete va_ellipses; va_ellipses = 0;
 }
 
 void PView::setOptions(PViewOptions *val)
@@ -311,18 +312,3 @@ PView *PView::getViewByNum(int num, int timeStep, int partition)
   return 0;
 }
 
-#include "Bindings.h"
-void PView::registerBindings(binding *b) {
-  classBinding *cb = b->addClass<PView>("PView");
-  cb->setDescription("A post-processing view");
-  methodBinding *cm;
-  cm = cb->addMethod("write",&PView::write);
-  cm->setArgNames("fileName","format","append",NULL);
-  cm->setDescription("write data to a file. Format can be: 0 for ascii pos file, "
-                     "1 for binary pos file, 2 for parsed pos file, 3 for STL, "
-                     "4 for TXT, 5 for MSH, 6 for MED files, or 10 for automatic. "
-                     "'append' option is only supported for pos format.");
-  cm = cb->addMethod("getData",&PView::getData);
-  cm->setArgNames("useAdaptiveIfAvailable",NULL);
-  cm->setDescription("return the structure containing the data of this view.");
-}

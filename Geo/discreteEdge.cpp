@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -40,6 +40,9 @@ void discreteEdge::createTopo()
 
 void discreteEdge::orderMLines()
 {
+  //printf("ordering line %d\n", tag());
+  //if(lines.size() <= 1) return;
+
   std::vector<MLine*> _m;
   std::list<MLine*> segments;
 
@@ -265,10 +268,11 @@ void discreteEdge::parametrize(std::map<GFace*, std::map<MVertex*, MVertex*,
                                std::map<GRegion*, std::map<MVertex*, MVertex*,
                                std::less<MVertex*> > > &region2Vert)
 { 
-  for (unsigned int i = 0; i < lines.size() + 1; i++){
-    _pars.push_back(i);
+  if (_pars.empty()){
+    for (unsigned int i = 0; i < lines.size() + 1; i++){
+      _pars.push_back(i);
+    }
   }
-
   //Replace MVertex by MedgeVertex
   std::map<MVertex*, MVertex*, std::less<MVertex*> > old2new;   
   old2new.clear();
@@ -394,6 +398,7 @@ void discreteEdge::computeNormals () const
 bool discreteEdge::getLocalParameter(const double &t, int &iLine,
                                      double &tLoc) const
 {
+
   for (iLine = 0; iLine < (int)lines.size(); iLine++){
     double tmin = _pars[iLine];
     double tmax = _pars[iLine+1];

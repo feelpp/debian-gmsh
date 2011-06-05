@@ -1,5 +1,5 @@
 %{
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -105,7 +105,7 @@ fullMatrix<double> ListOfListOfDouble2Matrix(List_T *list);
 %token tPrintf tSprintf tStrCat tStrPrefix tStrRelative
 %token tBoundingBox tDraw tToday tSyncModel tCreateTopology tDistanceFunction
 %token tPoint tCircle tEllipse tLine tSphere tPolarSphere tSurface tSpline tVolume
-%token tCharacteristic tLength tParametric tElliptic
+%token tCharacteristic tLength tParametric tElliptic tRefineMesh
 %token tPlane tRuled tTransfinite tComplex tPhysical tCompound tPeriodic
 %token tUsing tPlugin tDegenerated
 %token tRotate tTranslate tSymmetry tDilate tExtrude tLevelset
@@ -2411,9 +2411,13 @@ Command :
     }
    | tCreateTopology tEND
     {
-       GModel::current()->createTopologyFromMesh();
+      GModel::current()->createTopologyFromMesh();
     }
-
+   | tRefineMesh tEND
+    {
+      GModel::current()->importGEOInternals();
+      GModel::current()->refineMesh(CTX::instance()->mesh.secondOrderLinear);
+    }
 ;
 
 // L O O P  
@@ -2626,7 +2630,6 @@ Extrude :
 		    &extr, $$);
       List_Delete($3);
     }
-
   // Deprecated extrude commands (for backward compatibility)
   | tExtrude tPoint '{' FExpr ',' VExpr '}' tEND
     {
@@ -2877,6 +2880,14 @@ ExtrudeParameter :
 	}
       }
       List_Delete($6);
+    }
+  | tUsing tSTRING '[' FExpr ']' tEND
+    {
+      if(!strcmp($2, "Index"))
+        extr.mesh.BoundaryLayerIndex = $4;
+      else if(!strcmp($2, "View"))
+        extr.mesh.ViewIndex = $4;
+      Free($2);
     }
 ;
 
@@ -3345,6 +3356,36 @@ Coherence :
       else
         yymsg(0, "Unknown coherence command");
       Free($2);
+    }
+  | tCoherence tPoint '{' RecursiveListOfDouble '}' tEND
+    { 
+      if(List_Nbr($4) >= 2){
+        double d;
+        List_Read($4, 0, &d);
+        Vertex *target = FindPoint((int)d);
+        if(!target)
+          yymsg(0, "Could not find Point %d", (int)d);
+        else{
+          double x = target->Pos.X, y = target->Pos.Y, z = target->Pos.Z;
+          for(int i = 1; i < List_Nbr($4); i++){
+            List_Read($4, i, &d);
+            Vertex *source = FindPoint((int)d);
+            if(!source) yymsg(0, "Could not find Point %d", (int)d);
+            if(target && source){
+              source->Typ = target->Typ;
+              source->Pos.X = x;
+              source->Pos.Y = y;
+              source->Pos.Z = z;
+              source->boundaryLayerIndex = target->boundaryLayerIndex;
+            }
+          }
+          ExtrudeParams::normalsCoherence.push_back(SPoint3(x, y, z));
+        }
+      }
+      else
+        yymsg(0, "Need at least two points to merge");
+      ReplaceAllDuplicates();
+      List_Delete($4);
     }
 ;
 
@@ -3882,6 +3923,22 @@ FExpr_Multi :
 	List_Add($$, &v->Pos.Y);
 	List_Add($$, &v->Pos.Z);
       }
+    }
+  | tPoint tBIGSTR
+    {
+      $$ = GetAllEntityNumbers(0);
+    }
+  | tLine tBIGSTR
+    {
+      $$ = GetAllEntityNumbers(1);
+    }
+  | tSurface tBIGSTR
+    {
+      $$ = GetAllEntityNumbers(2);
+    }
+  | tVolume tBIGSTR
+    {
+      $$ = GetAllEntityNumbers(3);
     }
   | Transform
     {

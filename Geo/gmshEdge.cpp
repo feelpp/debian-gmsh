@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -36,6 +36,7 @@ Range<double> gmshEdge::parBounds(int i) const
 
 GPoint gmshEdge::point(double par) const
 {
+  
   Vertex a = InterpolateCurve(c, par, 0);
   return GPoint(a.Pos.X, a.Pos.Y, a.Pos.Z, this, par);
 }
@@ -43,6 +44,13 @@ GPoint gmshEdge::point(double par) const
 SVector3 gmshEdge::firstDer(double par) const
 {
   Vertex a = InterpolateCurve(c, par, 1);
+  return SVector3(a.Pos.X, a.Pos.Y, a.Pos.Z);
+}
+
+SVector3 gmshEdge::secondDer(double par) const
+{
+ 
+  Vertex a = InterpolateCurve(c, par, 2);
   return SVector3(a.Pos.X, a.Pos.Y, a.Pos.Z);
 }
 
@@ -144,7 +152,7 @@ SPoint2 gmshEdge::reparamOnFace(const GFace *face, double epar,int dir) const
             k = periodic ? k - NbControlPoints + 1: NbControlPoints - 1;
           List_Read(c->Control_Points, k, &v[j]);
         }
-        return InterpolateCubicSpline(v, t, c->mat, t1, t2, c->geometry);
+        return InterpolateCubicSpline(v, t, c->mat, t1, t2, c->geometry,0);
       }
     case MSH_SEGM_SPLN :
       {
@@ -185,7 +193,7 @@ SPoint2 gmshEdge::reparamOnFace(const GFace *face, double epar,int dir) const
         else{
           List_Read(c->Control_Points, i + 2, &v[3]);
         }
-        return InterpolateCubicSpline(v, t, c->mat, t1, t2, c->geometry);
+        return InterpolateCubicSpline(v, t, c->mat, t1, t2, c->geometry,0);
       }
     default:
       Msg::Error("Unknown edge type in reparamOnFace");

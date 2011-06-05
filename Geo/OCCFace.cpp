@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -14,19 +14,20 @@
 #include "Context.h"
 
 #if defined(HAVE_OCC)
-#include "Geom_CylindricalSurface.hxx"
-#include "Geom_ConicalSurface.hxx"
-#include "Geom_BSplineSurface.hxx"
-#include "Geom_SphericalSurface.hxx"
-#include "Geom_ToroidalSurface.hxx"
-#include "Geom_SurfaceOfRevolution.hxx"
-#include "Geom_BezierSurface.hxx"
-#include "Geom_Plane.hxx"
-#include "gp_Pln.hxx"
-#include "BRepMesh_FastDiscret.hxx"
-#include "IntTools_Context.hxx"
-#include "BOPTools_Tools2D.hxx"
-#include "BOPTools_Tools3D.hxx"
+#include <Standard_Version.hxx>
+#include <Geom_CylindricalSurface.hxx>
+#include <Geom_ConicalSurface.hxx>
+#include <Geom_BSplineSurface.hxx>
+#include <Geom_SphericalSurface.hxx>
+#include <Geom_ToroidalSurface.hxx>
+#include <Geom_SurfaceOfRevolution.hxx>
+#include <Geom_BezierSurface.hxx>
+#include <Geom_Plane.hxx>
+#include <gp_Pln.hxx>
+#include <BRepMesh_FastDiscret.hxx>
+#include <IntTools_Context.hxx>
+#include <BOPTools_Tools2D.hxx>
+#include <BOPTools_Tools3D.hxx>
 
 OCCFace::OCCFace(GModel *m, TopoDS_Face _s, int num)
   : GFace(m, num), s(_s)
@@ -337,27 +338,25 @@ bool OCCFace::buildSTLTriangulation(bool force)
 
   Bnd_Box aBox;
   BRepBndLib::Add(s, aBox);
-  Standard_Real aXmin, aYmin, aZmin, aXmax, aYmax, aZmax;
-  aBox.Get(aXmin, aYmin, aZmin, aXmax, aYmax, aZmax);
-  Standard_Real dX = aXmax - aXmin;
-  Standard_Real dY = aYmax - aYmin;
-  Standard_Real dZ = aZmax - aZmin;
-  Standard_Real dMax = dX;
-  if(dY > dMax) dMax = dY;
-  if(dZ > dMax) dMax = dZ;
-  Standard_Real aCoeff = 0.01;
-  Standard_Real aDiscret = aCoeff * dMax;
-  BRepMesh_FastDiscret aMesher(aDiscret, 0.5, aBox, Standard_False, Standard_True,
-                               Standard_False, Standard_True);
+  BRepMesh_FastDiscret aMesher(0.1, 0.5, aBox, Standard_False, Standard_False, Standard_True, Standard_False);
   aMesher.Add(s);
+#if !((OCC_VERSION_MAJOR == 6) && (OCC_VERSION_MINOR < 5))
+  aMesher.Process(s);
+#endif
+
   TopLoc_Location loc;
   Handle(Poly_Triangulation) triangulation = BRep_Tool::Triangulation(s, loc);
-  if(triangulation.IsNull()){
-    Msg::Warning("OCC STL triangulation failed");
-    return false;
-  }
-  if(!triangulation->HasUVNodes()){
-    Msg::Warning("OCC STL triangulation has no u,v coordinates");
+
+  if(triangulation.IsNull() || !triangulation->HasUVNodes()){
+    if(triangulation.IsNull())
+      Msg::Warning("OCC STL triangulation of surface %d failed", tag());
+    else
+      Msg::Warning("OCC STL triangulation of surface %d has no u,v coordinates", tag());
+    // add a dummy triangle so that we won't try again
+    stl_vertices.push_back(SPoint2(0., 0.));
+    stl_triangles.push_back(0);
+    stl_triangles.push_back(0);
+    stl_triangles.push_back(0);
     return false;
   }
 
@@ -519,7 +518,8 @@ void OCCFace::replaceEdgesInternal(std::list<GEdge*> &new_edges)
   setup();
 }
 
-bool OCCFace::isSphere (double &radius, SPoint3 &center) const{
+bool OCCFace::isSphere (double &radius, SPoint3 &center) const
+{
   switch(geomType()){
   case GEntity::Sphere:
     {
@@ -533,7 +533,6 @@ bool OCCFace::isSphere (double &radius, SPoint3 &center) const{
   default:
     return false;
   }
-  
 }
 
 

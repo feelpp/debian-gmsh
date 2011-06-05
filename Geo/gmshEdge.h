@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -20,6 +20,7 @@ class gmshEdge : public GEdge {
   virtual GeomType geomType() const;
   virtual GPoint point(double p) const;
   virtual SVector3 firstDer(double par) const;
+  virtual SVector3 secondDer(double par) const;
   ModelType getNativeType() const { return GmshModel; }
   void * getNativePtr() const { return c; }
   virtual std::string getAdditionalInfoString();

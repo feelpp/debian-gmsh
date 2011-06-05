@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -10,6 +10,7 @@
 #include <map>
 #include <string>
 #include "SmoothData.h"
+#include "SPoint3.h"
 #include "MElement.h"
 
 // geo.Mode
@@ -37,7 +38,6 @@ public :
     bool empty();
     void propagatePartitionInformation(std::vector<int>* partitionSizes = NULL);
   } elementMap;
-  static smooth_data *normals;
   ExtrudeParams(int Mode = EXTRUDED_ENTITY);
   void fill(int type,
             double T0, double T1, double T2,
@@ -55,6 +55,7 @@ public :
     std::vector<int> NbElmLayer;
     std::vector<double> hLayer;
     std::map<int, std::pair<double, std::vector<int> > > Holes;
+    int ViewIndex, BoundaryLayerIndex;
   }mesh;
   struct{
     int Mode;
@@ -63,6 +64,10 @@ public :
     double trans[3];
     double axe[3], pt[3], angle;
   }geo;
+
+  // for boundary layers
+  static smooth_data *normals[2];
+  static std::vector<SPoint3> normalsCoherence;
 };
 
 #endif

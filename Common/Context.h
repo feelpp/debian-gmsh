@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -10,8 +10,6 @@
 #include <string>
 #include "CGNSOptions.h"
 #include "meshPartitionOptions.h"
-
-class binding;
 
 // The interface-independent context.
 
@@ -36,7 +34,10 @@ struct contextMeshOptions {
   int smoothInternalEdges, minCircPoints, minCurvPoints;
   int saveAll, saveGroupsOfNodes, binary, bdfFieldFormat, saveParametric;
   int smoothNormals, reverseAllNormals, zoneDefinition, clip;
-  int saveElementTagType;  
+  int saveElementTagType;
+  int switchElementTags;
+  int highOrderNoMetric;
+  int multiplePasses;
 };
 
 struct contextGeometryOptions {
@@ -52,6 +53,8 @@ struct contextGeometryOptions {
   int copyMeshingMethod, exactExtrusion;
   int matchGeomAndMesh;
 };
+
+
 
 class CTX {
  private:
@@ -114,8 +117,10 @@ class CTX {
   int nonModalWindows;
   // clipping plane distance factor
   double clipFactor;
+  // display border factor (0 = model fits window size exactly)
+  double displayBorderFactor;
   // do or do not use the trackball for rotations
-  int useTrackball;
+  int useTrackball, trackballHyperbolicSheet;
   // point around which to rotate the scene
   double rotationCenter[3];
   // rotate around the center of mass instead of rotationCenter[]
@@ -128,7 +133,8 @@ class CTX {
   // generation ->only for geo/post)
   double lc;
   // double buffer/antialias/stereo graphics?
-  int db, antialiasing, stereo;
+  int db, antialiasing, stereo, camera;
+  double eye_sep_ratio,focallength_ratio,camera_aperture;
   // orthogonal projection? 
   int ortho;
   // draw the bounding boxes and the rot center?
@@ -208,6 +214,7 @@ class CTX {
   // solver options 
   struct{
     int plugins, listen;
+    double timeout;
     std::string socketName;
   }solver;
   // print options 

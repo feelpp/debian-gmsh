@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -295,13 +295,17 @@ static void remeshUnrecoveredEdges(std::map<MVertex*, BDS_Point*> &recoverMapInv
 
 static bool algoDelaunay2D(GFace *gf)
 {
-  // HACK REMOVE ME
-  //  if (gf->geomType() == GEntity::CompoundSurface)return true;
+  if(!noSeam(gf))
+    return false;
 
-  if(noSeam(gf) && (CTX::instance()->mesh.algo2d == ALGO_2D_DELAUNAY ||
-		    CTX::instance()->mesh.algo2d == ALGO_2D_BAMG || 
-                    CTX::instance()->mesh.algo2d == ALGO_2D_FRONTAL))
+  if(CTX::instance()->mesh.algo2d == ALGO_2D_DELAUNAY ||
+     CTX::instance()->mesh.algo2d == ALGO_2D_BAMG || 
+     CTX::instance()->mesh.algo2d == ALGO_2D_FRONTAL) 
     return true;
+
+  if(CTX::instance()->mesh.algo2d == ALGO_2D_AUTO && gf->geomType() == GEntity::Plane)
+    return true;
+
   return false;
 }
 
@@ -335,6 +339,8 @@ static bool recoverEdge(BDS_Mesh *m, GEdge *ge,
     g = m->get_geom(ge->tag(), 1);
   }
   
+  bool _fatallyFailed;
+
   for(unsigned int i = 0; i < ge->lines.size(); i++){
     MVertex *vstart = ge->lines[i]->getVertex(0);
     MVertex *vend = ge->lines[i]->getVertex(1);
@@ -346,14 +352,14 @@ static bool recoverEdge(BDS_Mesh *m, GEdge *ge,
       if(pass == 1) 
         e2r->insert(EdgeToRecover(pstart->iD, pend->iD, ge));
       else{
-        BDS_Edge *e = m->recover_edge(pstart->iD, pend->iD, e2r, notRecovered);
+        BDS_Edge *e = m->recover_edge(pstart->iD, pend->iD, _fatallyFailed, e2r, notRecovered);
         if(e) e->g = g;
-        //else {
-        //   Msg::Error("Unable to recover an edge %g %g && %g %g (%d/%d)",
-        //              vstart->x(), vstart->y(), vend->x(), vend->y(), i, 
-        //              ge->mesh_vertices.size());
-        //   return false;
-        // }
+        else {
+	  if (_fatallyFailed) Msg::Error("Unable to recover an edge %g %g && %g %g (%d/%d)",
+					 vstart->x(), vstart->y(), vend->x(), vend->y(), i, 
+					 ge->mesh_vertices.size());
+	  return !_fatallyFailed;
+	}
       }
     }
   }
@@ -444,9 +450,9 @@ static bool meshGenerator(GFace *gf, int RECUR_ITER,
     ++itvx;
   }
  
-  // add _additional_vertices 
-  all_vertices.insert(gf->_additional_vertices.begin(),
-                      gf->_additional_vertices.end());
+  // add additional vertices 
+  all_vertices.insert(gf->additionalVertices.begin(),
+                      gf->additionalVertices.end());
 
 
   if(all_vertices.size() < 3){
@@ -575,7 +581,11 @@ static bool meshGenerator(GFace *gf, int RECUR_ITER,
     ite = edges.begin();
     while(ite != edges.end()){
       if(!(*ite)->isMeshDegenerated()){
-        recoverEdge(m, *ite, recoverMapInv, &edgesToRecover, &edgesNotRecovered, 2);
+        if (!recoverEdge(m, *ite, recoverMapInv, &edgesToRecover, &edgesNotRecovered, 2)){
+	  delete m;
+	  gf->meshStatistics.status = GFace::FAILED;
+	  return false;
+	}
       }
       ++ite;
     }
@@ -818,7 +828,7 @@ static bool meshGenerator(GFace *gf, int RECUR_ITER,
                   &recoverMapInv);
     optimizeMeshBDS(gf, *m, 2);
     refineMeshBDS(gf, *m, CTX::instance()->mesh.refineSteps, false,
-                  &recoverMapInv);
+                &recoverMapInv);
     optimizeMeshBDS(gf, *m, 2);
   }
   computeMeshSizeFieldAccuracy(gf, *m, gf->meshStatistics.efficiency_index,
@@ -872,17 +882,16 @@ static bool meshGenerator(GFace *gf, int RECUR_ITER,
   // BDS mesh is passed in order not to recompute local coordinates of
   // vertices
   if(algoDelaunay2D(gf)){
-    if(CTX::instance()->mesh.algo2d == ALGO_2D_FRONTAL)//   ||  
-       //       gf->geomType() == GEntity::CompoundSurface)
+    if(CTX::instance()->mesh.algo2d == ALGO_2D_FRONTAL)
       bowyerWatsonFrontal(gf);
-    else if(CTX::instance()->mesh.algo2d == ALGO_2D_DELAUNAY)
+    else if(CTX::instance()->mesh.algo2d == ALGO_2D_DELAUNAY ||
+            CTX::instance()->mesh.algo2d == ALGO_2D_AUTO)
       bowyerWatson(gf);
     else {
       bowyerWatson(gf);
       meshGFaceBamg(gf);
     }
-    for(int i = 0; i < CTX::instance()->mesh.nbSmoothing; i++) 
-      laplaceSmoothing(gf);
+    laplaceSmoothing(gf,CTX::instance()->mesh.nbSmoothing);
   }
 
   if(debug){
@@ -900,13 +909,18 @@ static bool meshGenerator(GFace *gf, int RECUR_ITER,
 
   if((CTX::instance()->mesh.recombineAll || gf->meshAttributes.recombine) && 
      !CTX::instance()->mesh.optimizeLloyd)
-    recombineIntoQuads(gf);
+    recombineIntoQuadsIterative(gf);
 
   computeElementShapes(gf, gf->meshStatistics.worst_element_shape,
                        gf->meshStatistics.average_element_shape,
                        gf->meshStatistics.best_element_shape,
                        gf->meshStatistics.nbTriangle,
                        gf->meshStatistics.nbGoodQuality);
+
+  gf->mesh_vertices.insert(gf->mesh_vertices.end(),
+			      gf->additionalVertices.begin(),
+			      gf->additionalVertices.end());
+  gf->additionalVertices.clear();
 
   return true;
 }
@@ -1283,11 +1297,13 @@ static bool meshGeneratorPeriodic(GFace *gf, bool debug = true)
     outputScalarField(m->triangles, name, 1);
   }
 
+  bool _fatallyFailed;
+
   for(unsigned int i = 0; i < edgeLoops_BDS.size(); i++){
     std::vector<BDS_Point*> &edgeLoop_BDS = edgeLoops_BDS[i];
     for(unsigned int j = 0; j < edgeLoop_BDS.size(); j++){
       BDS_Edge * e = m->recover_edge
-        (edgeLoop_BDS[j]->iD, edgeLoop_BDS[(j + 1) % edgeLoop_BDS.size()]->iD);
+        (edgeLoop_BDS[j]->iD, edgeLoop_BDS[(j + 1) % edgeLoop_BDS.size()]->iD, _fatallyFailed);
       if(!e){
         Msg::Error("Impossible to recover the edge %d %d", edgeLoop_BDS[j]->iD,
                    edgeLoop_BDS[(j + 1) % edgeLoop_BDS.size()]->iD);
@@ -1455,15 +1471,14 @@ static bool meshGeneratorPeriodic(GFace *gf, bool debug = true)
   }
   
   if(algoDelaunay2D(gf)){
-    if(CTX::instance()->mesh.algo2d == ALGO_2D_FRONTAL)//   ||  
-       //       gf->geomType() == GEntity::CompoundSurface)
+    if(CTX::instance()->mesh.algo2d == ALGO_2D_FRONTAL)
       bowyerWatsonFrontal(gf);
-    else if(CTX::instance()->mesh.algo2d == ALGO_2D_DELAUNAY)
+    else if(CTX::instance()->mesh.algo2d == ALGO_2D_DELAUNAY ||
+            CTX::instance()->mesh.algo2d == ALGO_2D_AUTO)
       bowyerWatson(gf);
     else 
       meshGFaceBamg(gf);
-    for(int i = 0; i < CTX::instance()->mesh.nbSmoothing; i++) 
-      laplaceSmoothing(gf);
+    laplaceSmoothing(gf,CTX::instance()->mesh.nbSmoothing);
   }
   
   // delete the mesh  
@@ -1510,7 +1525,6 @@ void meshGFace::operator() (GFace *gf)
   deMeshGFace dem;
   dem(gf);
 
-  if(MeshBoundaryLayerSurface(gf)) return;
   if(MeshTransfiniteSurface(gf)) return;
   if(MeshExtrudedSurface(gf)) return;
   if(gf->meshMaster() != gf->tag()){
@@ -1527,16 +1541,16 @@ void meshGFace::operator() (GFace *gf)
   }
 
   const char *algo = "Unknown";
-  if(CTX::instance()->mesh.algo2d == ALGO_2D_FRONTAL)
-    algo = "Frontal";
-  else if(CTX::instance()->mesh.algo2d == ALGO_2D_DELAUNAY)
-    algo = "Delaunay";
-  else if(CTX::instance()->mesh.algo2d == ALGO_2D_MESHADAPT_OLD)
-    algo = "MeshAdapt (old)";
-  else if(CTX::instance()->mesh.algo2d == ALGO_2D_BAMG)
-    algo = "Bamg";
-  else 
-    algo = "MeshAdapt";
+  switch(CTX::instance()->mesh.algo2d){
+  case ALGO_2D_MESHADAPT : algo = "MeshAdapt"; break;
+  case ALGO_2D_FRONTAL : algo = "Frontal"; break;
+  case ALGO_2D_DELAUNAY : algo = "Delaunay"; break;
+  case ALGO_2D_MESHADAPT_OLD : algo = "MeshAdapt (old)"; break;
+  case ALGO_2D_BAMG : algo = "Bamg"; break;
+  case ALGO_2D_AUTO :
+    algo = (gf->geomType() == GEntity::Plane) ? "Delaunay" : "MeshAdapt";
+    break;
+  }
 
   Msg::Info("Meshing surface %d (%s, %s)", gf->tag(), 
             gf->getTypeString().c_str(), algo);
@@ -1562,19 +1576,22 @@ void meshGFace::operator() (GFace *gf)
   Msg::Debug("Type %d %d triangles generated, %d internal vertices",
              gf->geomType(), gf->triangles.size(), gf->mesh_vertices.size());
 
-  // test : recompute the background mesh using a PDE
-  /*
-    if (backgroundMesh::current()){
+  // do the 2D mesh in several passes. For second and other passes,
+  // a background mesh is constructed with the previous mesh and
+  // nodal values of the metric are computed that take into account
+  // complex size fields that are tedious to evaluate on the fly
+  if (!twoPassesMesh)return;
+  twoPassesMesh--;
+  if (backgroundMesh::current()){
     backgroundMesh::unset();
-    }    
-    else{
-    backgroundMesh::set(gf);
-    char name[256];
-    sprintf(name,"bgm-%d.pos",gf->tag());
-    backgroundMesh::current()->print(name,gf);
-    (*this)(gf);
-    }
-  */
+  }    
+  backgroundMesh::set(gf);
+  char name[256];
+  sprintf(name,"bgm-%d.pos",gf->tag());
+  backgroundMesh::current()->print(name,gf);
+  sprintf(name,"cross-%d.pos",gf->tag());
+  backgroundMesh::current()->print(name,gf,1);
+  (*this)(gf);
 }
 
 bool checkMeshCompound(GFaceCompound *gf, std::list<GEdge*> &edges)

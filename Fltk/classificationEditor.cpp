@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -15,6 +15,7 @@
 #include "Context.h"
 #include "GmshMessage.h"
 #include "MLine.h"
+#include "MQuadrangle.h"
 #include "meshGFaceDelaunayInsertion.h"
 #include "discreteEdge.h"
 #include "discreteFace.h"
@@ -104,9 +105,12 @@ static void select_elements_cb(Fl_Widget *w, void *data)
 
   if(all){
     for(GModel::fiter it = GModel::current()->firstFace(); 
-        it != GModel::current()->lastFace(); ++it)
+        it != GModel::current()->lastFace(); ++it){
       e->elements.insert(e->elements.end(), (*it)->triangles.begin(), 
                          (*it)->triangles.end());
+      e->elements.insert(e->elements.end(), (*it)->quadrangles.begin(), 
+                         (*it)->quadrangles.end());
+    }
   }
   else{
     CTX::instance()->pickElements = 1;
@@ -120,15 +124,19 @@ static void select_elements_cb(Fl_Widget *w, void *data)
       if(ib == 'l') {
         for(unsigned int i = 0; i < FlGui::instance()->selectedElements.size(); i++){
           MElement *me = FlGui::instance()->selectedElements[i];
-          if(me->getType() == TYPE_TRI && me->getVisibility() != 2){
+          if(me->getDim() == 2 && me->getVisibility() != 2){
             me->setVisibility(2); 
-            e->elements.push_back((MTriangle*)me);
+            e->elements.push_back(me);
           }
         }
       }
       if(ib == 'r') {
-        for(unsigned int i = 0; i < FlGui::instance()->selectedElements.size(); i++)
-          FlGui::instance()->selectedElements[i]->setVisibility(1);
+        for(unsigned int i = 0; i < FlGui::instance()->selectedElements.size(); i++){
+          MElement *me = FlGui::instance()->selectedElements[i];
+          if(me->getVisibility() == 2)
+            e->elements.erase(std::find(e->elements.begin(), e->elements.end(), me));
+          me->setVisibility(1);
+        }
       }
       if(ib == 'e') { // ok, compute the edges
         GModel::current()->setSelection(0);
@@ -144,7 +152,7 @@ static void select_elements_cb(Fl_Widget *w, void *data)
   }
 
   e2t_cont adj;
-  buildEdgeToTriangle(e->elements, adj);
+  buildEdgeToElements(e->elements, adj);
   buildListOfEdgeAngle(adj, e->edges_detected, e->edges_lonly);
   ElementsSelectedMode(e);
   update_edges_cb(0, data);
@@ -198,13 +206,18 @@ static void delete_edge_cb(Fl_Widget *w, void *data)
       for(unsigned int i = 0; i < FlGui::instance()->selectedElements.size(); i++){
         MElement *me = FlGui::instance()->selectedElements[i];
         if(me->getType() == TYPE_LIN && me->getVisibility() != 2){
-          me->setVisibility(2); ele.push_back((MLine*)me);
+          me->setVisibility(2); 
+          ele.push_back((MLine*)me);
         }
       }
     }
     if(ib == 'r') {
-      for(unsigned int i = 0; i < FlGui::instance()->selectedElements.size(); i++)
-        FlGui::instance()->selectedElements[i]->setVisibility(1);
+      for(unsigned int i = 0; i < FlGui::instance()->selectedElements.size(); i++){
+        MElement *me = FlGui::instance()->selectedElements[i];
+        if(me->getVisibility() == 2)
+          ele.erase(std::find(ele.begin(), ele.end(), me));
+        me->setVisibility(1);
+      }
     }
     if(ib == 'e') {
       GModel::current()->setSelection(0);
@@ -437,7 +450,7 @@ classificationEditor::classificationEditor() : selected(0)
   const int width = (int)(3.15 * BBB), height = (int)(9.5 * BH);
 
   window = new paletteWindow
-    (width, height, CTX::instance()->nonModalWindows ? true : false, "Reclassify");
+    (width, height, CTX::instance()->nonModalWindows ? true : false, "Reclassify 2D");
   window->box(GMSH_WINDOW_BOX);
   
   int x = WB, y = WB;

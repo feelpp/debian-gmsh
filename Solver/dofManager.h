@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -55,9 +55,9 @@ template<class T> struct dofTraits
 {
   typedef T VecType;
   typedef T MatType;
-  inline static void gemm(VecType &r, const MatType &m, const VecType &v, 
+  inline static void gemm(VecType &r, const MatType &m, const VecType &v,
                           double alpha, double beta)
-  { 
+  {
     r = beta * r + alpha * m * v;
   }
 };
@@ -68,7 +68,7 @@ template<class T> struct dofTraits<fullMatrix<T> >
   typedef fullMatrix<T> MatType;
   inline static void gemm (VecType &r, const MatType &m, const VecType &v,
                            double alpha, double beta)
-  { 
+  {
     r.gemm(m, v, alpha,beta);
   }
 };
@@ -132,10 +132,10 @@ class dofManager{
   void _parallelFinalize();
 
  public:
-  dofManager(linearSystem<dataMat> *l, bool isParallel=false) 
-    : _current(l), _isParallel(isParallel), _parallelFinalized(false) 
-  { 
-    _linearSystems["A"] = l; 
+  dofManager(linearSystem<dataMat> *l, bool isParallel=false)
+    : _current(l), _isParallel(isParallel), _parallelFinalized(false)
+  {
+    _linearSystems["A"] = l;
   }
   dofManager(linearSystem<dataMat> *l1, linearSystem<dataMat> *l2)
     : _current(l1), _isParallel(false), _parallelFinalized(false)
@@ -198,12 +198,12 @@ class dofManager{
   {
     numberDof(v->getNum(), Dof::createTypeWithTwoInts(iComp, iField));
   }
-  virtual inline void getDofValue(std::vector<Dof> &keys,std::vector<dataVec> &Vals)
+  virtual inline void getDofValue(std::vector<Dof> &keys, std::vector<dataVec> &Vals)
   {
-    int ndofs=keys.size();
+    int ndofs = keys.size();
     size_t originalSize = Vals.size();
-    Vals.resize(originalSize+ndofs);
-    for (int i=0;i<ndofs;++i) getDofValue(keys[i], Vals[originalSize+i]);
+    Vals.resize(originalSize + ndofs);
+    for (int i = 0; i < ndofs; ++i) getDofValue(keys[i], Vals[originalSize+i]);
   }
   virtual inline void getDofValue(Dof key,  dataVec &val) const
   {
@@ -211,7 +211,7 @@ class dofManager{
       typename std::map<Dof, dataVec>::const_iterator it = fixed.find(key);
       if (it != fixed.end()) {
         val =  it->second;
-        return ;
+        return;
       }
     }
     {
@@ -227,11 +227,11 @@ class dofManager{
       if (it != constraints.end()){
         dataVec tmp(val);
         val = it->second.shift;
-        for (unsigned i=0;i<(it->second).linear.size();i++){
+        for (unsigned i = 0; i < (it->second).linear.size(); i++){
           std::map<Dof, int>::const_iterator itu = unknown.find
             (((it->second).linear[i]).first);
           getDofValue(((it->second).linear[i]).first, tmp);
-          dofTraits<T>::gemm(val,((it->second).linear[i]).second, tmp, 1, 1);
+          dofTraits<T>::gemm(val, ((it->second).linear[i]).second, tmp, 1, 1);
         }
         return ;
       }
@@ -260,13 +260,13 @@ class dofManager{
       if (it != constraints.end()){
         v = it->second.shift;
         dataVec tmp(v);
-        for (unsigned i=0;i<(it->second).linear.size();i++){
+        for (unsigned i = 0; i < (it->second).linear.size(); i++){
           std::map<Dof, int>::const_iterator itu = unknown.find
             (((it->second).linear[i]).first);
           getDofValue(((it->second).linear[i]).first, tmp);
           dofTraits<T>::gemm(v, ((it->second).linear[i]).second, tmp, 1, 1);
         }
-        return ;
+        return;
       }
     }
   }
@@ -274,6 +274,54 @@ class dofManager{
   {
     getDofValue(v->getNum(), Dof::createTypeWithTwoInts(iComp, iField), value);
   }
+
+  inline void insertInSparsityPatternLinConst(const Dof &R, const Dof &C)
+  {
+    std::map<Dof, int>::iterator itR = unknown.find(R);
+    if (itR != unknown.end())
+    {
+      typename std::map<Dof, DofAffineConstraint<dataVec> >::iterator itConstraint;
+      itConstraint = constraints.find(C);
+      if (itConstraint != constraints.end()){
+        for (unsigned i = 0; i < (itConstraint->second).linear.size(); i++){
+          insertInSparsityPattern(R, (itConstraint->second).linear[i].first);
+        }
+      }
+    }
+    else{  // test function ; (no shift ?)
+      typename std::map<Dof, DofAffineConstraint<dataVec> >::iterator itConstraint;
+      itConstraint = constraints.find(R);
+      if (itConstraint != constraints.end()){
+        for (unsigned i = 0; i < (itConstraint->second).linear.size(); i++){
+          insertInSparsityPattern((itConstraint->second).linear[i].first, C);
+        }
+      }
+    }
+  }
+
+  inline void insertInSparsityPattern(const Dof &R, const Dof &C)
+  {
+    if (_isParallel && !_parallelFinalized) _parallelFinalize();
+    if (!_current->isAllocated()) _current->allocate (sizeOfR());
+    std::map<Dof, int>::iterator itR = unknown.find(R);
+    if (itR != unknown.end()){
+      std::map<Dof, int>::iterator itC = unknown.find(C);
+      if (itC != unknown.end()){
+        _current->insertInSparsityPattern(itR->second, itC->second);
+      }
+      else{
+        typename std::map<Dof, dataVec>::iterator itFixed = fixed.find(C);
+        if (itFixed != fixed.end()) {
+        }
+        else insertInSparsityPatternLinConst(R, C);
+      }
+    }
+    if (itR == unknown.end())
+    {
+      insertInSparsityPatternLinConst(R, C);
+    }
+  }
+
   inline void assemble(const Dof &R, const Dof &C, const dataMat &value)
   {
     if (_isParallel && !_parallelFinalized) _parallelFinalize();
@@ -285,13 +333,14 @@ class dofManager{
         _current->addToMatrix(itR->second, itC->second, value);
       }
       else{
-        typename std::map<Dof,  dataVec>::iterator itFixed = fixed.find(C);
+        typename std::map<Dof, dataVec>::iterator itFixed = fixed.find(C);
         if (itFixed != fixed.end()) {
           // tmp = -value * itFixed->second
           dataVec tmp(itFixed->second);
-          dofTraits<T>::gemm(tmp , value, itFixed->second, -1, 0);
+          dofTraits<T>::gemm(tmp, value, itFixed->second, -1, 0);
           _current->addToRightHandSide(itR->second, tmp);
-        }else assembleLinConst(R, C, value);
+        }
+        else assembleLinConst(R, C, value);
       }
     }
     if (itR == unknown.end())
@@ -299,7 +348,7 @@ class dofManager{
       assembleLinConst(R, C, value);
     }
   }
-  inline void assemble(std::vector<Dof> &R, std::vector<Dof> &C, 
+  inline void assemble(std::vector<Dof> &R, std::vector<Dof> &C,
                        const fullMatrix<dataMat> &m)
   {
     if (_isParallel && !_parallelFinalized) _parallelFinalize();
@@ -328,9 +377,10 @@ class dofManager{
             if (itFixed != fixed.end()){
               // tmp = -m(i,j) * itFixed->second
               dataVec tmp(itFixed->second);
-              dofTraits<T>::gemm(tmp , m(i,j), itFixed->second, -1, 0);
+              dofTraits<T>::gemm(tmp, m(i, j), itFixed->second, -1, 0);
               _current->addToRightHandSide(NR[i], tmp);
-            }else assembleLinConst(R[i], C[j], m(i,j));
+            }
+            else assembleLinConst(R[i], C[j], m(i, j));
           }
         }
       }
@@ -357,13 +407,13 @@ class dofManager{
         _current->addToRightHandSide(NR[i], m(i));
       }
       else{
-        typename std::map<Dof,DofAffineConstraint<dataVec> >::iterator itConstraint;
+        typename std::map<Dof, DofAffineConstraint<dataVec> >::iterator itConstraint;
         itConstraint = constraints.find(R[i]);
         if (itConstraint != constraints.end()){
           for (unsigned j = 0; j < (itConstraint->second).linear.size(); j++){
             dataMat tmp;
-            dofTraits<T>::gemm(tmp,(itConstraint->second).linear[j].second,m(i), 1, 0);
-            assemble((itConstraint->second).linear[j].first,tmp);
+            dofTraits<T>::gemm(tmp, (itConstraint->second).linear[j].second, m(i), 1, 0);
+            assemble((itConstraint->second).linear[j].first, tmp);
           }
         }
       }
@@ -390,15 +440,15 @@ class dofManager{
             if (itFixed != fixed.end()){
               // tmp = -m(i,j) * itFixed->second
               dataVec tmp(itFixed->second);
-              dofTraits<T>::gemm(tmp , m(i,j), itFixed->second, -1, 0);
+              dofTraits<T>::gemm(tmp, m(i, j), itFixed->second, -1, 0);
               _current->addToRightHandSide(NR[i], tmp);
-            } else assembleLinConst(R[i],R[j],m(i,j));
+            } else assembleLinConst(R[i], R[j], m(i, j));
           }
         }
       }
       else{
         for (unsigned int j = 0; j < R.size(); j++){
-          assembleLinConst(R[i],R[j],m(i,j));
+          assembleLinConst(R[i], R[j], m(i, j));
         }
       }
     }
@@ -424,13 +474,13 @@ class dofManager{
       _current->addToRightHandSide(itR->second, value);
     }
     else{
-      typename std::map<Dof,DofAffineConstraint<dataVec> >::iterator itConstraint;
+      typename std::map<Dof, DofAffineConstraint<dataVec> >::iterator itConstraint;
       itConstraint = constraints.find(R);
       if (itConstraint != constraints.end()){
         for (unsigned j = 0; j < (itConstraint->second).linear.size(); j++){
           dataMat tmp;
-          dofTraits<T>::gemm(tmp,(itConstraint->second).linear[j].second,value, 1, 0);
-          assemble((itConstraint->second).linear[j].first,tmp);
+          dofTraits<T>::gemm(tmp, (itConstraint->second).linear[j].second, value, 1, 0);
+          assemble((itConstraint->second).linear[j].first, tmp);
         }
       }
     }
@@ -459,11 +509,11 @@ class dofManager{
     if(it != _linearSystems.end())
       _current = it->second;
     else{
-      Msg::Error("Current matrix %s not found ",  name.c_str());
+      Msg::Error("Current matrix %s not found ", name.c_str());
       throw;
     }
   }
-  linearSystem<dataMat> *getLinearSystem(std::string &name)
+  virtual linearSystem<dataMat> *getLinearSystem(std::string &name)
   {
     typename std::map<const std::string, linearSystem<dataMat>*>::iterator it =
       _linearSystems.find(name);
@@ -475,20 +525,20 @@ class dofManager{
   inline void setLinearConstraint (Dof key, DofAffineConstraint<dataVec> &affineconstraint)
   {
     constraints[key] = affineconstraint;
-    // constraints.insert(std::make_pair(key,affineconstraint));
+    // constraints.insert(std::make_pair(key, affineconstraint));
   }
   inline void assembleLinConst(const Dof &R, const Dof &C, const dataMat &value)
   {
     std::map<Dof, int>::iterator itR = unknown.find(R);
     if (itR != unknown.end())
     {
-      typename std::map<Dof,DofAffineConstraint<dataVec> >::iterator itConstraint;
+      typename std::map<Dof, DofAffineConstraint<dataVec> >::iterator itConstraint;
       itConstraint = constraints.find(C);
       if (itConstraint != constraints.end()){
         dataMat tmp(value);
         for (unsigned i = 0; i < (itConstraint->second).linear.size(); i++){
           dofTraits<T>::gemm(tmp, (itConstraint->second).linear[i].second, value, 1, 0);
-          assemble(R,(itConstraint->second).linear[i].first,tmp);
+          assemble(R, (itConstraint->second).linear[i].first, tmp);
         }
         dataMat tmp2(value);
         dofTraits<T>::gemm(tmp2, value, itConstraint->second.shift, -1, 0);
@@ -496,7 +546,7 @@ class dofManager{
       }
     }
     else{  // test function ; (no shift ?)
-      typename std::map<Dof,DofAffineConstraint<dataVec> >::iterator itConstraint;
+      typename std::map<Dof, DofAffineConstraint<dataVec> >::iterator itConstraint;
       itConstraint = constraints.find(R);
       if (itConstraint != constraints.end()){
         dataMat tmp(value);
@@ -521,11 +571,11 @@ class dofManager{
 template<class T>
 void dofManager<T>::_parallelFinalize()
 {
+  _localSize = unknown.size();
 #ifdef HAVE_MPI
   int _numStart;
   int _numTotal;
   MPI_Status status;
-  _localSize = unknown.size();
   if (Msg::GetCommRank() == 0){
     _numStart = 0;
   }
@@ -537,7 +587,6 @@ void dofManager<T>::_parallelFinalize()
   MPI_Bcast(&_numTotal, 1, MPI_INT, Msg::GetCommSize()-1, MPI_COMM_WORLD);
   for (std::map <Dof, int> ::iterator it = unknown.begin(); it!= unknown.end(); it++)
     it->second += _numStart;
-  _parallelFinalized = true;
   std::vector<std::list<Dof> >  ghostedByProc;
   int *nRequest = new int[Msg::GetCommSize()];
   int *nRequested = new int[Msg::GetCommSize()];
@@ -545,7 +594,7 @@ void dofManager<T>::_parallelFinalize()
     nRequest[i] = 0;
   for (std::map <Dof, int >::iterator it = ghosted.begin(); it != ghosted.end(); it++)
     nRequest[it->second] ++;
-  MPI_Alltoall(nRequest,1,MPI_INT,nRequested,1,MPI_INT,MPI_COMM_WORLD);
+  MPI_Alltoall(nRequest, 1, MPI_INT, nRequested, 1, MPI_INT, MPI_COMM_WORLD);
   long int **recv0 = new long int*[Msg::GetCommSize()];
   int **recv1 = new int*[Msg::GetCommSize()];
   long int **send0 = new long int*[Msg::GetCommSize()];
@@ -579,17 +628,17 @@ void dofManager<T>::_parallelFinalize()
     }
   }
   int index;
-  while (MPI_Waitany (2*Msg::GetCommSize(), reqRecv0, &index, &status) == 0 && 
+  while (MPI_Waitany (2*Msg::GetCommSize(), reqRecv0, &index, &status) == 0 &&
          index != MPI_UNDEFINED) {
     if (status.MPI_TAG == 0) {
       for (int j = 0; j < nRequested[index]; j++) {
-        std::map<Dof,int>::iterator it = unknown.find
+        std::map<Dof, int>::iterator it = unknown.find
           (Dof(recv0[index][j*2], recv0[index][j*2+1]));
         if (it == unknown.end ())
           Msg::Error ("ghost Dof does not exist on parent process");
         send1[index][j] = it->second;
       }
-      MPI_Isend(send1[index], nRequested[index], MPI_INT, index, 1, 
+      MPI_Isend(send1[index], nRequested[index], MPI_INT, index, 1,
                 MPI_COMM_WORLD, &reqSend1[index]);
     }
   }
@@ -615,6 +664,7 @@ void dofManager<T>::_parallelFinalize()
   delete [] reqSend1;
   delete [] reqRecv0;
 #endif
+  _parallelFinalized = true;
 }
 
 #endif

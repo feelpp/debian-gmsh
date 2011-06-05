@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -292,7 +292,8 @@ bool edgeFront::formQuad(BDS_Edge *e, BDS_Edge *left, BDS_Edge *right)
     //    printf("recover\n");
     //    top = m->recover_edge_fast(pleft,pright);
     //    if(!top)
-    top = m->recover_edge(pleft->iD, pright->iD);
+    bool _fatallyFailed;
+    top = m->recover_edge(pleft->iD, pright->iD,_fatallyFailed);
     //    printf("recover done %p\n",top);
     if(!top) return false;
   }

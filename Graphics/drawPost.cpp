@@ -1,10 +1,11 @@
-// Gmsh - Copyright (C) 1997-2010 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
 #include <math.h>
 #include <algorithm>
+#include "GmshConfig.h"
 #include "GmshMessage.h"
 #include "drawContext.h"
 #include "PView.h"
@@ -15,6 +16,11 @@
 #include "VertexArray.h"
 #include "Context.h"
 #include "gl2ps.h"
+
+#if defined(HAVE_FLTK)
+#include <FL/Fl.H>
+#include <FL/gl.h>
+#endif
 
 static void drawArrays(drawContext *ctx, PView *p, VertexArray *va, GLint type, 
                        bool useNormalArray)
@@ -87,6 +93,34 @@ static void drawArrays(drawContext *ctx, PView *p, VertexArray *va, GLint type,
   glDisable(GL_LIGHTING);
 }
 
+static void drawEllipseArray(drawContext *ctx, PView *p, VertexArray *va)
+{
+  if(!va || va->getNumVerticesPerElement() != 4) return;
+
+  PViewOptions *opt = p->getOptions();
+  
+  for(int i = 0; i < va->getNumVertices(); i += 4) {
+    float *s = va->getVertexArray(3 * i);
+    float vv[3][3];
+    double lmax = opt->tmpMax;
+    double scale = (opt->arrowSizeMax - opt->arrowSizeMin) *ctx->pixel_equiv_x / ctx->s[0]/2;
+    double lmin = opt->arrowSizeMin * ctx->pixel_equiv_x / ctx->s[0]/2;
+    for (int j = 0; j < 3; j++) {
+      float *v = va->getVertexArray(3 * (i + j + 1));
+      double l = sqrt (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+      double l2 = std::min(1., l/lmax);
+      for (int k = 0; k < 3; k++) {
+        vv[j][k] = v[k]/l*(scale*l2 + lmin);
+      }
+    }
+    glColor4ubv((GLubyte *)va->getColorArray(4 * i));
+    if (opt->tensorType == PViewOptions::Ellipsoid)
+      ctx->drawEllipsoid(s[0], s[1], s[2], vv[0], vv[1], vv[2], opt->light);
+    else
+      ctx->drawEllipse(s[0], s[1], s[2], vv[0], vv[1], opt->light);
+  }
+}
+
 static void drawVectorArray(drawContext *ctx, PView *p, VertexArray *va)
 {
   if(!va || va->getNumVerticesPerElement() != 2) return;
@@ -149,7 +183,7 @@ static std::string stringValue(int numComp, double d[9], double norm,
 }
 
 static void drawNumberGlyphs(drawContext *ctx, PView *p, int numNodes, int numComp, 
-                             double xyz[PVIEW_NMAX][3], double val[PVIEW_NMAX][9])
+                             double **xyz, double **val)
 {
   PViewOptions *opt = p->getOptions();
   double d[9] = {0., 0., 0., 0., 0., 0., 0., 0., 0.};
@@ -196,7 +230,7 @@ static void drawNumberGlyphs(drawContext *ctx, PView *p, int numNodes, int numCo
 }
 
 static void drawNormalVectorGlyphs(drawContext *ctx, PView *p, int numNodes, 
-                                   double xyz[PVIEW_NMAX][3], double val[PVIEW_NMAX][9])
+                                   double **xyz, double **val)
 {
   PViewOptions *opt = p->getOptions();
 
@@ -218,7 +252,7 @@ static void drawNormalVectorGlyphs(drawContext *ctx, PView *p, int numNodes,
 }
 
 static void drawTangentVectorGlyphs(drawContext *ctx, PView *p, int numNodes,
-                                    double xyz[PVIEW_NMAX][3], double val[PVIEW_NMAX][9])
+                                    double **xyz, double **val)
 {
   PViewOptions *opt = p->getOptions();
 
@@ -236,6 +270,8 @@ static void drawTangentVectorGlyphs(drawContext *ctx, PView *p, int numNodes,
 
 static void drawGlyphs(drawContext *ctx, PView *p)
 {
+  static int numNodesError = 0;
+
   // use adaptive data if available
   PViewData *data = p->getData(true);
   PViewOptions *opt = p->getOptions();
@@ -245,7 +281,27 @@ static void drawGlyphs(drawContext *ctx, PView *p)
 
   Msg::Debug("drawing extra glyphs (this is slow...)");
 
-  double xyz[PVIEW_NMAX][3], val[PVIEW_NMAX][9];
+  // speedup drawing of textured fonts on cocoa mac version
+#if defined(HAVE_FLTK) && defined(__APPLE__) && defined(HAVE_64BIT_SIZE_T)
+#if (FL_MAJOR_VERSION == 1) && (FL_MINOR_VERSION == 3)
+  if(opt->intervalsType == PViewOptions::Numeric){
+    int numStrings = 0;
+    for(int ent = 0; ent < data->getNumEntities(opt->timeStep); ent++)
+      numStrings += data->getNumElements(opt->timeStep, ent);
+    if(gl_texture_pile_height() < numStrings)
+      gl_texture_pile_height(numStrings);
+  }
+#endif
+#endif
+
+  //double xyz[PVIEW_NMAX][3], val[PVIEW_NMAX][9];
+  int NMAX = PVIEW_NMAX;
+  double **xyz = new double*[NMAX];
+  double **val = new double*[NMAX];
+  for(int i = 0; i < NMAX; i++){
+    xyz[i] = new double[3];
+    val[i] = new double[9];
+  }
   for(int ent = 0; ent < data->getNumEntities(opt->timeStep); ent++){
     if(data->skipEntity(opt->timeStep, ent)) continue;
     for(int i = 0; i < data->getNumElements(opt->timeStep, ent); i++){
@@ -255,6 +311,32 @@ static void drawGlyphs(drawContext *ctx, PView *p)
       int dim = data->getDimension(opt->timeStep, ent, i);
       int numComp = data->getNumComponents(opt->timeStep, ent, i);
       int numNodes = data->getNumNodes(opt->timeStep, ent, i);
+      if(numNodes > NMAX){
+        if(type == TYPE_POLYG || type == TYPE_POLYH){
+          for(int j = 0; j < NMAX; j++){
+            delete [] xyz[i];
+            delete [] val[i];
+          }
+          delete [] xyz;
+          delete [] val;
+          NMAX = numNodes;
+          xyz = new double*[NMAX];
+          val = new double*[NMAX];
+          for(int j = 0; j < NMAX; j++){
+            xyz[j] = new double[3];
+            val[j] = new double[9];
+          }
+        }
+        else{
+          if(numNodesError != numNodes){
+            numNodesError = numNodes;
+            Msg::Error("You should never draw views with > %d nodes per element: use"
+                       "'Adapt visualization grid' to view high-order datasets!",
+                       PVIEW_NMAX);
+          }
+          continue;
+        }
+      }
       for(int j = 0; j < numNodes; j++){
         data->getNode(opt->timeStep, ent, i, j, xyz[j][0], xyz[j][1], xyz[j][2]);
         if(opt->forceNumComponents){
@@ -281,6 +363,12 @@ static void drawGlyphs(drawContext *ctx, PView *p)
         drawTangentVectorGlyphs(ctx, p, numNodes, xyz, val);  
     }
   }
+  for(int j = 0; j < NMAX; j++){
+    delete [] xyz[j];
+    delete [] val[j];
+  }
+  delete [] xyz;
+  delete [] val;
 }
 
 static bool eyeChanged(drawContext *ctx, PView *p)
@@ -321,6 +409,19 @@ class drawPView {
       glLightModelf(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
     else
       glLightModelf(GL_LIGHT_MODEL_TWO_SIDE, GL_FALSE);
+
+    if(opt->axes && opt->type == PViewOptions::Plot3D){
+      glColor4ubv((GLubyte *) & opt->color.axes);
+      glLineWidth((float)CTX::instance()->lineWidth);
+      gl2psLineWidth((float)(CTX::instance()->lineWidth * 
+                             CTX::instance()->print.epsLineWidthFactor));
+      if(!opt->axesAutoPosition)
+        _ctx->drawAxes(opt->axes, opt->axesTics, opt->axesFormat, opt->axesLabel,
+                       opt->axesPosition, opt->axesMikado);
+      else if(!opt->tmpBBox.empty())
+        _ctx->drawAxes(opt->axes, opt->axesTics, opt->axesFormat, opt->axesLabel,
+                       opt->tmpBBox, opt->axesMikado);
+    }
     
     if(!CTX::instance()->clipWholeElements){
       for(int i = 0; i < 6; i++)
@@ -374,6 +475,7 @@ class drawPView {
 
     // draw the "pseudo" vertex arrays for vectors
     drawVectorArray(_ctx, p, p->va_vectors);
+    drawEllipseArray(_ctx, p, p->va_ellipses);
 
     // to avoid looping over elements (and to enable drawing glyphs
     // for remote views) we should also store these glyphs in "pseudo"
@@ -399,20 +501,6 @@ class drawPView {
 
     for(int i = 0; i < 6; i++)
       glDisable((GLenum)(GL_CLIP_PLANE0 + i));
-
-    if(opt->axes && opt->type == PViewOptions::Plot3D){
-      glColor4ubv((GLubyte *) & opt->color.axes);
-      glLineWidth((float)CTX::instance()->lineWidth);
-      gl2psLineWidth((float)(CTX::instance()->lineWidth * 
-                             CTX::instance()->print.epsLineWidthFactor));
-      if(!opt->axesAutoPosition)
-        _ctx->drawAxes(opt->axes, opt->axesTics, opt->axesFormat, opt->axesLabel,
-                       opt->axesPosition, opt->axesMikado);
-      else if(!opt->tmpBBox.empty())
-        _ctx->drawAxes(opt->axes, opt->axesTics, opt->axesFormat, opt->axesLabel,
-                       opt->tmpBBox, opt->axesMikado);
-    }
-    
   }
 };
 
