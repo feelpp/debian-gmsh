@@ -1,7 +1,7 @@
 gmsh (2.5.1~beta1~svn9373~dfsg-1) unstable; urgency=low
 
   * [5cf0714] Disable Metis. Packaged version of Metis does not support
-      some new finctions, itroduced in gmsh.
+      some new functions, itroduced in gmsh.
   * [e6b9db7] Change compat to 8.
   * [19d2bdf] Switch debian/rules to dh.
   * [e6404c4] Fix some typos.
