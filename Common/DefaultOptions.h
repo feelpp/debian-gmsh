@@ -62,15 +62,15 @@ StringXString GeneralOptions_String[] = {
   { F|S, "OptionsFileName" , opt_general_options_filename , ".gmsh-options" ,
     "Option file created with `Tools->Options->Save'; automatically read on startup" },
 
-  { F|S, "RecentFile1", opt_general_recent_file1 , "" ,
+  { F|S, "RecentFile1", opt_general_recent_file1 , "untitled.geo" ,
     "Most recent opened file"},
-  { F|S, "RecentFile2", opt_general_recent_file2 , "" ,
+  { F|S, "RecentFile2", opt_general_recent_file2 , "untitled.geo" ,
     "2nd most recent opened file"},
-  { F|S, "RecentFile3", opt_general_recent_file3 , "" ,
+  { F|S, "RecentFile3", opt_general_recent_file3 , "untitled.geo" ,
     "3rd most recent opened file"},
-  { F|S, "RecentFile4", opt_general_recent_file4 , "" ,
+  { F|S, "RecentFile4", opt_general_recent_file4 , "untitled.geo" ,
     "4th most recent opened file"},
-  { F|S, "RecentFile5", opt_general_recent_file5 , "" ,
+  { F|S, "RecentFile5", opt_general_recent_file5 , "untitled.geo" ,
     "5th most recent opened file"},
   
   { 0,   "SessionFileName" , opt_general_session_filename , ".gmshrc" ,
@@ -1018,7 +1018,7 @@ StringXNumber MeshOptions_Number[] = {
 #else
     ALGO_3D_FRONTAL ,
 #endif
-    "3D mesh algorithm (1=Delaunay, 4=Frontal)" }, 
+    "3D mesh algorithm (1=Delaunay, 4=Frontal, 5=Frontal Delaunay, 6=Frontal Hex, 7=MMG3D)" }, 
   { F|O, "AngleSmoothNormals" , opt_mesh_angle_smooth_normals , 30.0 ,
     "Threshold angle below which normals are not smoothed" }, 
   { F|O, "AnisoMax" , opt_mesh_aniso_max, 1.e33,
@@ -1168,10 +1168,6 @@ StringXNumber MeshOptions_Number[] = {
   { F|O, "PartitionTriWeight"     , opt_mesh_partition_tri_weight , 1 , 
     "Weight of triangle for METIS load balancing" ,},
 
-  { F|O, "PartitionByExtrusion" , opt_mesh_partition_by_extrusion, 0. ,
-    "Special partitioner that annotates all all extruded elements to the same "
-    "node as the source element" },
-    
   { F, "NbHexahedra" , opt_mesh_nb_hexahedra , 0. , 
     "Number of hexahedra in the current mesh (read-only)" },
   { F, "NbNodes" , opt_mesh_nb_nodes , 0. , 
@@ -1239,7 +1235,7 @@ StringXNumber MeshOptions_Number[] = {
   { F|O, "RemeshAlgorithm" , opt_mesh_remesh_algo , 0 ,
     "Remeshing algorithm (0=no split, 1=automatic, 2=automatic only with metis)" }, 
   { F|O, "RemeshParametrization" , opt_mesh_remesh_param , 0 ,
-    "Remsh Parametrization (0=harmonic, 1=conformal)" }, 
+    "Remsh Parametrization (0=harmonic, 1=conformal, 2=rbf harmonic)" }, 
 
   { F|O, "RefineSteps" , opt_mesh_refine_steps , 10 ,
     "Number of refinement steps in the MeshAdapt-based 2D algorithms" }, 

@@ -4775,8 +4775,17 @@ double opt_geometry_old_newreg(OPT_ARGS_NUM)
 
 double opt_geometry_num_sub_edges(OPT_ARGS_NUM)
 {
-  if(action & GMSH_SET)
+  if(action & GMSH_SET){
     CTX::instance()->geom.numSubEdges = (int)val;
+    if(CTX::instance()->geom.numSubEdges < 1)
+      CTX::instance()->geom.numSubEdges = 1;
+  }
+#if defined(HAVE_FLTK)
+  if(FlGui::available() && (action & GMSH_GUI)) {
+    FlGui::instance()->options->geo.value[19]->value
+      (CTX::instance()->geom.numSubEdges);
+  }
+#endif
   return CTX::instance()->geom.numSubEdges;
 }
 
@@ -4892,6 +4901,7 @@ double opt_mesh_optimize_netgen(OPT_ARGS_NUM)
 #endif
   return CTX::instance()->mesh.optimizeNetgen;
 }
+
 double opt_mesh_remove_4_triangles(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
@@ -4908,7 +4918,7 @@ double opt_mesh_remove_4_triangles(OPT_ARGS_NUM)
 double opt_mesh_refine_steps(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
-    CTX::instance()->mesh.refineSteps =(int) val;
+    CTX::instance()->mesh.refineSteps = (int)val;
   return CTX::instance()->mesh.refineSteps;
 }
 
@@ -4927,8 +4937,18 @@ double opt_mesh_normals(OPT_ARGS_NUM)
 
 double opt_mesh_num_sub_edges(OPT_ARGS_NUM)
 {
-  if(action & GMSH_SET)
-    CTX::instance()->mesh.numSubEdges =(int) val;
+  if(action & GMSH_SET){
+    if(CTX::instance()->mesh.numSubEdges != val) 
+      CTX::instance()->mesh.changed |= (ENT_LINE | ENT_SURFACE | ENT_VOLUME);
+    CTX::instance()->mesh.numSubEdges = (int)val;
+    if(CTX::instance()->mesh.numSubEdges < 1)
+      CTX::instance()->mesh.numSubEdges = 1;
+  }
+#if defined(HAVE_FLTK)
+  if(FlGui::available() && (action & GMSH_GUI))
+    FlGui::instance()->options->mesh.value[14]->value
+      (CTX::instance()->mesh.numSubEdges);
+#endif
   return CTX::instance()->mesh.numSubEdges;
 }
 
@@ -5501,8 +5521,6 @@ double opt_mesh_aniso_max(OPT_ARGS_NUM)
   return CTX::instance()->mesh.anisoMax;
 }
 
-
-
 double opt_mesh_angle_smooth_normals(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET) {
@@ -5667,6 +5685,9 @@ double opt_mesh_algo2d(OPT_ARGS_NUM)
     case ALGO_2D_FRONTAL:
       FlGui::instance()->options->mesh.choice[2]->value(3);
       break;
+    case ALGO_2D_FRONTAL_QUAD:
+      FlGui::instance()->options->mesh.choice[2]->value(4);
+      break;
     case ALGO_2D_AUTO:
     default:
       FlGui::instance()->options->mesh.choice[2]->value(0);
@@ -5729,7 +5750,7 @@ double opt_mesh_remesh_param(OPT_ARGS_NUM)
   if(action & GMSH_SET){
     CTX::instance()->mesh.remeshParam = (int)val;
     if(CTX::instance()->mesh.remeshParam < 0 && 
-       CTX::instance()->mesh.remeshParam > 1)
+       CTX::instance()->mesh.remeshParam > 2)
       CTX::instance()->mesh.remeshParam = 0;
   }
 #if defined(HAVE_FLTK)
@@ -5767,6 +5788,15 @@ double opt_mesh_algo3d(OPT_ARGS_NUM)
 #if defined(HAVE_FLTK)
   if(FlGui::available() && (action & GMSH_GUI)) {
     switch (CTX::instance()->mesh.algo3d) {
+    case ALGO_3D_MMG3D:
+      FlGui::instance()->options->mesh.choice[3]->value(4);
+      break;
+    case ALGO_3D_FRONTAL_HEX:
+      FlGui::instance()->options->mesh.choice[3]->value(3);
+      break;
+    case ALGO_3D_FRONTAL_DEL:
+      FlGui::instance()->options->mesh.choice[3]->value(2);
+      break;
     case ALGO_3D_FRONTAL:
       FlGui::instance()->options->mesh.choice[3]->value(1);
       break;
@@ -6038,14 +6068,6 @@ double opt_mesh_partition_partitioner(OPT_ARGS_NUM)
       (ival < 1 || ival > 2) ? 1 : ival;
   }
   return CTX::instance()->partitionOptions.partitioner;
-}
-double opt_mesh_partition_by_extrusion(OPT_ARGS_NUM)
-{
-  if(action & GMSH_SET) {
-    const int ival = (int)val;
-    CTX::instance()->partitionOptions.partitionByExtrusion = ival;
-  }
-  return CTX::instance()->partitionOptions.partitionByExtrusion;
 }
 
 double opt_mesh_partition_num(OPT_ARGS_NUM)

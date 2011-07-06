@@ -17,6 +17,7 @@
 #include "CutPlane.h"
 #include "CutParametric.h"
 #include "CutSphere.h"
+#include "CutBox.h"
 #include "Skin.h"
 #include "AnalyseCurvedMesh.h"
 #include "MathEval.h"
@@ -50,6 +51,8 @@
 #include "ExtractEdges.h"
 #include "FieldFromAmplitudePhase.h"
 #include "Bubbles.h"
+#include "NearToFarField.h"
+#include "DiscretizationError.h"
 
 // for testing purposes only :-)
 #undef HAVE_DLOPEN
@@ -90,7 +93,7 @@ GMSH_SolverPlugin *PluginManager::findSolverPlugin()
     GMSH_Plugin *p = it->second;
     if(p->getType() == GMSH_Plugin::GMSH_SOLVER_PLUGIN) {
       return (GMSH_SolverPlugin*)(p);
-    }      
+    }
   }
   return 0;
 }
@@ -106,7 +109,7 @@ void PluginManager::action(std::string pluginName, std::string action, void *dat
     throw "Unknown plugin action";
 }
 
-void PluginManager::setPluginOption(std::string pluginName, std::string option, 
+void PluginManager::setPluginOption(std::string pluginName, std::string option,
                                     std::string value)
 {
   GMSH_Plugin *plugin = find(pluginName);
@@ -122,7 +125,7 @@ void PluginManager::setPluginOption(std::string pluginName, std::string option,
   throw "Unknown plugin option name";
 }
 
-void PluginManager::setPluginOption(std::string pluginName, std::string option, 
+void PluginManager::setPluginOption(std::string pluginName, std::string option,
                                     double value)
 {
   GMSH_Plugin *plugin = find(pluginName);
@@ -163,6 +166,8 @@ void PluginManager::registerDefaultPlugins()
                       ("CutPlane", GMSH_RegisterCutPlanePlugin()));
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("CutSphere", GMSH_RegisterCutSpherePlugin()));
+    allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
+                      ("CutBox", GMSH_RegisterCutBoxPlugin()));
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("Skin", GMSH_RegisterSkinPlugin()));
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
@@ -224,7 +229,12 @@ void PluginManager::registerDefaultPlugins()
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("FieldFromAmplitudePhase", GMSH_RegisterFieldFromAmplitudePhasePlugin()));
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
+                      ("NearToFarField", GMSH_RegisterNearToFarFieldPlugin()));
+    allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("Bubbles", GMSH_RegisterBubblesPlugin()));
+    allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
+                      ("DiscretizationError", GMSH_RegisterDiscretizationErrorPlugin()));
+
 #if defined(HAVE_TETGEN)
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("Tetrahedralize", GMSH_RegisterTetrahedralizePlugin()));

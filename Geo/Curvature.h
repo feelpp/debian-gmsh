@@ -19,13 +19,28 @@ private:
     //-----------------------------------------
     // TYPEDEFS
 
-    typedef std::vector<GEntity*> GEntityList;
     typedef std::vector<GFace*> GFaceList;
-    typedef std::map<int, GEntityList >::iterator GEntityIter;
+    //typedef std::map<int, GEntityList >::iterator GEntityIter;
     typedef std::map<int, GFaceList >::iterator GFaceIter;
 
     //-----------------------------------------
+    // HELPER TYPE FOR WRITING TO VTK FILES
+    struct VtkPoint
+    {
+      double x;
+      double y;
+      double z;
+    };
+
+    //-----------------------------------------
     // MEMBER VARIABLES
+
+    //Static member variable to implement the class curvature as a Singleton
+    static Curvature *_instance;
+    static bool _destroyed;
+
+    //Boolean to check if the curvature has already been computed
+    static bool _alreadyComputedCurvature;
 
     //Map definition
     std::map<int, int> _VertexToInt;
@@ -34,7 +49,7 @@ private:
     //Model and list of selected entities with give physical tag:
     GModel* _model;    
 
-    GEntityList _ptFinalEntityList;
+    GFaceList _ptFinalEntityList;
 
     //Averaged vertex normals
     std::vector<SVector3> _VertexNormal;
@@ -69,6 +84,17 @@ private:
     //-----------------------------------------
     // PRIVATE METHODS
 
+    //Constructor
+    Curvature();
+
+    //Destructor
+    ~Curvature();
+
+    static void create();
+
+    static void onDeadReference();
+
+
     void initializeMap();
     void computeVertexNormals();
     void curvatureTensor();
@@ -82,6 +108,7 @@ private:
                           const SVector3 &new_norm,
                           SVector3 &pdir1, SVector3 &pdir2, double &k1, double &k2);
     void computePointareas();
+    void computeRusinkiewiczNormals();
 
     // Perform LDL^T decomposition of a symmetric positive definite matrix.
     // Like Cholesky, but no square roots.  Overwrites lower triangle of matrix.
@@ -140,13 +167,14 @@ public:
 
   //-----------------------------------------
   // PUBLIC METHODS
-  //Constructor
-  Curvature(GModel* model);
 
-  //Destructor
-  ~Curvature();
+  static Curvature& getInstance();
+  static bool valueAlreadyComputed();
+  void setGModel(GModel* model);
 
-  void retrievePhysicalSurfaces(const std::string & face_tag);
+  void retrieveCompounds();
+  //void retrievePhysicalSurfaces(const std::string & face_tag);
+
   /// The following function implements algorithm from:
   /// Implementation of an Algorithm for Approximating the Curvature Tensor
   /// on a Triangular Surface Mesh in the Vish Environment
@@ -159,7 +187,11 @@ public:
   /// Code taken from Rusinkiewicz' 'trimesh2' library
   void computeCurvature_Rusinkiewicz();
 
-  void writeToFile( const std::string & filename);
+  void elementNodalValues(MTriangle* triangle, double& c0, double& c1, double& c2);
+
+  void writeToPosFile( const std::string & filename);
+
+  void writeToVtkFile( const std::string & filename);
 
 
 

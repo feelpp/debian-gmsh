@@ -35,6 +35,7 @@ option(ENABLE_MATHEX "Enable MathEx expression parser" ON)
 option(ENABLE_MED "Enable MED mesh and post-processing file formats" ON)
 option(ENABLE_MESH "Build the mesh module" ON)
 option(ENABLE_METIS "Enable Metis mesh partitioner" ON)
+option(ENABLE_MMG3D "Enable 3D Mobile Mesh Generation" ON)
 option(ENABLE_MPEG_ENCODE "Enable built-in MPEG encoder" ON)
 option(ENABLE_MPI "Enable MPI parallelization" OFF)
 option(ENABLE_MSVC_STATIC_RUNTIME "Use static Visual C++ runtime" OFF)
@@ -47,6 +48,7 @@ option(ENABLE_PETSC "Enable PETSc linear algebra solvers" ON)
 option(ENABLE_PLUGINS "Build the post-processing plugins" ON)
 option(ENABLE_POST "Build the post-processing module" ON)
 option(ENABLE_QT "Build QT GUI" OFF)
+option(ENABLE_RBF "Enable RBF project" OFF)
 option(ENABLE_READLINE "Enable Readline in Lua prompt" ON)
 option(ENABLE_SALOME "Enable Salome routines for CAD healing" ON)
 option(ENABLE_SLEPC "Enable SLEPc eigensolvers" ON)
@@ -74,7 +76,7 @@ set(GMSH_API
     Numeric/simpleFunction.h Numeric/cartesian.h
   Geo/GModel.h Geo/GEntity.h Geo/GPoint.h Geo/GVertex.h Geo/GEdge.h 
     Geo/GFace.h Geo/GRegion.h Geo/GEdgeLoop.h Geo/GEdgeCompound.h 
-    Geo/GFaceCompound.h Geo/GRegionCompound.h Geo/MVertex.h Geo/MEdge.h 
+    Geo/GFaceCompound.h Geo/GRegionCompound.h Geo/GRbf.h Geo/MVertex.h Geo/MEdge.h 
     Geo/MFace.h Geo/MElement.h Geo/MPoint.h Geo/MLine.h Geo/MTriangle.h 
     Geo/MQuadrangle.h Geo/MTetrahedron.h Geo/MHexahedron.h Geo/MPrism.h 
     Geo/MPyramid.h Geo/MElementCut.h Geo/discreteVertex.h Geo/discreteEdge.h
@@ -453,6 +455,7 @@ if(ENABLE_ANN)
   set_config_option(HAVE_ANN "Ann")
 endif(ENABLE_ANN)
 
+
 if(ENABLE_CHACO)
   add_subdirectory(contrib/Chaco)
   include_directories(contrib/Chaco/main)
@@ -536,6 +539,12 @@ if(HAVE_MESH)
     include_directories(contrib/bamg contrib/bamg/bamglib)
     set_config_option(HAVE_BAMG "Bamg")
   endif(ENABLE_BAMG)
+
+  if(ENABLE_MMG3D)
+    add_subdirectory(contrib/mmg3d)
+    include_directories(contrib/mmg3d/build/sources)
+    set_config_option(HAVE_MMG3D "Mmg3d")
+  endif(ENABLE_MMG3D)
 
   if(ENABLE_TETGEN_NEW AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/contrib/TetgenNew/tetgen.h)
     add_subdirectory(contrib/TetgenNew)
@@ -937,23 +946,7 @@ elseif(MSVC)
   set_target_properties(gmsh PROPERTIES LINK_FLAGS "/STACK:16777216")
 endif(WIN32 AND NOT MSVC)
 
-if(ENABLE_SWIG)
-  find_package(SWIG)
-  if(SWIG_FOUND)
-    message(STATUS "Found SWIG version " ${SWIG_VERSION})
-    string(SUBSTRING ${SWIG_VERSION} 0 1 SWIG_MAJOR_VERSION)
-    if(SWIG_MAJOR_VERSION EQUAL 1)
-      message("WARNING: Python bindings require SWIG >= 2: disabling Python")
-    else(SWIG_MAJOR_VERSION EQUAL 1)
-      include(${SWIG_USE_FILE})
-      find_package(PythonLibs)
-      include_directories(${PYTHON_INCLUDE_DIR})
-      set_source_files_properties(Common/gmshpy.i PROPERTIES CPLUSPLUS ON)
-      swig_add_module(gmshpy python Common/gmshpy.i ${GMSH_API})
-      swig_link_libraries(gmshpy ${PYTHON_LIBRARIES} shared)
-    endif(SWIG_MAJOR_VERSION EQUAL 1)
-  endif(SWIG_FOUND)
-endif(ENABLE_SWIG)
+add_subdirectory(gmshpy)
 
 find_program(BISON bison)
 find_program(FLEX flex)

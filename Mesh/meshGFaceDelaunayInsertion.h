@@ -38,17 +38,19 @@ bool invMapUV(MTriangle *t, double *p,
 
 class MTri3
 {
+ protected :
   bool deleted;
   double circum_radius;
   MTriangle *base;
   MTri3 *neigh[3];
 
  public :
+  static int radiusNorm; // 2 is euclidian norm, -1 is infinite norm  
   bool isDeleted() const { return deleted; }
   void forceRadius(double r) { circum_radius = r; }
   double getRadius() const { return circum_radius; }
 
-  MTri3(MTriangle *t, double lc, SMetric3 *m = 0);
+  MTri3(MTriangle *t, double lc, SMetric3 *m = 0, const std::vector<double> *Us = 0, const std::vector<double> *Vs = 0, GFace *gf = 0);
   inline MTriangle *tri() const { return base; }
   inline void  setNeigh(int iN , MTri3 *n) { neigh[iN] = n; }
   inline MTri3 *getNeigh(int iN ) const { return neigh[iN]; }
@@ -94,6 +96,7 @@ void connectTriangles(std::vector<MTri3*> &);
 void connectTriangles(std::set<MTri3*,compareTri3Ptr> &AllTris);
 void bowyerWatson(GFace *gf);
 void bowyerWatsonFrontal(GFace *gf);
+void bowyerWatsonFrontalLayers(GFace *gf, bool quad);
 
 struct edgeXface
 {

@@ -19,6 +19,7 @@
 #include "GEdgeCompound.h"
 #include "meshGFaceOptimize.h"
 #include "linearSystem.h"
+#include "GRbf.h"
 
 #define AR_MAX 5 //maximal geometrical aspect ratio
 
@@ -50,6 +51,7 @@ class  GFaceCompoundTriangle {
 };
 
 class Octree;
+class GRbf;
 
 class GFaceCompound : public GFace {
  public:
@@ -57,12 +59,12 @@ class GFaceCompound : public GFace {
   typedef enum {HARMONIC=1,CONFORMAL=2, CONVEXCOMBINATION=3, MULTISCALE=4, RBF=5} typeOfMapping;
   typedef enum {UNITCIRCLE, SQUARE} typeOfIsomorphism;
   void computeNormals(std::map<MVertex*, SVector3> &normals) const;
-  void setParam(std::map<MVertex*, SPoint3> rbf_param) const;
  protected:
+  mutable GRbf *_rbf;
   simpleFunction<double> *ONE;
   simpleFunction<double> *MONE;
   std::list<GFace*> _compound;
-  std::list<GEdge*> _U0, _U1, _V0, _V1;
+  std::list<GEdge*> _U0;
   std::list<std::list<GEdge*> > _interior_loops;
   mutable int nbT;
   mutable GFaceCompoundTriangle *_gfct;
@@ -77,12 +79,12 @@ class GFaceCompound : public GFace {
   mutable std::set<MVertex*> fillNodes;
   mutable std::vector<MVertex*> _ordered;
   mutable std::vector<double> _coords;
+  mutable std::map<MVertex*, int> _mapV;
   void buildOct() const ;
   void buildAllNodes() const; 
   void parametrize(iterationStep, typeOfMapping) const;
   bool parametrize_conformal() const;
   bool parametrize_conformal_spectral() const;
-  bool parametrize_conformal_nonLinear() const;
   void compute_distance() const;
   bool checkOrientation(int iter) const;
   bool checkOverlap() const;
@@ -104,15 +106,10 @@ class GFaceCompound : public GFace {
   SOrientedBoundingBox obb_boundEdges(const std::list<GEdge* > &elist) const;
   void fillNeumannBCS() const;
   /* double sumAngles(std::vector<MVertex*> ordered) const; */
-  void computeThetaDerivatives (MVertex *prev, MVertex *curr, MVertex *next,
-  				double &dTdu1, double &dTdv1,
-  				double &dTdu2, double &dTdv2,
-  				double &dTdu3, double &dTdv3) const;
+
  public: 
   GFaceCompound(GModel *m, int tag, std::list<GFace*> &compound,
-                std::list<GEdge*> &U0, std::list<GEdge*> &U1,
-                std::list<GEdge*> &V0, std::list<GEdge*> &V1,
-                linearSystem<double>* lsys =0,
+		std::list<GEdge*> &U0, linearSystem<double>* lsys =0,
                 typeOfMapping typ = HARMONIC, int allowPartition=1);
   virtual ~GFaceCompound();
   Range<double> parBounds(int i) const 
@@ -149,9 +146,7 @@ class GFaceCompound : public GFace {
  public:
   typedef enum {HARMONIC=1,CONFORMAL=2, CONVEXCOMBINATION=3, MULTISCALE=4} typeOfMapping;
  GFaceCompound(GModel *m, int tag, std::list<GFace*> &compound,
-                std::list<GEdge*> &U0, std::list<GEdge*> &U1,
-                std::list<GEdge*> &V0, std::list<GEdge*> &V1,
-                linearSystem<double>* lsys =0,
+	       std::list<GEdge*> &U0, linearSystem<double>* lsys =0,
                 typeOfMapping typ = HARMONIC, int allowPartition=1)
     : GFace(m, tag)
   {
