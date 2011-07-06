@@ -1,5 +1,6 @@
-Description: delete gl2ps.* and use packaged version.
+Description: delete gl2ps and use packaged version.
 Author: Anton Gladky <gladky.anton@gmail.com>
+Last-Update: 2011-07-06
 
 --- a/Graphics/CMakeLists.txt
 +++ b/Graphics/CMakeLists.txt

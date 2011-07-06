@@ -1,6 +1,6 @@
 Description: Switch off some options.
 Author: Anton Gladky <gladky.anton@gmail.com>
-Last-Update: 2011-06-02
+Last-Update: 2011-07-06
 
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
@@ -10,10 +10,10 @@ Last-Update: 2011-06-02
  option(ENABLE_MESH "Build the mesh module" ON)
 -option(ENABLE_METIS "Enable Metis mesh partitioner" ON)
 +option(ENABLE_METIS "Enable Metis mesh partitioner" OFF)
+ option(ENABLE_MMG3D "Enable 3D Mobile Mesh Generation" ON)
  option(ENABLE_MPEG_ENCODE "Enable built-in MPEG encoder" ON)
  option(ENABLE_MPI "Enable MPI parallelization" OFF)
- option(ENABLE_MSVC_STATIC_RUNTIME "Use static Visual C++ runtime" OFF)
-@@ -52,8 +52,8 @@
+@@ -54,8 +54,8 @@
  option(ENABLE_SLEPC "Enable SLEPc eigensolvers" ON)
  option(ENABLE_SOLVER "Enable solver components" ON)
  option(ENABLE_SWIG "Enable swig" ON)
