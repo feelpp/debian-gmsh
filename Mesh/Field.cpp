@@ -1580,7 +1580,8 @@ class AttractorField : public Field
       for(std::list<int>::iterator it = edges_id.begin();
           it != edges_id.end(); ++it) {
         Curve *c = FindCurve(*it);
-        if(c) {
+	GEdge *e = GModel::current()->getEdgeByTag(*it);
+        if(c && !e) {
           for(int i = 0; i < n_nodes_by_edge; i++) {
             double u = (double)i / (n_nodes_by_edge - 1);
             Vertex V = InterpolateCurve(c, u, 0);
@@ -1589,7 +1590,6 @@ class AttractorField : public Field
           }
         }
         else {
-          GEdge *e = GModel::current()->getEdgeByTag(*it);
           if(e) {
             for(int i = 0; i < n_nodes_by_edge; i++) {
               double u = (double)i / (n_nodes_by_edge - 1);
@@ -1715,12 +1715,6 @@ public:
     const double ll2   = dist*(ratio-1) + hwall_t;
     double lc_t  = std::min(lc_n*CTX::instance()->mesh.anisoMax, std::min(ll2,hfar));
 
-    if (backgroundMesh::current()){
-      const double lcBG = backgroundMesh::current()->operator() (x,y,z);
-      lc_n = std::min(lc_n, lcBG);
-      lc_t = std::min(lc_t, lcBG);
-    }
-
     SVector3 t1,t2,t3;
     double L1,L2,L3;
 
@@ -1729,7 +1723,6 @@ public:
       std::pair<AttractorInfo,SPoint3> pp = cc->getAttractorInfo();
       if (pp.first.dim ==1){
 	GEdge *e = GModel::current()->getEdgeByTag(pp.first.ent);
-
 
 	// the tangent size at this point is the size of the
 	// 1D mesh at this point !
@@ -1743,7 +1736,7 @@ public:
 	}
 
 
-	if (dist < hwall_n){
+	if (dist < hwall_t){
 	  L1 = lc_t;
 	  L2 = lc_n;
 	  L3 = lc_n;
@@ -1777,6 +1770,44 @@ public:
 	  t3.normalize();
 	  t1 = crossprod(t3,t2);	  
 	}
+      }
+      else {
+	GFace *gf = GModel::current()->getFaceByTag(pp.first.ent);
+	
+	if (dist < hwall_t){
+	  L1 = lc_n;
+	  L2 = lc_t;
+	  L3 = lc_t;
+	  t1 = gf->normal(SPoint2(pp.first.u,pp.first.v));
+	  t1.normalize();
+	  if (fabs(t1.x()) < fabs(t1.y()) && fabs(t1.x()) < fabs(t1.z()))
+	    t2 = SVector3(1,0,0);
+	  else if (fabs(t1.y()) < fabs(t1.x()) && fabs(t1.y()) < fabs(t1.z()))
+	    t2 = SVector3(0,1,0);
+	  else
+	    t2 = SVector3(0,0,1);
+	  t3 = crossprod(t1,t2);
+	  t3.normalize();
+	  t2 = crossprod(t3,t1);
+	  //	  printf("hfar = %g lc = %g dir %g %g \n",hfar,lc,t1.x(),t1.y());
+	}
+	else {
+	  L1 = lc_t;
+	  L2 = lc_n;
+	  L3 = lc_t;
+	  GPoint p = gf->point(SPoint2(pp.first.u,pp.first.v));
+	  t2 = SVector3(p.x() -x,p.y() -y,p.z() -z);
+	  if (fabs(t2.x()) < fabs(t2.y()) && fabs(t2.x()) < fabs(t2.z()))
+	    t1 = SVector3(1,0,0);
+	  else if (fabs(t2.y()) < fabs(t2.x()) && fabs(t2.y()) < fabs(t2.z()))
+	    t1 = SVector3(0,1,0);
+	  else
+	    t1 = SVector3(0,0,1);
+	  t2.normalize();
+	  t3 = crossprod(t1,t2);
+	  t3.normalize();
+	  t1 = crossprod(t3,t2);	  
+	}	
       }
     }
     else{   

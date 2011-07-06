@@ -300,7 +300,9 @@ static bool algoDelaunay2D(GFace *gf)
 
   if(CTX::instance()->mesh.algo2d == ALGO_2D_DELAUNAY ||
      CTX::instance()->mesh.algo2d == ALGO_2D_BAMG || 
-     CTX::instance()->mesh.algo2d == ALGO_2D_FRONTAL) 
+     CTX::instance()->mesh.algo2d == ALGO_2D_FRONTAL || 
+     CTX::instance()->mesh.algo2d == ALGO_2D_FRONTAL_QUAD || 
+     CTX::instance()->mesh.algo2d == ALGO_2D_BAMG) 
     return true;
 
   if(CTX::instance()->mesh.algo2d == ALGO_2D_AUTO && gf->geomType() == GEntity::Plane)
@@ -392,8 +394,10 @@ static bool recoverEdge(BDS_Mesh *m, GEdge *ge,
 // the domain, including embedded points and surfaces
 static bool meshGenerator(GFace *gf, int RECUR_ITER, 
                           bool repairSelfIntersecting1dMesh,
+                          bool onlyInitialMesh,
                           bool debug = true)
 {
+
   BDS_GeomEntity CLASS_F(1, 2);
   BDS_GeomEntity CLASS_EXTERIOR(1, 3);
   std::map<BDS_Point*, MVertex*> recoverMap;
@@ -404,8 +408,8 @@ static bool meshGenerator(GFace *gf, int RECUR_ITER,
   // replace edges by their compounds
   // if necessary split compound and remesh parts
   bool isMeshed = false;
-  if(gf->geomType() == GEntity::CompoundSurface){
-    isMeshed = checkMeshCompound((GFaceCompound*) gf, edges);
+  if(gf->geomType() == GEntity::CompoundSurface  && !onlyInitialMesh){
+	  isMeshed = checkMeshCompound((GFaceCompound*) gf, edges);
     if (isMeshed) return true;
   }
 
@@ -629,7 +633,7 @@ static bool meshGenerator(GFace *gf, int RECUR_ITER,
       delete m;
       if(RECUR_ITER < 10 && facesToRemesh.size() == 0)
         return meshGenerator
-          (gf, RECUR_ITER + 1, repairSelfIntersecting1dMesh, debug);
+          (gf, RECUR_ITER + 1, repairSelfIntersecting1dMesh, onlyInitialMesh, debug);
       return false;
     }
 
@@ -823,7 +827,7 @@ static bool meshGenerator(GFace *gf, int RECUR_ITER,
   Msg::Debug("Starting to add internal points");
 
   // start mesh generation
-  if(!algoDelaunay2D(gf)){
+  if(!algoDelaunay2D(gf) && !onlyInitialMesh){
     refineMeshBDS(gf, *m, CTX::instance()->mesh.refineSteps, true,
                   &recoverMapInv);
     optimizeMeshBDS(gf, *m, 2);
@@ -881,9 +885,11 @@ static bool meshGenerator(GFace *gf, int RECUR_ITER,
   // the delaunay algo is based directly on internal gmsh structures
   // BDS mesh is passed in order not to recompute local coordinates of
   // vertices
-  if(algoDelaunay2D(gf)){
+  if(algoDelaunay2D(gf) && !onlyInitialMesh){
     if(CTX::instance()->mesh.algo2d == ALGO_2D_FRONTAL)
       bowyerWatsonFrontal(gf);
+    else if(CTX::instance()->mesh.algo2d == ALGO_2D_FRONTAL_QUAD)
+      bowyerWatsonFrontalLayers(gf,true);
     else if(CTX::instance()->mesh.algo2d == ALGO_2D_DELAUNAY ||
             CTX::instance()->mesh.algo2d == ALGO_2D_AUTO)
       bowyerWatson(gf);
@@ -1473,6 +1479,8 @@ static bool meshGeneratorPeriodic(GFace *gf, bool debug = true)
   if(algoDelaunay2D(gf)){
     if(CTX::instance()->mesh.algo2d == ALGO_2D_FRONTAL)
       bowyerWatsonFrontal(gf);
+    else if(CTX::instance()->mesh.algo2d == ALGO_2D_FRONTAL_QUAD)
+      bowyerWatsonFrontalLayers(gf,true);
     else if(CTX::instance()->mesh.algo2d == ALGO_2D_DELAUNAY ||
             CTX::instance()->mesh.algo2d == ALGO_2D_AUTO)
       bowyerWatson(gf);
@@ -1544,6 +1552,7 @@ void meshGFace::operator() (GFace *gf)
   switch(CTX::instance()->mesh.algo2d){
   case ALGO_2D_MESHADAPT : algo = "MeshAdapt"; break;
   case ALGO_2D_FRONTAL : algo = "Frontal"; break;
+  case ALGO_2D_FRONTAL_QUAD : algo = "Frontal Quad"; break;
   case ALGO_2D_DELAUNAY : algo = "Delaunay"; break;
   case ALGO_2D_MESHADAPT_OLD : algo = "MeshAdapt (old)"; break;
   case ALGO_2D_BAMG : algo = "Bamg"; break;
@@ -1564,7 +1573,7 @@ void meshGFace::operator() (GFace *gf)
        (!gf->periodic(0) && !gf->periodic(1))) &&
       (noSeam(gf) || gf->getNativeType() == GEntity::GmshModel || 
        gf->edgeLoops.empty())){
-    meshGenerator(gf, 0, repairSelfIntersecting1dMesh,
+    meshGenerator(gf, 0, repairSelfIntersecting1dMesh, onlyInitialMesh,
 		  debugSurface >= 0 || debugSurface == -100);
   }
   else {
@@ -1598,7 +1607,6 @@ bool checkMeshCompound(GFaceCompound *gf, std::list<GEdge*> &edges)
 {
   bool isMeshed = false;
 #if defined(HAVE_SOLVER)  
-
   bool correctTopo = gf->checkTopology();
   if (!correctTopo && gf->allowPartition()){
     partitionAndRemesh((GFaceCompound*) gf);
@@ -1688,8 +1696,8 @@ void partitionAndRemesh(GFaceCompound *gf)
   }
 
   //Parametrize Compound surfaces
-  std::list<GEdge*> b[4];
   std::set<MVertex*> allNod; 
+  std::list<GEdge*> U0;
   for (int i=0; i < NF; i++){
     std::list<GFace*> f_compound;
     GFace *pf =  gf->model()->getFaceByTag(numf+i);//partition face 
@@ -1697,11 +1705,9 @@ void partitionAndRemesh(GFaceCompound *gf)
     f_compound.push_back(pf);     
     Msg::Info("Parametrize Compound Surface (%d) = %d discrete face",
               num_gfc, pf->tag());
-
-    GFaceCompound *gfc = new GFaceCompound(gf->model(), num_gfc, f_compound,
-                                            b[0], b[1], b[2], b[3], 0,
+    
+    GFaceCompound *gfc = new GFaceCompound(gf->model(), num_gfc, f_compound, U0, 0,
                                             gf->getTypeOfMapping());
-
     gfc->meshAttributes.recombine = gf->meshAttributes.recombine;
     gf->model()->add(gfc);
 

@@ -152,6 +152,10 @@ int GModel::importGEOInternals()
                            getVertexByTag(c->end->Num));
           add(e);
         }
+        else if(!e){
+          e = new gmshEdge(this, c, 0, 0);
+          add(e);
+        }
         else
           e->resetMeshAttributes();
         if(!c->Visible) e->setVisibility(0);
@@ -175,24 +179,48 @@ int GModel::importGEOInternals()
           GFace *gf = getFaceByTag(s->compound[j]);
           if(gf) comp.push_back(gf);
         }
-        std::list<GEdge*> b[4];
+	std::list<GEdge*> U0;
         for(int j = 0; j < 4; j++){
           for(unsigned int k = 0; k < s->compoundBoundary[j].size(); k++){
             GEdge *ge = getEdgeByTag(s->compoundBoundary[j][k]);
-            if(ge) b[j].push_back(ge);
+            if(ge) U0.push_back(ge);
           }
         }
  	int param = CTX::instance()->mesh.remeshParam;
+	GFaceCompound::typeOfMapping typ = GFaceCompound::HARMONIC;
+	if (param == 1) typ =  GFaceCompound::CONFORMAL;
+	if (param == 2) typ =  GFaceCompound::RBF;
 	int algo = CTX::instance()->mesh.remeshAlgo;
-        f = new GFaceCompound(this, s->Num, comp,
-                              b[0], b[1], b[2], b[3], 0,
-                              (param == 0) ? GFaceCompound::HARMONIC :
-                              GFaceCompound::CONFORMAL, algo);
+        f = new GFaceCompound(this, s->Num, comp, U0, 0, typ, algo);
+
 	f->meshAttributes.recombine = s->Recombine;
 	f->meshAttributes.recombineAngle = s->RecombineAngle;
 	f->meshAttributes.Method = s->Method;
 	f->meshAttributes.extrude = s->Extrude;
         add(f);
+
+	if(s->EmbeddedCurves){
+	  for(int i = 0; i < List_Nbr(s->EmbeddedCurves); i++){
+	    Curve *c;
+	    List_Read(s->EmbeddedCurves, i, &c);
+	    GEdge *e = getEdgeByTag(abs(c->Num));
+	    if(e)
+	      f->addEmbeddedEdge(e);
+	    else
+	      Msg::Error("Unknown curve %d", c->Num);
+	  }
+	}
+	if(s->EmbeddedPoints){
+	  for(int i = 0; i < List_Nbr(s->EmbeddedPoints); i++){
+	    Vertex *v;
+	    List_Read(s->EmbeddedPoints, i, &v);
+	    GVertex *gv = getVertexByTag(v->Num);
+	    if(gv)
+	      f->addEmbeddedVertex(gv);
+	    else
+	      Msg::Error("Unknown point %d", v->Num);
+	  }
+	}
       }
       else if(!f){
         f = new gmshFace(this, s);

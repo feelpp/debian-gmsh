@@ -6,7 +6,8 @@
 set(SRC
   GEntity.cpp STensor3.cpp
     GVertex.cpp GEdge.cpp GFace.cpp GRegion.cpp
-    GEdgeLoop.cpp GEdgeCompound.cpp GFaceCompound.cpp GRegionCompound.cpp
+    GEdgeLoop.cpp GEdgeCompound.cpp GFaceCompound.cpp
+  GRegionCompound.cpp GRbf.cpp
     gmshVertex.cpp gmshEdge.cpp gmshFace.cpp gmshRegion.cpp gmshSurface.cpp
     OCCVertex.cpp OCCEdge.cpp OCCFace.cpp OCCRegion.cpp
     discreteEdge.cpp discreteFace.cpp discreteRegion.cpp
@@ -38,6 +39,7 @@ set(SRC
     MHexahedron.cpp MPrism.cpp MPyramid.cpp MElementCut.cpp
   MZone.cpp MZoneBoundary.cpp
   Cell.cpp CellComplex.cpp ChainComplex.cpp Homology.cpp
+  Curvature.cpp
 )
 
 file(GLOB HDR RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.h) 

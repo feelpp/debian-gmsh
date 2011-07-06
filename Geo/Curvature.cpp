@@ -5,6 +5,8 @@
 
 #include "Curvature.h"
 #include "MElement.h"
+#include "GEntity.h"
+#include "GFaceCompound.h"
 
 #include<iostream>
 #include<fstream>
@@ -12,60 +14,116 @@
 
 #define NEXT(i) ((i)<2 ? (i)+1 : (i)-2)
 #define PREV(i) ((i)>0 ? (i)-1 : (i)+2)
+//========================================================================================================
 
-//std::cout << "NEXT(1) = " << NEXT(1) << std::endl;
+//Initialization of the static variables:
+Curvature* Curvature::_instance = 0;
+bool Curvature::_destroyed = false;
+bool Curvature::_alreadyComputedCurvature = false;
+
 //========================================================================================================
 
 //CONSTRUCTOR
-Curvature::Curvature(GModel* model)
+Curvature::Curvature()
 {
-    _model = model;
+
 }
 //========================================================================================================
 
 //DESTRUCTOR
 Curvature::~Curvature()
 {
+  _instance = 0;
+  _destroyed = true;
 
 }
 //========================================================================================================
-
-void Curvature::retrievePhysicalSurfaces(const std::string & face_tag)
+void Curvature::onDeadReference()
 {
-//    GFaceList ptFaceList;     //Pointer to face
-    GEntityList ptTempEntityList;
+  std::cout << "Dead reference of Curvature detected" << std::endl;
+}
 
 
-    std::map<int, GEntityList > physicals[4]; //The right vector is a vector of 4 maps: 1 for 0D, one for 1D, one for 2D, one for 3D
-    _model->getPhysicalGroups(physicals);
-    std::map<int, GEntityList > surface_physicals = physicals[2];// Here we need only the 2nd maps which represents the faces (triangles)
+//========================================================================================================
 
-    for (GEntityIter it = surface_physicals.begin(); it != surface_physicals.end(); it++) //Loop over physical names
+Curvature& Curvature::getInstance()
+{
+  if (!_instance)
+  {
+    // Check for dead reference:
+    if(_destroyed)
     {
-      std::string physicalTag = _model->getPhysicalName(2, it->first);
-//        std::cout << "The physical tag we have stored is: "<< physicalTag << std::endl;
-
-      if (physicalTag == face_tag) //face_tag is one of the argument of "compute_curvature"
-      {
-        ptTempEntityList.clear(); // the vector is cleared before the for-loop where is it filled
-        ptTempEntityList  = it->second;
-
-        for (unsigned int iEnt = 0; iEnt < ptTempEntityList.size(); iEnt++)
-        {
-          GEntity* entity = ptTempEntityList[iEnt];
-          _ptFinalEntityList.push_back(entity);
-
-        }
-      }
-   }
-//   //To check that all the surfaces with the physical-tag "face_tag", are stored in ptFinalEntityList:
-//   std::cout << "Stored physical tags:" << std::endl;
-//   for(unsigned int i =0; i < _ptFinalEntityList.size(); ++i)
-//   {
-//    std::cout << _ptFinalEntityList[i]->tag() << std::endl; //some method that prints the name of the entity
-//   }
+      onDeadReference();
+    }
+    else
+    {
+      create();
+    }
+  }
+  return *_instance;
 
 }
+
+//========================================================================================================
+
+
+  bool Curvature::valueAlreadyComputed()
+  {
+    return _alreadyComputedCurvature;
+  }
+
+//========================================================================================================
+
+ void Curvature::create()
+ {
+   static Curvature instance;
+   _instance = & instance;
+ }
+
+//========================================================================================================
+
+ void Curvature::setGModel(GModel* model)
+ {
+   _model = model;
+ }
+
+ //========================================================================================================
+
+ void Curvature::retrieveCompounds()
+ {
+   std::vector<GEntity*> entities;
+   _model->getEntities(entities);
+
+//   std::cout << "The size of entities is " << entities.size() << std::endl;
+   for(int ie = 0; ie < entities.size(); ++ie)
+   {
+//     std::cout << "Entity " << ie << ":" << std::endl;
+//     std::cout << "\ttag = " << entities[ie]->tag() << std::endl;
+//     std::cout << "\t" << entities[ie]->getInfoString() << std::endl;
+
+
+     if(  entities[ie]->geomType() == GEntity::CompoundSurface )
+     {
+       //std::cout << "This is compound surface" << std::endl;
+       GFaceCompound* compound = dynamic_cast<GFaceCompound*>(entities[ie]);
+
+       std::list<GFace*> tempcompounds = compound->getCompounds();
+       //std::cout << "The compound surface consists of " << tempcompounds.size() << " sub-surfaces " << std::endl;
+
+       std::list<GFace*>::iterator surfIterator;
+
+       for(surfIterator = tempcompounds.begin(); surfIterator != tempcompounds.end(); ++surfIterator)
+       {
+//         std::cout << "TAG = " << (*surfIterator)->tag() << std::endl;
+//         std::cout << "THIS SURFACE HAS " << (*surfIterator)->getNumMeshElements() << std::endl;
+         _ptFinalEntityList.push_back(*surfIterator);
+       }
+     }
+
+   }
+
+ }
+
 
 //========================================================================================================
 
@@ -76,14 +134,17 @@ void Curvature::initializeMap()
 
   for (int i = 0; i< _ptFinalEntityList.size(); ++i)
   {
-    // entity is a pointer to one surface of the group "FinalEntityList"
-    GEntity* entity = _ptFinalEntityList[i];
+    // face is a pointer to one surface of the group "FinalEntityList"
+    GFace* face = _ptFinalEntityList[i];
+
+    std::cout << "Face " << i << " has " << face->getNumMeshElements() << " elements" << std::endl;
 
     // Loop over the element all the element of the "myTag"-surface
-    for (int iElem = 0; iElem < entity->getNumMeshElements(); iElem++)
+    for (int iElem = 0; iElem < face->getNumMeshElements(); iElem++)
     {
+
       // Pointer to one element
-      MElement *e = entity->getMeshElement(iElem);
+      MElement *e = face->getMeshElement(iElem);
       // Tag of the corresponding element
       const int E = e->getNum();
       // std::cout << "We are now looking at element Nr: " << E << std::endl;
@@ -136,14 +197,14 @@ void Curvature::computeVertexNormals()
 
   for (int i = 0; i< _ptFinalEntityList.size(); ++i)
   {
-    // entity is a pointer to one surface of the group "FinalEntityList"
-    GEntity* entity = _ptFinalEntityList[i];
+    // face is a pointer to one surface of the group "FinalEntityList"
+    GFace* face = _ptFinalEntityList[i];
 
     //Loop over the element all the element of the "myTag"-surface
-    for (int iElem = 0; iElem < entity->getNumMeshElements(); iElem++)
+    for (int iElem = 0; iElem < face->getNumMeshElements(); iElem++)
     {
       // Pointer to one element
-      MElement *e = entity->getMeshElement(iElem);
+      MElement *e = face->getMeshElement(iElem);
       // The NEW tag of the corresponding element
       const int E = _ElementToInt[e->getNum()];
       // std::cout << "We are now looking at element Nr: " << E << std::endl;
@@ -174,18 +235,15 @@ void Curvature::computeVertexNormals()
       _VertexNormal[V1] += cross;
       _VertexNormal[V2] += cross;
 
-
-    } // end of loop over elements of one entity
+    } // end of loop over elements of one face
 
   } //Loop over _ptFinalEntityList
-
 
     ///////Normalize the vertex-normals.
     for (unsigned int n = 0; n < _VertexToInt.size(); ++ n)
     {
       _VertexNormal[n].normalize();
     }
-
 }
 
 //========================================================================================================
@@ -200,14 +258,13 @@ void Curvature::curvatureTensor()
 
   _CurveTensor.resize(_VertexToInt.size());
 
-
   for (int i = 0; i< _ptFinalEntityList.size(); ++i)
   {
-    GEntity* entity = _ptFinalEntityList[i]; //entity is a pointer to one surface of the group "FinalEntityList"
+    GFace* face = _ptFinalEntityList[i]; //face is a pointer to one surface of the group "FinalEntityList"
 
-    for (int iElem = 0; iElem < entity->getNumMeshElements(); iElem++) //Loop over the element all the element of the "myTag"-surface
+    for (int iElem = 0; iElem < face->getNumMeshElements(); iElem++) //Loop over the element all the element of the "myTag"-surface
     {
-      MElement *e = entity->getMeshElement(iElem);  //Pointer to one element
+      MElement *e = face->getMeshElement(iElem);  //Pointer to one element
       const int E = _ElementToInt[e->getNum()]; //The NEW tag of the corresponding element
 
       for (unsigned int i = 0; i<3; ++i)  // Loop over the 3 edges of each element
@@ -219,27 +276,26 @@ void Curvature::curvatureTensor()
         const int V0 = _VertexToInt[A->getNum()];       //Tag of the 1st vertex of the edge A-to-B
         const int V1 = _VertexToInt[B->getNum()];       //Tag of the 2nd vertex of the edge A-to-B
 
-
         //Weight for triangle-i-th's contribution to the shape tensor:
         const double Wij0 = _TriangleArea[E] / (2 * _VertexArea[V0]);
         const double Wij1 = _TriangleArea[E] / (2 * _VertexArea[V1]);
 
         //Approximate Curvature "kappa" along some tangential vector T:
         vector_AB = SVector3(B->x() - A->x(), B->y() - A->y(), B->z() - A->z() );
-        const double k_nominator0 = dot(_VertexNormal[V0], vector_AB); //Dot-product of the 2 vectors
-        const double k_nominator1 = -dot(_VertexNormal[V1], vector_AB); //Dot-product of the 2 vectors
+        const double k_nominator0 =  dot(_VertexNormal[V0], vector_AB); //Dot-product of the 2 vectors
+        const double k_nominator1 = -dot(_VertexNormal[V1], vector_AB);
 
-        const double coeff = 2.0/vector_AB.normSq(); //normSq is the norm to the power 2
+        const double coeff   = 2.0/vector_AB.normSq(); //normSq is the norm to the power 2
         const double KijAB_0 = coeff*k_nominator0;
         const double KijAB_1 = coeff*k_nominator1;
 
         //Projection of the edge vector AB on the tangential plane:
         //** For Vertex 0
         tensprod(_VertexNormal[V0], _VertexNormal[V0], TempTensor);
-        TempTensor *= -1.0; //-N*Nt
-        TempTensor(0,0) += 1.0; //I-N*Nt
-        TempTensor(1,1) += 1.0;
-        TempTensor(2,2) += 1.0;
+        TempTensor      *= -1.0; //-N*Nt
+        TempTensor(0,0) +=  1.0; //I-N*Nt
+        TempTensor(1,1) +=  1.0;
+        TempTensor(2,2) +=  1.0;
 
         for (int m = 0; m<3; ++m)
         {
@@ -249,17 +305,17 @@ void Curvature::curvatureTensor()
             TijAB(m) += TempTensor(m,n) * vector_AB(n);
           }
         }
+
         TijAB.normalize();
         tensprod(TijAB, TijAB, TijABTensorProduct);
         _CurveTensor[V0] += Wij0*KijAB_0*TijABTensorProduct;
 
-
         //** For Vertex 1
         tensprod(_VertexNormal[V1], _VertexNormal[V1], TempTensor);
-        TempTensor *= -1.0; //-N*Nt
-        TempTensor(0,0) += 1.0; //I-N*Nt
-        TempTensor(1,1) += 1.0;
-        TempTensor(2,2) += 1.0;
+        TempTensor      *= -1.0; //-N*Nt
+        TempTensor(0,0) +=  1.0; //I-N*Nt
+        TempTensor(1,1) +=  1.0;
+        TempTensor(2,2) +=  1.0;
 
          for (int m = 0; m<3; ++m)
         {
@@ -269,14 +325,14 @@ void Curvature::curvatureTensor()
             TijAB(m) += TempTensor(m,n) * vector_AB(n);
           }
         }
+
         TijAB.normalize();
         tensprod(TijAB, TijAB, TijABTensorProduct);
         _CurveTensor[V1] += Wij1*KijAB_1*TijABTensorProduct;
 
-
       }//end of loop over the edges
 
-    }//end of loop over all elements of one GEntity
+    }//end of loop over all elements of one GFace
 
   }//End of loop over ptFinalEntityList
 
@@ -286,78 +342,143 @@ void Curvature::curvatureTensor()
 
 void Curvature::computeCurvature_Simple()
 {
-    SVector3 vector_E;
-    SVector3 vector_A;
-    SVector3 vector_B;
-    SVector3 vector_Wvi;
-    STensor3 Qvi;
-    STensor3 QviT;
-    STensor3 Holder;
+  SVector3 vector_E;
+  SVector3 vector_A;
+  SVector3 vector_B;
+  SVector3 vector_Wvi;
+  STensor3 Qvi;
+  STensor3 QviT;
+  STensor3 Holder;
 
-    initializeMap();
-    computeVertexNormals();
-    curvatureTensor();
+  initializeMap();
+  computeVertexNormals();
+  curvatureTensor();
 
-    _VertexCurve.resize(_VertexToInt.size());
+  _VertexCurve.resize(_VertexToInt.size());
 
+  for (unsigned int n = 0; n < _VertexToInt.size(); ++ n) //Loop over the vertex
+  {
+    vector_E = SVector3(1,0,0);
+    vector_A = vector_E + _VertexNormal[n];
+    vector_B = vector_E - _VertexNormal[n];
 
-    for (unsigned int n = 0; n < _VertexToInt.size(); ++ n) //Loop over the vertex
+    const double MagA = vector_A.norm();
+    const double MagB = vector_B.norm();
+
+    if (MagB > MagA)
     {
-       vector_E = SVector3(1,0,0);
-       vector_A = vector_E + _VertexNormal[n];
-       vector_B = vector_E - _VertexNormal[n];
+      vector_Wvi = vector_B;
+    }
+    else
+    {
+      vector_Wvi = vector_A;
+    }
 
-       const double MagA = vector_A.norm();
-       const double MagB = vector_B.norm();
+    vector_Wvi.normalize();
+    //to obtain the Qvi = Id -2*Wvi*Wvi^t
+    tensprod(vector_Wvi, vector_Wvi, Qvi); //Qvi = Wvi*Wvi^t
+    Qvi      *= -2.0;                      //-2*Wvi*Wvi^t
+    Qvi(0,0) +=  1.0;                      //I - 2*Wvi*Wvi^t  ==> Householder transformation
+    Qvi(1,1) +=  1.0;
+    Qvi(2,2) +=  1.0;
 
-       if (MagB > MagA)
-       {
-          vector_Wvi = vector_B;
+    //Transpose the matrix:
+    for (int i = 0; i<3; ++i)
+    {
+      for (int j = 0; j<3; ++j)
+      {
+        QviT(i,j) = Qvi(j,i);
        }
-       else
-       {
-          vector_Wvi = vector_A;
-       }
+     }
 
-       vector_Wvi.normalize();
-       //to obtain the Qvi = Id -2*Wvi*Wvi^t
-       tensprod(vector_Wvi, vector_Wvi, Qvi); //Qvi = Wvi*Wvi^t
-       Qvi *= -2.0;                           //-2*Wvi*Wvi^t
-       Qvi(0,0) += 1.0;                       //I - 2*Wvi*Wvi^t  ==> Householder transformation
-       Qvi(1,1) += 1.0;
-       Qvi(2,2) += 1.0;
+     QviT *= _CurveTensor[n];
+     QviT *=Qvi;
+     Holder = QviT;
 
-       //To create the transpose matrix:
-       for (int i = 0; i<3; ++i)
-       {
-         for (int j = 0; j<3; ++j)
-         {
-           QviT(i,j) = Qvi(j,i);
-         }
-       }
+     //Eigenvalues of the 2*2 minor from the Householder matrix
+     const double A = 1.0;
+     const double B = -(Holder(1,1) + Holder(2,2));
+     const double C = Holder(1,1)*Holder(2,2) - Holder(1,2)*Holder(2,1);
+     const double Delta = std::sqrt(B*B-4*A*C);
 
-       QviT *= _CurveTensor[n];
-       QviT *=Qvi;
-       Holder = QviT;
+     if((B*B-4.*A*C) < 0.0)
+     {
+       std::cout << "WARNING: negative discriminant: " << B*B-4.*A*C << std::endl;
+     }
 
-       //Eigenvalues of the 2*2 minor from the Householder matrix
-       const double A = 1.0;
-       const double B = -(Holder(1,1) + Holder(2,2));
-       const double C = Holder(1,1)*Holder(2,2) - Holder(1,2)*Holder(2,1);
-       const double Delta = std::sqrt(B*B-4*A*C);
+     const double m11 = (-B + Delta)/(2*A);  //Eigenvalue of Householder submatrix
+     const double m22 = (-B - Delta)/(2*A);
 
-       if((B*B-4.*A*C) < 0.0)
-       {
-         std::cout << "WARNING: negative discriminant: " << B*B-4.*A*C << std::endl;
-       }
+     //_VertexCurve[n] = (3*m11-m22)*(3*m22-m11);  //Gaussian Curvature
+     _VertexCurve[n] = ((3*m11-m22) + (3*m22-m11))*0.5; //Mean Curvature
+
+  }
+}
+
+//========================================================================================================
+
+//COMPUTE THE NORMAL AT THE VERTEX AND THE AREA AROUND
+
+void Curvature::computeRusinkiewiczNormals()
+{
+  SVector3 vector_AB;
+  SVector3 vector_AC;
+  SVector3 vector_BC;
+
+  _TriangleArea.resize(_ElementToInt.size() );
+  _VertexNormal.resize(_VertexToInt.size());
+
+  for (int i = 0; i< _ptFinalEntityList.size(); ++i)
+  {
+    // face is a pointer to one surface of the group "FinalEntityList"
+    GFace* face = _ptFinalEntityList[i];
+
+    //Loop over the element all the element of the "myTag"-surface
+    for (int iElem = 0; iElem < face->getNumMeshElements(); iElem++)
+    {
+      // Pointer to one element
+      MElement *e = face->getMeshElement(iElem);
+      // The NEW tag of the corresponding element
+      const int E = _ElementToInt[e->getNum()];
+      // std::cout << "We are now looking at element Nr: " << E << std::endl;
+
+      // Pointers to vertices of triangle
+      MVertex* A = e->getVertex(0);
+      MVertex* B = e->getVertex(1);
+      MVertex* C = e->getVertex(2);
+
+      const int V0 = _VertexToInt[A->getNum()];  //The new number of the vertex
+      const int V1 = _VertexToInt[B->getNum()];
+      const int V2 = _VertexToInt[C->getNum()];
+
+      vector_AB = SVector3(B->x() - A->x(), B->y() - A->y(), B->z() - A->z() );
+      vector_AC = SVector3(C->x() - A->x(), C->y() - A->y(), C->z() - A->z() );
+      vector_BC = SVector3(C->x() - B->x(), C->y() - B->y(), C->z() - B->z() );
 
 
-       const double m11 = (-B + Delta)/(2*A);  //Eigenvalue of Householder submatrix
-       const double m22 = (-B - Delta)/(2*A);
+      const SVector3 cross = crossprod(vector_AB, vector_AC);
 
-       //_VertexCurve[n] = (3*m11-m22)*(3*m22-m11);  //Gaussian Curvature
-       _VertexCurve[n] = ((3*m11-m22) + (3*m22-m11))*0.5; //Mean Curvature
+      // Area of the triangles:
+      _TriangleArea[E] = 0.5*cross.norm();
+      // std::cout << "The area of the triangle nr: " << e->getNum() << " is: "<< TriangleArea[E] << std::endl;
 
+
+      const double l_AB = vector_AB.normSq();
+      const double l_AC = vector_AC.normSq();
+      const double l_BC = vector_BC.normSq();
+
+      _VertexNormal[V0] += cross * (1.0/ (l_AB*l_AC));
+      _VertexNormal[V1] += cross * (1.0/ (l_AB*l_BC));
+      _VertexNormal[V2] += cross * (1.0/ (l_AC*l_BC));
+
+    } // end of loop over elements of one face
+
+  } //Loop over _ptFinalEntityList
+
+    ///////Normalize the vertex-normals.
+    for (unsigned int n = 0; n < _VertexToInt.size(); ++ n)
+    {
+      _VertexNormal[n].normalize();
     }
 }
 
@@ -367,96 +488,90 @@ void Curvature::computeCurvature_Simple()
 void Curvature::computePointareas()
 {
 
-//    if (_pointareas.size() == _VertexToInt.size())
-//        return;
-//        need_faces();
-
-    std::cout << "Computing point areas... " << std::endl;
+  std::cout << "Computing point areas... " << std::endl;
 //    std::cout << "The mesh has " << _VertexToInt.size() << " nodes" << std::endl;
 
-    SVector3 e[3];
-    SVector3 l2;
-    SVector3 ew;
+  SVector3 e[3];
+  SVector3 l2;
+  SVector3 ew;
 
-    _pointareas.resize(_VertexToInt.size());
-    _cornerareas.resize(_ElementToInt.size());
+  _pointareas.resize(_VertexToInt.size());
+  _cornerareas.resize(_ElementToInt.size());
 
+  for (int i = 0; i< _ptFinalEntityList.size(); ++i)
+  {
+    GFace* face = _ptFinalEntityList[i]; //face is a pointer to one surface of the group "FinalEntityList"
 
-    for (int i = 0; i< _ptFinalEntityList.size(); ++i)
+    for (int iElem = 0; iElem < face->getNumMeshElements(); iElem++) //Loop over the element all the element of the "myTag"-surface
     {
-      GEntity* entity = _ptFinalEntityList[i]; //entity is a pointer to one surface of the group "FinalEntityList"
+      MElement *E = face->getMeshElement(iElem);  //Pointer to one element
+      // The NEW tag of the corresponding element
+      const int EIdx = _ElementToInt[E->getNum()];
 
-      for (int iElem = 0; iElem < entity->getNumMeshElements(); iElem++) //Loop over the element all the element of the "myTag"-surface
+      MVertex* A = E->getVertex(0);  //Pointers to vertices of triangle
+      MVertex* B = E->getVertex(1);
+      MVertex* C = E->getVertex(2);
+
+      //Edges
+      e[0] = SVector3(C->x() - B->x(), C->y() - B->y(), C->z() - B->z()); //vector side of a triangilar element
+      e[1] = SVector3(A->x() - C->x(), A->y() - C->y(), A->z() - C->z());
+      e[2] = SVector3(B->x() - A->x(), B->y() - A->y(), B->z() - A->z());
+
+      // Compute corner weights
+      //SVector3 len = crossprod(e[0], e[1]);
+      //len = norm
+      //len2 = normSq
+      double area = 0.5 * norm(crossprod(e[0], e[1])); //area of a triangle
+      l2 = SVector3( normSq(e[0]), normSq(e[1]), normSq(e[2]) );
+      ew = SVector3( l2[0] * (l2[1] + l2[2] - l2[0]),
+                     l2[1] * (l2[2] + l2[0] - l2[1]),
+                     l2[2] * (l2[0] + l2[1] - l2[2]) );
+
+      if (ew[0] <= 0.0)
       {
-          MElement *E = entity->getMeshElement(iElem);  //Pointer to one element
-          // The NEW tag of the corresponding element
-          const int EIdx = _ElementToInt[E->getNum()];
+        _cornerareas[EIdx][1] = -0.25 * l2[2] * area / dot(e[0], e[2]);
+        _cornerareas[EIdx][2] = -0.25 * l2[1] * area / dot(e[0], e[1]);
+        _cornerareas[EIdx][0] = area - _cornerareas[EIdx][1] - _cornerareas[EIdx][2];
+      }
+      else if (ew[1] <= 0.0)
+      {
+        _cornerareas[EIdx][2] = -0.25 * l2[0] * area / dot(e[1], e[0]);
+        _cornerareas[EIdx][0] = -0.25 * l2[2] * area / dot(e[1], e[2]);
+        _cornerareas[EIdx][1] = area - _cornerareas[EIdx][2] - _cornerareas[EIdx][0];
+      }
+      else if (ew[2] <= 0.0)
+      {
+        _cornerareas[EIdx][0] = -0.25 * l2[1] * area / dot(e[2], e[1]);
+        _cornerareas[EIdx][1] = -0.25 * l2[0] * area / dot(e[2], e[0]);
+        _cornerareas[EIdx][2] = area - _cornerareas[EIdx][0] - _cornerareas[EIdx][1];
+      }
+      else
+      {
+        float ewscale = 0.5 * area / (ew[0] + ew[1] + ew[2]);
+        for (int j = 0; j < 3; j++)
+          _cornerareas[EIdx][j] = ewscale * (ew[(j+1)%3] + ew[(j+2)%3]);
+      }
 
-          MVertex* A = E->getVertex(0);  //Pointers to vertices of triangle
-          MVertex* B = E->getVertex(1);
-          MVertex* C = E->getVertex(2);
+      const int V0 = _VertexToInt[A->getNum()];
+      const int V1 = _VertexToInt[B->getNum()];
+      const int V2 = _VertexToInt[C->getNum()];
 
-          //Edges
-          e[0] = SVector3(C->x() - B->x(), C->y() - B->y(), C->z() - B->z()); //vector side of a triangilar element
-          e[1] = SVector3(A->x() - C->x(), A->y() - C->y(), A->z() - C->z());
-          e[2] = SVector3(B->x() - A->x(), B->y() - A->y(), B->z() - A->z());
+      _pointareas[V0] += _cornerareas[EIdx][0];
+      //_pointareas[faces[i][0]] += _cornerareas[i][0];
 
-          // Compute corner weights
-          //SVector3 len = crossprod(e[0], e[1]);
-          //len = norm
-          //len2 = normSq
-          double area = 0.5 * norm(crossprod(e[0], e[1])); //area of a triangle
-          l2 = SVector3( normSq(e[0]), normSq(e[1]), normSq(e[2]) );
-          ew = SVector3( l2[0] * (l2[1] + l2[2] - l2[0]),
-                          l2[1] * (l2[2] + l2[0] - l2[1]),
-                          l2[2] * (l2[0] + l2[1] - l2[2]) );
+      _pointareas[V1] += _cornerareas[EIdx][1];
 
-          if (ew[0] <= 0.0)
-          {
-              _cornerareas[EIdx][1] = -0.25 * l2[2] * area / dot(e[0], e[2]);
-              _cornerareas[EIdx][2] = -0.25 * l2[1] * area / dot(e[0], e[1]);
-              _cornerareas[EIdx][0] = area - _cornerareas[EIdx][1] - _cornerareas[EIdx][2];
+      _pointareas[V2] += _cornerareas[EIdx][2];
 
-          }
-          else if (ew[1] <= 0.0)
-          {
-              _cornerareas[EIdx][2] = -0.25 * l2[0] * area / dot(e[1], e[0]);
-              _cornerareas[EIdx][0] = -0.25 * l2[2] * area / dot(e[1], e[2]);
-              _cornerareas[EIdx][1] = area - _cornerareas[EIdx][2] - _cornerareas[EIdx][0];
-           }
-          else if (ew[2] <= 0.0)
-          {
-              _cornerareas[EIdx][0] = -0.25 * l2[1] * area / dot(e[2], e[1]);
-              _cornerareas[EIdx][1] = -0.25 * l2[0] * area / dot(e[2], e[0]);
-              _cornerareas[EIdx][2] = area - _cornerareas[EIdx][0] - _cornerareas[EIdx][1];
-           }
-          else
-          {
-              float ewscale = 0.5 * area / (ew[0] + ew[1] + ew[2]);
-              for (int j = 0; j < 3; j++)
-                  _cornerareas[EIdx][j] = ewscale * (ew[(j+1)%3] + ew[(j+2)%3]);
-          }
+    } //End of loop over iElem
 
-          const int V0 = _VertexToInt[A->getNum()];
-          const int V1 = _VertexToInt[B->getNum()];
-          const int V2 = _VertexToInt[C->getNum()];
-
-          _pointareas[V0] += _cornerareas[EIdx][0];
-          //_pointareas[faces[i][0]] += _cornerareas[i][0];
-
-          _pointareas[V1] += _cornerareas[EIdx][1];
-
-          _pointareas[V2] += _cornerareas[EIdx][2];
-
-      }//End of loop over iElem
-
-      std::cout << "Done computing pointareas" << std::endl;
+    std::cout << "Done computing pointareas" << std::endl;
 //      std::cout << "_pointareas.size = " << _pointareas.size() << std::endl;
 //      std::cout << "_cornerareas.size = " << _cornerareas.size() << std::endl;
 
-    }//End of loop over _ptFinalEntityList
+  } //End of loop over _ptFinalEntityList
 
-}//End of the method "computePointareas"
+} //End of the method "computePointareas"
 
 
 //========================================================================================================
@@ -475,15 +590,13 @@ void Curvature::rot_coord_sys(const SVector3 &old_u, const SVector3 &old_v, cons
     new_u = -1.0*new_u;
     new_v = -1.0*new_v;
     return;
-  }//end of if-condtion
+  }
 
   SVector3 perp_old = new_norm - ndot*old_norm;
   SVector3 dperp = 1.0f/(1 + ndot) * (old_norm + new_norm);
   new_u -= dperp*dot(new_u, perp_old);
   new_v -= dperp*dot(new_v, perp_old);
-
 }
-
 
 //========================================================================================================
 
@@ -500,16 +613,14 @@ void Curvature::proj_curv( const SVector3 &old_u, const SVector3 &old_v,
   SVector3 r_new_v;
   rot_coord_sys(new_u, new_v, crossprod(old_u,old_v), r_new_u, r_new_v);
 
-  double u1 = dot(r_new_u, old_u);
-  double v1 = dot(r_new_u, old_v);
-  double u2 = dot(r_new_v, old_u);
-  double v2 = dot(r_new_v, old_v);
+  const double u1 = dot(r_new_u, old_u);
+  const double v1 = dot(r_new_u, old_v);
+  const double u2 = dot(r_new_v, old_u);
+  const double v2 = dot(r_new_v, old_v);
 
   new_ku  =   old_ku*u1*u1 + old_kuv*(2.0f * u1*v1)   + old_kv*v1*v1;
   new_kuv  =  old_ku*u1*u2 + old_kuv*(u1*v2 * u2*v1)  + old_kv*v1*v2;
   new_kv  =   old_ku*u2*u2 + old_kuv*(2.0f * u2*v2)   + old_kv*v2*v2;
-
-
 }
 
 
@@ -563,8 +674,9 @@ void Curvature::diagonalize_curv(const SVector3 &old_u, const SVector3 &old_v,
 
 void Curvature::computeCurvature_Rusinkiewicz()
 {
+  retrieveCompounds();
   initializeMap();
-  computeVertexNormals();
+  computeRusinkiewiczNormals();
   computePointareas();
 
   SVector3 e[3];
@@ -593,17 +705,15 @@ void Curvature::computeCurvature_Rusinkiewicz()
   _curv2.resize(_VertexToInt.size());
   _curv12.resize(_VertexToInt.size());
 
-
-
   std::cout << "Computing Curvature.." << std::endl;
 
   for (int i = 0; i< _ptFinalEntityList.size(); ++i)
   {
-    GEntity* entity = _ptFinalEntityList[i]; //entity is a pointer to one surface of the group "FinalEntityList"
+    GFace* face = _ptFinalEntityList[i]; //face is a pointer to one surface of the group "FinalEntityList"
 
-    for (int iElem = 0; iElem < entity->getNumMeshElements(); iElem++) //Loop over the element all the element of the "myTag"-surface
+    for (int iElem = 0; iElem < face->getNumMeshElements(); iElem++) //Loop over the element all the element of the "myTag"-surface
     {
-      MElement *E = entity->getMeshElement(iElem);  //Pointer to one element
+      MElement *E = face->getMeshElement(iElem);  //Pointer to one element
 
       MVertex* A = E->getVertex(0);  //Pointers to vertices of triangle
       MVertex* B = E->getVertex(1);
@@ -613,145 +723,204 @@ void Curvature::computeCurvature_Rusinkiewicz()
       const int V1 = _VertexToInt[B->getNum()];
       const int V2 = _VertexToInt[C->getNum()];
 
-
       ///Set up an initial coordinate system per vertex:
 
       _pdir1[V0] = SVector3(B->x() - A->x(), B->y() - A->y(), B->z() - A->z());
       _pdir1[V1] = SVector3(C->x() - B->x(), C->y() - B->y(), C->z() - B->z());
       _pdir1[V2] = SVector3(A->x() - C->x(), A->y() - C->y(), A->z() - C->z());
-
     }
   }
 
-    for (int ivertex = 0; ivertex < _VertexToInt.size(); ++ivertex)
-    {
-      _pdir1[ivertex] = crossprod(_pdir1[ivertex], _VertexNormal[ivertex]);
-      _pdir1[ivertex].normalize();
-      _pdir2[ivertex] = crossprod(_VertexNormal[ivertex], _pdir1[ivertex]);
-    }
+  for (int ivertex = 0; ivertex < _VertexToInt.size(); ++ivertex)
+  {
+    _pdir1[ivertex] = crossprod(_pdir1[ivertex], _VertexNormal[ivertex]);
+    _pdir1[ivertex].normalize();
+    _pdir2[ivertex] = crossprod(_VertexNormal[ivertex], _pdir1[ivertex]);
+  }
 
-    // Compute curvature per face:
-    for (int i = 0; i< _ptFinalEntityList.size(); ++i)
+  // Compute curvature per face:
+  for (int i = 0; i< _ptFinalEntityList.size(); ++i)
+  {
+    //face is a pointer to one surface of the group "FinalEntityList"
+    GFace* face = _ptFinalEntityList[i];
+
+    //Loop over all elements of this face:
+    for (int iElem = 0; iElem < face->getNumMeshElements(); iElem++)
     {
-      GEntity* entity = _ptFinalEntityList[i]; //entity is a pointer to one surface of the group "FinalEntityList"
-      for (int iElem = 0; iElem < entity->getNumMeshElements(); iElem++) //Loop over the element all the element of the "myTag"-surface
+      MElement *E = face->getMeshElement(iElem);  //Pointer to one element
+      // The NEW tag of the corresponding element
+      const int EIdx = _ElementToInt[E->getNum()];
+
+      MVertex* A = E->getVertex(0);  //Pointers to vertices of triangle
+      MVertex* B = E->getVertex(1);
+      MVertex* C = E->getVertex(2);
+
+      e[0] = SVector3(C->x() - B->x(), C->y() - B->y(), C->z() - B->z());
+      e[1] = SVector3(A->x() - C->x(), A->y() - C->y(), A->z() - C->z());
+      e[2] = SVector3(B->x() - A->x(), B->y() - A->y(), B->z() - A->z());
+
+      //SVector3 e[3] = {SVector3(C->x() - B->x(), C->y() - B->y(), C->z() - B->z()), SVector3(A->x() - C->x(), A->y() - C->y(), A->z() - C->z()), SVector3(B->x() - A->x(), B->y() - A->y(), B->z() - A->z()) };
+
+      //N-T-B coordinate system per face
+      t = e[0];
+      t.normalize();
+      n = crossprod( e[0], e[1]);
+      b = crossprod(n, t);
+      b.normalize();
+
+      //Estimate curvature based on variations of normals along edges:
+      //intialization:
+      m = SVector3(0.0, 0.0, 0.0);
+      //maybe double m[3] = { 0.0, 0.0, 0.0 };
+      // w *= 0.0; //Reset w to zero
+      for (int i  = 0; i< 3; ++i)
       {
-        MElement *E = entity->getMeshElement(iElem);  //Pointer to one element
-        // The NEW tag of the corresponding element
-        const int EIdx = _ElementToInt[E->getNum()];
-
-        MVertex* A = E->getVertex(0);  //Pointers to vertices of triangle
-        MVertex* B = E->getVertex(1);
-        MVertex* C = E->getVertex(2);
-
-        e[0] = SVector3(C->x() - B->x(), C->y() - B->y(), C->z() - B->z());
-        e[1] = SVector3(A->x() - C->x(), A->y() - C->y(), A->z() - C->z());
-        e[2] = SVector3(B->x() - A->x(), B->y() - A->y(), B->z() - A->z());
-
-        //SVector3 e[3] = {SVector3(C->x() - B->x(), C->y() - B->y(), C->z() - B->z()), SVector3(A->x() - C->x(), A->y() - C->y(), A->z() - C->z()), SVector3(B->x() - A->x(), B->y() - A->y(), B->z() - A->z()) };
-
-
-        //N-T-B coordinate system per face
-        t = e[0];
-        t.normalize();
-        n = crossprod( e[0], e[1]);
-        b = crossprod(n, t);
-        b.normalize();
-
-        //Estimate curvature based on variations of normals along edges:
-        //intialization:
-        m = SVector3(0.0, 0.0, 0.0);
-        //maybe double m[3] = { 0.0, 0.0, 0.0 };
-        // w *= 0.0; //Reset w to zero
-        for (int i  = 0; i< 3; ++i)
+        for (int j = 0; j<3; ++j)
         {
-          for (int j = 0; j<3; ++j)
-          {
-            w(i,j) = 0.0;
-          }
+          w(i,j) = 0.0;
         }
+      }
 
-        //filling:
-        for (int j = 0; j< 3; ++j)
-        {
-          u = dot(e[j], t);
-          v = dot(e[j], b);
+      //filling:
+      for (int j = 0; j< 3; ++j)
+      {
+        u = dot(e[j], t);
+        v = dot(e[j], b);
 
-          w(0,0) += u*u;
-          w(0,1) += u*v;
-          w(2,2) += v*v;
+        w(0,0) += u*u;
+        w(0,1) += u*v;
+        w(2,2) += v*v;
 
-          MVertex* U = E->getVertex(PREV(j));
-          MVertex* V = E->getVertex(NEXT(j));
+        MVertex* U = E->getVertex(PREV(j));
+        MVertex* V = E->getVertex(NEXT(j));
 
-          const int UIdx = _VertexToInt[U->getNum()];
-          const int VIdx = _VertexToInt[V->getNum()];
+        const int UIdx = _VertexToInt[U->getNum()];
+        const int VIdx = _VertexToInt[V->getNum()];
 
-          dn = _VertexNormal[UIdx] - _VertexNormal[VIdx];
+        dn = _VertexNormal[UIdx] - _VertexNormal[VIdx];
 
-          dnu = dot(dn, t);
-          dnv = dot(dn, b);
+        dnu = dot(dn, t);
+        dnv = dot(dn, b);
 
-          m[0] += dnu*u;
-          m[1] += dnu*v + dnv*u;
-          m[2] += dnv*v;
-        }
+        m[0] += dnu*u;
+        m[1] += dnu*v + dnv*u;
+        m[2] += dnv*v;
+      }
 
-        w(1,1) = w(0,0) + w(2,2);
-        w(1,2) = w(0,1);
+      w(1,1) = w(0,0) + w(2,2);
+      w(1,2) = w(0,1);
 
-        //Least Square Solution
-        double diag[3];
-        if (!ldltdc(w, diag))
-        {
-          std::cout << "ldltdc failed" << std::endl;
-          continue;
-        }
-        ldltsl(w, diag, m, m);
+      //Least Squares Solution
+      double diag[3];
+      if (!ldltdc(w, diag))
+      {
+        std::cout << "ldltdc failed" << std::endl;
+        continue;
+      }
+      ldltsl(w, diag, m, m);
 
-        //Push it back out to the vertices
-        for (int j = 0; j< 3; ++j)
-        {
-          const int old_vj = E->getVertex(j)->getNum();
-          const int vj = _VertexToInt[old_vj];
-          proj_curv(t, b, m[0], m[1], m[2], _pdir1[vj], _pdir2[vj], c1, c12, c2);
-          wt = _cornerareas[EIdx][j]/_pointareas[vj];
+      //Push it back out to the vertices
+      for (int j = 0; j< 3; ++j)
+      {
+        const int old_vj = E->getVertex(j)->getNum();
+        const int vj = _VertexToInt[old_vj];
+        proj_curv(t, b, m[0], m[1], m[2], _pdir1[vj], _pdir2[vj], c1, c12, c2);
+        wt = _cornerareas[EIdx][j]/_pointareas[vj];
 //          wt = 1.0;
 
-          _curv1[vj] += wt*c1;
-          _curv12[vj] += wt*c12;
-          _curv2[vj] += wt*c2;
-
-        }
+        _curv1[vj] += wt*c1;
+        _curv12[vj] += wt*c12;
+        _curv2[vj] += wt*c2;
+      }
 
     } //End of loop over the element (iElem)
 
   } //End of loop over "_ptFinalEntityList"
 
 
-    //Compute principal directions and curvatures at each vertex
-    for (int ivertex = 0; ivertex < _VertexToInt.size(); ++ivertex)
-    {
-        diagonalize_curv(_pdir1[ivertex], _pdir2[ivertex], _curv1[ivertex], _curv12[ivertex], _curv2[ivertex],
-                         _VertexNormal[ivertex], _pdir1[ivertex], _pdir2[ivertex], _curv1[ivertex], _curv2[ivertex]);
-    }
+  //Compute principal directions and curvatures at each vertex
+  for (int ivertex = 0; ivertex < _VertexToInt.size(); ++ivertex)
+  {
+    diagonalize_curv(_pdir1[ivertex], _pdir2[ivertex], _curv1[ivertex], _curv12[ivertex], _curv2[ivertex],
+                     _VertexNormal[ivertex], _pdir1[ivertex], _pdir2[ivertex], _curv1[ivertex], _curv2[ivertex]);
+  }
 
-    std::cout << "Done" << std::endl;
+  std::cout << "Done" << std::endl;
 
-    _VertexCurve.resize( _VertexToInt.size() );
+  _VertexCurve.resize( _VertexToInt.size() );
 
-    for (int ivertex = 0; ivertex < _VertexToInt.size(); ++ivertex)
-    {
-        _VertexCurve[ivertex] = (_curv1[ivertex]+_curv2[ivertex])*0.5;
+  for (int ivertex = 0; ivertex < _VertexToInt.size(); ++ivertex)
+  {
+    //**Mean Curvature:**
+    _VertexCurve[ivertex] = (_curv1[ivertex]+_curv2[ivertex])*0.5;
+//    _VertexCurve[ivertex] = std::abs(_curv1[ivertex]) + std::abs(_curv2[ivertex]);
+    //**Gaussian Curvature:**
+//    _VertexCurve[ivertex] = std::abs( _curv1[ivertex]*_curv2[ivertex] );
+    //_VertexCurve[ivertex] = std::abs(_VertexCurve[ivertex]);
 
-    }
+  }
+  _alreadyComputedCurvature = true;
 
 } //End of the "computeCurvature_Rusinkiewicz" method
 
+//========================================================================================================
+
+ void Curvature::elementNodalValues(MTriangle* triangle, double& c0, double& c1, double& c2)
+ {
+   MVertex* A = triangle->getVertex(0);
+   MVertex* B = triangle->getVertex(1);
+   MVertex* C = triangle->getVertex(2);
+
+   int V0 = 0;
+   int V1 = 0;
+   int V2 = 0;
+
+   std::map<int,int>::iterator vertexIterator;
+
+   vertexIterator = _VertexToInt.find( A->getNum() );
+   if ( vertexIterator != _VertexToInt.end() )
+   {
+     V0 = (*vertexIterator).second;
+   }
+   else
+   {
+     std::cout << "Didn't find vertex with number " << A->getNum() << " in _VertextToInt !" << std::endl;
+   }
+
+   vertexIterator = _VertexToInt.find( B->getNum() );
+   if ( vertexIterator != _VertexToInt.end() )
+   {
+     V1 = (*vertexIterator).second;
+   }
+   else
+   {
+     std::cout << "Didn't find vertex with number " << B->getNum() << " in _VertextToInt !" << std::endl;
+   }
+
+   vertexIterator = _VertexToInt.find( C->getNum() );
+   if ( vertexIterator != _VertexToInt.end() )
+   {
+     V2 = (*vertexIterator).second;
+   }
+   else
+   {
+     std::cout << "Didn't find vertex with number " << C->getNum() << " in _VertextToInt !" << std::endl;
+   }
+
+
+//   const int V0 = _VertexToInt[A->getNum()];
+//   const int V1 = _VertexToInt[B->getNum()];
+//   const int V2 = _VertexToInt[C->getNum()];
+
+   c0 = _VertexCurve[V0]; //Mean curvature in vertex 0
+   c1 = _VertexCurve[V1]; //Mean curvature in vertex 1
+   c2 = _VertexCurve[V2]; //Mean curvature in vertex 2
+
+ }
 
 //========================================================================================================
 
-void Curvature::writeToFile( const std::string & filename)
+void Curvature::writeToPosFile( const std::string & filename)
 {
   std::ofstream outfile;
   outfile.precision(18);
@@ -760,11 +929,11 @@ void Curvature::writeToFile( const std::string & filename)
 
   for (int i = 0; i< _ptFinalEntityList.size(); ++i)
   {
-    GEntity* entity = _ptFinalEntityList[i]; //entity is a pointer to one surface of the group "FinalEntityList"
+    GFace* face = _ptFinalEntityList[i]; //face is a pointer to one surface of the group "FinalEntityList"
 
-    for (int iElem = 0; iElem < entity->getNumMeshElements(); iElem++) //Loop over the element all the element of the "myTag"-surface
+    for (int iElem = 0; iElem < face->getNumMeshElements(); iElem++) //Loop over the element all the element of the "myTag"-surface
     {
-      MElement *e = entity->getMeshElement(iElem);  //Pointer to one element
+      MElement *e = face->getMeshElement(iElem);  //Pointer to one element
       const int E = _ElementToInt[e->getNum()]; //The NEW tag of the corresponding element
 
       //std::cout << "We are now looking at element Nr: " << E << std::endl;
@@ -809,5 +978,128 @@ outfile.close();
 }
 
 //========================================================================================================
+
+void Curvature::writeToVtkFile( const std::string & filename)
+{
+
+  std::ofstream outfile;
+  outfile.precision(18);
+  outfile.open(filename.c_str());
+  outfile << "# vtk DataFile Version 2.0" << std::endl;
+  outfile << "Surface curvature computed by Gmsh" << std::endl;
+  outfile << "ASCII" << std::endl;
+  outfile << "DATASET UNSTRUCTURED_GRID" << std::endl;
+
+  const int npoints = _VertexToInt.size();
+
+  outfile << "POINTS " << npoints << " double" << std::endl;
+
+  /// Build a table of coordinates
+  /// Loop over all elements and look at the 'old' (not necessarily continuous) numbers of vertices
+  /// Get the 'new' index of each vertex through _VertexToInt and the [x,y,z] coordinates of this vertex
+  /// Store them in coordx,coordy and coordz
+
+
+  std::vector<VtkPoint> coord;
+
+  coord.resize(npoints);
+
+  for (int i = 0; i< _ptFinalEntityList.size(); ++i)
+  {
+    GFace* face = _ptFinalEntityList[i];
+
+    for (int iElem = 0; iElem < face->getNumMeshElements(); iElem++)
+    {
+      MElement *e = face->getMeshElement(iElem);
+
+      MVertex* A = e->getVertex(0);  //Pointers to vertices of triangle
+      MVertex* B = e->getVertex(1);
+      MVertex* C = e->getVertex(2);
+
+      const int oldIdxA = A->getNum();
+      const int oldIdxB = B->getNum();
+      const int oldIdxC = C->getNum();
+
+      const int newIdxA = _VertexToInt[oldIdxA];
+      const int newIdxB = _VertexToInt[oldIdxB];
+      const int newIdxC = _VertexToInt[oldIdxC];
+
+      coord[newIdxA].x = A->x();
+      coord[newIdxA].y = A->y();
+      coord[newIdxA].z = A->z();
+
+      coord[newIdxB].x = B->x();
+      coord[newIdxB].y = B->y();
+      coord[newIdxB].z = B->z();
+
+      coord[newIdxC].x = C->x();
+      coord[newIdxC].y = C->y();
+      coord[newIdxC].z = C->z();
+    }
+  }
+
+  for (int v = 0; v < npoints; ++v)
+  {
+    outfile << coord[v].x << " " << coord[v].y << " " << coord[v].z << std::endl;
+  }
+
+  /// Empty the array 'coord' to free the memory
+  /// Point coordinates will not be needed anymore
+  coord.clear();
+
+  /// Write the cell connectivity
+
+  outfile << std::endl << "CELLS " << _ElementToInt.size() << " " << 4*_ElementToInt.size() << std::endl;
+
+  for (int i = 0; i< _ptFinalEntityList.size(); ++i)
+  {
+    GFace* face = _ptFinalEntityList[i];
+
+    for (int iElem = 0; iElem < face->getNumMeshElements(); iElem++)
+    {
+      MElement *e = face->getMeshElement(iElem);
+
+      MVertex* A = e->getVertex(0);  //Pointers to vertices of triangle
+      MVertex* B = e->getVertex(1);
+      MVertex* C = e->getVertex(2);
+
+      const int oldIdxA = A->getNum();
+      const int oldIdxB = B->getNum();
+      const int oldIdxC = C->getNum();
+
+      const int newIdxA = _VertexToInt[oldIdxA];
+      const int newIdxB = _VertexToInt[oldIdxB];
+      const int newIdxC = _VertexToInt[oldIdxC];
+
+      outfile << "3 " << newIdxA << " " << newIdxB << " " << newIdxC << std::endl;
+    }
+  }
+
+  outfile << std::endl << "CELL_TYPES " << _ElementToInt.size() << std::endl;
+  for(int ie = 0; ie < _ElementToInt.size(); ++ie)
+  {
+    outfile << "5" << std::endl; //Triangle is element type 5 in vtk
+
+  }
+
+  /// Write the curvature values as vtk 'point data'
+
+  outfile << std::endl << "POINT_DATA " << npoints << std::endl;
+  outfile << "SCALARS curvature float 1" << std::endl;
+  outfile << "LOOKUP_TABLE default" << std::endl;
+
+  for (int iv = 0; iv < npoints; ++iv)
+  {
+    outfile << _VertexCurve[iv] << std::endl;
+  }
+
+  outfile.close();
+
+
+}
+
+
+//========================================================================================================
+
 
 

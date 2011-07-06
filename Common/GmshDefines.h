@@ -29,7 +29,9 @@
 #define FORMAT_EPS   20
 #define FORMAT_MAIL  21
 #define FORMAT_PNG   22
+#define FORMAT_TXT   23
 #define FORMAT_PDF   24
+#define FORMAT_RMED  25
 #define FORMAT_POS   26
 #define FORMAT_STL   27
 #define FORMAT_P3D   28
@@ -181,10 +183,14 @@
 #define ALGO_2D_DELAUNAY       5
 #define ALGO_2D_FRONTAL        6
 #define ALGO_2D_BAMG           7
+#define ALGO_2D_FRONTAL_QUAD   8
 
 // 3D meshing algorithms (numbers should not be changed)
 #define ALGO_3D_DELAUNAY       1
 #define ALGO_3D_FRONTAL        4
+#define ALGO_3D_FRONTAL_DEL    5
+#define ALGO_3D_FRONTAL_HEX    6
+#define ALGO_3D_MMG3D          7
 
 // Meshing methods
 #define MESH_NONE         0

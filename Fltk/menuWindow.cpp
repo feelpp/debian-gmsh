@@ -56,7 +56,7 @@
 static void file_new_cb(Fl_Widget *w, void *data)
 {
  test:
-  if(fileChooser(FILE_CHOOSER_CREATE, "New", "*")) {
+  if(fileChooser(FILE_CHOOSER_CREATE, "New", "")) {
     std::string name = fileChooserGetName(1);
     if(!StatFile(name)){
       if(fl_choice("File '%s' already exists.\n\nDo you want to erase it?",
@@ -88,7 +88,7 @@ static void file_new_cb(Fl_Widget *w, void *data)
 #endif
 
 static const char *input_formats =
-  "All Files" TT "*" NN
+  "All Files" TT "*.*" NN
   "Gmsh Geometry" TT "*.geo" NN
   "Gmsh Mesh" TT "*.msh" NN
   "Gmsh Post-processing View" TT "*.pos" NN
@@ -111,7 +111,7 @@ static const char *input_formats =
   "STL Surface Mesh" TT "*.stl" NN
   "VTK Mesh" TT "*.vtk" NN
   "VRML Surface Mesh" TT "*.{wrl,vrml}" NN
-  "PLY2 Surface Mesh" TT "*.{ply2}" NN
+  "PLY2 Surface Mesh" TT "*.ply2" NN
   "BMP" TT "*.bmp" NN
 #if defined(HAVE_LIBJPEG)
   "JPEG" TT "*.{jpg,jpeg}" NN
@@ -149,9 +149,9 @@ static void file_merge_cb(Fl_Widget *w, void *data)
 }
 
 static void file_open_recent_cb(Fl_Widget *w, void *data)
-{  
+{
+  if(!data) return;
   std::string str((const char*)data);
-
   int n = PView::list.size();
   OpenProject(str);
   drawContext::global()->draw();
@@ -232,9 +232,11 @@ static void file_window_cb(Fl_Widget *w, void *data)
 }
 
 static int _save_msh(const char *name){ return mshFileDialog(name); }
-static int _save_pos(const char *name){ return posFileDialog(name); }
+static int _save_mesh_stat(const char *name){ return meshStatFileDialog(name); }
 static int _save_options(const char *name){ return optionsFileDialog(name); }
 static int _save_geo(const char *name){ return geoFileDialog(name); }
+static int _save_brep(const char *name){ CreateOutputFile(name, FORMAT_BREP); return 1; }
+static int _save_step(const char *name){ CreateOutputFile(name, FORMAT_STEP); return 1; }
 static int _save_cgns(const char *name){ return cgnsFileDialog(name); }
 static int _save_unv(const char *name){ return unvFileDialog(name); }
 static int _save_vtk(const char *name){ return genericMeshFileDialog
@@ -278,18 +280,27 @@ static int _save_svg(const char *name){ return gl2psFileDialog
     (name, "SVG Options", FORMAT_SVG); }
 static int _save_yuv(const char *name){ return genericBitmapFileDialog
     (name, "YUV Options", FORMAT_YUV); }
+static int _save_view_pos(const char *name){ return posFileDialog(name); }
+static int _save_view_med(const char *name){ return genericViewFileDialog
+    (name, "MED Options", 6); }
+static int _save_view_txt(const char *name){ return genericViewFileDialog
+    (name, "TXT Options", 4); }
 
 static int _save_auto(const char *name)
 {
   switch(GuessFileFormatFromFileName(name)){
   case FORMAT_MSH  : return _save_msh(name);
-  case FORMAT_POS  : return _save_pos(name);
+  case FORMAT_POS  : return _save_view_pos(name);
+  case FORMAT_TXT  : return _save_view_txt(name);
   case FORMAT_OPT  : return _save_options(name);
   case FORMAT_GEO  : return _save_geo(name);
+  case FORMAT_BREP : return _save_brep(name);
+  case FORMAT_STEP : return _save_step(name);
   case FORMAT_CGNS : return _save_cgns(name);
   case FORMAT_UNV  : return _save_unv(name);
   case FORMAT_VTK  : return _save_vtk(name);
   case FORMAT_MED  : return _save_med(name);
+  case FORMAT_RMED : return _save_view_med(name);
   case FORMAT_MESH : return _save_mesh(name);
   case FORMAT_MAIL : return _save_mail(name);
   case FORMAT_BDF  : return _save_bdf(name);
@@ -326,45 +337,54 @@ static void file_save_as_cb(Fl_Widget *w, void *data)
 {
   static patXfunc formats[] = {
     {"Guess From Extension" TT "*.*", _save_auto},
-    {"Gmsh Mesh" TT "*.msh", _save_msh},
-    {"Gmsh Mesh Statistics" TT "*.pos", _save_pos},
-    {"Gmsh Options" TT "*.opt", _save_options},
-    {"Gmsh Unrolled Geometry" TT "*.geo", _save_geo},
-    {"Abaqus INP Mesh" TT "*.inp", _save_inp},
+    {"Geometry - Gmsh Options" TT "*.opt", _save_options},
+    {"Geometry - Gmsh Unrolled GEO" TT "*.geo", _save_geo},
+#if defined(HAVE_OCC)
+    {"Geometry - OpenCASCADE STEP" TT "*.step", _save_step},
+    {"Geometry - OpenCASCADE BRep" TT "*.brep", _save_brep},
+#endif
+    {"Mesh - Gmsh MSH" TT "*.msh", _save_msh},
+    {"Mesh - Abaqus INP" TT "*.inp", _save_inp},
 #if defined(HAVE_LIBCGNS)
-    {"CGNS (Experimental)" TT "*.cgns", _save_cgns},
+    {"Mesh - CGNS (Experimental)" TT "*.cgns", _save_cgns},
 #endif
-    {"Diffpack 3D Mesh" TT "*.diff", _save_diff},
-    {"I-deas Universal Mesh" TT "*.unv", _save_unv},
-    {"Iridum Mesh" TT "*.ir3", _save_ir3},
+    {"Mesh - Diffpack 3D" TT "*.diff", _save_diff},
+    {"Mesh - I-deas Universal" TT "*.unv", _save_unv},
+    {"Mesh - Iridum" TT "*.ir3", _save_ir3},
 #if defined(HAVE_MED)
-    {"MED File" TT "*.med", _save_med},
+    {"Mesh - MED" TT "*.med", _save_med},
 #endif
-    {"Medit INRIA Mesh" TT "*.mesh", _save_mesh},
-    {"CEA Triangulation" TT "*.mail", _save_mail},
-    {"Nastran Bulk Data File" TT "*.bdf", _save_bdf},
-    {"Plot3D Structured Mesh" TT "*.p3d", _save_p3d},
-    {"STL Surface Mesh" TT "*.stl", _save_stl},
-    {"VRML Surface Mesh" TT "*.wrl", _save_vrml},
-    {"VTK Mesh" TT "*.vtk", _save_vtk},
-    {"PLY2 Mesh" TT "*.ply2", _save_ply2},
-    {"Encapsulated PostScript" TT "*.eps", _save_eps},
-    {"GIF" TT "*.gif", _save_gif},
+    {"Mesh - INRIA Medit" TT "*.mesh", _save_mesh},
+    {"Mesh - CEA Triangulation" TT "*.mail", _save_mail},
+    {"Mesh - Nastran Bulk Data File" TT "*.bdf", _save_bdf},
+    {"Mesh - Plot3D Structured Mesh" TT "*.p3d", _save_p3d},
+    {"Mesh - STL Surface" TT "*.stl", _save_stl},
+    {"Mesh - VRML Surface" TT "*.wrl", _save_vrml},
+    {"Mesh - VTK" TT "*.vtk", _save_vtk},
+    {"Mesh - PLY2" TT "*.ply2", _save_ply2},
+    {"Post-processing - Gmsh POS" TT "*.pos", _save_view_pos},
+#if defined(HAVE_MED)
+    {"Post-processing - MED" TT "*.rmed", _save_view_med},
+#endif
+    {"Post-processing - Generic TXT" TT "*.txt", _save_view_txt},
+    {"Post-processing - Mesh Statistics" TT "*.pos", _save_mesh_stat},
+    {"Image - Encapsulated PostScript" TT "*.eps", _save_eps},
+    {"Image - GIF" TT "*.gif", _save_gif},
 #if defined(HAVE_LIBJPEG)
-    {"JPEG" TT "*.jpg", _save_jpeg},
+    {"Image - JPEG" TT "*.jpg", _save_jpeg},
 #endif
-    {"LaTeX" TT "*.tex", _save_tex},
-#if defined(HAVE_MPEG_ENCODE)
-    {"MPEG Movie" TT "*.mpg", _save_mpeg},
-#endif
-    {"PDF" TT "*.pdf", _save_pdf},
+    {"Image - LaTeX" TT "*.tex", _save_tex},
+    {"Image - PDF" TT "*.pdf", _save_pdf},
 #if defined(HAVE_LIBPNG)
-    {"PNG" TT "*.png", _save_png},
+    {"Image - PNG" TT "*.png", _save_png},
 #endif
-    {"PostScript" TT "*.ps", _save_ps},
-    {"PPM" TT "*.ppm", _save_ppm},
-    {"SVG" TT "*.svg", _save_svg},
-    {"YUV" TT "*.yuv", _save_yuv},
+    {"Image - PostScript" TT "*.ps", _save_ps},
+    {"Image - PPM" TT "*.ppm", _save_ppm},
+    {"Image - SVG" TT "*.svg", _save_svg},
+    {"Image - YUV" TT "*.yuv", _save_yuv},
+#if defined(HAVE_MPEG_ENCODE)
+    {"Movie - MPEG" TT "*.mpg", _save_mpeg},
+#endif
   };
   int nbformats = sizeof(formats) / sizeof(formats[0]);
   static char *pat = 0;
@@ -396,9 +416,6 @@ static void file_save_as_cb(Fl_Widget *w, void *data)
   }
 }
 
-#undef TT
-#undef NN
-
 static void file_options_save_cb(Fl_Widget *w, void *data)
 {
   std::string str((const char*)data), fileName;
@@ -417,7 +434,7 @@ static void file_options_save_cb(Fl_Widget *w, void *data)
 static void file_rename_cb(Fl_Widget *w, void *data)
 {
  test:
-  if(fileChooser(FILE_CHOOSER_CREATE, "Rename", "*",
+  if(fileChooser(FILE_CHOOSER_CREATE, "Rename", "",
                  GModel::current()->getFileName().c_str())) {
     std::string name = fileChooserGetName(1);
     if(CTX::instance()->confirmOverwrite) {
@@ -2175,12 +2192,20 @@ static void view_remove_cb(Fl_Widget *w, void *data)
   drawContext::global()->draw();
 }
 
-static void view_save_as(int index, const char *title, int format)
+static void view_save_cb(Fl_Widget *w, void *data)
 {
-  PView *view = PView::list[index];
-  
+  static const char *formats =
+    "Gmsh Parsed" TT "*.pos" NN
+    "Gmsh Mesh-based" TT "*.pos" NN
+    "Gmsh Legacy ASCII" TT "*.pos" NN
+    "Gmsh Legacy Binary" TT "*.pos" NN
+    "MED" TT "*.rmed" NN
+    "STL Surface" TT "*.stl" NN
+    "Generic TXT" TT "*.txt" NN;
+
+  PView *view = PView::list[(intptr_t)data];
  test:
-  if(fileChooser(FILE_CHOOSER_CREATE, title, "*", 
+  if(fileChooser(FILE_CHOOSER_CREATE, "Save As", formats, 
                  view->getData()->getFileName().c_str())){
     std::string name = fileChooserGetName(1);
     if(CTX::instance()->confirmOverwrite) {
@@ -2189,44 +2214,22 @@ static void view_save_as(int index, const char *title, int format)
                       "Cancel", "Replace", 0, name.c_str()))
           goto test;
     }
+    int format = 0;
+    switch(fileChooserGetFilter()){
+    case 0: format = 2; break;
+    case 1: format = 5; break;
+    case 2: format = 0; break;
+    case 3: format = 1; break;
+    case 4: format = 6; break;
+    case 5: format = 3; break;
+    case 6: format = 4; break;
+    }
     view->write(name, format);
   }
 }
 
-static void view_save_ascii_cb(Fl_Widget *w, void *data)
-{
-  view_save_as((intptr_t)data, "Save As ASCII View", 0);
-}
-
-static void view_save_binary_cb(Fl_Widget *w, void *data)
-{
-  view_save_as((intptr_t)data, "Save As Binary View", 1);
-}
-
-static void view_save_parsed_cb(Fl_Widget *w, void *data)
-{
-  view_save_as((intptr_t)data, "Save As Parsed View", 2);
-}
-
-static void view_save_stl_cb(Fl_Widget *w, void *data)
-{
-  view_save_as((intptr_t)data, "Save As STL Triangulation", 3);
-}
-
-static void view_save_txt_cb(Fl_Widget *w, void *data)
-{
-  view_save_as((intptr_t)data, "Save As Raw Text", 4);
-}
-
-static void view_save_msh_cb(Fl_Widget *w, void *data)
-{
-  view_save_as((intptr_t)data, "Save As Gmsh Mesh", 5);
-}
-
-static void view_save_med_cb(Fl_Widget *w, void *data)
-{
-  view_save_as((intptr_t)data, "Save As MED file", 6);
-}
+#undef TT
+#undef NN
 
 static void view_alias_cb(Fl_Widget *w, void *data)
 {
@@ -2296,9 +2299,8 @@ static void view_all_visible_cb(Fl_Widget *w, void *data)
 static void view_applybgmesh_cb(Fl_Widget *w, void *data)
 {
   int index =  (intptr_t)data;
-  if(index >= 0 && index < (int)PView::list.size()){
+  if(index >= 0 && index < (int)PView::list.size())
     GModel::current()->getFields()->setBackgroundMesh(index);
-  }
 }
 
 // The static menus (we cannot use the 'g', 'm' 's' and 'p' mnemonics
@@ -2308,11 +2310,11 @@ static Fl_Menu_Item bar_table[] = {
     {"&New...",     FL_CTRL+'n', (Fl_Callback *)file_new_cb, 0},
     {"&Open...",    FL_CTRL+'o', (Fl_Callback *)file_open_cb, 0},
     {"Open Recent", 0, 0, 0, FL_SUBMENU},
-      {"History1", 0, 0, 0, FL_MENU_INVISIBLE},
-      {"History2", 0, 0, 0, FL_MENU_INVISIBLE},
-      {"History3", 0, 0, 0, FL_MENU_INVISIBLE},
-      {"History4", 0, 0, 0, FL_MENU_INVISIBLE},
-      {"History5", 0, 0, 0, FL_MENU_INVISIBLE},
+      {"", 0, (Fl_Callback *)file_open_recent_cb, 0},
+      {"", 0, (Fl_Callback *)file_open_recent_cb, 0},
+      {"", 0, (Fl_Callback *)file_open_recent_cb, 0},
+      {"", 0, (Fl_Callback *)file_open_recent_cb, 0},
+      {"", 0, (Fl_Callback *)file_open_recent_cb, 0},
       {0},
     {"M&erge...",   FL_CTRL+FL_SHIFT+'o', (Fl_Callback *)file_merge_cb, 0},
     {"Watch Pattern...",    0, (Fl_Callback *)file_watch_cb, 0},
@@ -2367,15 +2369,16 @@ static Fl_Menu_Item sysbar_table[] = {
   {"File", 0, 0, 0, FL_SUBMENU},
     {"New...",     FL_META+'n', (Fl_Callback *)file_new_cb, 0},
     {"Open...",    FL_META+'o', (Fl_Callback *)file_open_cb, 0},
-  /* system menu bar is not dynamic in fltk 1.1; it will be in fltk 1.3
+  // system menu bar is not dynamic in fltk 1.1; it is in fltk 1.3
+#if (FL_MAJOR_VERSION == 1) && (FL_MINOR_VERSION == 3)
     {"Open Recent", 0, 0, 0, FL_SUBMENU},
-      {"History1", 0, 0, 0, FL_MENU_INVISIBLE},
-      {"History2", 0, 0, 0, FL_MENU_INVISIBLE},
-      {"History3", 0, 0, 0, FL_MENU_INVISIBLE},
-      {"History4", 0, 0, 0, FL_MENU_INVISIBLE},
-      {"History5", 0, 0, 0, FL_MENU_INVISIBLE},
+      {"", 0, (Fl_Callback *)file_open_recent_cb, 0},
+      {"", 0, (Fl_Callback *)file_open_recent_cb, 0},
+      {"", 0, (Fl_Callback *)file_open_recent_cb, 0},
+      {"", 0, (Fl_Callback *)file_open_recent_cb, 0},
+      {"", 0, (Fl_Callback *)file_open_recent_cb, 0},
       {0},
-  */
+#endif
     {"Merge...",   FL_META+FL_SHIFT+'o', (Fl_Callback *)file_merge_cb, 0},
     {"Watch Pattern...",   0, (Fl_Callback *)file_watch_cb, 0},
     {"Clear",      0, (Fl_Callback *)file_clear_cb, 0, FL_MENU_DIVIDER},
@@ -2707,6 +2710,7 @@ menuWindow::menuWindow()
     sysbar = new Fl_Sys_Menu_Bar(1, 1, 1, 1);
     sysbar->menu(sysbar_table);
     sysbar->global();
+    fillRecentHistoryMenu();
     Fl_Box *o = new Fl_Box(0, 0, width, BH + 6);
     o->box(FL_UP_BOX);
     y = 3;
@@ -2717,10 +2721,7 @@ menuWindow::menuWindow()
     bar->menu(bar_table);
     bar->box(FL_UP_BOX);
     bar->global();
-    
-    // create recent history menu
     fillRecentHistoryMenu();
-    
     Fl_Box *o = new Fl_Box(0, BH, width, BH + 6);
     o->box(FL_UP_BOX);
     y = BH + 3;
@@ -2943,24 +2944,10 @@ void menuWindow::setContext(contextItem *menu_asked, int flag)
                   (Fl_Callback *) view_all_visible_cb, (void *)0, 0);
         p[j]->add("Set Visibility/Invert", 0, 
                   (Fl_Callback *) view_all_visible_cb, (void *)-1, 0);
-        p[j]->add("Save As/Parsed View...", 0, 
-                  (Fl_Callback *) view_save_parsed_cb, (void *)nb, 0);
-        p[j]->add("Save As/ASCII View...", 0, 
-                  (Fl_Callback *) view_save_ascii_cb, (void *)nb, 0);
-        p[j]->add("Save As/Binary View...", 0, 
-                  (Fl_Callback *) view_save_binary_cb, (void *)nb, 0);
-        p[j]->add("Save As/STL Triangulation...", 0, 
-                  (Fl_Callback *) view_save_stl_cb, (void *)nb, 0);
-        p[j]->add("Save As/Raw Text...", 0, 
-                  (Fl_Callback *) view_save_txt_cb, (void *)nb, 0);
-        p[j]->add("Save As/Gmsh Mesh...", 0, 
-                  (Fl_Callback *) view_save_msh_cb, (void *)nb, 0);
-#if defined(HAVE_MED)
-        p[j]->add("Save As/MED file...", 0, 
-                  (Fl_Callback *) view_save_med_cb, (void *)nb, 0);
-#endif
         p[j]->add("Apply As Background Mesh", 0, 
-                  (Fl_Callback *) view_applybgmesh_cb, (void *)nb, FL_MENU_DIVIDER);
+                  (Fl_Callback *) view_applybgmesh_cb, (void *)nb, 0);
+        p[j]->add("Save As...", 0, 
+                  (Fl_Callback *) view_save_cb, (void *)nb, FL_MENU_DIVIDER);
         p[j]->add("Options", 'o', 
                   (Fl_Callback *) view_options_cb, (void *)nb, 0);
         p[j]->add("Plugins", 'p', 
@@ -2998,15 +2985,19 @@ void menuWindow::setContext(contextItem *menu_asked, int flag)
 
 void menuWindow::fillRecentHistoryMenu()
 {
-  int last = 0;
-  for(unsigned int i = 0; i < CTX::instance()->recentFiles.size(); i++)
-    if(CTX::instance()->recentFiles[i].size()) last = i + 1;
-  for(int i = 0; i < last; i++){
-    bar_table[4 + i].text = CTX::instance()->recentFiles[i].c_str();
-    bar_table[4 + i].callback_ = (Fl_Callback *)file_open_recent_cb;
-    bar_table[4 + i].user_data_ = (void*)CTX::instance()->recentFiles[i].c_str();
-    bar_table[4 + i].show();
+  Fl_Menu_Item *table = bar_table;
+#if defined(__APPLE__) && (FL_MAJOR_VERSION == 1) && (FL_MINOR_VERSION == 3)
+  if(CTX::instance()->systemMenuBar)
+    table = sysbar_table;
+#endif
+
+  for(int i = 0; i < 5; i++){
+    table[4 + i].text = CTX::instance()->recentFiles[i].c_str();
+    table[4 + i].user_data_ = (void*)CTX::instance()->recentFiles[i].c_str();
   }
-  for (unsigned int i = last; i < 5; i++)
-    bar_table[4 + i].hide();
+
+#if defined(__APPLE__) && (FL_MAJOR_VERSION == 1) && (FL_MINOR_VERSION == 3)
+  if(CTX::instance()->systemMenuBar)
+    sysbar->menu(table);
+#endif
 }

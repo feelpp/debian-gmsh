@@ -75,6 +75,7 @@ void Msg::Init(int argc, char **argv)
 #endif
 #if defined(HAVE_PETSC)
   PetscInitialize(&argc, &argv, PETSC_NULL, PETSC_NULL);
+  PetscPopSignalHandler();
 #endif
 #if defined(HAVE_SLEPC)
   SlepcInitialize(&argc, &argv, PETSC_NULL, PETSC_NULL);
@@ -134,7 +135,8 @@ void Msg::Exit(int level)
 #if defined(HAVE_MPI)
   MPI_Finalize();
 #endif
-  exit(0);
+
+  exit(_errorCount);
 }
 
 void Msg::Fatal(const char *fmt, ...)

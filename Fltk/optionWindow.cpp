@@ -403,6 +403,7 @@ static void geometry_options_ok_cb(Fl_Widget *w, void *data)
   opt_geometry_offset0(0, GMSH_SET, o->geo.value[10]->value());
   opt_geometry_offset1(0, GMSH_SET, o->geo.value[14]->value());
   opt_geometry_offset2(0, GMSH_SET, o->geo.value[18]->value());
+  opt_geometry_num_sub_edges(0, GMSH_SET, o->geo.value[19]->value());
 
   opt_geometry_point_type(0, GMSH_SET, o->geo.choice[0]->value());
   opt_geometry_line_type(0, GMSH_SET, o->geo.choice[1]->value());
@@ -466,6 +467,7 @@ static void mesh_options_ok_cb(Fl_Widget *w, void *data)
   opt_mesh_normals(0, GMSH_SET, o->mesh.value[8]->value());
   opt_mesh_explode(0, GMSH_SET, o->mesh.value[9]->value());
   opt_mesh_tangents(0, GMSH_SET, o->mesh.value[13]->value());
+  opt_mesh_num_sub_edges(0, GMSH_SET, o->mesh.value[14]->value());
   opt_mesh_point_size(0, GMSH_SET, o->mesh.value[10]->value());
   opt_mesh_line_width(0, GMSH_SET, o->mesh.value[11]->value());
   opt_mesh_label_sampling(0, GMSH_SET, o->mesh.value[12]->value());
@@ -476,9 +478,13 @@ static void mesh_options_ok_cb(Fl_Widget *w, void *data)
                   (o->mesh.choice[2]->value() == 1) ? ALGO_2D_MESHADAPT : 
                   (o->mesh.choice[2]->value() == 2) ? ALGO_2D_DELAUNAY :
                   (o->mesh.choice[2]->value() == 3) ? ALGO_2D_FRONTAL : 
+                  (o->mesh.choice[2]->value() == 4) ? ALGO_2D_FRONTAL_QUAD : 
                   ALGO_2D_AUTO);
   opt_mesh_algo3d(0, GMSH_SET,
                   (o->mesh.choice[3]->value() == 0) ? ALGO_3D_DELAUNAY : 
+                  (o->mesh.choice[3]->value() == 2) ? ALGO_3D_FRONTAL_DEL : 
+                  (o->mesh.choice[3]->value() == 3) ? ALGO_3D_FRONTAL_HEX : 
+                  (o->mesh.choice[3]->value() == 4) ? ALGO_3D_MMG3D : 
                   ALGO_3D_FRONTAL);
   opt_mesh_algo_recombine(0, GMSH_SET, o->mesh.choice[1]->value());
   opt_mesh_recombine_all(0, GMSH_SET, o->mesh.butt[21]->value());
@@ -1989,8 +1995,16 @@ optionWindow::optionWindow(int deltaFontSize)
       geo.value[6]->align(FL_ALIGN_RIGHT);
       geo.value[6]->callback(geometry_options_ok_cb);
 
+      geo.value[19] = new Fl_Value_Input
+        (L + 2 * WB, 2 * WB + 7 * BH, IW, BH, "Curve subdivisions");
+      geo.value[19]->minimum(1);
+      geo.value[19]->maximum(50);
+      geo.value[19]->step(1);
+      geo.value[19]->align(FL_ALIGN_RIGHT);
+      geo.value[19]->callback(geometry_options_ok_cb);
+
       geo.choice[2] = new Fl_Choice
-        (L + 2 * WB, 2 * WB + 7 * BH, IW, BH, "Surface display");
+        (L + 2 * WB, 2 * WB + 8 * BH, IW, BH, "Surface display");
       geo.choice[2]->menu(menu_surface_display);
       geo.choice[2]->align(FL_ALIGN_RIGHT);     
       geo.choice[2]->callback(geometry_options_ok_cb);
@@ -2051,11 +2065,15 @@ optionWindow::optionWindow(int deltaFontSize)
         {"MeshAdapt", 0, 0, 0},
         {"Delaunay", 0, 0, 0},
         {"Frontal", 0, 0, 0},
+        {"Delaunay for quads", 0, 0, 0},
         {0}
       };
       static Fl_Menu_Item menu_3d_algo[] = {
         {"Delaunay", 0, 0, 0},
         {"Frontal", 0, 0, 0},
+        {"Frontal Delaunay", 0, 0, 0},
+        {"Frontal Hex", 0, 0, 0},
+        {"MMG3D", 0, 0, 0},
         {0}
       };
       static Fl_Menu_Item menu_recombination_algo[] = {
@@ -2078,6 +2096,7 @@ optionWindow::optionWindow(int deltaFontSize)
       static Fl_Menu_Item menu_remeshing_param[] = {
         {"Harmonic", 0, 0, 0},
         {"Conformal", 0, 0, 0},
+	{"Rbf Harmonic", 0, 0, 0},
         {0}
       };
 
@@ -2406,6 +2425,15 @@ optionWindow::optionWindow(int deltaFontSize)
       mesh.value[11]->step(0.1);
       mesh.value[11]->align(FL_ALIGN_RIGHT);
       mesh.value[11]->callback(mesh_options_ok_cb);
+
+      mesh.value[14] = new Fl_Value_Input
+        (L + 2 * WB, 2 * WB + 5 * BH, IW, BH, "High-order element subdivisions");
+      mesh.value[14]->minimum(1);
+      mesh.value[14]->maximum(10);
+      mesh.value[14]->step(1);
+      mesh.value[14]->align(FL_ALIGN_RIGHT);
+      mesh.value[14]->when(FL_WHEN_RELEASE);
+      mesh.value[14]->callback(mesh_options_ok_cb);
 
       o->end();
     }

@@ -326,7 +326,13 @@ void GFace::computeMeanPlane()
     pts.push_back(SPoint3(v->x(), v->y(), v->z()));
   }
 
-  if(pts.size() < 3){
+  bool colinear = (pts.size() < 3);
+  if(pts.size() > 2){
+    SVector3 d01(pts[0], pts[1]), d02(pts[0], pts[2]);
+    if(norm(crossprod(d01, d02)) < 1e-12) colinear = true;
+  }
+  
+  if(colinear){
     Msg::Info("Adding edge points to compute mean plane of face %d", tag());
     std::list<GEdge*> edg = edges();
     for(std::list<GEdge*>::const_iterator ite = edg.begin(); ite != edg.end(); ite++){
@@ -1164,8 +1170,10 @@ bool GFace::fillPointCloud(double maxDist, std::vector<SPoint3> *points,
 void GFace::lloyd(int nbiter, int infn)
 {
 #if defined(HAVE_MESH) && defined(HAVE_BFGS)
-  lloydAlgorithm algo(nbiter, infn);
-  algo(this);
+  smoothing s = smoothing(nbiter,infn);
+  s.optimize_face(this);	
+  //lloydAlgorithm algo(nbiter, infn);
+  //algo(this);
 #endif
 }
 

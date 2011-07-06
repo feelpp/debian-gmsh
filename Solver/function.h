@@ -68,7 +68,7 @@ class function {
 
   // get or print information
   inline bool isInvalitedOnElement() { return _invalidatedOnElement; }
-  inline int getNbCol() const        { return _nbCol; }
+  inline int getNbCol() const        {if(_nbCol ==0) Msg::Error("Cannot ask nbCol of functionSolution"); return _nbCol; }
   static functionConstant *getTime();
   static functionConstant *getDT();
   static function *getSolution();
@@ -298,5 +298,5 @@ function *functionProdNew (const function *f0, const function *f1);
 function *functionScaleNew (const function *f0, const double s);
 function *functionExtractCompNew (const function *f0, const int iComp);
 function *functionCatCompNew(std::vector<const function *> fArray);
-function *functionMeanNew(const function *f0);
+function *functionMeanP1New(const function *f, const function *df);
 #endif
