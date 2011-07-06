@@ -1,7 +1,9 @@
 gmsh (2.5.1~beta1~svn9559~dfsg-1) unstable; urgency=low
 
-  * [7a54011] Imported Upstream version 2.5.1~beta1~svn9559~dfsg (Closes:
-    #607875 #613568)
+  * [7a54011] Imported Upstream version 2.5.1~beta1~svn9559~dfsg:
+      - fixed segmentation fault when creating 3d mesh (Closes: #607875)
+      - gmsh returns a non-zero exit code, if an error appears during work 
+        (Closes: #613568)
   * [c176e62] Update some patches (small changes).
 
  -- Anton Gladky <gladky.anton@gmail.com>  Wed, 06 Jul 2011 20:10:06 +0200
