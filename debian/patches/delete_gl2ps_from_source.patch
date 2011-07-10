@@ -1,6 +1,6 @@
 Description: delete gl2ps and use packaged version.
-Author: Anton Gladky <gladky.anton@gmail.com>
-Last-Update: 2011-07-06
+Author: Anton Gladky <gladky.anton@gmail.com>, Julian Taylor <jtaylor.debian@googlemail.com>
+Last-Update: 2011-07-10
 
 --- a/Graphics/CMakeLists.txt
 +++ b/Graphics/CMakeLists.txt
@@ -12,3 +12,14 @@ Last-Update: 2011-07-06
    gl2gif.cpp
    gl2jpeg.cpp
    gl2png.cpp
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -925,7 +925,7 @@
+ else(HAVE_FLTK)
+   add_executable(gmsh Common/Main.cpp ${GMSH_SRC})
+ endif(HAVE_FLTK)
+-target_link_libraries(gmsh ${LINK_LIBRARIES})
++target_link_libraries(gmsh ${LINK_LIBRARIES} -lgl2ps -lGL -lglut)
+ 
+ # increase stack to 16Mb on Windows to avoid overflows in recursive
+ # tet classification for large 3D Delaunay grids + force static
