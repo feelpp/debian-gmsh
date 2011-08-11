@@ -160,9 +160,9 @@ void GEdgeCompound::orderEdges()
 
 int GEdgeCompound::minimumMeshSegments() const
 {
-  int N = 0;
-  for (unsigned int i = 0; i < _compound.size(); i++) 
-    N +=_compound[i]->minimumMeshSegments();
+  // int N = 0;
+  // for (unsigned int i = 0; i < _compound.size(); i++) 
+  //   N +=_compound[i]->minimumMeshSegments();
   return 3;
 }
 
@@ -237,6 +237,7 @@ double GEdgeCompound::curvature(double par) const
   double tLoc;
   int iEdge;
   getLocalParameter(par,iEdge,tLoc);
+
   return _compound[iEdge]->curvature(tLoc);
 }
 

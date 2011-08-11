@@ -7,6 +7,7 @@
 #include "MElement.h"
 #include "GEntity.h"
 #include "GFaceCompound.h"
+#include "MLine.h"
 
 #include<iostream>
 #include<fstream>
@@ -24,16 +25,23 @@ bool Curvature::_alreadyComputedCurvature = false;
 //========================================================================================================
 
 //CONSTRUCTOR
-Curvature::Curvature()
-{
-
+Curvature::Curvature(){
 }
+
+// Curvature::Curvature(std::list<GFace*> &myFaces){
+
+//   std::list<GFace*>::const_iterator it = myFaces.begin();
+//   for( ; it != myFaces.end() ; ++it){
+//          _ptFinalEntityList.push_back(*it);
+//   }
+
+// }
+
 //========================================================================================================
 
-//DESTRUCTOR
 Curvature::~Curvature()
 {
-  _instance = 0;
+   _instance = 0;
   _destroyed = true;
 
 }
@@ -42,31 +50,21 @@ void Curvature::onDeadReference()
 {
   std::cout << "Dead reference of Curvature detected" << std::endl;
 }
-
-
 //========================================================================================================
 
 Curvature& Curvature::getInstance()
 {
-  if (!_instance)
-  {
-    // Check for dead reference:
-    if(_destroyed)
-    {
+  if (!_instance)  {
+    if(_destroyed){
       onDeadReference();
     }
-    else
-    {
+    else{
       create();
     }
   }
   return *_instance;
-
 }
-
 //========================================================================================================
-
-
   bool Curvature::valueAlreadyComputed()
   {
     return _alreadyComputedCurvature;
@@ -88,42 +86,25 @@ Curvature& Curvature::getInstance()
  }
 
  //========================================================================================================
+ void Curvature::retrieveCompounds()  {
 
- void Curvature::retrieveCompounds()
- {
    std::vector<GEntity*> entities;
    _model->getEntities(entities);
 
-//   std::cout << "The size of entities is " << entities.size() << std::endl;
-   for(int ie = 0; ie < entities.size(); ++ie)
-   {
-//     std::cout << "Entity " << ie << ":" << std::endl;
-//     std::cout << "\ttag = " << entities[ie]->tag() << std::endl;
-//     std::cout << "\t" << entities[ie]->getInfoString() << std::endl;
+   for(int ie = 0; ie < entities.size(); ++ie)   {
 
-
-     if(  entities[ie]->geomType() == GEntity::CompoundSurface )
-     {
-       //std::cout << "This is compound surface" << std::endl;
+     if(  entities[ie]->geomType() == GEntity::CompoundSurface ) {
        GFaceCompound* compound = dynamic_cast<GFaceCompound*>(entities[ie]);
-
        std::list<GFace*> tempcompounds = compound->getCompounds();
-       //std::cout << "The compound surface consists of " << tempcompounds.size() << " sub-surfaces " << std::endl;
-
        std::list<GFace*>::iterator surfIterator;
 
-       for(surfIterator = tempcompounds.begin(); surfIterator != tempcompounds.end(); ++surfIterator)
-       {
-//         std::cout << "TAG = " << (*surfIterator)->tag() << std::endl;
-//         std::cout << "THIS SURFACE HAS " << (*surfIterator)->getNumMeshElements() << std::endl;
+       for(surfIterator = tempcompounds.begin(); surfIterator != tempcompounds.end(); ++surfIterator) {
          _ptFinalEntityList.push_back(*surfIterator);
        }
      }
 
    }
-
  }
-
 
 //========================================================================================================
 
@@ -137,7 +118,7 @@ void Curvature::initializeMap()
     // face is a pointer to one surface of the group "FinalEntityList"
     GFace* face = _ptFinalEntityList[i];
 
-    std::cout << "Face " << i << " has " << face->getNumMeshElements() << " elements" << std::endl;
+//    std::cout << "Face " << i << " has " << face->getNumMeshElements() << " elements" << std::endl;
 
     // Loop over the element all the element of the "myTag"-surface
     for (int iElem = 0; iElem < face->getNumMeshElements(); iElem++)
@@ -169,17 +150,13 @@ void Curvature::initializeMap()
   std::map<int,int>::iterator element_iterator;
 
   for (vertex_iterator = _VertexToInt.begin() ; vertex_iterator !=_VertexToInt.end() ; ++ vertex_iterator, ++idx)
-  {
     (*vertex_iterator).second = idx;
-  }
-
+  
   idx = 0;
 
   for (element_iterator = _ElementToInt.begin() ; element_iterator !=_ElementToInt.end() ; ++ element_iterator, ++idx)
-  {
     (*element_iterator).second = idx;
-  }
-
+  
 }
 
 //========================================================================================================
@@ -488,7 +465,7 @@ void Curvature::computeRusinkiewiczNormals()
 void Curvature::computePointareas()
 {
 
-  std::cout << "Computing point areas... " << std::endl;
+//  std::cout << "Computing point areas... " << std::endl;
 //    std::cout << "The mesh has " << _VertexToInt.size() << " nodes" << std::endl;
 
   SVector3 e[3];
@@ -565,11 +542,12 @@ void Curvature::computePointareas()
 
     } //End of loop over iElem
 
-    std::cout << "Done computing pointareas" << std::endl;
 //      std::cout << "_pointareas.size = " << _pointareas.size() << std::endl;
 //      std::cout << "_cornerareas.size = " << _cornerareas.size() << std::endl;
 
   } //End of loop over _ptFinalEntityList
+
+  //std::cout << "Done computing pointareas" << std::endl;
 
 } //End of the method "computePointareas"
 
@@ -644,8 +622,7 @@ void Curvature::diagonalize_curv(const SVector3 &old_u, const SVector3 &old_v,
   rot_coord_sys(old_u, old_v, new_norm, r_old_u, r_old_v);
 
 //  if(unlikely(kuv !=0.0f))
-  if(kuv !=0.0)
-  {
+  if(kuv !=0.0)  {
     //Jacobi rotation to diagonalize
     double h= 0.5*(kv -ku)/ kuv;
     tt = (h<0.0) ?
@@ -658,12 +635,10 @@ void Curvature::diagonalize_curv(const SVector3 &old_u, const SVector3 &old_v,
   k1 = ku - tt *kuv;
   k2 = kv + tt *kuv;
 
-  if(std::abs(k1) >= std::abs(k2))
-  {
+  if(std::abs(k1) >= std::abs(k2))  {
     pdir1 = c*r_old_u - s*r_old_v;
   }
-  else
-  {
+  else  {
     std::swap(k1,k2);
     pdir1 = s*r_old_u + c*r_old_v;
   }
@@ -672,8 +647,7 @@ void Curvature::diagonalize_curv(const SVector3 &old_u, const SVector3 &old_v,
 
 //========================================================================================================
 
-void Curvature::computeCurvature_Rusinkiewicz()
-{
+void Curvature::computeCurvature_Rusinkiewicz(int isMax){
   retrieveCompounds();
   initializeMap();
   computeRusinkiewiczNormals();
@@ -828,9 +802,9 @@ void Curvature::computeCurvature_Rusinkiewicz()
         wt = _cornerareas[EIdx][j]/_pointareas[vj];
 //          wt = 1.0;
 
-        _curv1[vj] += wt*c1;
+        _curv1[vj]  += wt*c1;
         _curv12[vj] += wt*c12;
-        _curv2[vj] += wt*c2;
+        _curv2[vj]  += wt*c2;
       }
 
     } //End of loop over the element (iElem)
@@ -851,72 +825,161 @@ void Curvature::computeCurvature_Rusinkiewicz()
 
   for (int ivertex = 0; ivertex < _VertexToInt.size(); ++ivertex)
   {
-    //**Mean Curvature:**
-    _VertexCurve[ivertex] = (_curv1[ivertex]+_curv2[ivertex])*0.5;
-//    _VertexCurve[ivertex] = std::abs(_curv1[ivertex]) + std::abs(_curv2[ivertex]);
-    //**Gaussian Curvature:**
-//    _VertexCurve[ivertex] = std::abs( _curv1[ivertex]*_curv2[ivertex] );
+
+    if (isMax){
+      _VertexCurve[ivertex] = std::max(fabs(_curv1[ivertex]), fabs(_curv2[ivertex]));
+    }
+    else{
+      _VertexCurve[ivertex] = (_curv1[ivertex]+_curv2[ivertex])*0.5; //Mean curvature
+    //_VertexCurve[ivertex] = std::abs(_curv1[ivertex]) + std::abs(_curv2[ivertex]);
+    //_VertexCurve[ivertex] = std::abs( _curv1[ivertex]*_curv2[ivertex] ); //Gaussian
     //_VertexCurve[ivertex] = std::abs(_VertexCurve[ivertex]);
+    }
 
   }
   _alreadyComputedCurvature = true;
 
 } //End of the "computeCurvature_Rusinkiewicz" method
 
+ //========================================================================================================
+
+void Curvature::triangleNodalValues(MTriangle* triangle, double& c0, double& c1, double& c2, int isAbs)
+  {
+    MVertex* A = triangle->getVertex(0);
+    MVertex* B = triangle->getVertex(1);
+    MVertex* C = triangle->getVertex(2);
+
+    int V0 = 0;
+    int V1 = 0;
+    int V2 = 0;
+
+    std::map<int,int>::iterator vertexIterator;
+    vertexIterator = _VertexToInt.find( A->getNum() );
+    if ( vertexIterator != _VertexToInt.end() )  V0 = (*vertexIterator).second;
+    else
+      std::cout << "Didn't find vertex with number " << A->getNum() << " in _VertextToInt !" << std::endl;
+    
+    vertexIterator = _VertexToInt.find( B->getNum() );
+    if ( vertexIterator != _VertexToInt.end() )   V1 = (*vertexIterator).second;
+    else
+      std::cout << "Didn't find vertex with number " << B->getNum() << " in _VertextToInt !" << std::endl;
+    
+    vertexIterator = _VertexToInt.find( C->getNum() );
+    if ( vertexIterator != _VertexToInt.end() )  V2 = (*vertexIterator).second;
+    else
+      std::cout << "Didn't find vertex with number " << C->getNum() << " in _VertextToInt !" << std::endl;
+    
+    if (isAbs){
+      c0 = std::abs(_VertexCurve[V0]); //Mean curvature in vertex 0
+      c1 = std::abs(_VertexCurve[V1]); //Mean curvature in vertex 1
+      c2 = std::abs(_VertexCurve[V2]); //Mean curvature in vertex 2
+    }
+    else{
+      c0 = _VertexCurve[V0]; //Mean curvature in vertex 0
+      c1 = _VertexCurve[V1]; //Mean curvature in vertex 1
+      c2 = _VertexCurve[V2]; //Mean curvature in vertex 2
+    }
+
+  }
+
 //========================================================================================================
 
- void Curvature::elementNodalValues(MTriangle* triangle, double& c0, double& c1, double& c2)
- {
-   MVertex* A = triangle->getVertex(0);
-   MVertex* B = triangle->getVertex(1);
-   MVertex* C = triangle->getVertex(2);
+void Curvature::triangleNodalValuesAndDirections(MTriangle* triangle, SVector3* dMax, SVector3* dMin, double* cMax, double* cMin, int isAbs)
+{
+  MVertex* A = triangle->getVertex(0);
+  MVertex* B = triangle->getVertex(1);
+  MVertex* C = triangle->getVertex(2);
 
-   int V0 = 0;
-   int V1 = 0;
-   int V2 = 0;
+  int V0 = 0;
+  int V1 = 0;
+  int V2 = 0;
 
-   std::map<int,int>::iterator vertexIterator;
+  std::map<int,int>::iterator vertexIterator;
+  vertexIterator = _VertexToInt.find( A->getNum() );
+  if ( vertexIterator != _VertexToInt.end() )  V0 = (*vertexIterator).second;
+  else
+    std::cout << "Didn't find vertex with number " << A->getNum() << " in _VertextToInt !" << std::endl;
 
-   vertexIterator = _VertexToInt.find( A->getNum() );
-   if ( vertexIterator != _VertexToInt.end() )
+  vertexIterator = _VertexToInt.find( B->getNum() );
+  if ( vertexIterator != _VertexToInt.end() )  V1 = (*vertexIterator).second;
+  else
+    std::cout << "Didn't find vertex with number " << B->getNum() << " in _VertextToInt !" << std::endl;
+
+  vertexIterator = _VertexToInt.find( C->getNum() );
+  if ( vertexIterator != _VertexToInt.end() )  V2 = (*vertexIterator).second;
+  else
+    std::cout << "Didn't find vertex with number " << C->getNum() << " in _VertextToInt !" << std::endl;
+
+  if (isAbs){
+    dMax[0] = _pdir1[V0];
+    dMax[1] = _pdir1[V1];
+    dMax[2] = _pdir1[V2];
+
+    dMin[0] = _pdir2[V0];
+    dMin[1] = _pdir2[V1];
+    dMin[2] = _pdir2[V2];
+
+    cMax[0]  = std::abs(_curv1[V0]);
+    cMax[1]  = std::abs(_curv1[V1]);
+    cMax[2]  = std::abs(_curv1[V2]);
+
+    cMin[0]  = std::abs(_curv2[V0]);
+    cMin[1]  = std::abs(_curv2[V1]);
+    cMin[2]  = std::abs(_curv2[V2]);
+
+  }
+  else{
+
+    dMax[0] = _pdir1[V0];
+    dMax[1] = _pdir1[V1];
+    dMax[2] = _pdir1[V2];
+
+    dMin[0] = _pdir2[V0];
+    dMin[1] = _pdir2[V1];
+    dMin[2] = _pdir2[V2];
+
+    cMax[0]  = _curv1[V0];
+    cMax[1]  = _curv1[V1];
+    cMax[2]  = _curv1[V2];
+
+    cMin[0]  = _curv2[V0];
+    cMin[1]  = _curv2[V1];
+    cMin[2]  = _curv2[V2];
+  }
+}
+
+
+
+  //========================================================================================================
+
+void Curvature::edgeNodalValues(MLine* edge, double& c0, double& c1, int isAbs)
    {
-     V0 = (*vertexIterator).second;
-   }
-   else
-   {
-     std::cout << "Didn't find vertex with number " << A->getNum() << " in _VertextToInt !" << std::endl;
-   }
+     MVertex* A = edge->getVertex(0);
+     MVertex* B = edge->getVertex(1);
 
-   vertexIterator = _VertexToInt.find( B->getNum() );
-   if ( vertexIterator != _VertexToInt.end() )
-   {
-     V1 = (*vertexIterator).second;
+     int V0 = 0;
+     int V1 = 0;
+
+     std::map<int,int>::iterator vertexIterator;
+
+     vertexIterator = _VertexToInt.find( A->getNum() );
+     if ( vertexIterator != _VertexToInt.end() )  V0 = (*vertexIterator).second;
+     else  std::cout << "Didn't find vertex with number " << A->getNum() << " in _VertextToInt !" << std::endl;
+     
+     vertexIterator = _VertexToInt.find( B->getNum() );
+     if ( vertexIterator != _VertexToInt.end() ) V1 = (*vertexIterator).second;
+     else std::cout << "Didn't find vertex with number " << B->getNum() << " in _VertextToInt !" << std::endl;
+     
+     if (isAbs){
+       c0 = std::abs(_VertexCurve[V0]); //Mean curvature in vertex 0
+       c1 = std::abs(_VertexCurve[V1]); //Mean curvature in vertex 1
+     }
+     else{
+       c0 = _VertexCurve[V0]; //Mean curvature in vertex 0
+       c1 = _VertexCurve[V1]; //Mean curvature in vertex 1
+     }
+
    }
-   else
-   {
-     std::cout << "Didn't find vertex with number " << B->getNum() << " in _VertextToInt !" << std::endl;
-   }
-
-   vertexIterator = _VertexToInt.find( C->getNum() );
-   if ( vertexIterator != _VertexToInt.end() )
-   {
-     V2 = (*vertexIterator).second;
-   }
-   else
-   {
-     std::cout << "Didn't find vertex with number " << C->getNum() << " in _VertextToInt !" << std::endl;
-   }
-
-
-//   const int V0 = _VertexToInt[A->getNum()];
-//   const int V1 = _VertexToInt[B->getNum()];
-//   const int V2 = _VertexToInt[C->getNum()];
-
-   c0 = _VertexCurve[V0]; //Mean curvature in vertex 0
-   c1 = _VertexCurve[V1]; //Mean curvature in vertex 1
-   c2 = _VertexCurve[V2]; //Mean curvature in vertex 2
-
- }
 
 //========================================================================================================
 
@@ -926,6 +989,8 @@ void Curvature::writeToPosFile( const std::string & filename)
   outfile.precision(18);
   outfile.open(filename.c_str());
   outfile << "View \"Curvature \"{" << std::endl;
+
+  int idxelem = 0;
 
   for (int i = 0; i< _ptFinalEntityList.size(); ++i)
   {
@@ -968,7 +1033,10 @@ void Curvature::writeToPosFile( const std::string & filename)
 
       outfile << "};" << std::endl;
 
+      idxelem++;
+
   } //Loop over elements
+    std::cout << "The Total Number of triangle is: " << idxelem << std::endl;
 
 } // Loop over ptFinalEntityList
 
@@ -1098,7 +1166,114 @@ void Curvature::writeToVtkFile( const std::string & filename)
 
 }
 
+//========================================================================================================
 
+void Curvature::writeDirectionsToPosFile( const std::string & filename)
+{
+  std::ofstream outfile;
+  outfile.precision(18);
+  outfile.open(filename.c_str());
+  outfile << "View \"Curvature_DirMax \"{" << std::endl;
+
+  for (int i = 0; i< _ptFinalEntityList.size(); ++i)
+  {
+    GFace* face = _ptFinalEntityList[i]; //face is a pointer to one surface of the group "FinalEntityList"
+
+    for (int iElem = 0; iElem < face->getNumMeshElements(); iElem++) //Loop over the element all the element of the "myTag"-surface
+    {
+      MElement *e = face->getMeshElement(iElem);  //Pointer to one element
+      const int E = _ElementToInt[e->getNum()]; //The NEW tag of the corresponding element
+
+      //std::cout << "We are now looking at element Nr: " << E << std::endl;
+
+      MVertex* A = e->getVertex(0);  //Pointers to vertices of triangle
+      MVertex* B = e->getVertex(1);
+      MVertex* C = e->getVertex(2);
+
+      const int V1 = _VertexToInt[A->getNum()];                //Tag of the 1st vertex of the triangle
+      const int V2 = _VertexToInt[B->getNum()];                //Tag of the 2nd vertex of the triangle
+      const int V3 = _VertexToInt[C->getNum()];                //Tag of the 3rd vertex of the triangle
+
+      //Here is printing the triplet X-Y-Z of each vertex:
+      //*************************************************
+
+      outfile << "VT("; //VT = vector triangles   //ST = scalar triangle
+      outfile << A->x() << ","<< A->y() << "," << A->z()<< ",";
+      outfile << B->x() << ","<< B->y() << "," << B->z()<< ",";
+      outfile << C->x() << ","<< C->y() << "," << C->z();
+
+      outfile << ")";
+      outfile <<"{";
+
+      //Here is printing the 3 components of the curvature max direction for each vertex:
+      //*********************************************************************************
+
+         outfile << _pdir1[V1].x() << ","<< _pdir1[V1].y() << ","<< _pdir1[V1].z() << ",";
+         outfile << _pdir1[V2].x() << ","<< _pdir1[V2].y() << ","<< _pdir1[V2].z() << ",";
+         outfile << _pdir1[V3].x() << ","<< _pdir1[V3].y() << ","<< _pdir1[V3].z();
+
+
+      outfile << "};" << std::endl;
+
+  } //Loop over elements
+
+} // Loop over ptFinalEntityList
+
+outfile << "};" << std::endl;
+
+
+//----------------------------------------------------------------------------------------------
+
+outfile << "View \"Curvature_DirMin \"{" << std::endl;
+
+for (int i = 0; i< _ptFinalEntityList.size(); ++i)
+{
+  GFace* face = _ptFinalEntityList[i]; //face is a pointer to one surface of the group "FinalEntityList"
+
+  for (int iElem = 0; iElem < face->getNumMeshElements(); iElem++) //Loop over the element all the element of the "myTag"-surface
+  {
+    MElement *e = face->getMeshElement(iElem);  //Pointer to one element
+    const int E = _ElementToInt[e->getNum()]; //The NEW tag of the corresponding element
+
+    //std::cout << "We are now looking at element Nr: " << E << std::endl;
+
+    MVertex* A = e->getVertex(0);  //Pointers to vertices of triangle
+    MVertex* B = e->getVertex(1);
+    MVertex* C = e->getVertex(2);
+
+    const int V1 = _VertexToInt[A->getNum()];                //Tag of the 1st vertex of the triangle
+    const int V2 = _VertexToInt[B->getNum()];                //Tag of the 2nd vertex of the triangle
+    const int V3 = _VertexToInt[C->getNum()];                //Tag of the 3rd vertex of the triangle
+
+    //Here is printing the triplet X-Y-Z of each vertex:
+    //*************************************************
+
+    outfile << "VT("; //VT = vector triangles   //ST = scalar triangle
+    outfile << A->x() << ","<< A->y() << "," << A->z()<< ",";
+    outfile << B->x() << ","<< B->y() << "," << B->z()<< ",";
+    outfile << C->x() << ","<< C->y() << "," << C->z();
+
+    outfile << ")";
+    outfile <<"{";
+
+    //Here is printing the 3 components of the curvature min direction for each vertex:
+    //*********************************************************************************
+
+       outfile << _pdir2[V1].x() << ","<< _pdir2[V1].y() << ","<< _pdir2[V1].z() << ",";
+       outfile << _pdir2[V2].x() << ","<< _pdir2[V2].y() << ","<< _pdir2[V2].z() << ",";
+       outfile << _pdir2[V3].x() << ","<< _pdir2[V3].y() << ","<< _pdir2[V3].z();
+
+
+    outfile << "};" << std::endl;
+
+} //Loop over elements
+
+} // Loop over ptFinalEntityList
+
+outfile << "};" << std::endl;
+
+outfile.close();
+}
 //========================================================================================================
 
 

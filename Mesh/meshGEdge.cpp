@@ -34,13 +34,15 @@ static double F_Lc(GEdge *ge, double t)
   else if(t == t_end)
     lc_here = BGM_MeshSize(ge->getEndVertex(), t, 0, p.x(), p.y(), p.z());
   else
-    lc_here = BGM_MeshSize(ge, t, 0, p.x(), p.y(), p.z());
+    lc_here = BGM_MeshSize(ge, t, 0, p.x(), p.y(), p.z()); 
  
   SVector3 der = ge->firstDer(t);
   //const double d = norm(der);
   //return d / lc_here; 
+
   SMetric3 metric(1. / (lc_here * lc_here));
   double lSquared = dot(der, metric, der);
+
   return sqrt(lSquared);
 }
 

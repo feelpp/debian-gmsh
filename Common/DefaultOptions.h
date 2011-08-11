@@ -805,8 +805,8 @@ StringXNumber GeneralOptions_Number[] = {
     "Z coordinate of the center of rotation" }, 
 
   { F|S, "SaveOptions" , opt_general_options_save, 0. , 
-    "Automatically save current options in General.OptionsFileName each time "
-    "you quit Gmsh?" }, 
+    "Automatically save current options in General.OptionsFileName (1) or per model (2)"
+    "each time you quit Gmsh?" }, 
   { F|S, "SaveSession" , opt_general_session_save, 1. , 
     "Automatically save session specific information in General.SessionFileName "
     "each time you quit Gmsh?" }, 
@@ -1011,7 +1011,7 @@ StringXNumber GeometryOptions_Number[] = {
 
 StringXNumber MeshOptions_Number[] = {
   { F|O, "Algorithm" , opt_mesh_algo2d , ALGO_2D_AUTO ,
-    "2D mesh algorithm (1=MeshAdapt, 2=Automatic, 5=Delaunay, 6=Frontal, 7=bamg)" }, 
+    "2D mesh algorithm (1=MeshAdapt, 2=Automatic, 5=Delaunay, 6=Frontal, 7=bamg, 8=delquad)" }, 
   { F|O, "Algorithm3D" , opt_mesh_algo3d , 
 #if defined(HAVE_TETGEN)
     ALGO_3D_DELAUNAY ,

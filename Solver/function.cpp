@@ -325,17 +325,19 @@ dataCacheMap::~dataCacheMap()
 
 void dataCacheMap::setNbEvaluationPoints(int nbEvaluationPoints) 
 {
-  if (_nbEvaluationPoints == nbEvaluationPoints)
+  for(std::list<dataCacheMap*>::iterator it = _children.begin(); it != _children.end(); it++) {
+    (*it)->setNbEvaluationPoints(nbEvaluationPoints);
+  }
+  if (_nbEvaluationPoints == nbEvaluationPoints) {
+    for(std::set<dataCacheDouble*>::iterator it = _allDataCaches.begin(); it != _allDataCaches.end(); it++)
+      (*it)->_valid = false;
     return;
+  }
   _nbEvaluationPoints = nbEvaluationPoints;
   for(std::set<dataCacheDouble*>::iterator it = _allDataCaches.begin();
       it != _allDataCaches.end(); it++){
     (*it)->resize(nbEvaluationPoints);
   }
-    for(std::list<dataCacheMap*>::iterator it = _children.begin();
-        it != _children.end(); it++) {
-      (*it)->setNbEvaluationPoints(nbEvaluationPoints);
-    }
 }
 
 // Some examples of functions
@@ -356,14 +358,14 @@ void functionConstant::call(dataCacheMap *m, fullMatrix<double> &val)
       val(i, j)=_source(j, 0);
 }
 
-functionConstant::functionConstant(std::vector<double> source) : function(source.size())
+functionConstant::functionConstant(std::vector<double> source) : function(source.size(), false)
 {
   _source = fullMatrix<double>(source.size(), 1);
   for (size_t i = 0; i < source.size(); i++)
     _source(i, 0) = source[i];
 }
 
-functionConstant::functionConstant(double source) : function(1)
+functionConstant::functionConstant(double source) : function(1, false)
 {
   _source.resize(1, 1);
   _source(0, 0) = source;
@@ -466,13 +468,25 @@ class functionLevelsetSmooth : public function {
   void call(dataCacheMap *m, fullMatrix<double> &val) 
   {
     
+    double ivalPlus = 1./_valPlus;
+    double ivalMin = 1./_valMin;
     for (int i = 0; i < val.size1(); i++)
       for (int j = 0; j < val.size2(); j++){
         double phi = _f0(i,j);
-        double Heps = 0.5 * (1 + phi / _E + 1. / M_PI * sin(M_PI * phi / _E));
-        if (fabs(phi) < _E)  val(i, j) = Heps * _valPlus + (1 - Heps) * _valMin;
+
+        //double Heps = 0.5 * (1 + phi / _E + 1. / M_PI * sin(M_PI * phi / _E));
+	//double Heps = 0.5 + 1./32.*(45.*phi/_E - 50.*pow(phi/_E,3.) + 21.*pow(phi/_E,5.)  );
+	//double Heps = 0.5*(1+tanh(M_PI*phi/_E));
+	double Heps = 0.75 * (phi/_E - 0.33*pow(phi/_E,3.0)) + 0.5;
+
+        //if (fabs(phi) < _E)  val(i, j) = 1./(Heps * ivalPlus + (1 - Heps) * ivalMin);
+        //else if (phi >  _E)  val(i, j) = 1./ivalPlus;
+        //else if (phi < -_E)  val(i, j) = 1./ivalMin;
+
+        if (fabs(phi) < _E)  val(i, j) = (Heps * _valPlus + (1 - Heps) * _valMin);
         else if (phi >  _E)  val(i, j) = _valPlus;
         else if (phi < -_E)  val(i, j) = _valMin;
+
       }
   }
   functionLevelsetSmooth(const function *f0, const double valMin, const double valPlus, const double E) : function(f0->getNbCol()) 
@@ -757,7 +771,7 @@ functionC::functionC (std::string file, std::string symbol, int nbCol,
   dlHandler = dlopen(file.c_str(), RTLD_NOW);
   callback = (void(*)(void))dlsym(dlHandler, symbol.c_str());
   if(!callback)
-    Msg::Error("Cannot get the callback to the compiled C function");
+    Msg::Error("Cannot get the callback to the compiled C function: %s", symbol.c_str());
 #else
   Msg::Error("Cannot construct functionC without dlopen");
 #endif

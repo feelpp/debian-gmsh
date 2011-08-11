@@ -1126,16 +1126,36 @@ GModel *buildCutMesh(GModel *gm, gLevelset *ls,
 
   std::vector<const gLevelset *> primitives;
   ls->getPrimitivesPO(primitives);
+  int primS = primitives.size();
   int numVert = gm->indexMeshVertices(true);
-  int nbLs = (cutElem) ? primitives.size() : 1;
+  int nbLs = (cutElem) ? ((primS > 1) ? primS + 1 : 1) : 1;
   fullMatrix<double> verticesLs(nbLs, numVert + 1);
+
+ //Emi test compute all at once for POINTS (type = 11)
+  std::vector<MVertex *> vert;
+  for(unsigned int i = 0; i < gmEntities.size(); i++) {
+    for(unsigned int j = 0; j < gmEntities[i]->getNumMeshVertices(); j++) {
+      vert.push_back(gmEntities[i]->getMeshVertex(j));
+    }
+  }
+  for(int k = 0; k < primS; k++){
+    if (primitives[k]->type() == 11){ //points
+      ((gLevelsetPoints*)primitives[k])->computeLS(vert);
+    }
+  }
+
   //compute and store levelset values
   for(unsigned int i = 0; i < gmEntities.size(); i++) {
     for(unsigned int j = 0; j < gmEntities[i]->getNumMeshVertices(); j++) {
       MVertex *vi = gmEntities[i]->getMeshVertex(j);
-      if(cutElem)
-        for(unsigned int k = 0; k < primitives.size(); k++)
+      if(cutElem){
+        int k = 0;
+        for(; k < primS; k++){
           verticesLs(k, vi->getIndex()) = (*primitives[k])(vi->x(), vi->y(), vi->z());
+      	}
+        if(primS > 1)
+          verticesLs(k, vi->getIndex()) = (*ls)(vi->x(), vi->y(), vi->z());
+      }
       else
         verticesLs(0, vi->getIndex()) = (*ls)(vi->x(), vi->y(), vi->z());
     }
