@@ -1,3 +1,10 @@
+gmsh (2.5.1~beta1~svn9724~dfsg-1) unstable; urgency=low
+
+  * [24356cb] Replace  libjpeg62-dev by libjpeg-dev (Closes: #635688)
+  * [7f8fa66] Imported Upstream version 2.5.1~beta1~svn9724~dfsg
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Thu, 11 Aug 2011 23:28:43 +0300
+
 gmsh (2.5.1~beta1~svn9559~dfsg-2) unstable; urgency=low
 
   * [6215c99] Update FTBFS with ld --as-needed. 
