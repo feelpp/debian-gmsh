@@ -42,6 +42,7 @@
 #include "multiscaleLaplace.h"
 #include "GRbf.h"
 #include "Curvature.h"
+#include "MPoint.h"
 
 static void fixEdgeToValue(GEdge *ed, double value, dofManager<double> &myAssembler)
 {
@@ -678,8 +679,10 @@ bool GFaceCompound::parametrize() const
     //_rbf->RbfLapSurface_local_projection(_rbf->getXYZ(), _rbf->getN(), Oper);
   
     _rbf->solveHarmonicMap(Oper, _ordered, _coords, coordinates);
-    
-    printStuff();
+
+    //_rbf->computeCurvature(coordinates);
+    //printStuff();
+    //exit(1);
 
   }
 
@@ -951,6 +954,9 @@ GFaceCompound::GFaceCompound(GModel *m, int tag, std::list<GFace*> &compound,
  }
 
   for(std::list<GFace*>::iterator it = _compound.begin(); it != _compound.end(); ++it){
+    //EMI FIX
+    //if ((*it)->tag() == 3) _mapping = CONFORMAL;
+
     if(!(*it)){
       Msg::Error("Incorrect face in compound surface %d\n", tag);
       Msg::Exit(1);
@@ -959,7 +965,7 @@ GFaceCompound::GFaceCompound(GModel *m, int tag, std::list<GFace*> &compound,
   
   getBoundingEdges();
   _type = UNITCIRCLE;
-
+ 
   nbSplit = 0;
   fillTris.clear();
 }
@@ -1366,74 +1372,112 @@ void GFaceCompound::computeNormals() const
 double GFaceCompound::curvatureMax(const SPoint2 &param) const
 {
   
-  if(!oct) parametrize();
-
-
-  Curvature& curvature = Curvature::getInstance();
-
-  if( !Curvature::valueAlreadyComputed() )
-  {
-    std::cout << "Need to compute curvature" << std::endl;
-    std::cout << "Getting instance of curvature" << std::endl;
-
-    curvature.setGModel( model() );
-    curvature.computeCurvature_Rusinkiewicz();
-    curvature.writeToPosFile("curvature.pos");
-    curvature.writeToVtkFile("curvature.vtk");
-
-    std::cout << " ... finished" << std::endl;
-
-  }
-
-
-    // find the proper triangle that contains point param
-    // find the curvature values of the three vertices of this triangle
-    // compute the curvature value as cv = C1*(1-U-V)+C2*U+C3*V
-    // return cv
-
-
-
-
- if(trivial()){
+ if(!oct) parametrize();
+ if(trivial()) {
     return (*(_compound.begin()))->curvatureMax(param);
-  }
+ }
 
   double U, V;
   GFaceCompoundTriangle *lt;
-  getTriangle(param.x(), param.y(), &lt, U,V);  
-  if(!lt)
-  {
+  getTriangle(param.x(), param.y(), &lt, U,V);
+
+  if(!lt)  {
     return  0.0;   
   }
 
-  if(lt->gf && lt->gf->geomType() != GEntity::DiscreteSurface)
-  {
-    //std::cout << "I'm not in DiscreteSurface" << std::endl;
+  if(lt->gf && lt->gf->geomType() != GEntity::DiscreteSurface)  {
     SPoint2 pv = lt->gfp1*(1.-U-V) + lt->gfp2*U + lt->gfp3*V;
     return lt->gf->curvatureMax(pv);
   }
-  else if (lt->gf->geomType() == GEntity::DiscreteSurface)
-  {
-    //std::cout << "I'm in DiscreteSurface" << std::endl;
+  else if (lt->gf->geomType() == GEntity::DiscreteSurface)  {
+
+    Curvature& curvature = Curvature::getInstance();
+
+    if( !Curvature::valueAlreadyComputed() ) {
+      Msg::Info("Need to compute discrete curvature for isotropic remesh");
+      Msg::Info("Getting instance of curvature");
+
+      curvature.setGModel( model() );
+      int computeMax = 0;
+      curvature.computeCurvature_Rusinkiewicz(computeMax);
+      curvature.writeToPosFile("curvature.pos");
+      curvature.writeToVtkFile("curvature.vtk");
+      Msg::Info(" ... computing curvature finished");
+    }
+
     double c0;
     double c1;
     double c2;
-    curvature.elementNodalValues(lt->tri,c0, c1, c2);
+    curvature.triangleNodalValues(lt->tri,c0, c1, c2, 1);
+    
     double cv = (1-U-V)*c0 + U*c1 + V*c2;
-    //std::cin.get();
-    //std::cout << "(" << c0 << "," << c1 << "," << c2 << ")" << std::endl;
-    //std::cout << "The curvature of the triangle " << lt->tri->getNum() << " is " << cv << std::endl;
     return cv;
 
-//    double curv= 0.;
-//    curv = locCurvature(lt->tri,U,V);
-//    return curv;
   }
 
-  std::cin.get();
   return 0.;
 }
+double GFaceCompound::curvatures(const SPoint2 &param, SVector3 *dirMax, SVector3 *dirMin,
+                         double *curvMax, double *curvMin) const
+{
 
+ if(!oct) parametrize();
+ if(trivial()) {
+   //Implement this
+//    return (*(_compound.begin()))->curvatureMax(param);
+ }
+
+  double U, V;
+  GFaceCompoundTriangle *lt;
+  getTriangle(param.x(), param.y(), &lt, U,V);
+
+  if(!lt)  {
+    return  0.0;
+  }
+
+  if(lt->gf && lt->gf->geomType() != GEntity::DiscreteSurface)  {
+      //Implement this...
+//    SPoint2 pv = lt->gfp1*(1.-U-V) + lt->gfp2*U + lt->gfp3*V;
+//    return lt->gf->curvatureMax(pv);
+  }
+  else if (lt->gf->geomType() == GEntity::DiscreteSurface)  {
+
+    Curvature& curvature = Curvature::getInstance();
+
+    if( !Curvature::valueAlreadyComputed() ) {
+      Msg::Info("Need to compute discrete curvature for anisotropic remesh");
+      Msg::Info("Getting instance of curvature");
+
+      curvature.setGModel( model() );
+      int computeMax = 0;
+      curvature.computeCurvature_Rusinkiewicz(computeMax);
+      curvature.writeToPosFile("curvature.pos");
+      curvature.writeToVtkFile("curvature.vtk");
+      curvature.writeDirectionsToPosFile("curvature_directions.pos");
+      Msg::Info(" ... computing curvature finished");
+    }
+
+    //std::cout << "I'm using curvatures in GFaceCompound.cpp" << std::endl;
+    double cMin[3];
+    double cMax[3];
+    SVector3 dMin[3];
+    SVector3 dMax[3];
+
+    curvature.triangleNodalValuesAndDirections(lt->tri, dMax, dMin, cMax, cMin, 0);
+    //curvature.triangleNodalValuesAndDirections(lt->tri, dMax, dMin, cMax, cMin, 1);
+
+    * dirMax = (1-U-V)*dMax[0] + U*dMax[1] + V*dMax[2];
+    * dirMin = (1-U-V)*dMin[0] + U*dMin[1] + V*dMin[2];
+    * curvMax = (1-U-V)*cMax[0] + U*cMax[1] + V*cMax[2];
+    * curvMin = (1-U-V)*cMin[0] + U*cMin[1] + V*cMin[2];
+
+    return * curvMax;
+
+
+  }
+
+  return 0.;
+}
 double GFaceCompound::locCurvature(MTriangle *t, double u, double v) const
 {
 
@@ -1468,7 +1512,17 @@ GPoint GFaceCompound::point(double par1, double par2) const
 
   if(!oct) parametrize();
 
-  if (_mapping == RBF){
+  double U,V;
+  double par[2] = {par1,par2};
+  GFaceCompoundTriangle *lt;
+  getTriangle (par1, par2, &lt, U,V);
+  SPoint3 p(3, 3, 0); 
+  if(!lt && _mapping != RBF){
+    GPoint gp (p.x(),p.y(),p.z(),this);
+    gp.setNoSuccess();
+    return gp;
+  }
+  else if (!lt && _mapping == RBF){
     if (fabs(par1) > 1 || fabs(par2) > 1){
       GPoint gp (3,3,0,this);
       gp.setNoSuccess();
@@ -1477,22 +1531,8 @@ GPoint GFaceCompound::point(double par1, double par2) const
     double x, y, z;
     SVector3 dXdu, dXdv;
     bool conv = _rbf->UVStoXYZ(par1, par2,x,y,z, dXdu, dXdv);
-    if (!conv) printf("UV=%g %g \n", par1, par2);
     return GPoint(x,y,z);
   }
-
-  double U,V;
-  double par[2] = {par1,par2};
-  GFaceCompoundTriangle *lt;
-  getTriangle (par1, par2, &lt, U,V);  
-  SPoint3 p(3, 3, 0); 
-  if(!lt){
-    GPoint gp (p.x(),p.y(),p.z(),this);
-    gp.setNoSuccess();
-    return gp;
-  }
-  
-  const bool LINEARMESH = true; //false
   
   if (lt->gf->geomType() != GEntity::DiscreteSurface){
     SPoint2 pParam = lt->gfp1*(1.-U-V) + lt->gfp2*U + lt->gfp3*V;
@@ -1500,6 +1540,7 @@ GPoint GFaceCompound::point(double par1, double par2) const
     return GPoint(pp.x(),pp.y(),pp.z(),this,par);
   }
 
+  const bool LINEARMESH = true; //false
   if(LINEARMESH){
 
     //linear Lagrange mesh
@@ -1567,24 +1608,29 @@ Pair<SVector3,SVector3> GFaceCompound::firstDer(const SPoint2 &param) const
   if(trivial())
     return (*(_compound.begin()))->firstDer(param);
 
-   if (_mapping == RBF){
-     double x, y, z;
-     SVector3 dXdu, dXdv  ;
-     bool conv = _rbf->UVStoXYZ(param.x(), param.y(), x,y,z, dXdu, dXdv);
-    return Pair<SVector3, SVector3>(dXdu,dXdv);
-   }
-
   double U, V;
   GFaceCompoundTriangle *lt;
   getTriangle(param.x(), param.y(), &lt, U,V);
-  if(!lt)
+  if(!lt && _mapping != RBF)
     return Pair<SVector3, SVector3>(SVector3(1, 0, 0), SVector3(0, 1, 0));
+  else if (!lt && _mapping == RBF){
+    double x, y, z;
+    SVector3 dXdu, dXdv  ;
+    bool conv = _rbf->UVStoXYZ(param.x(), param.y(), x,y,z, dXdu, dXdv);
+    return Pair<SVector3, SVector3>(dXdu,dXdv);
+   }
 
   double mat[2][2] = {{lt->p2.x() - lt->p1.x(), lt->p3.x() - lt->p1.x()},
                       {lt->p2.y() - lt->p1.y(), lt->p3.y() - lt->p1.y()}};
   double inv[2][2];
-  inv2x2(mat,inv);
- 
+  double det = inv2x2(mat,inv);
+  if (!det && _mapping == RBF){
+     double x, y, z;
+     SVector3 dXdu, dXdv  ;
+     bool conv = _rbf->UVStoXYZ(param.x(), param.y(), x,y,z, dXdu, dXdv);
+     return Pair<SVector3, SVector3>(dXdu,dXdv);
+  }
+
   SVector3 dXdxi(lt->v2 - lt->v1);
   SVector3 dXdeta(lt->v3 - lt->v1);
 
@@ -1598,54 +1644,8 @@ void GFaceCompound::secondDer(const SPoint2 &param,
                               SVector3 *dudu, SVector3 *dvdv, SVector3 *dudv) const
 {
 
-  if(!oct) parametrize();
-
-  //use central differences
-
-  //EMI: TODO should take size of two or three triangles
-  //   double eps = 1e+2;
-  
-  //   double u  = param.x();
-  //   double v = param.y();
-  //   Pair<SVector3,SVector3> Der_u, Der_ueps, Der_v, Der_veps;
-  
-  //   if(u - eps < 0.0) {
-  //     Der_u = firstDer(SPoint2(u,v));
-  //     Der_ueps = firstDer(SPoint2(u+eps,v));
-  //   }
-  //   else {
-  //     Der_u = firstDer(SPoint2(u-eps,v));
-  //     Der_ueps = firstDer(SPoint2(u,v));
-  //   }
-  
-  //   if(v - eps < 0.0) {
-  //     Der_v = firstDer(SPoint2(u,v));
-  //     Der_veps = firstDer(SPoint2(u,v+eps));
-  //   }
-  //   else {
-  //     Der_v = firstDer(SPoint2(u,v-eps));
-  //     Der_veps = firstDer(SPoint2(u,v));
-  //   }
-  
-  //   SVector3 dXdu_u =  Der_u.first();
-  //   SVector3 dXdv_u =  Der_u.second();
-  //   SVector3 dXdu_ueps =  Der_ueps.first();
-  //   SVector3 dXdv_ueps =  Der_ueps.second();
-  //   SVector3 dXdu_v =  Der_v.first();
-  //   SVector3 dXdv_v =  Der_v.second();
-  //   SVector3 dXdu_veps =  Der_veps.first();
-  //   SVector3 dXdv_veps =  Der_veps.second();
-  
-  //   double inveps = 1./eps;
-  //   *dudu = inveps * (dXdu_u - dXdu_ueps) ;
-  //   *dvdv = inveps * (dXdv_v - dXdv_veps) ;
-  //   *dudv = inveps * (dXdu_v - dXdu_veps) ;
-
-  //printf("der second dudu = %g %g %g \n", dudu->x(),  dudu->y(),  dudu->z());
-  //printf("der second dvdv = %g %g %g \n", dvdv->x(),  dvdv->y(),  dvdv->z());
-  //printf("der second dudv = %g %g %g \n", dudv->x(),  dudv->y(),  dudv->z());
-  
-  Msg::Debug("Computation of the second derivatives is not implemented for compound faces");
+  if(!oct) parametrize();  
+  Msg::Fatal("Computation of the second derivatives is not implemented for compound faces");
   
 }
 
@@ -1702,15 +1702,30 @@ void GFaceCompound::getTriangle(double u, double v,
                                 double &_u, double &_v) const
 {
   double uv[3] = {u, v, 0};
-  *lt = (GFaceCompoundTriangle*)Octree_Search(uv, oct);
-  //  if(!(*lt)) {
+  // if (_mapping == RBF){
+  //   std::list<void*> l;
+  //   Octree_SearchAll(uv, oct, &l);
+  //   if (l.size() > 1 || l.size() == 0){
+  //     GFaceCompoundTriangle *gfct = NULL;
+  //     *lt = gfct;
+  //     return;
+  //   }
+  //   else{
+  //     std::list<void*>::iterator it = l.begin();     
+  //     *lt = (GFaceCompoundTriangle*)(*it);
+  //   }
+  // }
+  
+  *lt = (GFaceCompoundTriangle*)Octree_Search(uv, oct); 
+
+  // if(!(*lt)) {
   //     for(int i=0;i<nbT;i++){
   //       if(GFaceCompoundInEle (&_gfct[i],uv)){
   //      *lt = &_gfct[i];
   //      break;
   //       }
   //     } 
-  //   }
+  // }
   if(!(*lt)){
     return;
   }

@@ -19,6 +19,7 @@
 #include "MPyramid.h"
 #include "Geo.h"
 #include "OS.h"
+#include "Curvature.h"
 
 discreteEdge::discreteEdge(GModel *model, int num, GVertex *_v0, GVertex *_v1)
   : GEdge(model, num, _v0, _v1)
@@ -474,6 +475,7 @@ GPoint discreteEdge::point(double par) const
 
 SVector3 discreteEdge::firstDer(double par) const
 {
+  
   double tLoc;
   int iEdge;
   getLocalParameter(par, iEdge, tLoc);
@@ -490,6 +492,38 @@ SVector3 discreteEdge::firstDer(double par) const
   SVector3 der(dx, dy, dz);
   return der;
 }
+
+double discreteEdge::curvature(double par) const{
+  double tLoc;
+  int iEdge;
+  if(!getLocalParameter(par,iEdge,tLoc)) return MAX_LC;
+
+  double c0, c1;
+
+  Curvature& curvature  = Curvature::getInstance();
+
+  if( !Curvature::valueAlreadyComputed() ) {
+    std::cout << "Need to compute discrete curvature" << std::endl;
+    std::cout << "Getting instance of curvature" << std::endl;
+
+    curvature.setGModel( model() );
+    int computeMax = 0;
+    curvature.computeCurvature_Rusinkiewicz(computeMax);
+    curvature.writeToPosFile("curvature.pos");
+    curvature.writeDirectionsToPosFile("curvature_directions.pos");
+    curvature.writeToVtkFile("curvature.vtk");
+
+    std::cout << " ... computing curvature finished" << std::endl;
+  }
+
+  curvature.edgeNodalValues(lines[iEdge],c0, c1, 1);
+  double cv = (1-tLoc)*c0 + tLoc*c1;
+
+  //printf("curv edge =%g \n", cv);
+  return cv;
+
+}
+
 
 Range<double> discreteEdge::parBounds(int i) const
 {

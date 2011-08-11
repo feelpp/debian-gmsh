@@ -12,8 +12,7 @@
 #include<map>
 #include<vector>
 
-class Curvature
-{
+class Curvature {
 private:
 
     //-----------------------------------------
@@ -48,7 +47,6 @@ private:
 
     //Model and list of selected entities with give physical tag:
     GModel* _model;    
-
     GFaceList _ptFinalEntityList;
 
     //Averaged vertex normals
@@ -67,7 +65,6 @@ private:
     std::vector<double> _pointareas;
     std::vector<SVector3> _cornerareas;
 
-
     //Curvature Tensor per mesh vertex
     std::vector<STensor3> _CurveTensor;
 
@@ -76,24 +73,17 @@ private:
 
     //Area around a mesh vertex:
     std::vector<double> _VertexArea;
-
     std::vector<double> _VertexCurve;
-
-
 
     //-----------------------------------------
     // PRIVATE METHODS
 
-    //Constructor
+    //Constructor and destructor
     Curvature();
-
-    //Destructor
     ~Curvature();
 
     static void create();
-
     static void onDeadReference();
-
 
     void initializeMap();
     void computeVertexNormals();
@@ -170,8 +160,8 @@ public:
 
   static Curvature& getInstance();
   static bool valueAlreadyComputed();
+  
   void setGModel(GModel* model);
-
   void retrieveCompounds();
   //void retrievePhysicalSurfaces(const std::string & face_tag);
 
@@ -185,13 +175,18 @@ public:
   /// Estimating Curvatures and Their Derivatives on Triangle Meshes
   /// Szymon Rusinkiewicz, Princeton University
   /// Code taken from Rusinkiewicz' 'trimesh2' library
-  void computeCurvature_Rusinkiewicz();
+  void computeCurvature_Rusinkiewicz(int isMax=0);
 
-  void elementNodalValues(MTriangle* triangle, double& c0, double& c1, double& c2);
+  void triangleNodalValues(MTriangle* triangle, double& c0, double& c1, double& c2, int isAbs=0);
+  void triangleNodalValuesAndDirections(MTriangle* triangle, SVector3* dMax, SVector3* dMin, double* cMax, double* cMin, int isAbs=0);
+
+  void edgeNodalValues(MLine* edge, double& c0, double& c1, int isAbs=0);
 
   void writeToPosFile( const std::string & filename);
 
   void writeToVtkFile( const std::string & filename);
+
+  void writeDirectionsToPosFile( const std::string & filename);
 
 
 

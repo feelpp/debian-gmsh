@@ -115,7 +115,8 @@ static double max_surf_curvature(const GEdge *ge, double u)
   std::list<GFace *> faces = ge->faces();
   std::list<GFace *>::iterator it = faces.begin();
   while(it != faces.end()){
-    if ((*it)->geomType() != GEntity::CompoundSurface){
+    if ((*it)->geomType() != GEntity::CompoundSurface &&
+	(*it)->geomType() != GEntity::DiscreteSurface){
       SPoint2 par = ge->reparamOnFace((*it), u, 1);
       double cc = (*it)->curvature(par);
       val = std::max(cc, val);
@@ -176,7 +177,7 @@ static SMetric3 metric_based_on_surface_curvature(const GEdge *ge, double u)
   std::list<GFace *>::iterator it = faces.begin();
   int count = 0;
   while(it != faces.end()){
-    if ((*it)->geomType() != GEntity::CompoundSurface){
+    if ( ((*it)->geomType() != GEntity::CompoundSurface) && ((*it)->geomType() != GEntity::DiscreteSurface) ){
       SPoint2 par = ge->reparamOnFace((*it), u, 1);
       SMetric3 m = metric_based_on_surface_curvature (*it, par.x(), par.y());
       if (!count) mesh_size = m;
@@ -219,6 +220,7 @@ static SMetric3 metric_based_on_surface_curvature(const GVertex *gv)
 
 static double LC_MVertex_CURV(GEntity *ge, double U, double V)
 {
+
   double Crv = 0;
   switch(ge->dim()){
   case 0:        
@@ -248,7 +250,10 @@ static double LC_MVertex_CURV(GEntity *ge, double U, double V)
 
 static SMetric3 LC_MVertex_CURV_ANISO(GEntity *ge, double U, double V)
 {
+  //std::cout << "I'm in LC_MVertex_CURV_ANISO" << std::endl;
+  //std::cout << "The dimension of the entity is: "<< ge->dim() << std::endl;
   switch(ge->dim()){
+  //std::cout << "The dimension of the entity is: "<< ge->dim() << std::endl;
   case 0: return metric_based_on_surface_curvature((const GVertex *)ge);
   case 1: return metric_based_on_surface_curvature((const GEdge *)ge, U);
   case 2: return metric_based_on_surface_curvature((const GFace *)ge, U, V);
@@ -303,31 +308,34 @@ double BGM_MeshSize(GEntity *ge, double U, double V,
   double l2 = MAX_LC;
   if(CTX::instance()->mesh.lcFromPoints && ge->dim() < 2) 
     l2 = LC_MVertex_PNTS(ge, U, V);
-
+  
   // lc from curvature
   double l3 = MAX_LC;
   if(CTX::instance()->mesh.lcFromCurvature && ge->dim() < 3)
     l3 = LC_MVertex_CURV(ge, U, V);
-
+  
   // lc from fields
   double l4 = MAX_LC;
   FieldManager *fields = ge->model()->getFields();
   if(fields->background_field > 0){
     Field *f = fields->get(fields->background_field);
-    //    printf("field %p %s %d %p\n",f,f->getName(),fields->size(), ge->model());
+    //printf("field %p %s %d %p\n",f,f->getName(),fields->size(), ge->model());
     if(f) l4 = (*f)(X, Y, Z, ge);
+    //printf("X Y Z =%g %g %g L4=%g L3=%g L2=%g L1=%g\n", X, Y, Z, l4, l3, l2, l1);
   }
 
   // take the minimum, then constrain by lcMin and lcMax
   double lc = std::min(std::min(std::min(l1, l2), l3), l4);
   lc = std::max(lc, CTX::instance()->mesh.lcMin);
   lc = std::min(lc, CTX::instance()->mesh.lcMax);
-
+ 
   if(lc <= 0.){
     Msg::Error("Wrong mesh element size lc = %g (lcmin = %g, lcmax = %g)",
                lc, CTX::instance()->mesh.lcMin, CTX::instance()->mesh.lcMax);
     lc = l1;
   }
+
+  //printf("BGM X Y Z =%g %g %g L4=%g L3=%g L2=%g L1=%g LC=%g LFINAL=%g \n", X, Y, Z, l4, l3, l2, l1, lc , lc* CTX::instance()->mesh.lcFactor);
 
   return lc * CTX::instance()->mesh.lcFactor;
 }

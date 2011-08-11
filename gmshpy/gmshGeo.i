@@ -4,6 +4,7 @@
 %include std_string.i
 %include std_list.i
 %include std_vector.i
+%import "gmshCommon.i"
 
 %{
   #include "GmshConfig.h"
@@ -22,9 +23,12 @@
   #include "MPrism.h"
   #include "MQuadrangle.h"
   #include "MLine.h"
+  #include "MEdge.h"
+  #include "MFace.h"
   #include "SVector3.h"
   #include "SPoint3.h"
   #include "SPoint2.h"
+  #include "SBoundingBox3d.h"
 %}
 
 namespace std {
@@ -56,6 +60,9 @@ namespace std {
 %include "MPrism.h"
 %include "MQuadrangle.h"
 %include "MLine.h"
+%include "MEdge.h"
+%include "MFace.h"
 %include "SVector3.h"
 %include "SPoint3.h"
 %include "SPoint2.h"
+%include "SBoundingBox3d.h"

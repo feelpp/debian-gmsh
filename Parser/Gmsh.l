@@ -176,12 +176,17 @@ Physical                return tPhysical;
 Pi                      return tPi;
 Plane                   return tPlane;
 Point                   return tPoint;
+Points                  return tPoints;
 Parametric		return tParametric;
 PolarSphere             return tPolarSphere;
 Printf                  return tPrintf;
 Plugin                  return tPlugin;
 
+Quad[tT]ri[dD]bl        return tQuadTriDbl;
+Quad[tT]ri[sS]ngl       return tQuadTriSngl;
+
 Recombine               return tRecombine;
+Recomb[lL]aterals       return tRecombLaterals;
 Rotate                  return tRotate;
 Ruled                   return tRuled;
 Rand                    return tRand;
@@ -208,6 +213,7 @@ T2                      return tText2D;
 T3                      return tText3D;
 TIME                    return tTime;
 Transfinite             return tTransfinite;
+Transf[qQ]uad[tT]ri     return tTransfQuadTri;
 Translate               return tTranslate;
 Tanh                    return tTanh;
 Tan                     return tTan;

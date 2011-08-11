@@ -30,6 +30,7 @@
 #include "CreateFile.h"
 #include "gmshSurface.h"
 #include "gmshLevelset.h"
+#include "fullMatrix.h"
 
 #if defined(HAVE_MESH)
 #include "Generator.h"
@@ -108,9 +109,10 @@ fullMatrix<double> ListOfListOfDouble2Matrix(List_T *list);
 %token tCharacteristic tLength tParametric tElliptic tRefineMesh
 %token tPlane tRuled tTransfinite tComplex tPhysical tCompound tPeriodic
 %token tUsing tPlugin tDegenerated
-%token tRotate tTranslate tSymmetry tDilate tExtrude tLevelset
+%token tRotate tTranslate tSymmetry tDilate tExtrude tLevelset tPoints
 %token tLoop tRecombine tSmoother tSplit tDelete tCoherence tIntersect
 %token tLayers tHole tAlias tAliasWithOptions
+%token tQuadTriDbl tQuadTriSngl tRecombLaterals tTransfQuadTri
 %token tText2D tText3D tInterpolationScheme  tTime tCombine
 %token tBSpline tBezier tNurbs tNurbsOrder tNurbsKnots
 %token tColor tColorTable tFor tIn tEndFor tIf tEndIf tExit
@@ -1805,6 +1807,29 @@ LevelSet :
         yymsg(0, "Wrong levelset definition (%d)", $4);
 #endif
     }
+  | tLevelset tPoints '(' FExpr ')' tAFFECT '{' RecursiveListOfListOfDouble '}' tEND
+    {
+#if defined(HAVE_DINTEGRATION)
+      int t = (int)$4;
+      if(FindLevelSet(t)){
+	yymsg(0, "Levelset %d already exists", t);
+      }
+      else {
+	//Msg::Info("nb = %d \n",List_Nbr($8) );
+	fullMatrix<double> centers(List_Nbr($8),3);
+	for (int i = 0; i < List_Nbr($8); i++){
+	  List_T *l = *(List_T**)List_Pointer($8, i);
+	  for (int j = 0; j < List_Nbr(l); j++){
+	    //Msg::Info("nb j = %d \n",List_Nbr(l) );
+	    centers(i,j) = (double)(*(double*)List_Pointer(l, j));
+	  }
+	}
+	 gLevelset *ls = new gLevelsetPoints(centers, t);
+	 LevelSet *l = Create_LevelSet(ls->getTag(), ls);
+	 Tree_Add(GModel::current()->getGEOInternals()->LevelSets, &l);
+      }
+#endif
+    }
   | tLevelset tPlane '(' FExpr ')' tAFFECT '{' VExpr ',' VExpr ',' 
                                                RecursiveListOfDouble '}' tEND
     {
@@ -2005,13 +2030,19 @@ LevelSet :
       if(!strcmp($2, "CutMesh")){
         int t = (int)$4;
         GModel *GM = GModel::current();
-        GM->buildCutGModel(FindLevelSet(t)->ls);
+        GM->buildCutGModel(FindLevelSet(t)->ls, true, false);
+        GM->setVisibility(0);
+      }
+      if(!strcmp($2, "CutMeshTri")){
+        int t = (int)$4;
+        GModel *GM = GModel::current();
+        GM->buildCutGModel(FindLevelSet(t)->ls, true, true);
         GM->setVisibility(0);
       }
       else if(!strcmp($2, "SplitMesh")){
         int t = (int)$4;
         GModel *GM = GModel::current();
-        GM->buildCutGModel(FindLevelSet(t)->ls, false);
+        GM->buildCutGModel(FindLevelSet(t)->ls, false, true);
         GM->setVisibility(0);
       }
       else
@@ -2590,6 +2621,7 @@ Extrude :
   | tExtrude VExpr '{' ListOfShapes 
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
+      extr.mesh.QuadToTri = NO_QUADTRI;
     }
                        ExtrudeParameters '}'
     {
@@ -2602,6 +2634,7 @@ Extrude :
   | tExtrude '{' VExpr ',' VExpr ',' FExpr '}' '{' ListOfShapes 
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
+      extr.mesh.QuadToTri = NO_QUADTRI;
     }
                                                    ExtrudeParameters '}'
     {
@@ -2614,6 +2647,7 @@ Extrude :
   | tExtrude '{' VExpr ',' VExpr ',' VExpr ',' FExpr '}' '{' ListOfShapes
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
+      extr.mesh.QuadToTri = NO_QUADTRI;
     }
                                                              ExtrudeParameters '}'
     {
@@ -2626,6 +2660,7 @@ Extrude :
   | tExtrude '{' ListOfShapes 
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
+      extr.mesh.QuadToTri = NO_QUADTRI;
     }
                        ExtrudeParameters '}'
     {
@@ -2701,6 +2736,7 @@ Extrude :
   | tExtrude tPoint '{' FExpr ',' VExpr '}' 
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
+      extr.mesh.QuadToTri = NO_QUADTRI;
     }
                     '{' ExtrudeParameters '}' tEND
     {
@@ -2712,6 +2748,7 @@ Extrude :
   | tExtrude tLine '{' FExpr ',' VExpr '}'
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
+      extr.mesh.QuadToTri = NO_QUADTRI;
     }
                    '{' ExtrudeParameters '}' tEND
     {
@@ -2723,6 +2760,7 @@ Extrude :
   | tExtrude tSurface '{' FExpr ',' VExpr '}' 
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
+      extr.mesh.QuadToTri = NO_QUADTRI;
     }
                       '{' ExtrudeParameters '}' tEND
     {
@@ -2734,6 +2772,7 @@ Extrude :
   | tExtrude tPoint '{' FExpr ',' VExpr ',' VExpr ',' FExpr '}'
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
+      extr.mesh.QuadToTri = NO_QUADTRI;
     }
                     '{' ExtrudeParameters '}' tEND
     {
@@ -2745,6 +2784,7 @@ Extrude :
   | tExtrude tLine '{' FExpr ',' VExpr ',' VExpr ',' FExpr '}'
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
+      extr.mesh.QuadToTri = NO_QUADTRI;
     }
                    '{' ExtrudeParameters '}' tEND
     {
@@ -2756,6 +2796,7 @@ Extrude :
   | tExtrude tSurface '{' FExpr ',' VExpr ',' VExpr ',' FExpr '}'
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
+      extr.mesh.QuadToTri = NO_QUADTRI;
     }
                       '{' ExtrudeParameters '}' tEND
     {
@@ -2767,6 +2808,7 @@ Extrude :
   | tExtrude tPoint '{' FExpr ',' VExpr ',' VExpr ',' VExpr ',' FExpr'}' 
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
+      extr.mesh.QuadToTri = NO_QUADTRI;
     }
                     '{' ExtrudeParameters '}' tEND
     {
@@ -2778,6 +2820,7 @@ Extrude :
   | tExtrude tLine '{' FExpr ',' VExpr ',' VExpr ',' VExpr ',' FExpr '}' 
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
+      extr.mesh.QuadToTri = NO_QUADTRI;
     }
                    '{' ExtrudeParameters '}' tEND
     {
@@ -2789,6 +2832,7 @@ Extrude :
   | tExtrude tSurface '{' FExpr ',' VExpr ',' VExpr ',' VExpr ',' FExpr '}' 
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
+      extr.mesh.QuadToTri = NO_QUADTRI;
     }
                       '{' ExtrudeParameters '}' tEND
     {
@@ -2865,6 +2909,22 @@ ExtrudeParameter :
   | tRecombine tEND
     {
       extr.mesh.Recombine = true;
+    }
+  | tQuadTriDbl tEND
+    {
+      extr.mesh.QuadToTri = QUADTRI_DBL_1;
+    }
+  | tQuadTriDbl tRecombLaterals tEND
+    {
+      extr.mesh.QuadToTri = QUADTRI_DBL_1_RECOMB;
+    }
+  | tQuadTriSngl tEND
+    {
+      extr.mesh.QuadToTri = QUADTRI_SNGL_1;
+    }
+  | tQuadTriSngl tRecombLaterals tEND
+    {
+      extr.mesh.QuadToTri = QUADTRI_SNGL_1_RECOMB;
     }
   | tHole '(' FExpr ')' tAFFECT ListOfDouble tUsing FExpr tEND
     {
@@ -3149,6 +3209,42 @@ Transfinite :
         }
       }
       List_Delete($4);
+    }
+  | tTransfQuadTri ListOfDoubleOrAll tEND
+    {
+      if(!$2){
+  	  List_T *tmp = Tree2List(GModel::current()->getGEOInternals()->Volumes);
+        if(List_Nbr(tmp)){
+          for(int i = 0; i < List_Nbr(tmp); i++){
+            Volume *v;
+            List_Read(tmp, i, &v);
+            v->QuadTri = TRANSFINITE_QUADTRI_1;
+          }
+        }
+        else{
+          for(GModel::riter it = GModel::current()->firstRegion(); 
+              it != GModel::current()->lastRegion(); it++)
+            (*it)->meshAttributes.QuadTri = TRANSFINITE_QUADTRI_1;
+        }
+        List_Delete(tmp);
+      }
+      else{
+        for(int i = 0; i < List_Nbr($2); i++){
+          double d;
+          List_Read($2, i, &d);
+          Volume *v = FindVolume((int)d);
+          if(v)
+            v->QuadTri = TRANSFINITE_QUADTRI_1;
+          else{
+            GRegion *gr = GModel::current()->getRegionByTag((int)d);
+            if(gr)
+              gr->meshAttributes.QuadTri = TRANSFINITE_QUADTRI_1;
+            else
+              yymsg(1, "Unknown region %d", (int)d);
+          }
+        }
+        List_Delete($2);
+      }
     }
   | tRecombine tSurface ListOfDoubleOrAll RecombineAngle tEND
     {
