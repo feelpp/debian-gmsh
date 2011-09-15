@@ -1,4 +1,3 @@
-
 // Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
@@ -6,9 +5,10 @@
 //
 // Contributed by Matti Pellikka <matti.pellikka@tut.fi>.
 
-#include "ChainComplex.h"
-
+#include "GmshConfig.h"
 #if defined(HAVE_KBIPACK)
+
+#include "ChainComplex.h"
 
 ChainComplex::ChainComplex(CellComplex* cellComplex, int domain)
 { 
@@ -68,7 +68,8 @@ ChainComplex::ChainComplex(CellComplex* cellComplex, int domain)
 	    || (domain == 2 && cell->inSubdomain()) ){
           for(Cell::biter it = cell->firstBoundary();
 	      it != cell->lastBoundary(); it++){
-            Cell* bdCell = (*it).first;
+            Cell* bdCell = it->first;
+	    if(it->second.get() == 0) continue;
             if((domain == 0 && !bdCell->inSubdomain()) || domain == 1 
 	       || (domain == 2 && cell->inSubdomain()) ){
               int old_elem = 0;
@@ -83,8 +84,8 @@ ChainComplex::ChainComplex(CellComplex* cellComplex, int domain)
                 gmp_matrix_get_elem(elem, bdCell->getIndex(), 
 				    cell->getIndex(), _HMatrix[dim]);
                 old_elem = mpz_get_si(elem);
-                mpz_set_si(elem, old_elem + (*it).second);
-                if( abs((old_elem + (*it).second)) > 1){
+                mpz_set_si(elem, old_elem + it->second.get());
+                if( abs((old_elem + it->second.get())) > 1){
 		  //printf("Incidence index: %d, in HMatrix: %d. \n", (old_elem + (*it).second), dim);
                 }
                 gmp_matrix_set_elem(elem, bdCell->getIndex(), 
@@ -307,7 +308,6 @@ void ChainComplex::computeHomology(bool dual)
       //KerCod(highDim);
     }
     
-    //printf("Homology computation process: step %d of 4 \n", i+1);
     
     KerCod(highDim);
     
@@ -369,7 +369,7 @@ void ChainComplex::computeHomology(bool dual)
         
         gmp_matrix_right_mult(getHbasis(setDim), getQMatrix(lowDim));
       } 
-    } 
+    }
 
     //destroy_gmp_matrix(getKerHMatrix(lowDim));
     //destroy_gmp_matrix(getCodHMatrix(lowDim));
@@ -380,7 +380,7 @@ void ChainComplex::computeHomology(bool dual)
     //setCodHMatrix(lowDim, NULL);
     setJMatrix(lowDim, NULL);
     setQMatrix(lowDim, NULL);  
-  } 
+  }
   return;
 }
 
@@ -566,17 +566,18 @@ bool ChainComplex::deformChain(std::map<Cell*, int, Less_Cell>& cells,
 {  
   Cell* c1 = cell.first;
   int dim = c1->getDim();
-  for(citer cit = c1->firstCoboundary(true); cit != c1->lastCoboundary(true);
+  for(Cell::biter cit = c1->firstCoboundary(true); cit != c1->lastCoboundary();
       cit++){
     
     std::map<Cell*, int, Less_Cell> cellsInChain;
     std::map<Cell*, int, Less_Cell> cellsNotInChain;
-    Cell* c1CbdCell = (*cit).first;
+    Cell* c1CbdCell = cit->first;
 
-    for(citer cit2 = c1CbdCell->firstBoundary(true);
-	cit2 != c1CbdCell->lastBoundary(true); cit2++){
-      Cell* c1CbdBdCell = (*cit2).first;
-      int coeff = (*cit2).second;
+    for(Cell::biter cit2 = c1CbdCell->firstBoundary(true);
+	cit2 != c1CbdCell->lastBoundary(); cit2++){
+      Cell* c1CbdBdCell = cit2->first;
+      int coeff = cit2->second.geto();
+      if(coeff == 0) continue;
       if( (cells.find(c1CbdBdCell) != cells.end() && cells[c1CbdBdCell] != 0) 
 	  || c1CbdBdCell->inSubdomain()){
 	cellsInChain.insert(std::make_pair(c1CbdBdCell, coeff));
@@ -633,7 +634,7 @@ void ChainComplex::smoothenChain(std::map<Cell*, int, Less_Cell>& cells)
 {
   if(!_cellComplex->simplicial() || cells.empty()) return;
   int dim = cells.begin()->first->getDim();
-  int start = cells.size();
+  int start = cells.size(); 
 
   int useless = 0;
   for(int i = 0; i < 20; i++){
@@ -1030,6 +1031,5 @@ void HomologySequence::blockHBasis(gmp_matrix* block1T,
   destroy_gmp_matrix(temp1);
   destroy_gmp_matrix(temp2);
 }
-
 
 #endif

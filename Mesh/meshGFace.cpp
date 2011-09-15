@@ -409,7 +409,7 @@ static bool meshGenerator(GFace *gf, int RECUR_ITER,
   // if necessary split compound and remesh parts
   bool isMeshed = false;
   if(gf->geomType() == GEntity::CompoundSurface  && !onlyInitialMesh){
-	  isMeshed = checkMeshCompound((GFaceCompound*) gf, edges);
+    isMeshed = checkMeshCompound((GFaceCompound*) gf, edges);
     if (isMeshed) return true;
   }
 
@@ -1537,15 +1537,19 @@ void meshGFace::operator() (GFace *gf)
   if(MeshExtrudedSurface(gf)) return;
   if(gf->meshMaster() != gf->tag()){
     GFace *gff = gf->model()->getFaceByTag(abs(gf->meshMaster()));
-    if (gff->meshStatistics.status != GFace::DONE){
-      gf->meshStatistics.status = GFace::PENDING;
+    if(gff){
+      if (gff->meshStatistics.status != GFace::DONE){
+        gf->meshStatistics.status = GFace::PENDING;
+        return;
+      }
+      Msg::Info("Meshing face %d (%s) as a copy of %d", gf->tag(), 
+                gf->getTypeString().c_str(), gf->meshMaster());
+      copyMesh(gff, gf);
+      gf->meshStatistics.status = GFace::DONE;
       return;
     }
-    Msg::Info("Meshing face %d (%s) as a copy of %d", gf->tag(), 
-              gf->getTypeString().c_str(), gf->meshMaster());
-    copyMesh(gff, gf);
-    gf->meshStatistics.status = GFace::DONE;
-    return;    
+    else
+      Msg::Warning("Unknown mesh master face %d", abs(gf->meshMaster()));
   }
 
   const char *algo = "Unknown";
@@ -1593,12 +1597,14 @@ void meshGFace::operator() (GFace *gf)
   if (backgroundMesh::current()){
     backgroundMesh::unset();
   }    
-  backgroundMesh::set(gf);
-  char name[256];
-  sprintf(name,"bgm-%d.pos",gf->tag());
-  backgroundMesh::current()->print(name,gf);
-  sprintf(name,"cross-%d.pos",gf->tag());
-  backgroundMesh::current()->print(name,gf,1);
+  if (CTX::instance()->mesh.saveAll){
+    backgroundMesh::set(gf);
+    char name[256];
+    sprintf(name,"bgm-%d.pos",gf->tag());
+    backgroundMesh::current()->print(name,gf);
+    sprintf(name,"cross-%d.pos",gf->tag());
+    backgroundMesh::current()->print(name,gf,1);
+  }
   (*this)(gf);
 }
 

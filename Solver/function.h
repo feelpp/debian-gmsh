@@ -55,6 +55,7 @@ class function {
  private:
   static functionConstant *_timeFunction;
   static functionConstant *_dtFunction;  
+  static functionConstant *_dtSubFunction;  
 
  public:
   function(int nbCol, bool invalidatedOnElement = true)
@@ -71,6 +72,7 @@ class function {
   inline int getNbCol() const        {if(_nbCol ==0) Msg::Error("Cannot ask nbCol of functionSolution"); return _nbCol; }
   static functionConstant *getTime();
   static functionConstant *getDT();
+  static functionConstant *getSubDT();
   static function *getSolution();
   static function *getCoordinates();
   static function *getSolutionGradient();
@@ -296,6 +298,7 @@ function *functionLevelsetSmoothNew (const function *f0, const double valMin, co
 function *functionSumNew (const function *f0, const function *f1);
 function *functionMinusNew (const function *f0, const function *f1);
 function *functionProdNew (const function *f0, const function *f1);
+function *functionQuotientNew (const function *f0, const function *f1);
 function *functionScaleNew (const function *f0, const double s);
 function *functionExtractCompNew (const function *f0, const int iComp);
 function *functionCatCompNew(std::vector<const function *> fArray);

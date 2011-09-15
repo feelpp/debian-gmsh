@@ -5,9 +5,12 @@
 
 #include "Curvature.h"
 #include "MElement.h"
+#include "MTriangle.h"
 #include "GEntity.h"
 #include "GFaceCompound.h"
 #include "MLine.h"
+#include "GRbf.h"
+#include "SBoundingBox3d.h"
 
 #include<iostream>
 #include<fstream>
@@ -87,7 +90,7 @@ Curvature& Curvature::getInstance()
 
  //========================================================================================================
  void Curvature::retrieveCompounds()  {
-
+#if defined(HAVE_SOLVER)
    std::vector<GEntity*> entities;
    _model->getEntities(entities);
 
@@ -99,11 +102,16 @@ Curvature& Curvature::getInstance()
        std::list<GFace*>::iterator surfIterator;
 
        for(surfIterator = tempcompounds.begin(); surfIterator != tempcompounds.end(); ++surfIterator) {
-         _ptFinalEntityList.push_back(*surfIterator);
+         if ((*surfIterator)->geomType() == GEntity::DiscreteSurface) {
+           _ptFinalEntityList.push_back(*surfIterator);
+         }
        }
      }
-
+     else if (entities[ie]->geomType() == GEntity::DiscreteSurface) {
+         _ptFinalEntityList.push_back(dynamic_cast<GFace*>(entities[ie]));
+     }
    }
+#endif
  }
 
 //========================================================================================================
@@ -115,20 +123,12 @@ void Curvature::initializeMap()
 
   for (int i = 0; i< _ptFinalEntityList.size(); ++i)
   {
-    // face is a pointer to one surface of the group "FinalEntityList"
     GFace* face = _ptFinalEntityList[i];
 
-//    std::cout << "Face " << i << " has " << face->getNumMeshElements() << " elements" << std::endl;
-
-    // Loop over the element all the element of the "myTag"-surface
     for (int iElem = 0; iElem < face->getNumMeshElements(); iElem++)
     {
-
-      // Pointer to one element
       MElement *e = face->getMeshElement(iElem);
-      // Tag of the corresponding element
       const int E = e->getNum();
-      // std::cout << "We are now looking at element Nr: " << E << std::endl;
       _ElementToInt[E] = 1;
 
       const int A = e->getVertex(0)->getNum();   //Pointer to 1st vertex of the triangle
@@ -841,6 +841,62 @@ void Curvature::computeCurvature_Rusinkiewicz(int isMax){
 
 } //End of the "computeCurvature_Rusinkiewicz" method
 
+
+void Curvature::computeCurvature_RBF(){
+  retrieveCompounds();
+  initializeMap();
+ 
+  std::cout << "Computing Curvature RBF ..." << std::endl;
+  
+  //fill set of MVertex
+  std::set<MVertex*> allNodes;
+  for (int i = 0; i< _ptFinalEntityList.size(); ++i)  {
+    GFaceCompound* face = (GFaceCompound*)_ptFinalEntityList[i];
+    for (int iElem = 0; iElem < face->getNumMeshElements(); iElem++) {
+      MElement *e = face->getMeshElement(iElem);
+      for(int j = 0; j < e->getNumVertices(); j++){
+        allNodes.insert(e->getVertex(j));
+      }
+    }
+  }
+
+  //bounding box
+  SBoundingBox3d bb;
+  std::vector<SPoint3> vertices;
+  for(std::set<MVertex *>::iterator itv = allNodes.begin(); itv !=allNodes.end() ; ++itv){
+    SPoint3 pt((*itv)->x(),(*itv)->y(), (*itv)->z());
+    vertices.push_back(pt);
+    bb +=pt;
+  }
+  double sizeBox = norm(SVector3(bb.max(), bb.min()));
+  printf("allNodes := %d sizeBox = %g \n", allNodes.size(), sizeBox);
+
+  //compure curvature RBF
+  std::map<MVertex*, SVector3> _normals;
+  std::vector<MVertex*> _ordered;
+  std::map<MVertex*, double> curvRBF;
+  GRbf *_rbf = new GRbf(sizeBox, 0, 1, _normals, allNodes, _ordered); //, true);
+  _rbf->computeCurvature(_rbf->getXYZ(),curvRBF);
+  // _rbf->computeLocalCurvature(_rbf->getXYZ(),curvRBF);
+
+  std::cout << "Done" << std::endl;
+
+  //fill vertex curve
+  _VertexCurve.resize( _VertexToInt.size() );
+  for(std::set<MVertex *>::iterator itv = allNodes.begin(); itv !=allNodes.end() ; ++itv){
+    MVertex *v = *itv;
+    std::map<int,int>::iterator vertexIterator;
+    int V0;
+    vertexIterator = _VertexToInt.find( v->getNum() );
+    if ( vertexIterator != _VertexToInt.end() )  V0 = (*vertexIterator).second;
+    _VertexCurve[V0] = curvRBF[v];
+   }
+ 
+ _alreadyComputedCurvature = true;
+
+} //End of the "computeCurvature_RBF" method
+
+
  //========================================================================================================
 
 void Curvature::triangleNodalValues(MTriangle* triangle, double& c0, double& c1, double& c2, int isAbs)
@@ -983,6 +1039,15 @@ void Curvature::edgeNodalValues(MLine* edge, double& c0, double& c1, int isAbs)
 
 //========================================================================================================
 
+double Curvature::getAtVertex(const MVertex *v) const {
+  std::map<int,int>::const_iterator it = _VertexToInt.find(v->getNum());
+  if (it == _VertexToInt.end()) {
+    Msg::Error("curvature has not been computed for vertex %i (%i)", v->getNum(), _VertexToInt.size());
+    return 1;
+  }
+  return _VertexCurve[it->second];
+}
+
 void Curvature::writeToPosFile( const std::string & filename)
 {
   std::ofstream outfile;
@@ -992,15 +1057,12 @@ void Curvature::writeToPosFile( const std::string & filename)
 
   int idxelem = 0;
 
-  for (int i = 0; i< _ptFinalEntityList.size(); ++i)
-  {
-    GFace* face = _ptFinalEntityList[i]; //face is a pointer to one surface of the group "FinalEntityList"
+  for (int i = 0; i< _ptFinalEntityList.size(); ++i) {
+    GFace* face = _ptFinalEntityList[i]; 
 
-    for (int iElem = 0; iElem < face->getNumMeshElements(); iElem++) //Loop over the element all the element of the "myTag"-surface
-    {
-      MElement *e = face->getMeshElement(iElem);  //Pointer to one element
-      const int E = _ElementToInt[e->getNum()]; //The NEW tag of the corresponding element
-
+    for (int iElem = 0; iElem < face->getNumMeshElements(); iElem++){
+      MElement *e = face->getMeshElement(iElem);  
+      const int E = _ElementToInt[e->getNum()]; 
       //std::cout << "We are now looking at element Nr: " << E << std::endl;
 
       MVertex* A = e->getVertex(0);  //Pointers to vertices of triangle
@@ -1036,8 +1098,7 @@ void Curvature::writeToPosFile( const std::string & filename)
       idxelem++;
 
   } //Loop over elements
-    std::cout << "The Total Number of triangle is: " << idxelem << std::endl;
-
+ 
 } // Loop over ptFinalEntityList
 
 outfile << "};" << std::endl;
