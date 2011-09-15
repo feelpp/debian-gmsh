@@ -1,6 +1,7 @@
 gmsh (2.5.1~beta1~svn9877~dfsg-1) unstable; urgency=low
 
   * [7963a43] Imported Upstream version 2.5.1~beta1~svn9877~dfsg
+  * [0170b01] Add revision to copyright-file.
 
  -- Anton Gladky <gladky.anton@gmail.com>  Thu, 15 Sep 2011 22:20:02 +0200
 
