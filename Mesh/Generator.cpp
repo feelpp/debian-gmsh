@@ -21,13 +21,13 @@
 #include "meshGEdge.h"
 #include "meshGFace.h"
 #include "meshGFaceOptimize.h"
-#include "meshGFaceLloyd.h"
 #include "meshGFaceBDS.h"
 #include "meshGRegion.h"
 #include "BackgroundMesh.h"
 #include "BoundaryLayers.h"
 #include "HighOrder.h"
 #include "Generator.h"
+#include "meshGFaceLloyd.h"
 
 #if defined(HAVE_POST)
 #include "PView.h"
@@ -331,8 +331,8 @@ static bool CancelDelaunayHybrid(GModel *m)
     return !Msg::GetAnswer
       ("You are trying to generate a mixed structured/unstructured grid using\n"
        "the 3D Delaunay algorithm. This algorithm cannot garantee that the\n"
-       "final mesh will be conforming. You should probably use the 3D Frontal\n"
-       "algorithm instead. Do you really want to continue?\n\n"
+       "final mesh will be conforming. (You should probably use the 3D Frontal\n"
+       "algorithm instead.) Do you really want to continue with the Delaunay?\n\n"
        "(To disable this warning in the future, select `Enable expert mode'\n"
        "in the option dialog.)", 1, "Cancel", "Continue");
   return false;
@@ -470,6 +470,7 @@ static void Mesh2D(GModel *m)
   }
 
 
+#if defined(HAVE_BFGS)
   // lloyd optimization
   if (CTX::instance()->mesh.optimizeLloyd){
     for(GModel::fiter it = m->firstFace(); it != m->lastFace(); ++it){
@@ -493,6 +494,7 @@ static void Mesh2D(GModel *m)
     }
     */
   }
+#endif
 
   // collapseSmallEdges(*m);
 

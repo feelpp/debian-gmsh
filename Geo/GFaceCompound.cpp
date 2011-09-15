@@ -53,35 +53,18 @@ static void fixEdgeToValue(GEdge *ed, double value, dofManager<double> &myAssemb
   }
 }
 
-int intersection_segments (SPoint3 &p1, SPoint3 &p2,
-			   SPoint3 &q1, SPoint3 &q2, 
-			   double x[2])
-{
-  double xp_max = std::max(p1.x(),p2.x()); 
-  double yp_max = std::max(p1.y(),p2.y()); 
-  double xq_max = std::max(q1.x(),q2.x()); 
-  double yq_max = std::max(q1.y(),q2.y()); 
-
-  double xp_min = std::min(p1.x(),p2.x()); 
-  double yp_min = std::min(p1.y(),p2.y()); 
-  double xq_min = std::min(q1.x(),q2.x()); 
-  double yq_min = std::min(q1.y(),q2.y()); 
-  if (yq_min > yp_max || xq_min >  xp_max ||
-      yq_max < yp_min || xq_max <  xp_min){
-    return 0;
-  }
-  else{
-    double A[2][2];
-    A[0][0] = p2.x()-p1.x();
-    A[0][1] = q1.x()-q2.x();
-    A[1][0] = p2.y()-p1.y();
-    A[1][1] = q1.y()-q2.y();
-    double b[2] = {q1.x()-p1.x(),q1.y()-p1.y()};
-    sys2x2(A,b,x);
-
-    return (x[0] >= 0.0 && x[0] <= 1. &&
-	    x[1] >= 0.0 && x[1] <= 1.);
-  }
+static void printBound(std::vector<MVertex*> &l, int tag){
+  //print boundary
+  char name[256];
+  sprintf(name, "myBOUND%d.pos", tag);
+  FILE * xyz = fopen(name,"w");
+  fprintf(xyz,"View \"\"{\n");
+  for(int i = 0; i < l.size(); i++){
+   MVertex *v = l[i];
+   fprintf(xyz,"SP(%g,%g,%g){%d};\n", v->x(), v->y(), v->z(), i);
+ }
+ fprintf(xyz,"};\n");
+ fclose(xyz);
 }
 
 static bool orderVertices(const std::list<GEdge*> &e, std::vector<MVertex*> &l,
@@ -144,6 +127,7 @@ static bool orderVertices(const std::list<GEdge*> &e, std::vector<MVertex*> &l,
     }
     if(!found) return false;
   }    
+
   return true;
 }
 
@@ -443,7 +427,7 @@ void GFaceCompound::fillNeumannBCS() const
   }
 
   //printing
-  if(!CTX::instance()->mesh.saveAll){
+  if(CTX::instance()->mesh.saveAll){
     if (fillTris.size() > 0){
       char name[256];
       std::list<GFace*>::const_iterator itf = _compound.begin();
@@ -628,7 +612,7 @@ bool GFaceCompound::parametrize() const
   if(allNodes.empty()) buildAllNodes();
   
   bool success = orderVertices(_U0, _ordered, _coords);
-  if(!success) Msg::Error("Could not order vertices on boundary");
+  if(!success) {Msg::Error("Could not order vertices on boundary");exit(1);}
     
   // Laplace parametrization
   if (_mapping == HARMONIC){
@@ -636,6 +620,8 @@ bool GFaceCompound::parametrize() const
     fillNeumannBCS();
     parametrize(ITERU,HARMONIC); 
     parametrize(ITERV,HARMONIC);
+    //parametrize(ITERU,CONVEXCOMBINATION);
+    //parametrize(ITERV,CONVEXCOMBINATION);
   }
   // Multiscale Laplace parametrization
   else if (_mapping == MULTISCALE){
@@ -663,20 +649,20 @@ bool GFaceCompound::parametrize() const
   // Radial-Basis Function parametrization
   else if (_mapping == RBF){    
     Msg::Debug("Parametrizing surface %d with 'RBF' ", tag());
-     
+    double t1 = Cpu();
     int variableEps = 0;
-    int radFunInd = 1; //MQ RBF
+    int radFunInd = 1; // 1 MQ RBF , 0 GA
     double sizeBox = getSizeH();
 
     fullMatrix<double> Oper(3*allNodes.size(),3*allNodes.size());
     _rbf = new GRbf(sizeBox, variableEps, radFunInd, _normals, allNodes, _ordered);
 
     //_rbf->RbfLapSurface_global_CPM_low(_rbf->getXYZ(), _rbf->getN(), Oper);
-    //_rbf->RbfLapSurface_local_CPM(true, _rbf->getXYZ(), _rbf->getN(), Oper);
+    //_rbf->RbfLapSurface_local_CPM(true, _rbf->getXYZ(), _rbf->getN(), Oper, true);
     _rbf->RbfLapSurface_global_CPM_high(_rbf->getXYZ(), _rbf->getN(), Oper);
-    //_rbf->RbfLapSurface_local_CPM(false, _rbf->getXYZ(), _rbf->getN(),  Oper);
+    //_rbf->RbfLapSurface_local_CPM(false, _rbf->getXYZ(), _rbf->getN(),  Oper, true);
     //_rbf->RbfLapSurface_global_projection(_rbf->getXYZ(), _rbf->getN(), Oper);
-    //_rbf->RbfLapSurface_local_projection(_rbf->getXYZ(), _rbf->getN(), Oper);
+    //_rbf->RbfLapSurface_local_projection(_rbf->getXYZ(), _rbf->getN(), Oper, true);
   
     _rbf->solveHarmonicMap(Oper, _ordered, _coords, coordinates);
 
@@ -684,6 +670,8 @@ bool GFaceCompound::parametrize() const
     //printStuff();
     //exit(1);
 
+    double t2 = Cpu();
+    printf("param RBF in %g sec \n", t2-t1);
   }
 
   buildOct();  
@@ -1156,6 +1144,7 @@ bool GFaceCompound::parametrize_conformal_spectral() const
   Msg::Error("Switch to harmonic map or see doc on the wiki for installing petsc and slepc:");
   Msg::Error("https://geuz.org/trac/gmsh/wiki/STLRemeshing (username:gmsh,passwd:gmsh)");
   return false;
+  parametrize_conformal();
 #else
   linearSystem <double> *lsysA  = new linearSystemPETSc<double>;
   linearSystem <double> *lsysB  = new linearSystemPETSc<double>;
@@ -1395,11 +1384,12 @@ double GFaceCompound::curvatureMax(const SPoint2 &param) const
 
     if( !Curvature::valueAlreadyComputed() ) {
       Msg::Info("Need to compute discrete curvature for isotropic remesh");
-      Msg::Info("Getting instance of curvature");
+      Msg::Info("Getting instance of curvature!");
 
       curvature.setGModel( model() );
       int computeMax = 0;
       curvature.computeCurvature_Rusinkiewicz(computeMax);
+      //curvature.computeCurvature_RBF();
       curvature.writeToPosFile("curvature.pos");
       curvature.writeToVtkFile("curvature.vtk");
       Msg::Info(" ... computing curvature finished");
@@ -1451,13 +1441,14 @@ double GFaceCompound::curvatures(const SPoint2 &param, SVector3 *dirMax, SVector
       curvature.setGModel( model() );
       int computeMax = 0;
       curvature.computeCurvature_Rusinkiewicz(computeMax);
+      //curvature.computeCurvature_RBF();
       curvature.writeToPosFile("curvature.pos");
-      curvature.writeToVtkFile("curvature.vtk");
-      curvature.writeDirectionsToPosFile("curvature_directions.pos");
+      //curvature.writeToVtkFile("curvature.vtk");
+      //curvature.writeDirectionsToPosFile("curvature_directions.pos");
       Msg::Info(" ... computing curvature finished");
     }
 
-    //std::cout << "I'm using curvatures in GFaceCompound.cpp" << std::endl;
+    std::cout << "I'm using curvatures in GFaceCompound.cpp" << std::endl;
     double cMin[3];
     double cMax[3];
     SVector3 dMin[3];
@@ -2080,8 +2071,8 @@ int GFaceCompound::genusGeom() const
 
 void GFaceCompound::printStuff(int iNewton) const
 {
-  //if( !CTX::instance()->mesh.saveAll) return;  
- 
+  if( !CTX::instance()->mesh.saveAll) return;  
+
   std::list<GFace*>::const_iterator it = _compound.begin();
  
   char name0[256], name1[256], name2[256], name3[256];

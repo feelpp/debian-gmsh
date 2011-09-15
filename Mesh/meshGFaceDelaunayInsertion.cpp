@@ -655,10 +655,6 @@ void _printTris(char *name, std::set<MTri3*, compareTri3Ptr> &AllTris,
   fclose (ff);
 }
 
-int intersection_segments (SPoint3 &p1, SPoint3 &p2,
-			   SPoint3 &q1, SPoint3 &q2, 
-			   double x[2]);
-
 static MTri3* search4Triangle (MTri3 *t, double pt[2], 
 			       std::vector<double> &Us, std::vector<double> &Vs,
 			       std::set<MTri3*,compareTri3Ptr> &AllTris) {
@@ -1189,10 +1185,12 @@ void bowyerWatsonFrontalLayers(GFace *gf, bool quad)
     CTX::instance()->mesh.lcFromCurvature = CurvControl;    
     backgroundMesh::set(gf);
     char name[256];
-    sprintf(name,"bgm-%d.pos",gf->tag());
-    backgroundMesh::current()->print(name,gf);
-    sprintf(name,"cross-%d.pos",gf->tag());
-    backgroundMesh::current()->print(name,gf,1);
+    if (CTX::instance()->mesh.saveAll){
+      sprintf(name,"bgm-%d.pos",gf->tag());
+      backgroundMesh::current()->print(name,gf);
+      sprintf(name,"cross-%d.pos",gf->tag());
+      backgroundMesh::current()->print(name,gf,1);
+    }
     // FIXME DELETE CURRENT MESH
     gf->triangles = TR;    
   }

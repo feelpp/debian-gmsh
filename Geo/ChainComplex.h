@@ -9,7 +9,6 @@
 #define _CHAINCOMPLEX_H_
 
 #include "GmshConfig.h"
-
 #if defined(HAVE_KBIPACK)
 
 #include <cstdio>
@@ -172,6 +171,7 @@ class ChainComplex
       gmp_matrix_right_mult(_Hbasis[dim], T);
     }
   }
+  //void printBasisChain(std::map<Cell*, int, Less_Cell>& chain);
 
   // debugging aid
   int printMatrix(gmp_matrix* matrix){ 
@@ -182,7 +182,7 @@ class ChainComplex
 };
 
 
-// An experimental class to modify computed bases for homnology spaces
+// An experimental class to modify computed bases for homology spaces
 // so that the basis chains are decomposed according to the long
 // exact homology sequence.
 class HomologySequence
@@ -237,6 +237,5 @@ class HomologySequence
 };
 
 #endif
-   
-#endif
+#endif   
    

@@ -134,6 +134,7 @@ void openglWindow::draw()
     glLoadIdentity();
     glColor3d(1., 1., 1.);
     glDisable(GL_DEPTH_TEST);
+    glDrawBuffer(GL_FRONT_AND_BACK);
     if(selectionMode && CTX::instance()->mouseSelection){
       glEnable(GL_LINE_STIPPLE);
       glLineStipple(1, 0x0F0F);
@@ -159,6 +160,7 @@ void openglWindow::draw()
     glDisable(GL_BLEND);
     glDisable(GL_LINE_STIPPLE);
     glEnable(GL_DEPTH_TEST);
+    glDrawBuffer(GL_BACK);
   }
   else if(addPointMode) { 
     // draw the whole scene and the point to add
@@ -396,7 +398,7 @@ int openglWindow::handle(int event)
     }
     _click.set(_ctx, Fl::event_x(), Fl::event_y());
     _prev.set(_ctx, Fl::event_x(), Fl::event_y());
-   FlGui::instance()->manip->update();
+    FlGui::instance()->manip->update();
     return 1;
 
   case FL_RELEASE:
