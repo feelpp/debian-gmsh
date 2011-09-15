@@ -1,3 +1,9 @@
+gmsh (2.5.1~beta1~svn9877~dfsg-1) unstable; urgency=low
+
+  * [7963a43] Imported Upstream version 2.5.1~beta1~svn9877~dfsg
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Thu, 15 Sep 2011 22:20:02 +0200
+
 gmsh (2.5.1~beta1~svn9724~dfsg-1) unstable; urgency=low
 
   * [24356cb] Replace  libjpeg62-dev by libjpeg-dev (Closes: #635688)
