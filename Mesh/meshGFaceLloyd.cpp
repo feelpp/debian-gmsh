@@ -1,3 +1,11 @@
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+//
+// See the LICENSE.txt file for license information. Please report all
+// bugs and problems to <gmsh@geuz.org>.
+//
+// Contributor(s):
+//   Tristan Carrier
+
 #include <set>
 #include "meshGFaceLloyd.h"
 
@@ -215,7 +223,7 @@ void smoothing::optimize_face(GFace* gf){
   double epsf;
   double epsx;
   lpcvt obj;
-  double initial_conditions[2*triangulator.numPoints];
+  std::vector<double> initial_conditions(2*triangulator.numPoints);
   alglib::ae_int_t maxits;
   alglib::minlbfgsstate state;
   alglib::minlbfgsreport rep;
@@ -245,7 +253,7 @@ void smoothing::optimize_face(GFace* gf){
 	}
   }
 	
-  x.setcontent(2*num_interior,initial_conditions);
+  x.setcontent(2*num_interior, &initial_conditions[0]);
 
   octree = backgroundMesh::current()->get_octree();	
 	
