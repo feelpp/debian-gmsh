@@ -4,7 +4,7 @@
 // bugs and problems to <gmsh@geuz.org>.
 
 #include <string.h>
-#include <inttypes.h>
+#include <stdint.h>
 #include <FL/Fl_Tabs.H>
 #include <FL/Fl_Scroll.H>
 #include <FL/Fl_Color_Chooser.H>
@@ -591,12 +591,14 @@ static void view_options_ok_cb(Fl_Widget *w, void *data)
       if(vindex >= 0 && vindex < (int)PView::list.size()){
         // compute min/max taking current visibility status into account
         int step = (int)opt_view_timestep(vindex, GMSH_GET, 0);
+        PViewData *data = PView::list[vindex]->getData(true);
+        PViewOptions *opt = PView::list[vindex]->getOptions();
         if(!strcmp(str, "range_min"))
-          o->view.value[31]->value
-            (PView::list[vindex]->getData(true)->getMin(step, true));
+          o->view.value[31]->value(data->getMin(step, true, opt->forceNumComponents,
+                                                opt->componentMap));
         else if(!strcmp(str, "range_max"))
-          o->view.value[32]->value
-            (PView::list[vindex]->getData(true)->getMax(step, true));
+          o->view.value[32]->value(data->getMax(step, true, opt->forceNumComponents,
+                                                opt->componentMap));
       }
     }
   }
@@ -2113,7 +2115,7 @@ optionWindow::optionWindow(int deltaFontSize)
       mesh.choice[3]->callback(mesh_options_ok_cb);
 
       mesh.choice[1] = new Fl_Choice
-        (L + 2 * WB, 2 * WB + 3 * BH, IW, BH, "2D Recombination algorithm");
+        (L + 2 * WB, 2 * WB + 3 * BH, IW, BH, "2D recombination algorithm");
       mesh.choice[1]->menu(menu_recombination_algo);
       mesh.choice[1]->align(FL_ALIGN_RIGHT);
       mesh.choice[1]->callback(mesh_options_ok_cb);
