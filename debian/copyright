@@ -92,3 +92,11 @@ License: LGPL-2.1
  On Debian systems, the full text of the GNU LESSER GENERAL PUBLIC 
  LICENSE version 2.1 can be found in the file
  `/usr/share/common-licenses/LGPL-2.1'.
+
+Files: contrib/blossom/*
+Copyright: 1997-2011 Prof. Cook <bico@isye.gatech.edu> 
+License: other
+ Free to use for both academic and non-academic work.
+ Concorde license is granted only for use within the Gmsh system.
+ .
+ For more informatoin, please, refer contrib/blossom/README.txt
