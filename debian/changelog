@@ -1,3 +1,10 @@
+gmsh (2.5.1~beta1~svn9957~dfsg-1) unstable; urgency=low
+
+  * [63b8191] Imported Upstream version 2.5.1~beta1~svn9957~dfsg
+  * [7792c18] Update copyright file due to adding blossom-directory.
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Tue, 27 Sep 2011 21:47:25 +0200
+
 gmsh (2.5.1~beta1~svn9877~dfsg-1) unstable; urgency=low
 
   * [7963a43] Imported Upstream version 2.5.1~beta1~svn9877~dfsg
