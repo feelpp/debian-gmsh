@@ -1,3 +1,10 @@
+gmsh (2.5.1~beta2~svn10284~dfsg-1) unstable; urgency=low
+
+  * [4fb9f69] Imported Upstream version 2.5.1~beta2~svn10284~dfsg
+  * [80b038c] Add lintian-overrides for 1 warning.
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Fri, 28 Oct 2011 22:55:39 +0200
+
 gmsh (2.5.1~beta1~svn9957~dfsg-1) unstable; urgency=low
 
   * [63b8191] Imported Upstream version 2.5.1~beta1~svn9957~dfsg
