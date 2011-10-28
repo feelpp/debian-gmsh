@@ -49,7 +49,8 @@ struct contextGeometryOptions {
   double normals, tangents, scalingFactor;
   int autoCoherence, highlightOrphans, clip, useTransform;
   double tolerance, snap[3], transform[3][3], offset[3];
-  int occFixSmallEdges, occFixSmallFaces, occSewFaces, occConnectFaces;
+  int occFixDegenerated, occFixSmallEdges, occFixSmallFaces;
+  int occSewFaces, occConnectFaces;
   int copyMeshingMethod, exactExtrusion;
   int matchGeomAndMesh;
 };
@@ -93,10 +94,8 @@ class CTX {
   std::string watchFilePattern;
   // show tootips in the GUI?
   int tooltips;
-  // scroll automatically to last message in the message window?
-  int msgAutoScroll;
   // position and size of various windows in the GUI
-  int menuPosition[2], glPosition[2], glSize[2], msgPosition[2], msgSize[2];
+  int menuPosition[2], glPosition[2], glSize[2], msgSize;
   int optPosition[2], visPosition[2], clipPosition[2], manipPosition[2];
   int statPosition[2], ctxPosition[2], solverPosition[2];
   int pluginPosition[2], pluginSize[2], fieldPosition[2], fieldSize[2];
@@ -193,6 +192,8 @@ class CTX {
   int printing;
   // hide all unselected entities?
   int hideUnselected;
+  // hide underlying curves and surfaces of compounds (makes work a lot easier)
+  int compoundOnly;
   // temporary storage of rotation, translation, scale (until the GUI
   // is ready)
   double tmpRotation[3], tmpTranslation[3], tmpScale[3], tmpQuaternion[4];
@@ -207,7 +208,7 @@ class CTX {
   // post processing options 
   struct{
     int draw, link, horizontalScales;
-    int smooth, animCycle, combineTime, combineRemoveOrig;
+    int smooth, animCycle, animStep, combineTime, combineRemoveOrig;
     int fileFormat, plugins;
     double animDelay;
   }post;
@@ -216,6 +217,7 @@ class CTX {
     int plugins, listen;
     double timeout;
     std::string socketName;
+    std::string name[5], commandLine[5];
   }solver;
   // print options 
   struct{

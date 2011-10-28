@@ -9,7 +9,6 @@
 #include "GmshConfig.h"
 #include "GmshDefines.h"
 #include "GmshMessage.h"
-#include "ConnectionManager.h"
 #include "StringUtils.h"
 #include "GModel.h"
 #include "Context.h"
@@ -44,9 +43,7 @@
 #include "menuWindow.h"
 #include "graphicWindow.h"
 #include "optionWindow.h"
-#include "solverWindow.h"
 #include "manipWindow.h"
-#include "messageWindow.h"
 #include "contextWindow.h"
 #include "clippingWindow.h"
 #endif
@@ -992,35 +989,35 @@ std::string opt_general_options_filename(OPT_ARGS_STR)
   return CTX::instance()->optionsFileName;
 }
 
-std::string opt_general_recent_file1(OPT_ARGS_STR)
+std::string opt_general_recent_file0(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
     CTX::instance()->recentFiles[0] = val;
   return CTX::instance()->recentFiles[0];
 }
 
-std::string opt_general_recent_file2(OPT_ARGS_STR)
+std::string opt_general_recent_file1(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
     CTX::instance()->recentFiles[1] = val;
   return CTX::instance()->recentFiles[1];
 }
 
-std::string opt_general_recent_file3(OPT_ARGS_STR)
+std::string opt_general_recent_file2(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
     CTX::instance()->recentFiles[2] = val;
   return CTX::instance()->recentFiles[2];
 }
 
-std::string opt_general_recent_file4(OPT_ARGS_STR)
+std::string opt_general_recent_file3(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
     CTX::instance()->recentFiles[3] = val;
   return CTX::instance()->recentFiles[3];
 }
 
-std::string opt_general_recent_file5(OPT_ARGS_STR)
+std::string opt_general_recent_file4(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
     CTX::instance()->recentFiles[4] = val;
@@ -1114,12 +1111,8 @@ std::string opt_solver_socket_name(OPT_ARGS_STR)
 std::string opt_solver_name(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    ConnectionManager::get(num)->name = val;
-#if defined(HAVE_FLTK)
-  if(FlGui::available() && (action & GMSH_GUI))
-    FlGui::instance()->solver[num]->win->label(ConnectionManager::get(num)->name.c_str());
-#endif
-  return ConnectionManager::get(num)->name;
+    CTX::instance()->solver.name[num] = val;
+  return CTX::instance()->solver.name[num];
 }
 
 std::string opt_solver_name0(OPT_ARGS_STR)
@@ -1150,13 +1143,8 @@ std::string opt_solver_name4(OPT_ARGS_STR)
 std::string opt_solver_executable(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    ConnectionManager::get(num)->executable = val;
-#if defined(HAVE_FLTK)
-  if(FlGui::available() && (action & GMSH_GUI))
-    FlGui::instance()->solver[num]->input[2]->value
-      (ConnectionManager::get(num)->executable.c_str());
-#endif
-  return ConnectionManager::get(num)->executable;
+    CTX::instance()->solver.commandLine[num] = val;
+  return CTX::instance()->solver.commandLine[num];
 }
 
 std::string opt_solver_executable0(OPT_ARGS_STR)
@@ -1182,799 +1170,6 @@ std::string opt_solver_executable3(OPT_ARGS_STR)
 std::string opt_solver_executable4(OPT_ARGS_STR)
 {
   return opt_solver_executable(4, action, val);
-}
-
-std::string opt_solver_extra_arguments(OPT_ARGS_STR)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->extraArguments = val;
-#if defined(HAVE_FLTK)
-  if(FlGui::available() && (action & GMSH_GUI))
-    FlGui::instance()->solver[num]->input[3]->value
-      (ConnectionManager::get(num)->extraArguments.c_str());
-#endif
-  return ConnectionManager::get(num)->extraArguments;
-}
-
-std::string opt_solver_extra_arguments0(OPT_ARGS_STR)
-{
-  return opt_solver_extra_arguments(0, action, val);
-}
-
-std::string opt_solver_extra_arguments1(OPT_ARGS_STR)
-{
-  return opt_solver_extra_arguments(1, action, val);
-}
-
-std::string opt_solver_extra_arguments2(OPT_ARGS_STR)
-{
-  return opt_solver_extra_arguments(2, action, val);
-}
-
-std::string opt_solver_extra_arguments3(OPT_ARGS_STR)
-{
-  return opt_solver_extra_arguments(3, action, val);
-}
-
-std::string opt_solver_extra_arguments4(OPT_ARGS_STR)
-{
-  return opt_solver_extra_arguments(4, action, val);
-}
-
-std::string opt_solver_help(OPT_ARGS_STR)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->help = val;
-  return ConnectionManager::get(num)->help;
-}
-
-std::string opt_solver_help0(OPT_ARGS_STR)
-{
-  return opt_solver_help(0, action, val);
-}
-
-std::string opt_solver_help1(OPT_ARGS_STR)
-{
-  return opt_solver_help(1, action, val);
-}
-
-std::string opt_solver_help2(OPT_ARGS_STR)
-{
-  return opt_solver_help(2, action, val);
-}
-
-std::string opt_solver_help3(OPT_ARGS_STR)
-{
-  return opt_solver_help(3, action, val);
-}
-
-std::string opt_solver_help4(OPT_ARGS_STR)
-{
-  return opt_solver_help(4, action, val);
-}
-
-std::string opt_solver_input_name(OPT_ARGS_STR)
-{
-  if(action & GMSH_SET){
-#if defined(HAVE_PARSER)
-    ConnectionManager::get(num)->inputFileName = FixRelativePath(gmsh_yyname, val);
-#else
-    ConnectionManager::get(num)->inputFileName = val;
-#endif
-  }
-#if defined(HAVE_FLTK)
-  if(FlGui::available() && (action & GMSH_GUI))
-    FlGui::instance()->solver[num]->input[0]->value
-      (ConnectionManager::get(num)->inputFileName.c_str());
-#endif
-  return ConnectionManager::get(num)->inputFileName;
-}
-
-std::string opt_solver_input_name0(OPT_ARGS_STR)
-{
-  return opt_solver_input_name(0, action, val);
-}
-
-std::string opt_solver_input_name1(OPT_ARGS_STR)
-{
-  return opt_solver_input_name(1, action, val);
-}
-
-std::string opt_solver_input_name2(OPT_ARGS_STR)
-{
-  return opt_solver_input_name(2, action, val);
-}
-
-std::string opt_solver_input_name3(OPT_ARGS_STR)
-{
-  return opt_solver_input_name(3, action, val);
-}
-
-std::string opt_solver_input_name4(OPT_ARGS_STR)
-{
-  return opt_solver_input_name(4, action, val);
-}
-
-std::string opt_solver_extension(OPT_ARGS_STR)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->inputFileExtension = val;
-  return ConnectionManager::get(num)->inputFileExtension;
-}
-
-std::string opt_solver_extension0(OPT_ARGS_STR)
-{
-  return opt_solver_extension(0, action, val);
-}
-
-std::string opt_solver_extension1(OPT_ARGS_STR)
-{
-  return opt_solver_extension(1, action, val);
-}
-
-std::string opt_solver_extension2(OPT_ARGS_STR)
-{
-  return opt_solver_extension(2, action, val);
-}
-
-std::string opt_solver_extension3(OPT_ARGS_STR)
-{
-  return opt_solver_extension(3, action, val);
-}
-
-std::string opt_solver_extension4(OPT_ARGS_STR)
-{
-  return opt_solver_extension(4, action, val);
-}
-
-std::string opt_solver_mesh_name(OPT_ARGS_STR)
-{
-  if(action & GMSH_SET){
-#if defined(HAVE_PARSER)
-    ConnectionManager::get(num)->meshFileName = FixRelativePath(gmsh_yyname, val);
-#else
-    ConnectionManager::get(num)->meshFileName = val;
-#endif
-  }
-#if defined(HAVE_FLTK)
-  if(FlGui::available() && (action & GMSH_GUI))
-    FlGui::instance()->solver[num]->input[1]->value
-      (ConnectionManager::get(num)->meshFileName.c_str());
-#endif
-  return ConnectionManager::get(num)->meshFileName;
-}
-
-std::string opt_solver_mesh_name0(OPT_ARGS_STR)
-{
-  return opt_solver_mesh_name(0, action, val);
-}
-
-std::string opt_solver_mesh_name1(OPT_ARGS_STR)
-{
-  return opt_solver_mesh_name(1, action, val);
-}
-
-std::string opt_solver_mesh_name2(OPT_ARGS_STR)
-{
-  return opt_solver_mesh_name(2, action, val);
-}
-
-std::string opt_solver_mesh_name3(OPT_ARGS_STR)
-{
-  return opt_solver_mesh_name(3, action, val);
-}
-
-std::string opt_solver_mesh_name4(OPT_ARGS_STR)
-{
-  return opt_solver_mesh_name(4, action, val);
-}
-
-std::string opt_solver_mesh_command(OPT_ARGS_STR)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->meshFileSwitch = val;
-  return ConnectionManager::get(num)->meshFileSwitch;
-}
-
-std::string opt_solver_mesh_command0(OPT_ARGS_STR)
-{
-  return opt_solver_mesh_command(0, action, val);
-}
-
-std::string opt_solver_mesh_command1(OPT_ARGS_STR)
-{
-  return opt_solver_mesh_command(1, action, val);
-}
-
-std::string opt_solver_mesh_command2(OPT_ARGS_STR)
-{
-  return opt_solver_mesh_command(2, action, val);
-}
-
-std::string opt_solver_mesh_command3(OPT_ARGS_STR)
-{
-  return opt_solver_mesh_command(3, action, val);
-}
-
-std::string opt_solver_mesh_command4(OPT_ARGS_STR)
-{
-  return opt_solver_mesh_command(4, action, val);
-}
-
-std::string opt_solver_socket_command(OPT_ARGS_STR)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->socketSwitch = val;
-  return ConnectionManager::get(num)->socketSwitch;
-}
-
-std::string opt_solver_socket_command0(OPT_ARGS_STR)
-{
-  return opt_solver_socket_command(0, action, val);
-}
-
-std::string opt_solver_socket_command1(OPT_ARGS_STR)
-{
-  return opt_solver_socket_command(1, action, val);
-}
-
-std::string opt_solver_socket_command2(OPT_ARGS_STR)
-{
-  return opt_solver_socket_command(2, action, val);
-}
-
-std::string opt_solver_socket_command3(OPT_ARGS_STR)
-{
-  return opt_solver_socket_command(3, action, val);
-}
-
-std::string opt_solver_socket_command4(OPT_ARGS_STR)
-{
-  return opt_solver_socket_command(4, action, val);
-}
-
-std::string opt_solver_name_command(OPT_ARGS_STR)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->inputFileSwitch = val;
-  return ConnectionManager::get(num)->inputFileSwitch;
-}
-
-std::string opt_solver_name_command0(OPT_ARGS_STR)
-{
-  return opt_solver_name_command(0, action, val);
-}
-
-std::string opt_solver_name_command1(OPT_ARGS_STR)
-{
-  return opt_solver_name_command(1, action, val);
-}
-
-std::string opt_solver_name_command2(OPT_ARGS_STR)
-{
-  return opt_solver_name_command(2, action, val);
-}
-
-std::string opt_solver_name_command3(OPT_ARGS_STR)
-{
-  return opt_solver_name_command(3, action, val);
-}
-
-std::string opt_solver_name_command4(OPT_ARGS_STR)
-{
-  return opt_solver_name_command(4, action, val);
-}
-
-std::string opt_solver_option_command(OPT_ARGS_STR)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->optionSwitch = val;
-  return ConnectionManager::get(num)->optionSwitch;
-}
-
-std::string opt_solver_option_command0(OPT_ARGS_STR)
-{
-  return opt_solver_option_command(0, action, val);
-}
-
-std::string opt_solver_option_command1(OPT_ARGS_STR)
-{
-  return opt_solver_option_command(1, action, val);
-}
-
-std::string opt_solver_option_command2(OPT_ARGS_STR)
-{
-  return opt_solver_option_command(2, action, val);
-}
-
-std::string opt_solver_option_command3(OPT_ARGS_STR)
-{
-  return opt_solver_option_command(3, action, val);
-}
-
-std::string opt_solver_option_command4(OPT_ARGS_STR)
-{
-  return opt_solver_option_command(4, action, val);
-}
-
-std::string opt_solver_first_option(OPT_ARGS_STR)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->optionName[0] = val;
-  return ConnectionManager::get(num)->optionName[0];
-}
-
-std::string opt_solver_first_option0(OPT_ARGS_STR)
-{
-  return opt_solver_first_option(0, action, val);
-}
-
-std::string opt_solver_first_option1(OPT_ARGS_STR)
-{
-  return opt_solver_first_option(1, action, val);
-}
-
-std::string opt_solver_first_option2(OPT_ARGS_STR)
-{
-  return opt_solver_first_option(2, action, val);
-}
-
-std::string opt_solver_first_option3(OPT_ARGS_STR)
-{
-  return opt_solver_first_option(3, action, val);
-}
-
-std::string opt_solver_first_option4(OPT_ARGS_STR)
-{
-  return opt_solver_first_option(4, action, val);
-}
-
-std::string opt_solver_second_option(OPT_ARGS_STR)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->optionName[1] = val;
-  return ConnectionManager::get(num)->optionName[1];
-}
-
-std::string opt_solver_second_option0(OPT_ARGS_STR)
-{
-  return opt_solver_second_option(0, action, val);
-}
-
-std::string opt_solver_second_option1(OPT_ARGS_STR)
-{
-  return opt_solver_second_option(1, action, val);
-}
-
-std::string opt_solver_second_option2(OPT_ARGS_STR)
-{
-  return opt_solver_second_option(2, action, val);
-}
-
-std::string opt_solver_second_option3(OPT_ARGS_STR)
-{
-  return opt_solver_second_option(3, action, val);
-}
-
-std::string opt_solver_second_option4(OPT_ARGS_STR)
-{
-  return opt_solver_second_option(4, action, val);
-}
-
-std::string opt_solver_third_option(OPT_ARGS_STR)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->optionName[2] = val;
-  return ConnectionManager::get(num)->optionName[2];
-}
-
-std::string opt_solver_third_option0(OPT_ARGS_STR)
-{
-  return opt_solver_third_option(0, action, val);
-}
-
-std::string opt_solver_third_option1(OPT_ARGS_STR)
-{
-  return opt_solver_third_option(1, action, val);
-}
-
-std::string opt_solver_third_option2(OPT_ARGS_STR)
-{
-  return opt_solver_third_option(2, action, val);
-}
-
-std::string opt_solver_third_option3(OPT_ARGS_STR)
-{
-  return opt_solver_third_option(3, action, val);
-}
-
-std::string opt_solver_third_option4(OPT_ARGS_STR)
-{
-  return opt_solver_third_option(4, action, val);
-}
-
-std::string opt_solver_fourth_option(OPT_ARGS_STR)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->optionName[3] = val;
-  return ConnectionManager::get(num)->optionName[3];
-}
-
-std::string opt_solver_fourth_option0(OPT_ARGS_STR)
-{
-  return opt_solver_fourth_option(0, action, val);
-}
-
-std::string opt_solver_fourth_option1(OPT_ARGS_STR)
-{
-  return opt_solver_fourth_option(1, action, val);
-}
-
-std::string opt_solver_fourth_option2(OPT_ARGS_STR)
-{
-  return opt_solver_fourth_option(2, action, val);
-}
-
-std::string opt_solver_fourth_option3(OPT_ARGS_STR)
-{
-  return opt_solver_fourth_option(3, action, val);
-}
-
-std::string opt_solver_fourth_option4(OPT_ARGS_STR)
-{
-  return opt_solver_fourth_option(4, action, val);
-}
-
-std::string opt_solver_fifth_option(OPT_ARGS_STR)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->optionName[4] = val;
-  return ConnectionManager::get(num)->optionName[4];
-}
-
-std::string opt_solver_fifth_option0(OPT_ARGS_STR)
-{
-  return opt_solver_fifth_option(0, action, val);
-}
-
-std::string opt_solver_fifth_option1(OPT_ARGS_STR)
-{
-  return opt_solver_fifth_option(1, action, val);
-}
-
-std::string opt_solver_fifth_option2(OPT_ARGS_STR)
-{
-  return opt_solver_fifth_option(2, action, val);
-}
-
-std::string opt_solver_fifth_option3(OPT_ARGS_STR)
-{
-  return opt_solver_fifth_option(3, action, val);
-}
-
-std::string opt_solver_fifth_option4(OPT_ARGS_STR)
-{
-  return opt_solver_fifth_option(4, action, val);
-}
-
-std::string opt_solver_first_button(OPT_ARGS_STR)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->buttonName[0] = val;
-  return ConnectionManager::get(num)->buttonName[0];
-}
-
-std::string opt_solver_first_button0(OPT_ARGS_STR)
-{
-  return opt_solver_first_button(0, action, val);
-}
-
-std::string opt_solver_first_button1(OPT_ARGS_STR)
-{
-  return opt_solver_first_button(1, action, val);
-}
-
-std::string opt_solver_first_button2(OPT_ARGS_STR)
-{
-  return opt_solver_first_button(2, action, val);
-}
-
-std::string opt_solver_first_button3(OPT_ARGS_STR)
-{
-  return opt_solver_first_button(3, action, val);
-}
-
-std::string opt_solver_first_button4(OPT_ARGS_STR)
-{
-  return opt_solver_first_button(4, action, val);
-}
-
-std::string opt_solver_first_button_command(OPT_ARGS_STR)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->buttonSwitch[0] = val;
-  return ConnectionManager::get(num)->buttonSwitch[0];
-}
-
-std::string opt_solver_first_button_command0(OPT_ARGS_STR)
-{
-  return opt_solver_first_button_command(0, action, val);
-}
-
-std::string opt_solver_first_button_command1(OPT_ARGS_STR)
-{
-  return opt_solver_first_button_command(1, action, val);
-}
-
-std::string opt_solver_first_button_command2(OPT_ARGS_STR)
-{
-  return opt_solver_first_button_command(2, action, val);
-}
-
-std::string opt_solver_first_button_command3(OPT_ARGS_STR)
-{
-  return opt_solver_first_button_command(3, action, val);
-}
-
-std::string opt_solver_first_button_command4(OPT_ARGS_STR)
-{
-  return opt_solver_first_button_command(4, action, val);
-}
-
-std::string opt_solver_second_button(OPT_ARGS_STR)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->buttonName[1] = val;
-  return ConnectionManager::get(num)->buttonName[1];
-}
-
-std::string opt_solver_second_button0(OPT_ARGS_STR)
-{
-  return opt_solver_second_button(0, action, val);
-}
-
-std::string opt_solver_second_button1(OPT_ARGS_STR)
-{
-  return opt_solver_second_button(1, action, val);
-}
-
-std::string opt_solver_second_button2(OPT_ARGS_STR)
-{
-  return opt_solver_second_button(2, action, val);
-}
-
-std::string opt_solver_second_button3(OPT_ARGS_STR)
-{
-  return opt_solver_second_button(3, action, val);
-}
-
-std::string opt_solver_second_button4(OPT_ARGS_STR)
-{
-  return opt_solver_second_button(4, action, val);
-}
-
-std::string opt_solver_second_button_command(OPT_ARGS_STR)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->buttonSwitch[1] = val;
-  return ConnectionManager::get(num)->buttonSwitch[1];
-}
-
-std::string opt_solver_second_button_command0(OPT_ARGS_STR)
-{
-  return opt_solver_second_button_command(0, action, val);
-}
-
-std::string opt_solver_second_button_command1(OPT_ARGS_STR)
-{
-  return opt_solver_second_button_command(1, action, val);
-}
-
-std::string opt_solver_second_button_command2(OPT_ARGS_STR)
-{
-  return opt_solver_second_button_command(2, action, val);
-}
-
-std::string opt_solver_second_button_command3(OPT_ARGS_STR)
-{
-  return opt_solver_second_button_command(3, action, val);
-}
-
-std::string opt_solver_second_button_command4(OPT_ARGS_STR)
-{
-  return opt_solver_second_button_command(4, action, val);
-}
-
-std::string opt_solver_third_button(OPT_ARGS_STR)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->buttonName[2] = val;
-  return ConnectionManager::get(num)->buttonName[2];
-}
-
-std::string opt_solver_third_button0(OPT_ARGS_STR)
-{
-  return opt_solver_third_button(0, action, val);
-}
-
-std::string opt_solver_third_button1(OPT_ARGS_STR)
-{
-  return opt_solver_third_button(1, action, val);
-}
-
-std::string opt_solver_third_button2(OPT_ARGS_STR)
-{
-  return opt_solver_third_button(2, action, val);
-}
-
-std::string opt_solver_third_button3(OPT_ARGS_STR)
-{
-  return opt_solver_third_button(3, action, val);
-}
-
-std::string opt_solver_third_button4(OPT_ARGS_STR)
-{
-  return opt_solver_third_button(4, action, val);
-}
-
-std::string opt_solver_third_button_command(OPT_ARGS_STR)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->buttonSwitch[2] = val;
-  return ConnectionManager::get(num)->buttonSwitch[2];
-}
-
-std::string opt_solver_third_button_command0(OPT_ARGS_STR)
-{
-  return opt_solver_third_button_command(0, action, val);
-}
-
-std::string opt_solver_third_button_command1(OPT_ARGS_STR)
-{
-  return opt_solver_third_button_command(1, action, val);
-}
-
-std::string opt_solver_third_button_command2(OPT_ARGS_STR)
-{
-  return opt_solver_third_button_command(2, action, val);
-}
-
-std::string opt_solver_third_button_command3(OPT_ARGS_STR)
-{
-  return opt_solver_third_button_command(3, action, val);
-}
-
-std::string opt_solver_third_button_command4(OPT_ARGS_STR)
-{
-  return opt_solver_third_button_command(4, action, val);
-}
-
-std::string opt_solver_fourth_button(OPT_ARGS_STR)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->buttonName[3] = val;
-  return ConnectionManager::get(num)->buttonName[3];
-}
-
-std::string opt_solver_fourth_button0(OPT_ARGS_STR)
-{
-  return opt_solver_fourth_button(0, action, val);
-}
-
-std::string opt_solver_fourth_button1(OPT_ARGS_STR)
-{
-  return opt_solver_fourth_button(1, action, val);
-}
-
-std::string opt_solver_fourth_button2(OPT_ARGS_STR)
-{
-  return opt_solver_fourth_button(2, action, val);
-}
-
-std::string opt_solver_fourth_button3(OPT_ARGS_STR)
-{
-  return opt_solver_fourth_button(3, action, val);
-}
-
-std::string opt_solver_fourth_button4(OPT_ARGS_STR)
-{
-  return opt_solver_fourth_button(4, action, val);
-}
-
-std::string opt_solver_fourth_button_command(OPT_ARGS_STR)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->buttonSwitch[3] = val;
-  return ConnectionManager::get(num)->buttonSwitch[3];
-}
-
-std::string opt_solver_fourth_button_command0(OPT_ARGS_STR)
-{
-  return opt_solver_fourth_button_command(0, action, val);
-}
-
-std::string opt_solver_fourth_button_command1(OPT_ARGS_STR)
-{
-  return opt_solver_fourth_button_command(1, action, val);
-}
-
-std::string opt_solver_fourth_button_command2(OPT_ARGS_STR)
-{
-  return opt_solver_fourth_button_command(2, action, val);
-}
-
-std::string opt_solver_fourth_button_command3(OPT_ARGS_STR)
-{
-  return opt_solver_fourth_button_command(3, action, val);
-}
-
-std::string opt_solver_fourth_button_command4(OPT_ARGS_STR)
-{
-  return opt_solver_fourth_button_command(4, action, val);
-}
-
-std::string opt_solver_fifth_button(OPT_ARGS_STR)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->buttonName[4] = val;
-  return ConnectionManager::get(num)->buttonName[4];
-}
-
-std::string opt_solver_fifth_button0(OPT_ARGS_STR)
-{
-  return opt_solver_fifth_button(0, action, val);
-}
-
-std::string opt_solver_fifth_button1(OPT_ARGS_STR)
-{
-  return opt_solver_fifth_button(1, action, val);
-}
-
-std::string opt_solver_fifth_button2(OPT_ARGS_STR)
-{
-  return opt_solver_fifth_button(2, action, val);
-}
-
-std::string opt_solver_fifth_button3(OPT_ARGS_STR)
-{
-  return opt_solver_fifth_button(3, action, val);
-}
-
-std::string opt_solver_fifth_button4(OPT_ARGS_STR)
-{
-  return opt_solver_fifth_button(4, action, val);
-}
-
-std::string opt_solver_fifth_button_command(OPT_ARGS_STR)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->buttonSwitch[4] = val;
-  return ConnectionManager::get(num)->buttonSwitch[4];
-}
-
-std::string opt_solver_fifth_button_command0(OPT_ARGS_STR)
-{
-  return opt_solver_fifth_button_command(0, action, val);
-}
-
-std::string opt_solver_fifth_button_command1(OPT_ARGS_STR)
-{
-  return opt_solver_fifth_button_command(1, action, val);
-}
-
-std::string opt_solver_fifth_button_command2(OPT_ARGS_STR)
-{
-  return opt_solver_fifth_button_command(2, action, val);
-}
-
-std::string opt_solver_fifth_button_command3(OPT_ARGS_STR)
-{
-  return opt_solver_fifth_button_command(3, action, val);
-}
-
-std::string opt_solver_fifth_button_command4(OPT_ARGS_STR)
-{
-  return opt_solver_fifth_button_command(4, action, val);
 }
 
 #if defined(HAVE_FLTK)
@@ -2470,8 +1665,10 @@ double opt_general_graphics_position1(OPT_ARGS_NUM)
 
 double opt_general_graphics_size0(OPT_ARGS_NUM)
 {
-  if(action & GMSH_SET)
+  if(action & GMSH_SET){
     CTX::instance()->glSize[0] = (int)val;
+    if(CTX::instance()->glSize[0] <= 0) CTX::instance()->glSize[0] = 600;
+  }
 #if defined(HAVE_FLTK)
   if(FlGui::available()){
     if(action & GMSH_SET){
@@ -2489,8 +1686,10 @@ double opt_general_graphics_size0(OPT_ARGS_NUM)
 
 double opt_general_graphics_size1(OPT_ARGS_NUM)
 {
-  if(action & GMSH_SET)
+  if(action & GMSH_SET){
     CTX::instance()->glSize[1] = (int)val;
+    if(CTX::instance()->glSize[1] <= 0) CTX::instance()->glSize[1] = 600;
+  }
 #if defined(HAVE_FLTK)
   if(FlGui::available()){
     if(action & GMSH_SET){
@@ -2569,43 +1768,13 @@ double opt_general_system_menu_bar(OPT_ARGS_NUM)
   return CTX::instance()->systemMenuBar;
 }
 
-double opt_general_message_position0(OPT_ARGS_NUM)
+double opt_general_message_size(OPT_ARGS_NUM)
 {
-  if(action & GMSH_SET)
-    CTX::instance()->msgPosition[0] = (int)val;
-  return CTX::instance()->msgPosition[0];
-}
-
-double opt_general_message_position1(OPT_ARGS_NUM)
-{
-  if(action & GMSH_SET)
-    CTX::instance()->msgPosition[1] = (int)val;
-  return CTX::instance()->msgPosition[1];
-}
-
-double opt_general_message_size0(OPT_ARGS_NUM)
-{
-  if(action & GMSH_SET)
-    CTX::instance()->msgSize[0] = (int)val;
-  return CTX::instance()->msgSize[0];
-}
-
-double opt_general_message_size1(OPT_ARGS_NUM)
-{
-  if(action & GMSH_SET)
-    CTX::instance()->msgSize[1] = (int)val;
-  return CTX::instance()->msgSize[1];
-}
-
-double opt_general_message_auto_scroll(OPT_ARGS_NUM)
-{
-  if(action & GMSH_SET)
-    CTX::instance()->msgAutoScroll = (int)val;
-#if defined(HAVE_FLTK)
-  if(FlGui::available() && (action & GMSH_GUI))
-    FlGui::instance()->messages->butt->value(CTX::instance()->msgAutoScroll);
-#endif
-  return CTX::instance()->msgAutoScroll;
+  if(action & GMSH_SET){
+    CTX::instance()->msgSize = (int)val;
+    if(CTX::instance()->msgSize < 0) CTX::instance()->msgSize = 0;
+  }
+  return CTX::instance()->msgSize;
 }
 
 double opt_general_option_position0(OPT_ARGS_NUM)
@@ -4707,6 +3876,19 @@ double opt_geometry_light_two_side(OPT_ARGS_NUM)
   return CTX::instance()->geom.lightTwoSide;
 }
 
+double opt_geometry_occ_fix_degenerated(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->geom.occFixDegenerated = val ? 1 : 0;
+#if defined(HAVE_FLTK)
+  if(FlGui::available() && (action & GMSH_GUI)) {
+    FlGui::instance()->options->geo.butt[16]->value
+      (CTX::instance()->geom.occFixDegenerated);
+  }
+#endif
+  return CTX::instance()->geom.occFixSmallEdges;
+}
+
 double opt_geometry_occ_fix_small_edges(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
@@ -6311,132 +5493,11 @@ double opt_solver_timeout(OPT_ARGS_NUM)
   return CTX::instance()->solver.timeout;
 }
 
-
 double opt_solver_plugins(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
     CTX::instance()->solver.plugins = (int)val;
   return CTX::instance()->solver.plugins;
-}
-
-double opt_solver_client_server(OPT_ARGS_NUM)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->clientServer = (bool)val;
-#if defined(HAVE_FLTK)
-  if(FlGui::available() && (action & GMSH_GUI)){
-    if(ConnectionManager::get(num)->clientServer)
-      ((Fl_Menu_Item*)FlGui::instance()->solver[num]->menu->menu())[0].set();
-    else
-      ((Fl_Menu_Item*)FlGui::instance()->solver[num]->menu->menu())[0].clear();
-  }
-#endif
-  return ConnectionManager::get(num)->clientServer ? 1 : 0;
-}
-
-double opt_solver_client_server0(OPT_ARGS_NUM)
-{
-  return opt_solver_client_server(0, action, val);
-}
-
-double opt_solver_client_server1(OPT_ARGS_NUM)
-{
-  return opt_solver_client_server(1, action, val);
-}
-
-double opt_solver_client_server2(OPT_ARGS_NUM)
-{
-  return opt_solver_client_server(2, action, val);
-}
-
-double opt_solver_client_server3(OPT_ARGS_NUM)
-{
-  return opt_solver_client_server(3, action, val);
-}
-
-double opt_solver_client_server4(OPT_ARGS_NUM)
-{
-  return opt_solver_client_server(4, action, val);
-}
-
-double opt_solver_popup_messages(OPT_ARGS_NUM)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->popupMessages = (bool)val;
-#if defined(HAVE_FLTK)
-  if(FlGui::available() && (action & GMSH_GUI)){
-    if(ConnectionManager::get(num)->popupMessages)
-      ((Fl_Menu_Item*)FlGui::instance()->solver[num]->menu->menu())[1].set();
-    else
-      ((Fl_Menu_Item*)FlGui::instance()->solver[num]->menu->menu())[1].clear();
-  }
-#endif
-  return ConnectionManager::get(num)->popupMessages ? 1 : 0;
-}
-
-double opt_solver_popup_messages0(OPT_ARGS_NUM)
-{
-  return opt_solver_popup_messages(0, action, val);
-}
-
-double opt_solver_popup_messages1(OPT_ARGS_NUM)
-{
-  return opt_solver_popup_messages(1, action, val);
-}
-
-double opt_solver_popup_messages2(OPT_ARGS_NUM)
-{
-  return opt_solver_popup_messages(2, action, val);
-}
-
-double opt_solver_popup_messages3(OPT_ARGS_NUM)
-{
-  return opt_solver_popup_messages(3, action, val);
-}
-
-double opt_solver_popup_messages4(OPT_ARGS_NUM)
-{
-  return opt_solver_popup_messages(4, action, val);
-}
-
-double opt_solver_merge_views(OPT_ARGS_NUM)
-{
-  if(action & GMSH_SET)
-    ConnectionManager::get(num)->mergeViews = (bool)val;
-#if defined(HAVE_FLTK)
-  if(FlGui::available() && (action & GMSH_GUI)){
-    if(ConnectionManager::get(num)->mergeViews)
-      ((Fl_Menu_Item*)FlGui::instance()->solver[num]->menu->menu())[2].set();
-    else
-      ((Fl_Menu_Item*)FlGui::instance()->solver[num]->menu->menu())[2].clear();
-  }
-#endif
-  return ConnectionManager::get(num)->mergeViews ? 1 : 0;
-}
-
-double opt_solver_merge_views0(OPT_ARGS_NUM)
-{
-  return opt_solver_merge_views(0, action, val);
-}
-
-double opt_solver_merge_views1(OPT_ARGS_NUM)
-{
-  return opt_solver_merge_views(1, action, val);
-}
-
-double opt_solver_merge_views2(OPT_ARGS_NUM)
-{
-  return opt_solver_merge_views(2, action, val);
-}
-
-double opt_solver_merge_views3(OPT_ARGS_NUM)
-{
-  return opt_solver_merge_views(3, action, val);
-}
-
-double opt_solver_merge_views4(OPT_ARGS_NUM)
-{
-  return opt_solver_merge_views(4, action, val);
 }
 
 double opt_post_horizontal_scales(OPT_ARGS_NUM)
@@ -6499,6 +5560,20 @@ double opt_post_anim_cycle(OPT_ARGS_NUM)
       FlGui::instance()->graph[i]->checkAnimButtons();
 #endif
   return CTX::instance()->post.animCycle;
+}
+
+double opt_post_anim_step(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET){
+    CTX::instance()->post.animStep = (int)val;
+    if(CTX::instance()->post.animStep < 1) CTX::instance()->post.animStep = 1;
+  }
+#if defined(HAVE_FLTK)
+  if(FlGui::available() && (action & GMSH_GUI))
+    FlGui::instance()->options->post.value[1]->value
+      (CTX::instance()->post.animStep);
+#endif
+  return CTX::instance()->post.animStep;
 }
 
 double opt_post_combine_remove_orig(OPT_ARGS_NUM)

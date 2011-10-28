@@ -4,8 +4,10 @@
 #include "Integration3D.h"
 #include "recurCut.h"
 #include "Gauss.h"
+#include "polynomialBasis.h"
+#include "GmshDefines.h" 
 
-#define ZERO_LS_TOL  1.e-7
+#define ZERO_LS_TOL  1.e-3
 #define EQUALITY_TOL 1.e-15
 
 // cross product
@@ -64,13 +66,13 @@ inline DI_Point* middle (const DI_Point *p1, const DI_Point *p2) {
   return new DI_Point ((p1->x() + p2->x()) / 2, (p1->y() + p2->y()) / 2, (p1->z() + p2->z()) / 2);
 }
 inline DI_Point* middle (const DI_Point *p1, const DI_Point *p2,
-                        const DI_Element *e, const std::vector<const gLevelset *> &RPNi) {
+                        const DI_Element *e, const std::vector<gLevelset *> &RPNi) {
   return new DI_Point ((p1->x() + p2->x()) / 2, (p1->y() + p2->y()) / 2, (p1->z() + p2->z()) / 2, e, RPNi);
 }
 
 // barycentre
 inline DI_Point* barycenter (const DI_Element *el,
-                             const DI_Element *e, const std::vector<const gLevelset *> &RPN) {
+                             const DI_Element *e, const std::vector<gLevelset *> &RPN) {
   double x[3] = {0., 0., 0.};
   int n;
   for (n = 0; n < el->nbVert(); n++) {
@@ -447,7 +449,7 @@ int bestQuality (DI_Point *p0, DI_Point *p1, DI_Point *p2,
 
 // computes the intersection between a level set and a linear edge
 DI_Point* Newton(const DI_Point *p1, const DI_Point *p2,
-                const DI_Element *e, const std::vector<const gLevelset *> &RPNi) {
+                const DI_Element *e, const std::vector<gLevelset *> &RPNi) {
   double eps = -p1->ls() / (p2->ls() - p1->ls());
   DI_Point* p = new DI_Point(p1->x() + eps * (p2->x() - p1->x()), p1->y() + eps * (p2->y() - p1->y()),
                              p1->z() + eps * (p2->z() - p1->z()));
@@ -471,7 +473,7 @@ DI_Point* Newton(const DI_Point *p1, const DI_Point *p2,
 // compute the position of the middle of a quadratic edge
 //(intersection between the bisector of the linear edge and the levelset)
 DI_Point* quadMidNode(const DI_Point *p1, const DI_Point *p2, const DI_Point *pf,
-                      const DI_Element *e, const std::vector<const gLevelset *> &RPNi) {
+                      const DI_Element *e, const std::vector<gLevelset *> &RPNi) {
   // middle of the edge between the 2 cutting points
   DI_Point midEN((p1->x() + p2->x()) / 2., (p1->y() + p2->y()) / 2., (p1->z() + p2->z()) / 2.);
   midEN.addLs(e);
@@ -522,7 +524,7 @@ void DI_Point::chooseLs (const gLevelset *Lsi) {
   Ls.pop_back(); Ls.pop_back();
   addLs(ls);
 }
-void DI_Point::computeLs (const DI_Element *e, const std::vector<const gLevelset*> &RPNi) {
+void DI_Point::computeLs (const DI_Element *e, const std::vector<gLevelset*> &RPNi) {
   int prim = 0; Ls.clear();
   if(e->sizeLs() == 0) return;
   for(int l = 0; l < (int)RPNi.size(); l++) {
@@ -541,7 +543,7 @@ bool DI_Point::equal(const DI_Point *p) const {
 }
 
 // DI_IntegrationPoint methods --------------------------------------------------------------------
-void DI_IntegrationPoint::computeLs (const DI_Element *e, const std::vector<const gLevelset*> &RPN) {
+void DI_IntegrationPoint::computeLs (const DI_Element *e, const std::vector<gLevelset*> &RPN) {
   int prim = 0; std::vector<double> Ls;
   for(int l = 0; l < (int)RPN.size(); l++) {
     if(RPN[l]->isPrimitive())
@@ -613,9 +615,24 @@ DI_Element & DI_Element::operator= (const DI_Element &rhs){
   }
   return *this;
 }
+void DI_Element::getShapeFunctions(double u, double v, double w, double s[], int o) const
+{
+  //printf("type elem =%d  order =%d\n", type(), o);
+  const polynomialBasis* fs = getFunctionSpace(o);
+  if(fs) fs->f(u, v, w, s);
+  else Msg::Error("Function space not implemented for this type of element");
+}
+
+void DI_Element::getGradShapeFunctions(double u, double v, double w, double s[][3],
+                                     int o) const
+{
+  const polynomialBasis* fs = getFunctionSpace(o);
+  if(fs) fs->df(u, v, w, s);
+  else Msg::Error("Function space not implemented for this type of element");
+}
 void DI_Element::setPolynomialOrder (int o) {
   if(polOrder_ == o) return;
-  delete [] mid_;
+  if (mid_) delete [] mid_;
   polOrder_ = o;
   switch (o) {
   case 1 :
@@ -632,12 +649,13 @@ void DI_Element::setPolynomialOrder (int o) {
     }
     return;
   default :
-    printf("Order %d line function space not implemented ", o); print();
+    return;
+    //printf("Order %d line function space not implemented ", o); print();
   }
 }
-void DI_Element::setPolynomialOrder (int o, const DI_Element *e, const std::vector<const gLevelset *> &RPNi) {
+void DI_Element::setPolynomialOrder (int o, const DI_Element *e, const std::vector<gLevelset *> &RPNi) {
   if(polOrder_ == o) return;
-  delete [] mid_;
+  if (mid_) delete [] mid_;
   polOrder_ = o;
   switch (o) {
   case 1 :
@@ -720,7 +738,7 @@ void DI_Element::clearLs() {
     mid_[i].clearLs();
 }
 bool DI_Element::addQuadEdge (int edge, DI_Point *xm,
-                              const DI_Element *e, const std::vector<const gLevelset *> &RPNi) {
+                              const DI_Element *e, const std::vector<gLevelset *> &RPNi) {
   if(edge >= nbEdg()) {printf("wrong number (%d) for quadratic edge for a ", edge); print(); return false;}
   int s1, s2; vert(edge, s1, s2);
   int order0 = getPolynomialOrder();
@@ -729,7 +747,7 @@ bool DI_Element::addQuadEdge (int edge, DI_Point *xm,
   double sideLength = distance(pt(s1), pt(s2));
   if (dist / sideLength < 1.e-5) {
     if(order0 == 1) setPolynomialOrder(1);
-    printf("dist=%.20f, sideLength=%g, d/sL=%g => do not add quad edge\n", dist, sideLength, dist/sideLength);
+    printf("dist=%.20f, sideLength=%g, d/sL=%g => do not add quadratic edge\n", dist, sideLength, dist/sideLength);
     return true; // do not add the quadratic edge if xm is very close from the middle of the edge
   }
   DI_Point *p0 = &mid_[edge];
@@ -742,6 +760,7 @@ bool DI_Element::addQuadEdge (int edge, DI_Point *xm,
     printf("detJ<0 when trying to add a quadratic edge in "); print();
     return false;
   }
+  printf("in add quad edge \n");
   computeIntegral();
   return true;
 }
@@ -814,7 +833,7 @@ void DI_Element::mappingEl (DI_Element *el) const {
   el->computeIntegral();
 }
 void DI_Element::integrationPoints (const int polynomialOrder, const DI_Element *loc,
-                                    const DI_Element *e, const std::vector<const gLevelset *> &RPN,
+                                    const DI_Element *e, const std::vector<gLevelset *> &RPN,
                                     std::vector<DI_IntegrationPoint *> &ip) const {
   std::vector<DI_IntegrationPoint *> ip_ref;
   getRefIntegrationPoints(polynomialOrder, ip_ref);
@@ -834,7 +853,7 @@ void DI_Element::integrationPoints (const int polynomialOrder, const DI_Element 
     ip.push_back(ip_ref[j]);
   }
 }
-void DI_Element::getCuttingPoints (const DI_Element *e, const std::vector<const gLevelset *> &RPNi,
+void DI_Element::getCuttingPoints (const DI_Element *e, const std::vector<gLevelset *> &RPNi,
                                    std::vector<DI_CuttingPoint *> &cp) const {
   int s1, s2;
   for(int i = 0; i < nbEdg(); i++){
@@ -921,7 +940,7 @@ double DI_Element::detJ (const double u, const double v, const double w) const {
   }
 }
 // set the lsTag to +1 if the element is inside the domain (lsTag is -1 by default)
-void DI_Element::computeLsTagDom(const DI_Element *e, const std::vector<const gLevelset *> &RPN) {
+void DI_Element::computeLsTagDom(const DI_Element *e, const std::vector<gLevelset *> &RPN) {
   for(int i = 0; i < nbVert(); i++) {
     if(pt(i)->isOutsideDomain())
       return;
@@ -1042,369 +1061,159 @@ bool DI_ElementLessThan::operator()(const DI_Element *e1, const DI_Element *e2) 
 }
 
 // DI_Line methods --------------------------------------------------------------------------------
-void DI_Line::computeIntegral() {
-  switch (getPolynomialOrder()) {
-  case 1 :
-    integral_ = LineLength(pt(0), pt(1));
-    break;
-  case 2 :
-    integral_ = LineLength(pt(0), mid(0)) + LineLength(mid(0), pt(1));
-    break;
-  default :
-    printf("Order %d line function space not implemented ", getPolynomialOrder()); print();
-  }
-}
-void DI_Line::getShapeFunctions (double u, double v, double w, double s[], int ord) const {
-  int order = (ord == -1) ? getPolynomialOrder() : ord;
-  double valm = (fabs(1. - u) < 1.e-16) ? 0. : (1. - u);
-  double valp = (fabs(1. + u) < 1.e-16) ? 0. : (1. + u);
+const polynomialBasis* DI_Line::getFunctionSpace(int o) const{
+  int order = (o == -1) ? getPolynomialOrder() : o;
   switch (order) {
-  case 1 :
-    s[0] = valm / 2.;
-    s[1] = valp / 2.;
-    break;
-  case 2 :
-    s[0] = -u * valm / 2.;
-    s[1] = u * valp / 2.;
-    s[2] = valm * valp;
-    break;
-  default : printf("Order %d line function space not implemented ", order); print();
+  case 0: return polynomialBases::find(MSH_LIN_1);
+  case 1: return polynomialBases::find(MSH_LIN_2);
+  case 2: return polynomialBases::find(MSH_LIN_3);
+  case 3: return polynomialBases::find(MSH_LIN_4);
+  case 4: return polynomialBases::find(MSH_LIN_5);
+  case 5: return polynomialBases::find(MSH_LIN_6);
+  case 6: return polynomialBases::find(MSH_LIN_7);
+  case 7: return polynomialBases::find(MSH_LIN_8);
+  case 8: return polynomialBases::find(MSH_LIN_9);
+  case 9: return polynomialBases::find(MSH_LIN_10);
+  case 10: return polynomialBases::find(MSH_LIN_11);
+  default: Msg::Error("Order %d line function space not implemented", order);
   }
-}
-void DI_Line::getGradShapeFunctions (const double u, const double v, const double w, double s[][3], int ord) const {
-  int order = (ord == -1) ? getPolynomialOrder() : ord;
-  switch (order) {
-  case 1 :
-    s[0][0] = -0.5; s[0][1] = 0.; s[0][2] = 0.;
-    s[1][0] =  0.5; s[1][1] = 0.; s[1][2] = 0.;
-    break;
-  case 2 :
-    s[0][0] = u - 0.5; s[0][1] = 0.; s[0][2] = 0.;
-    s[1][0] = u + 0.5; s[1][1] = 0.; s[1][2] = 0.;
-    s[2][0] = -2. * u; s[2][1] = 0.; s[2][2] = 0.;
-    break;
-  default :
-    printf("Order %d line function space not implemented ", order); print();
-  }
+  return 0;
 }
 
+void DI_Line::computeIntegral() {
+  integral_ = LineLength(pt(0), pt(1));
+  // switch (getPolynomialOrder()) {
+  // case 1 :
+  //   integral_ = LineLength(pt(0), pt(1));
+  //   break;
+  // case 2 :
+  //   integral_ = LineLength(pt(0), mid(0)) + LineLength(mid(0), pt(1));
+  //   break;
+  // default :
+  //   printf("Order %d line function space not implemented ", getPolynomialOrder()); print();
+  // }
+}
 // DI_Triangle methods ----------------------------------------------------------------------------
+const polynomialBasis* DI_Triangle::getFunctionSpace(int o) const
+{
+  int order = (o == -1) ? getPolynomialOrder() : o;
+  switch (order) {
+    case 0: return polynomialBases::find(MSH_TRI_1);
+    case 1: return polynomialBases::find(MSH_TRI_3);
+    case 2: return polynomialBases::find(MSH_TRI_6);
+    case 3: return polynomialBases::find(MSH_TRI_10);
+    case 4: return polynomialBases::find(MSH_TRI_15);
+    case 5: return polynomialBases::find(MSH_TRI_21);
+    case 6: return polynomialBases::find(MSH_TRI_28);
+    case 7: return polynomialBases::find(MSH_TRI_36);
+    case 8: return polynomialBases::find(MSH_TRI_45);
+    case 9: return polynomialBases::find(MSH_TRI_55);
+    case 10: return polynomialBases::find(MSH_TRI_66);
+    default: Msg::Error("Order %d triangle function space not implemented", order);
+    }
+}
 void DI_Triangle::computeIntegral() {
-  switch (getPolynomialOrder()) {
-  case 1 :
-    integral_ = TriSurf(pt(0), pt(1), pt(2));
-    break;
-  case 2 :
-    integral_ = TriSurf(pt(0), mid(0), mid(2)) + TriSurf(pt(1), mid(0), mid(1))
-              + TriSurf(pt(2), mid(1), mid(2)) + TriSurf(mid(0), mid(1), mid(2));
-    break;
-  default :
-    printf("Order %d triangle function space not implemented ", getPolynomialOrder()); print();
-  }
-}
-void DI_Triangle::getShapeFunctions (double u, double v, double w, double s[], int ord) const {
-  int order = (ord == -1) ? getPolynomialOrder() : ord;
-  double val1 = (fabs(1. - u - v) < 1.e-16) ? 0. : (1. - u - v);
-  switch (order) {
-  case 1 :
-    s[0] = val1;
-    s[1] = u;
-    s[2] = v;
-    break;
-  case 2 :
-    s[0] = val1 * (1. - 2. * u - 2. * v);
-    s[1] = u * (2. * u - 1.);
-    s[2] = v * (2. * v - 1.);
-    s[3] = 4. * u * val1;
-    s[4] = 4. * u * v;
-    s[5] = 4. * v * val1;
-    break;
-  default :
-    printf("Order %d triangle function space not implemented ", order); print();
-  }
-}
-void DI_Triangle::getGradShapeFunctions (const double u, const double v, const double w,
-                                         double s[][3], int ord) const {
-  int order = (ord == -1) ? getPolynomialOrder() : ord;
-  switch (order) {
-  case 1 :
-    s[0][0] = -1.; s[0][1] = -1.; s[0][2] = 0.;
-    s[1][0] =  1.; s[1][1] =  0.; s[1][2] = 0.;
-    s[2][0] =  0.; s[2][1] =  1.; s[2][2] = 0.;
-    break;
-  case 2 :
-    s[0][0] = 4. * u + 4. * v - 3.;
-    s[0][1] = 4. * u + 4. * v - 3.;
-    s[0][2] = 0.;
-    s[1][0] = 4. * u -1.;
-    s[1][1] = 0.;
-    s[1][2] = 0.;
-    s[2][0] = 0.;
-    s[2][1] = 4. * v - 1.;
-    s[2][2] = 0.;
-    s[3][0] = -8. * u - 4. * v + 4.;
-    s[3][1] = -4. * u;
-    s[3][2] = 0.;
-    s[4][0] = 4. * v;
-    s[4][1] = 4. * u;
-    s[4][2] = 0.;
-    s[5][0] = -4. * v;
-    s[5][1] = -4. * u - 8. * v + 4.;
-    s[5][2] = 0.;
-    break;
-  default :
-    printf("Order %d triangle function space not implemented ", order); print();
-  }
+  integral_ = TriSurf(pt(0), pt(1), pt(2));
+  // switch (getPolynomialOrder()) {
+  // case 1 :
+  //   integral_ = TriSurf(pt(0), pt(1), pt(2));
+  //   break;
+  // case 2 :
+  //   integral_ = TriSurf(pt(0), mid(0), mid(2)) + TriSurf(pt(1), mid(0), mid(1))
+  //             + TriSurf(pt(2), mid(1), mid(2)) + TriSurf(mid(0), mid(1), mid(2));
+  //   break;
+  // default :
+  //   printf("Order %d triangle function space not implemented ", getPolynomialOrder()); print();
+  // }
 }
 double DI_Triangle::quality() const {
   return qualityTri(pt(0), pt(1), pt(2));
 }
 
 // DI_Quad methods --------------------------------------------------------------------------------
-void DI_Quad::computeIntegral() {
-  switch (getPolynomialOrder()) {
-  case 1 :
-    integral_ = TriSurf(pt(0), pt(1), pt(2)) + TriSurf(pt(0), pt(2), pt(3));
-    break;
-  case 2 :
-    integral_ = TriSurf(pt(0), mid(0), mid(4)) + TriSurf(pt(0), mid(4), mid(3))
-              + TriSurf(pt(1), mid(1), mid(4)) + TriSurf(pt(1), mid(4), mid(0))
-              + TriSurf(pt(2), mid(2), mid(4)) + TriSurf(pt(2), mid(4), mid(1))
-              + TriSurf(pt(3), mid(3), mid(4)) + TriSurf(pt(3), mid(4), mid(2));
-    break;
-  default :
-    printf("Order %d quadrangle function space not implemented ", getPolynomialOrder()); print();
-  }
-}
-void DI_Quad::getShapeFunctions (double u, double v, double w, double s[], int ord) const {
-  int order = (ord == -1) ? getPolynomialOrder() : ord;
-  switch (order) {
-  case 1 :
-    s[0] = (1. - u) * (1. - v) / 4.;
-    s[1] = (1. + u) * (1. - v) / 4.;
-    s[2] = (1. + u) * (1. + v) / 4.;
-    s[3] = (1. - u) * (1. + v) / 4.;
-    break;
-  case 2 :
-    s[0] =  u * v * (1. - u) * (1. - v) / 4.;
-    s[1] = -u * v * (1. + u) * (1. - v) / 4.;
-    s[2] =  u * v * (1. + u) * (1. + v) / 4.;
-    s[3] = -u * v * (1. - u) * (1. + v) / 4.;
-    s[4] = -v * (1. - u) * (1. + u) * (1. - v) / 2.;
-    s[5] =  u * (1. + u) * (1. - v) * (1. + v) / 2.;
-    s[6] =  v * (1. - u) * (1. + u) * (1. + v) / 2.;
-    s[7] = -u * (1. - u) * (1. - v) * (1. + v) / 2.;
-    s[8] =  (1. - u) * (1. + u) * (1. - v) * (1. + v);
-    break;
-  default :
-    printf("Order %d quadrangle function space not implemented ", order); print();
-  }
-}
-void DI_Quad::getGradShapeFunctions (const double u, const double v, const double w, double s[][3], int ord) const {
-  int order = (ord == -1) ? getPolynomialOrder() : ord;
-  switch (order) {
-  case 1 :
-    s[0][0] = -0.25 * (1. - v); s[0][1] = -0.25 * (1. - u); s[0][2] = 0.;
-    s[1][0] =  0.25 * (1. - v); s[1][1] = -0.25 * (1. + u); s[1][2] = 0.;
-    s[2][0] =  0.25 * (1. + v); s[2][1] =  0.25 * (1. + u); s[2][2] = 0.;
-    s[3][0] = -0.25 * (1. + v); s[3][1] =  0.25 * (1. - u); s[3][2] = 0.;
-    break;
-  case 2 :
-    s[0][0] = v * (1. - v) * (1. - 2. * u) / 4.;
-    s[0][1] = u * (1. - u) * (1. - 2.* v ) / 4.;
-    s[0][2] = 0.;
-    s[1][0] = -v * (1. - v) * (1. + 2. * u) / 4.;
-    s[1][1] = -u * (1. + u) * (1. - 2. * v) / 4.;
-    s[1][2] = 0.;
-    s[2][0] = v * (1. + v) * (1. + 2. * u) / 4.;
-    s[2][1] = u * (1. + u) * (1. + 2. * v) / 4.;
-    s[2][2] = 0.;
-    s[3][0] = -v * (1. + v) * (1. - 2. * u) / 4.;
-    s[3][1] = -u * (1. - u) * (1. + 2. * v) / 4.;
-    s[3][2] = 0.;
-    s[4][0] = v * (1. - v) * u;
-    s[4][1] = -(1. - u * u) * (1. - 2. * v) / 2.;
-    s[4][2] = 0.;
-    s[5][0] = (1. - v * v) * (1. + 2. * u) / 2.;
-    s[5][1] = -u * (1. + u) * v;
-    s[5][2] = 0.;
-    s[6][0] = -v * (1. + v) * u;
-    s[6][1] = (1. - u * u) * (1. + 2. * v) / 2.;
-    s[6][2] = 0.;
-    s[7][0] = -(1. - v * v) * (1. - 2. * u) / 2.;
-    s[7][1] = u * (1. - u) * v;
-    s[7][2] = 0.;
-    s[8][0] = -(1. - v * v) * u * 2.;
-    s[8][1] = -(1. - u * u) * v * 2.;
-    s[8][2] = 0.;
-    break;
-  default :
-    printf("Order %d quadrangle function space not implemented ", order); print();
+const polynomialBasis* DI_Quad::getFunctionSpace(int o) const{
+ int order = (o == -1) ? getPolynomialOrder() : o;
+ switch (order) {
+    case 0: return polynomialBases::find(MSH_QUA_1);
+    case 1: return polynomialBases::find(MSH_QUA_4);
+    case 2: return polynomialBases::find(MSH_QUA_9);
+    case 3: return polynomialBases::find(MSH_QUA_16);
+    case 4: return polynomialBases::find(MSH_QUA_25);
+    case 5: return polynomialBases::find(MSH_QUA_36);
+    case 6: return polynomialBases::find(MSH_QUA_49);
+    case 7: return polynomialBases::find(MSH_QUA_64);
+    case 8: return polynomialBases::find(MSH_QUA_81);
+    case 9: return polynomialBases::find(MSH_QUA_100);
+    case 10: return polynomialBases::find(MSH_QUA_121);
+    default: Msg::Error("Order %d quadrangle function space not implemented", order);
   }
 }
 
+void DI_Quad::computeIntegral() {
+  integral_ = TriSurf(pt(0), pt(1), pt(2)) + TriSurf(pt(0), pt(2), pt(3));
+  // switch (getPolynomialOrder()) {
+  // case 1 :
+  //   integral_ = TriSurf(pt(0), pt(1), pt(2)) + TriSurf(pt(0), pt(2), pt(3));
+  //   break;
+  // case 2 :
+  //   integral_ = TriSurf(pt(0), mid(0), mid(4)) + TriSurf(pt(0), mid(4), mid(3))
+  //             + TriSurf(pt(1), mid(1), mid(4)) + TriSurf(pt(1), mid(4), mid(0))
+  //             + TriSurf(pt(2), mid(2), mid(4)) + TriSurf(pt(2), mid(4), mid(1))
+  //             + TriSurf(pt(3), mid(3), mid(4)) + TriSurf(pt(3), mid(4), mid(2));
+  //   break;
+  // default :
+  //   printf("Order %d quadrangle function space not implemented ", getPolynomialOrder()); print();
+  // }
+}
+
 // DI_Tetra methods -------------------------------------------------------------------------------
+const polynomialBasis* DI_Tetra::getFunctionSpace(int o) const{
+ int order = (o == -1) ? getPolynomialOrder() : o;
+ switch (order) {
+    case 0: return polynomialBases::find(MSH_TET_1);
+    case 1: return polynomialBases::find(MSH_TET_4);
+    case 2: return polynomialBases::find(MSH_TET_10);
+    case 3: return polynomialBases::find(MSH_TET_20);
+    case 4: return polynomialBases::find(MSH_TET_35);
+    case 5: return polynomialBases::find(MSH_TET_56);
+    case 6: return polynomialBases::find(MSH_TET_84);
+    case 7: return polynomialBases::find(MSH_TET_120);
+    case 8: return polynomialBases::find(MSH_TET_165);
+    case 9: return polynomialBases::find(MSH_TET_220);
+    case 10: return polynomialBases::find(MSH_TET_286);
+    default: Msg::Error("Order %d tetrahedron function space not implemented", order);
+    }
+}
+
 void DI_Tetra::computeIntegral() {
     integral_ = TetraVol(pt(0), pt(1), pt(2), pt(3));
-}
-void DI_Tetra::getShapeFunctions (double u, double v, double w, double s[], int ord) const {
-  int order = (ord == -1) ? getPolynomialOrder() : ord;
-  switch (order) {
-  case 1 :
-    s[0] = 1. - u - v - w;
-    s[1] = u;
-    s[2] = v;
-    s[3] = w;
-    break;
-  case 2 :
-    s[0] = (1. - u - v - w) * (1. - 2. * u - 2. * v - 2. * w);
-    s[1] = u * (2. * u - 1.);
-    s[2] = v * (2. * v - 1.);
-    s[3] = w * (2. * w - 1.);
-    s[4] = 4. * u * (1. - u - v - w);
-    s[5] = 4. * v * (1. - u - v - w);
-    s[6] = 4. * w * (1. - u - v - w);
-    s[7] = 4. * u * v;
-    s[8] = 4. * v * w;
-    s[9] = 4. * u * w;
-    break;
-  default :
-    printf("Order %d tetrahedron function space not implemented ", order); print();
-  }
-}
-void DI_Tetra::getGradShapeFunctions (const double u, const double v, const double w, double s[][3], int ord) const {
-  int order = (ord == -1) ? getPolynomialOrder() : ord;
-  switch (order) {
-  case 1 :
-    s[0][0] = -1.; s[0][1] = -1.; s[0][2] = -1.;
-    s[1][0] =  1.; s[1][1] =  0.; s[1][2] =  0.;
-    s[2][0] =  0.; s[2][1] =  1.; s[2][2] =  0.;
-    s[3][0] =  0.; s[3][1] =  0.; s[3][2] =  1.;
-    break;
-  case 2 :
-    s[0][0] = -3. + 4. * u + 4. * v + 4. * w;
-    s[0][1] = -3. + 4. * u + 4. * v + 4. * w;
-    s[0][2] = -3. + 4. * u + 4. * v + 4. * w;
-    s[1][0] = 4. * u - 1.;
-    s[1][1] = 0.;
-    s[1][2] = 0.;
-    s[2][0] = 0.;
-    s[2][1] = 4. * v - 1.;
-    s[2][2] = 0.;
-    s[3][0] = 0.;
-    s[3][1] = 0.;
-    s[3][2] = 4. * w - 1.;
-    s[4][0] = 4. * (1. - 2. * u - v - w);
-    s[4][1] = -4. * u;
-    s[4][2] = -4. * u;
-    s[5][0] = -4. * v;
-    s[5][1] = 4. * (1. - u - 2. * v - w);
-    s[5][2] = -4. * v;
-    s[6][0] = -4. * w;
-    s[6][1] = -4. * w;
-    s[6][2] = 4. * (1. - u - v - 2. * w);
-    s[7][0] = 4. * v;
-    s[7][1] = 4. * u;
-    s[7][2] = 0.;
-    s[8][0] = 0.;
-    s[8][1] = 4. * w;
-    s[8][2] = 4. * v;
-    s[9][0] = 4. * w;
-    s[9][1] = 0.;
-    s[9][2] = 4. * u;
-    break;
-  default :
-    printf("Order %d tetrahedron function space not implemented ", order); print();
-  }
 }
 double DI_Tetra::quality() const {
   return qualityTet(x(0), y(0), z(0), x(1), y(1), z(1), x(2), y(2), z(2), x(3), y(3), z(3));
 }
 
+
 // Hexahedron methods -----------------------------------------------------------------------------
+const polynomialBasis* DI_Hexa::getFunctionSpace(int o) const{
+  int order = (o == -1) ? getPolynomialOrder() : o;
+  switch (order) {
+    case 0: return polynomialBases::find(MSH_HEX_1);
+    case 1: return polynomialBases::find(MSH_HEX_8);
+    case 2: return polynomialBases::find(MSH_HEX_27);
+    case 3: return polynomialBases::find(MSH_HEX_64);
+    case 4: return polynomialBases::find(MSH_HEX_125);
+    case 5: return polynomialBases::find(MSH_HEX_216);
+    case 6: return polynomialBases::find(MSH_HEX_343);
+    case 7: return polynomialBases::find(MSH_HEX_512);
+    case 8: return polynomialBases::find(MSH_HEX_729);
+    case 9: return polynomialBases::find(MSH_HEX_1000);
+    default: Msg::Error("Order %d hex function space not implemented", order);
+    }
+}
 void DI_Hexa::computeIntegral() {
     integral_ = TetraVol(pt(0), pt(1), pt(3), pt(4)) + TetraVol(pt(1), pt(4), pt(5), pt(7))
               + TetraVol(pt(1), pt(3), pt(4), pt(7)) + TetraVol(pt(2), pt(5), pt(6), pt(7))
               + TetraVol(pt(1), pt(2), pt(3), pt(7)) + TetraVol(pt(1), pt(5), pt(2), pt(7));
-}
-void DI_Hexa::getShapeFunctions (double u, double v, double w, double s[], int ord) const {
-  int order = (ord == -1) ? getPolynomialOrder() : ord;
-  switch (order) {
-  case 1 :
-    s[0] = (1. - u) * (1. - v) * (1. - w) / 8.;
-    s[1] = (1. + u) * (1. - v) * (1. - w) / 8.;
-    s[2] = (1. + u) * (1. + v) * (1. - w) / 8.;
-    s[3] = (1. - u) * (1. + v) * (1. - w) / 8.;
-    s[4] = (1. - u) * (1. - v) * (1. + w) / 8.;
-    s[5] = (1. + u) * (1. - v) * (1. + w) / 8.;
-    s[6] = (1. + u) * (1. + v) * (1. + w) / 8.;
-    s[7] = (1. - u) * (1. + v) * (1. + w) / 8.;
-    break;
-  case 2 :
-    s[0] = -u * v * w * (1. - u) * (1. - v) * (1. - w) / 8.;
-    s[1] =  u * v * w * (1. + u) * (1. - v) * (1. - w) / 8.;
-    s[2] = -u * v * w * (1. + u) * (1. + v) * (1. - w) / 8.;
-    s[3] =  u * v * w * (1. - u) * (1. + v) * (1. - w) / 8.;
-    s[4] =  u * v * w * (1. - u) * (1. - v) * (1. + w) / 8.;
-    s[5] = -u * v * w * (1. + u) * (1. - v) * (1. + w) / 8.;
-    s[6] =  u * v * w * (1. + u) * (1. + v) * (1. + w) / 8.;
-    s[7] = -u * v * w * (1. - u) * (1. + v) * (1. + w) / 8.;
-    s[8] =  v * w * (1. - u) * (1. + u) * (1. - v) * (1. - w) / 4.;
-    s[9] = -u * w * (1. - v) * (1. + v) * (1. + u) * (1. - w) / 4.;
-    s[10] = -v * w * (1. - u) * (1. + u) * (1. + v) * (1. - w) / 4.;
-    s[11] =  u * w * (1. - v) * (1. + v) * (1. - u) * (1. - w) / 4.;
-    s[12] =  u * v * (1. - w) * (1. + w) * (1. - u) * (1. - v) / 4.;
-    s[13] = -u * v * (1. - w) * (1. + w) * (1. + u) * (1. - v) / 4.;
-    s[14] =  u * v * (1. - w) * (1. + w) * (1. + u) * (1. + v) / 4.;
-    s[15] = -u * v * (1. - w) * (1. + w) * (1. - u) * (1. + v) / 4.;
-    s[16] = -v * w * (1. - u) * (1. + u) * (1. - v) * (1. + w) / 4.;
-    s[17] =  u * w * (1. - v) * (1. + v) * (1. + u) * (1. + w) / 4.;
-    s[18] =  v * w * (1. - u) * (1. + u) * (1. + v) * (1. + w) / 4.;
-    s[19] = -u * w * (1. - v) * (1. + v) * (1. - u) * (1. + w) / 4.;
-    s[20] = -w * (1. - w) * (1. + u) * (1. - u) * (1. + v) * (1. - v) / 2.;
-    s[21] = -v * (1. - v) * (1. + u) * (1. - u) * (1. + w) * (1. - w) / 2.;
-    s[22] =  u * (1. + u) * (1. + v) * (1. - v) * (1. + w) * (1. - w) / 2.;
-    s[23] =  v * (1. + v) * (1. + u) * (1. - u) * (1. + w) * (1. - w) / 2.;
-    s[24] = -u * (1. - u) * (1. + v) * (1. - v) * (1. + w) * (1. - w) / 2.;
-    s[25] =  w * (1. + w) * (1. + u) * (1. - u) * (1. + v) * (1. - v) / 2.;
-    s[26] =  (1. + u) * (1. - u) * (1. + v) * (1. - v) * (1. + w) * (1. - w);
-    break;
-  default :
-    printf("Order %d hexahedron function space not implemented ", order); print();
-  }
-}
-void DI_Hexa::getGradShapeFunctions (const double u, const double v, const double w, double s[][3], int ord) const {
-  int order = (ord == -1) ? getPolynomialOrder() : ord;
-  switch (order) {
-  case 1 :
-    s[0][0] = -0.125 * (1. - v) * (1. - w);
-    s[0][1] = -0.125 * (1. - u) * (1. - w);
-    s[0][2] = -0.125 * (1. - u) * (1. - v);
-    s[1][0] =  0.125 * (1. - v) * (1. - w);
-    s[1][1] = -0.125 * (1. + u) * (1. - w);
-    s[1][2] = -0.125 * (1. + u) * (1. - v);
-    s[2][0] =  0.125 * (1. + v) * (1. - w);
-    s[2][1] =  0.125 * (1. + u) * (1. - w);
-    s[2][2] = -0.125 * (1. + u) * (1. + v);
-    s[3][0] = -0.125 * (1. + v) * (1. - w);
-    s[3][1] =  0.125 * (1. - u) * (1. - w);
-    s[3][2] = -0.125 * (1. - u) * (1. + v);
-    s[4][0] = -0.125 * (1. - v) * (1. + w);
-    s[4][1] = -0.125 * (1. - u) * (1. + w);
-    s[4][2] =  0.125 * (1. - u) * (1. - v);
-    s[5][0] =  0.125 * (1. - v) * (1. + w);
-    s[5][1] = -0.125 * (1. + u) * (1. + w);
-    s[5][2] =  0.125 * (1. + u) * (1. - v);
-    s[6][0] =  0.125 * (1. + v) * (1. + w);
-    s[6][1] =  0.125 * (1. + u) * (1. + w);
-    s[6][2] =  0.125 * (1. + u) * (1. + v);
-    s[7][0] = -0.125 * (1. + v) * (1. + w);
-    s[7][1] =  0.125 * (1. - u) * (1. + w);
-    s[7][2] =  0.125 * (1. - u) * (1. + v);
-    break;
-  default :
-    printf("Order %d hexahedron function space not implemented ", order); print();
-  }
 }
 
 // ----------------------------------------------------------------------------
@@ -1412,7 +1221,7 @@ void DI_Hexa::getGradShapeFunctions (const double u, const double v, const doubl
 // ----------------------------------------------------------------------------
 
 // Split a reference line cut by a level set into sublines
-void DI_Line::selfSplit (const DI_Element *e, const std::vector<const gLevelset *> &RPNi,
+void DI_Line::selfSplit (const DI_Element *e, const std::vector<gLevelset *> &RPNi,
                           std::vector<DI_Line *> &subLines, std::vector<DI_CuttingPoint *> &cuttingPoints) const
 {
   if (!isCrossed(pt(0), pt(1))) {
@@ -1443,11 +1252,12 @@ void DI_Triangle::splitIntoSubTriangles (std::vector<DI_Triangle *> &subTriangle
   delete p01; delete p02; delete p12;
 }
 // Split a reference triangle cut by a level set into subtriangles
-void DI_Triangle::selfSplit (const DI_Element *e, const std::vector<const gLevelset *> &RPNi,
+void DI_Triangle::selfSplit (const DI_Element *e, const std::vector<gLevelset *> &RPNi,
                              std::vector<DI_Quad *> &subQuads, std::vector<DI_Triangle *> &subTriangles,
                              std::vector<DI_Line *> &surfLines, std::vector<DI_CuttingPoint *> &cuttingPoints) const
 {
-  bool quadT = (e->getPolynomialOrder() == 2) ? true : false; // if true, use quadratic sub triangles
+  //bool quadT = (e->getPolynomialOrder() == 2) ? true : false; // if true, use quadratic sub triangles
+  bool quadT = false;
   int LStag = RPNi.back()->getTag();
 
   int nbZe = 0, ze[3];
@@ -1561,11 +1371,12 @@ void DI_Quad::splitIntoTriangles(std::vector<DI_Triangle *> &triangles) const
 
 // Split a reference tetrahedron cut by a level set (defined in a hex) into sub tetrahedra
 // and create triangles on the surface of the level set
-void DI_Tetra::selfSplit (const DI_Element *e, const std::vector<const gLevelset *> &RPNi,
+void DI_Tetra::selfSplit (const DI_Element *e, const std::vector<gLevelset *> &RPNi,
                        std::vector<DI_Tetra *> &subTetras, std::vector<DI_Triangle *> &surfTriangles,
                        std::vector<DI_CuttingPoint *> &cuttingPoints, std::vector<DI_QualError *> &QError) const
 {
-  bool quadT = (e->getPolynomialOrder() == 2) ? true : false; // use of quadratic surf triangles and quadratic sub tetrahedra
+  //bool quadT = (e->getPolynomialOrder() == 2) ? true : false; // use of quadratic surf triangles and quadratic sub tetrahedra
+  bool quadT = false;
   int tag = RPNi.back()->getTag();
 
   int nbZe = 0, ze[4];
@@ -1990,12 +1801,12 @@ void DI_Hexa::getRefIntegrationPoints ( const int polynomialOrder , std::vector<
 // -----------------------------------------------------------------------------
 
 // cut a line into sublines along the levelset curve
-bool DI_Line::cut (std::vector<const gLevelset *> &RPN, std::vector<DI_IntegrationPoint *> &ip,
+bool DI_Line::cut (std::vector<gLevelset *> &RPN, std::vector<DI_IntegrationPoint *> &ip,
                    DI_Point::Container &cp, const int polynomialOrder,
                    std::vector<DI_Line *> &lines, int recurLevel, double **nodeLs) const
 {
   //printf(" "); print();
-  std::vector<const gLevelset *> RPNi; RPNi.reserve(RPN.size());
+  std::vector<gLevelset *> RPNi; RPNi.reserve(RPN.size());
 
   DI_Line *ll = new DI_Line(-1, 0, 0, 1, 0, 0, 2.); //reference line
   ll->setPolynomialOrder(getPolynomialOrder());
@@ -2010,7 +1821,7 @@ bool DI_Line::cut (std::vector<const gLevelset *> &RPN, std::vector<DI_Integrati
   int iPrim = 0;
   if(signChange){
     for(int l = 0; l < (int)RPN.size(); l++) {
-      const gLevelset *Lsi = RPN[l];
+      gLevelset *Lsi = RPN[l];
       RPNi.push_back(Lsi);
       if(Lsi->isPrimitive()) {
         ll->addLs(this, Lsi, iPrim++, nodeLs);
@@ -2036,7 +1847,7 @@ bool DI_Line::cut (std::vector<const gLevelset *> &RPN, std::vector<DI_Integrati
   }
   else{
     for(int l = 0; l < (int)RPN.size(); l++) {
-      const gLevelset *Lsi = RPN[l];
+      gLevelset *Lsi = RPN[l];
       if(Lsi->isPrimitive()) {
         ll->addLs(this, Lsi, iPrim++, nodeLs);
       }
@@ -2064,7 +1875,7 @@ bool DI_Line::cut (std::vector<const gLevelset *> &RPN, std::vector<DI_Integrati
 }
 
 // cut a line into sublines along one levelset primitive and return true if it is cut
-bool DI_Line::cut(const DI_Element *e, const std::vector<const gLevelset *> &RPNi,
+bool DI_Line::cut(const DI_Element *e, const std::vector<gLevelset *> &RPNi,
            std::vector<DI_Line *> &subLines, std::vector<DI_CuttingPoint *> &cp)
 {
   // check if the line is cut by the level set
@@ -2085,14 +1896,14 @@ bool DI_Line::cut(const DI_Element *e, const std::vector<const gLevelset *> &RPN
 }
 
 // cut a triangle into subtriangles along the levelset curve
-bool DI_Triangle::cut (std::vector<const gLevelset *> &RPN, std::vector<DI_IntegrationPoint *> &ip,
+bool DI_Triangle::cut (std::vector<gLevelset *> &RPN, std::vector<DI_IntegrationPoint *> &ip,
                        std::vector<DI_IntegrationPoint *> &ipS, DI_Point::Container &cp,
                        const int polynomialOrderQ, const int polynomialOrderTr, const int polynomialOrderL,
                        std::vector<DI_Quad *> &subQuads, std::vector<DI_Triangle *> &subTriangles,
                        std::vector<DI_Line *> &surfLines, int recurLevel, double **nodeLs) const
 {
   //printf(" ");print();
-  std::vector<const gLevelset *> RPNi; RPNi.reserve(RPN.size());
+  std::vector<gLevelset *> RPNi; RPNi.reserve(RPN.size());
 
   DI_Triangle *tt = new DI_Triangle(0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5); //reference triangle
   tt->setPolynomialOrder(getPolynomialOrder());
@@ -2109,7 +1920,7 @@ bool DI_Triangle::cut (std::vector<const gLevelset *> &RPN, std::vector<DI_Integ
   int iPrim = 0;
   if(signChange){
     for(int l = 0; l < (int)RPN.size(); l++) {
-      const gLevelset *Lsi = RPN[l]; //printf("LS(0,0)=%g LS(1,1)=%g\n",(*Lsi)(0,0,0),(*Lsi)(1,1,0));
+      gLevelset *Lsi = RPN[l]; //printf("LS(0,0)=%g LS(1,1)=%g\n",(*Lsi)(0,0,0),(*Lsi)(1,1,0));
       RPNi.push_back(Lsi);
       if(Lsi->isPrimitive()) {
         tt->addLs(this, Lsi, iPrim++, nodeLs);
@@ -2191,7 +2002,7 @@ bool DI_Triangle::cut (std::vector<const gLevelset *> &RPN, std::vector<DI_Integ
   }
   else{
     for(int l = 0; l < (int)RPN.size(); l++) {
-      const gLevelset *Lsi = RPN[l];
+      gLevelset *Lsi = RPN[l];
       if(Lsi->isPrimitive()) {
         tt->addLs(this, Lsi, iPrim++, nodeLs);
       }
@@ -2236,7 +2047,7 @@ bool DI_Triangle::cut (std::vector<const gLevelset *> &RPN, std::vector<DI_Integ
 }
 
 // cut a triangle into subtriangles along one levelset primitive
-bool DI_Triangle::cut (const DI_Element *e, const std::vector<const gLevelset *> &RPNi,
+bool DI_Triangle::cut (const DI_Element *e, const std::vector<gLevelset *> &RPNi,
                     std::vector<DI_Quad *> &subQuads, std::vector<DI_Triangle *> &subTriangles,
                     std::vector<DI_Line *> &surfLines, std::vector<DI_CuttingPoint *> &cp)
 {
@@ -2264,14 +2075,14 @@ bool DI_Triangle::cut (const DI_Element *e, const std::vector<const gLevelset *>
 }
 
 // cut a quadrangle into subtriangles along the levelset curve
-bool DI_Quad::cut (std::vector<const gLevelset *> &RPN, std::vector<DI_IntegrationPoint *> &ip,
+bool DI_Quad::cut (std::vector<gLevelset *> &RPN, std::vector<DI_IntegrationPoint *> &ip,
                    std::vector<DI_IntegrationPoint *> &ipS, DI_Point::Container &cp,
                    const int polynomialOrderQ, const int polynomialOrderTr, const int polynomialOrderL,
                    std::vector<DI_Quad *> &subQuads, std::vector<DI_Triangle *> &subTriangles,
                    std::vector<DI_Line *> &surfLines, int recurLevel, double **nodeLs) const
 {
   //printf(" "); printls();
-  std::vector<const gLevelset *> RPNi; RPNi.reserve(RPN.size());
+  std::vector<gLevelset *> RPNi; RPNi.reserve(RPN.size());
 
   DI_Quad *qq = new DI_Quad(-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0, 4.); // reference quad
   qq->setPolynomialOrder(getPolynomialOrder());
@@ -2288,7 +2099,7 @@ bool DI_Quad::cut (std::vector<const gLevelset *> &RPN, std::vector<DI_Integrati
   int iPrim = 0;
   if(signChange) {
     for(int l = 0; l < (int)RPN.size(); l++) {
-      const gLevelset *Lsi = RPN[l];
+      gLevelset *Lsi = RPN[l];
       RPNi.push_back(Lsi);
       if(Lsi->isPrimitive()) {
         qq->addLs(this, Lsi, iPrim++, nodeLs);
@@ -2374,7 +2185,7 @@ bool DI_Quad::cut (std::vector<const gLevelset *> &RPN, std::vector<DI_Integrati
   }
   else {
     for(int l = 0; l < (int)RPN.size(); l++) {
-      const gLevelset *Lsi = RPN[l];
+      gLevelset *Lsi = RPN[l];
       if(Lsi->isPrimitive()) {
         qq->addLs(this, Lsi, iPrim++, nodeLs);
       }
@@ -2419,7 +2230,7 @@ bool DI_Quad::cut (std::vector<const gLevelset *> &RPN, std::vector<DI_Integrati
 }
 
 // cut a quadrangle into subtriangles along the levelset curve
-bool DI_Quad::cut (const DI_Element *e, const std::vector<const gLevelset *> &RPNi,
+bool DI_Quad::cut (const DI_Element *e, const std::vector<gLevelset *> &RPNi,
                 std::vector<DI_Quad *> &subQuads, std::vector<DI_Triangle *> &subTriangles,
                 std::vector<DI_Line *> &surfLines, std::vector<DI_CuttingPoint *> &cp)
 {
@@ -2458,14 +2269,14 @@ bool DI_Quad::cut (const DI_Element *e, const std::vector<const gLevelset *> &RP
 }
 
 // cut a tetrahedron into subtetrahedra along the levelset surface
-bool DI_Tetra::cut (std::vector<const gLevelset *> &RPN, std::vector<DI_IntegrationPoint *> &ip,
+bool DI_Tetra::cut (std::vector<gLevelset *> &RPN, std::vector<DI_IntegrationPoint *> &ip,
                     std::vector<DI_IntegrationPoint *> &ipS, DI_Point::Container &cp,
                     const int polynomialOrderT, const int polynomialOrderQ, const int polynomialOrderTr,
                     std::vector<DI_Tetra *> &subTetras, std::vector<DI_Quad *> &surfQuads,
                     std::vector<DI_Triangle *> &surfTriangles, int recurLevel, double **nodeLs) const
 {
   //printf(" ");print();
-  std::vector<const gLevelset *> RPNi; RPNi.reserve(RPN.size());
+  std::vector<gLevelset *> RPNi; RPNi.reserve(RPN.size());
 
   DI_Tetra *tt = new DI_Tetra(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1./6.); // reference tetra
   tt->setPolynomialOrder(getPolynomialOrder());
@@ -2485,7 +2296,7 @@ bool DI_Tetra::cut (std::vector<const gLevelset *> &RPN, std::vector<DI_Integrat
   int iPrim = 0;
   if(signChange) {
     for(int l = 0; l < (int)RPN.size(); l++) {
-      const gLevelset *Lsi = RPN[l];
+      gLevelset *Lsi = RPN[l];
       RPNi.push_back(Lsi);
       if(Lsi->isPrimitive()) {
         tt->addLs(this, Lsi, iPrim++, nodeLs);
@@ -2549,7 +2360,7 @@ bool DI_Tetra::cut (std::vector<const gLevelset *> &RPN, std::vector<DI_Integrat
   }
   else {
     for(int l = 0; l < (int)RPN.size(); l++) {
-      const gLevelset *Lsi = RPN[l];
+      gLevelset *Lsi = RPN[l];
       if(Lsi->isPrimitive()) {
         tt->addLs(this, Lsi, iPrim++, nodeLs);
       }
@@ -2600,7 +2411,7 @@ bool DI_Tetra::cut (std::vector<const gLevelset *> &RPN, std::vector<DI_Integrat
 }
 
 // cut a tetrahedron into subtetrahedra along the levelset surface
-bool DI_Tetra::cut (const DI_Element *e, const std::vector<const gLevelset *> &RPNi,
+bool DI_Tetra::cut (const DI_Element *e, const std::vector<gLevelset *> &RPNi,
                  std::vector<DI_Tetra *> &subTetras, std::vector<DI_Quad *> &surfQuads,
                  std::vector<DI_Triangle *> &surfTriangles, std::vector<DI_CuttingPoint *> &cp,
                  std::vector<DI_QualError *> &QError)
@@ -2629,7 +2440,7 @@ bool DI_Tetra::cut (const DI_Element *e, const std::vector<const gLevelset *> &R
 }
 
 // cut a hex into subtetras along the levelset surface
-bool DI_Hexa::cut (std::vector<const gLevelset *> &RPN, std::vector<DI_IntegrationPoint *> &ip,
+bool DI_Hexa::cut (std::vector<gLevelset *> &RPN, std::vector<DI_IntegrationPoint *> &ip,
                    std::vector<DI_IntegrationPoint *> &ipS, DI_Point::Container &cp,
                    const int polynomialOrderH, const int polynomialOrderT,
                    const int polynomialOrderQ, const int polynomialOrderTr,
@@ -2638,7 +2449,7 @@ bool DI_Hexa::cut (std::vector<const gLevelset *> &RPN, std::vector<DI_Integrati
                    std::vector<DI_Line *> &frontLines, int recurLevel, double **nodeLs) const
 {
   //printf(" "); print();
-  std::vector<const gLevelset *> RPNi; RPNi.reserve(RPN.size());
+  std::vector<gLevelset *> RPNi; RPNi.reserve(RPN.size());
 
  // reference hexa
   DI_Hexa *hh = new DI_Hexa(-1, -1, -1, 1, -1, -1, 1, 1, -1, -1, 1, -1, -1, -1, 1, 1, -1, 1, 1, 1, 1, -1, 1, 1, 8.);
@@ -2659,7 +2470,7 @@ bool DI_Hexa::cut (std::vector<const gLevelset *> &RPN, std::vector<DI_Integrati
   int iPrim = 0;
   if(signChange){
     for(int l = 0; l < (int)RPN.size(); l++) {
-      const gLevelset *Lsi = RPN[l];
+      gLevelset *Lsi = RPN[l];
       RPNi.push_back(Lsi);
       if(Lsi->isPrimitive()) {
         hh->addLs(this, Lsi, iPrim++, nodeLs);
@@ -2780,7 +2591,7 @@ bool DI_Hexa::cut (std::vector<const gLevelset *> &RPN, std::vector<DI_Integrati
   }
   else {
     for(int l = 0; l < (int)RPN.size(); l++) {
-      const gLevelset *Lsi = RPN[l];
+      gLevelset *Lsi = RPN[l];
       if(Lsi->isPrimitive()) {
         hh->addLs(this, Lsi, iPrim++, nodeLs);
       }
@@ -2848,7 +2659,7 @@ bool DI_Hexa::cut (std::vector<const gLevelset *> &RPN, std::vector<DI_Integrati
 }
 
 // cut a hex into subtetras along the levelset surface
-bool DI_Hexa::cut (const DI_Element *e, const std::vector<const gLevelset *> &RPNi,
+bool DI_Hexa::cut (const DI_Element *e, const std::vector<gLevelset *> &RPNi,
                    std::vector<DI_Hexa *> &Hexas, std::vector<DI_Tetra *> &subTetras,
                    std::vector<DI_Quad *> &surfQuads, std::vector<DI_Triangle *> &surfTriangles,
                    std::vector<DI_CuttingPoint *> &cp, std::vector<DI_QualError *> &QError)

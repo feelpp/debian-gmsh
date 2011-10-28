@@ -57,16 +57,20 @@ void PrintUsage(const char *name)
   Msg::Direct("  -match                Match geometries and meshes");
   Msg::Direct("Mesh options:");
   Msg::Direct("  -1, -2, -3            Perform 1D, 2D or 3D mesh generation, then exit");
+  Msg::Direct("  -format string        Select output mesh format (auto (default), msh, msh1, msh2,");
+  Msg::Direct("                          unv, vrml, ply2, stl, mesh, bdf, cgns, p3d, diff, med, ...)");
   Msg::Direct("  -refine               Perform uniform mesh refinement, then exit");
   Msg::Direct("  -part int             Partition after batch mesh generation");
-  Msg::Direct("  -partWeight <tri|quad|tet|prism|hex> int    Weight of a triangle/... during partitioning");
+  Msg::Direct("  -partWeight <tri|quad|tet|prism|hex> int");
+  Msg::Direct("                          Weight of a triangle/quad/etc. during partitioning");
   Msg::Direct("  -renumber             Renumber the mesh elements after batch mesh generation");
   Msg::Direct("  -saveall              Save all elements (discard physical group definitions)");
   Msg::Direct("  -o file               Specify output file name");
   Msg::Direct("  -bin                  Use binary format when available");  
   Msg::Direct("  -parametric           Save vertices with their parametric coordinates");  
   Msg::Direct("  -numsubedges          Set the number of subdivisions when displaying high order elements");  
-  Msg::Direct("  -algo string          Select mesh algorithm (meshadapt, del2d, front2d, delquad, del3d, front3d, mmg3d)");
+  Msg::Direct("  -algo string          Select mesh algorithm (meshadapt, del2d, front2d, delquad, ");
+  Msg::Direct("                          del3d, front3d, mmg3d)");
   Msg::Direct("  -smooth int           Set number of mesh smoothing steps");
   Msg::Direct("  -order int            Set mesh order (1, ..., 5)");
   Msg::Direct("  -optimize[_netgen]    Optimize quality of tetrahedral elements");
@@ -77,7 +81,8 @@ void PrintUsage(const char *name)
   Msg::Direct("  -clmin float          Set minimum mesh element size");
   Msg::Direct("  -clmax float          Set maximum mesh element size");
   Msg::Direct("  -anisoMax float       Set maximum anisotropy (only used in bamg for now)");
-  Msg::Direct("  -smoothRatio float    Set smoothing ration between mesh sizes at nodes of a same edge (only used in bamg)");
+  Msg::Direct("  -smoothRatio float    Set smoothing ration between mesh sizes at nodes of a same edge");
+  Msg::Direct("                          (only used in bamg)");
   Msg::Direct("  -clcurv               Automatically compute element sizes from curvatures");
   Msg::Direct("  -epslc1d              Set the accuracy of the evaluation of the LCFIELD for 1D mesh");
   Msg::Direct("  -swapangle            Set the threshold angle (in degree) between two adjacent faces");
@@ -96,6 +101,7 @@ void PrintUsage(const char *name)
   Msg::Direct("  -fontsize int         Specify the font size for the GUI");
   Msg::Direct("  -theme string         Specify FLTK GUI theme");
   Msg::Direct("  -display string       Specify display");
+  Msg::Direct("  -compound_only        Hide underlying surfaces/edges of compounds");
 #endif
   Msg::Direct("Other options:");      
   Msg::Direct("  -                     Parse input files, then exit");
@@ -137,10 +143,18 @@ void GetOptions(int argc, char *argv[])
         CTX::instance()->batch = -99;
         i++;
       }
+      else if(!strcmp(argv[i] + 1, "onelab")) {
+        i++;        
+        if(argv[i])
+          Msg::InitializeOnelab("GmshOnelab", argv[i++]);
+        else
+          Msg::Fatal("Missing string");
+        CTX::instance()->batch = -4;
+      }
       else if(!strcmp(argv[i] + 1, "socket")) {
         i++;        
         if(argv[i])
-          Msg::InitClient(argv[i++]);
+          Msg::InitializeOnelab("GmshRemote", argv[i++]);
         else
           Msg::Fatal("Missing string");
         CTX::instance()->batch = -3;
@@ -732,6 +746,10 @@ void GetOptions(int argc, char *argv[])
           CTX::instance()->display = argv[i++];
         else
           Msg::Fatal("Missing argument");
+      }
+      else if(!strcmp(argv[i] + 1, "compound_only")) {
+        CTX::instance()->compoundOnly = 1;
+        i++;
       }
 #endif
 #if defined(__APPLE__)

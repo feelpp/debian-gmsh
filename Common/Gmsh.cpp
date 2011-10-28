@@ -16,7 +16,7 @@
 #include "CommandLine.h"
 #include "OS.h"
 #include "Context.h"
-#include "ConnectionManager.h"
+#include "onelab.h"
 #include "robustPredicates.h"
 
 #if defined(HAVE_MESH)
@@ -150,7 +150,10 @@ int GmshBatch()
   }
 #endif
 
-  if(CTX::instance()->batch == -3){
+  if(CTX::instance()->batch == -4){
+    // 
+  }
+  else if(CTX::instance()->batch == -3){
     GmshRemote();
   }
   else if(CTX::instance()->batch == -2){
@@ -193,8 +196,6 @@ int GmshBatch()
   std::string currtime = ctime(&now);
   currtime.resize(currtime.size() - 1);
   Msg::Info("Stopped on %s", currtime.c_str());
-
-  Msg::FinalizeClient();
 
   return 1;
 }
@@ -249,8 +250,8 @@ int GmshFLTK(int argc, char **argv)
 
   // listen to external solvers
   if(CTX::instance()->solver.listen){
-    ConnectionManager::get(-1)->name = "unknown";
-    ConnectionManager::get(-1)->run("");
+    onelab::localNetworkClient *c = new onelab::localNetworkClient("Listen", "");
+    c->run("");
   }
 
   // loop

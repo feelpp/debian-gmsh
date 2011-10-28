@@ -424,6 +424,14 @@ int GModel::setPhysicalName(std::string name, int dim, int number)
 
 std::string GModel::getPhysicalName(int dim, int number)
 {
+  //Emi debug here
+  // printf("getPhysName size %d \n", physicalNames.size());
+  // std::map<std::pair<int, int>, std::string>::iterator itt = physicalNames.begin();
+  // for (; itt != physicalNames.end(); itt++){
+  //   printf("name %s \n", itt->second.c_str());
+  //   printf("par (%d,%d) \n", itt->first.first, itt->first.second);
+  // }
+
   std::map<std::pair<int, int>, std::string>::iterator it =
     physicalNames.find(std::pair<int, int>(dim, number));
   if(it != physicalNames.end()) return it->second;
@@ -473,6 +481,23 @@ void GModel::setSelection(int val)
     }
   }
 }
+
+void GModel::updateUpperTopology()
+{
+  for(eiter it = firstEdge(); it != lastEdge(); ++it) {
+    if(!(*it)->getCompound() && !edgesUpper.count((*it)))
+      edgesUpper.insert((*it));
+  }
+  for(fiter it = firstFace(); it != lastFace(); ++it) {
+    if(!(*it)->getCompound() && !facesUpper.count((*it)))
+      facesUpper.insert((*it));
+  }
+  for(riter it = firstRegion(); it != lastRegion(); ++it) {
+    if(!(*it)->getCompound() && !regionsUpper.count((*it)))
+      regionsUpper.insert((*it));
+  }
+}
+
 
 SBoundingBox3d GModel::bounds(bool aroundVisible)
 {
@@ -563,6 +588,16 @@ int GModel::getNumMeshElements()
   unsigned int n = 0;
   for(unsigned int i = 0; i < entities.size(); i++)
     n += entities[i]->getNumMeshElements();
+  return n;
+}
+
+int GModel::getNumMeshParentElements()
+{
+  std::vector<GEntity*> entities;
+  getEntities(entities);
+  unsigned int n = 0;
+  for(unsigned int i = 0; i < entities.size(); i++)
+    n += entities[i]->getNumMeshParentElements();
   return n;
 }
 
@@ -1788,17 +1823,22 @@ GModel *GModel::buildCutGModel(gLevelset *ls, bool cutElem, bool saveTri)
 
   for(int i = 0; i < (int)(sizeof(elements) / sizeof(elements[0])); i++)
     cutGM->_storeElementsInEntities(elements[i]);
-
   cutGM->_associateEntityWithMeshVertices();
-
   cutGM->_storeVerticesInEntities(vertexMap);
 
-  for(int i = 0; i < 4; i++)
+  for(int i = 0; i < 4; i++){
     cutGM->_storePhysicalTagsInEntities(i, physicals[i]);
+    std::map<int, std::map<int, std::string> >::iterator it = physicals[i].begin();
+    for(; it != physicals[i].end(); it++){
+      std::map<int, std::string>::iterator it2 = it->second.begin();
+      for(; it2 != it->second.end(); it2++)
+        if(it2->second != "")
+          cutGM->setPhysicalName(it2->second, i, it2->first);
+    }
+  }
 
-  double t2 = Cpu();
+  Msg::Info("Mesh cutting completed (%g s)", Cpu() - t1);
 
-  Msg::Info("Mesh cutting complete (%g s)", t2 - t1);
   return cutGM;
 }
 
@@ -1817,6 +1857,26 @@ void GModel::save(std::string fileName)
   int guess = GuessFileFormatFromFileName(fileName);
   CreateOutputFile(fileName, guess);
   GModel::setCurrent(temp);
+}
+
+GFaceCompound* GModel::addCompoundFace(std::vector<GFace*> faces, int typeP, int typeS)
+{
+
+  int num =  getMaxElementaryNumber(2) + 1;
+
+  std::list<GFace*> comp(faces.begin(), faces.end());
+  std::list<GEdge*> U0;
+
+  GFaceCompound::typeOfMapping typ = GFaceCompound::HARMONIC;
+  if (typeP == 1) typ =  GFaceCompound::CONFORMAL;
+  if (typeP == 2) typ =  GFaceCompound::RBF;
+
+  GFaceCompound *gfc = new GFaceCompound(this, num, comp, U0, typ, typeS);
+
+  add(gfc);
+
+  return gfc;
+
 }
 
 GVertex *GModel::addVertex(double x, double y, double z, double lc)

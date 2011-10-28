@@ -450,11 +450,13 @@ void GFaceCompound::fillNeumannBCS() const
 
 bool GFaceCompound::trivial() const
 {
+  return false;
   if(_compound.size() == 1 && 
      (*(_compound.begin()))->getNativeType() == GEntity::OpenCascadeModel &&
-     (*(_compound.begin()))->geomType() != GEntity::DiscreteSurface){
+     (*(_compound.begin()))->geomType() != GEntity::DiscreteSurface &&
+     _mapping != CONFORMAL){
     if ((*(_compound.begin()))->periodic(0) || 
-	(*(_compound.begin()))->periodic(1) )return false; 
+	(*(_compound.begin()))->periodic(1) ) return false; 
     return true;
   }
   return false;
@@ -462,10 +464,11 @@ bool GFaceCompound::trivial() const
 
 // For the conformal map the linear system cannot guarantee there is
 // no overlapping of triangles
-bool GFaceCompound::checkOverlap() const
+bool GFaceCompound::checkOverlap(std::vector<MVertex *> &vert) const
 {
-  bool has_no_overlap = true;
-
+  vert.clear();
+  bool has_overlap = false;
+  double EPS = 1.e-2;
   for(std::list<std::list<GEdge*> >::const_iterator iloop = _interior_loops.begin(); 
       iloop != _interior_loops.end(); iloop++){
     std::list<GEdge*> loop = *iloop;
@@ -486,20 +489,33 @@ bool GFaceCompound::checkOverlap() const
 	SPoint3 q2 = coordinates[orderedLoop[k+1]];
 	double x[2];
 	int inters = intersection_segments (p1,p2,q1,q2,x);
-	if (inters > 0){
-	  has_no_overlap = false; 
-	  break;
+	if (inters && x[1] > EPS && x[1] < 1.-EPS){
+	  has_overlap = true; 
+	  MVertex *v1 = orderedLoop[i];
+	  MVertex *v2 = orderedLoop[k];
+	  std::set<MVertex *>::iterator it1 = ov.find(v1);
+	  std::set<MVertex *>::iterator it2 = ov.find(v2);
+	  vert.push_back(v1);
+	  vert.push_back(v2);
+	  return has_overlap;
+	  // if(it1 == ov.end() && it1 == ov.end()){
+	  //   ov.insert(v1);
+	  //   ov.insert(v2);
+	  //   vert.push_back(v1);
+	  //   vert.push_back(v2);
+	  //   return has_overlap;
+	  // }
 	}
       }
     }
     
   }
   
-  if ( !has_no_overlap ) {
+  if (has_overlap ) {
     Msg::Debug("Overlap for compound face %d", this->tag());
   }
 
-  return has_no_overlap;
+  return has_overlap;
 
 }
 
@@ -546,7 +562,7 @@ bool GFaceCompound::checkOrientation(int iter) const
   }
   else if (oriented && iter < iterMax){
     Msg::Info("Parametrization is bijective (no flips)");
-    printStuff(); 
+    //printStuff(); 
   }
 
   return oriented;
@@ -620,8 +636,6 @@ bool GFaceCompound::parametrize() const
     fillNeumannBCS();
     parametrize(ITERU,HARMONIC); 
     parametrize(ITERV,HARMONIC);
-    //parametrize(ITERU,CONVEXCOMBINATION);
-    //parametrize(ITERV,CONVEXCOMBINATION);
   }
   // Multiscale Laplace parametrization
   else if (_mapping == MULTISCALE){
@@ -635,13 +649,10 @@ bool GFaceCompound::parametrize() const
   else if (_mapping == CONFORMAL){
     Msg::Debug("Parametrizing surface %d with 'conformal map'", tag());
     fillNeumannBCS();
-    bool noOverlap = parametrize_conformal_spectral() ;
-    if (!noOverlap){
-      Msg::Warning("!!! Overlap: parametrization switched to 'FE conformal' map");
-      noOverlap = parametrize_conformal();
-    }
-    if (!noOverlap || !checkOrientation(0) ){
-      Msg::Warning("$$$ Flipping: parametrization switched to 'harmonic' map");
+    bool hasOverlap = parametrize_conformal_spectral();
+    if (hasOverlap || !checkOrientation(0) ){
+      printStuff(33);
+      Msg::Warning("$$$ Overlap or Flipping: parametrization switched to 'harmonic' map");
       parametrize(ITERU,HARMONIC); 
       parametrize(ITERV,HARMONIC);
     }
@@ -658,9 +669,9 @@ bool GFaceCompound::parametrize() const
     _rbf = new GRbf(sizeBox, variableEps, radFunInd, _normals, allNodes, _ordered);
 
     //_rbf->RbfLapSurface_global_CPM_low(_rbf->getXYZ(), _rbf->getN(), Oper);
-    //_rbf->RbfLapSurface_local_CPM(true, _rbf->getXYZ(), _rbf->getN(), Oper, true);
-    _rbf->RbfLapSurface_global_CPM_high(_rbf->getXYZ(), _rbf->getN(), Oper);
-    //_rbf->RbfLapSurface_local_CPM(false, _rbf->getXYZ(), _rbf->getN(),  Oper, true);
+    //_rbf->RbfLapSurface_local_CPM(true, _rbf->getXYZ(), _rbf->getN(), Oper);
+    _rbf->RbfLapSurface_global_CPM_high_2(_rbf->getXYZ(), _rbf->getN(), Oper);
+    //_rbf->RbfLapSurface_local_CPM(false, _rbf->getXYZ(), _rbf->getN(),  Oper);
     //_rbf->RbfLapSurface_global_projection(_rbf->getXYZ(), _rbf->getN(), Oper);
     //_rbf->RbfLapSurface_local_projection(_rbf->getXYZ(), _rbf->getN(), Oper, true);
   
@@ -918,33 +929,15 @@ void GFaceCompound::computeALoop(std::set<GEdge*> &_unique, std::list<GEdge*> &l
 }
 
 GFaceCompound::GFaceCompound(GModel *m, int tag, std::list<GFace*> &compound,
-			     std::list<GEdge*> &U0, 
-                             linearSystem<double> *lsys, typeOfMapping mpg, 
+			     std::list<GEdge*> &U0, typeOfMapping mpg, 
                              int allowPartition)
   : GFace(m, tag), _compound(compound),  oct(0), _U0(U0), 
-    _lsys(lsys),_mapping(mpg), _allowPartition(allowPartition)
+    _mapping(mpg), _allowPartition(allowPartition)
 {
   ONE = new simpleFunction<double>(1.0);
   MONE = new simpleFunction<double>(-1.0);
 
-  if (!_lsys) {
-#if defined(HAVE_PETSC) && !defined(HAVE_TAUCS)
-    _lsys = new linearSystemPETSc<double>;
-#elif defined(HAVE_GMM) && !defined(HAVE_TAUCS)
-    linearSystemGmm<double> *_lsysb = new linearSystemGmm<double>;
-    _lsysb->setGmres(1);
-    _lsys = _lsysb;
-#elif defined(HAVE_TAUCS) 
-    _lsys = new linearSystemCSRTaucs<double>;
-#else
-    _lsys = new linearSystemFull<double>;
-#endif
- }
-
   for(std::list<GFace*>::iterator it = _compound.begin(); it != _compound.end(); ++it){
-    //EMI FIX
-    //if ((*it)->tag() == 3) _mapping = CONFORMAL;
-
     if(!(*it)){
       Msg::Error("Incorrect face in compound surface %d\n", tag);
       Msg::Exit(1);
@@ -964,7 +957,6 @@ GFaceCompound::~GFaceCompound()
     Octree_Delete(oct);
     delete [] _gfct;
   }
-  if (_lsys)delete _lsys;
   delete ONE;
   delete MONE;
 }
@@ -998,7 +990,7 @@ SPoint2 GFaceCompound::getCoordinates(MVertex *v) const
 
       //compute local parameter on Edge
       gec->getLocalParameter(tGlob,iEdge,tLoc);
-      std::vector<GEdge*> gev = gec->getEdgesOfCompound();
+      std::vector<GEdge*> gev = gec->getCompounds();
       GEdge *ge = gev[iEdge];
        
       //left and right vertex of the Edge
@@ -1056,6 +1048,20 @@ SPoint2 GFaceCompound::getCoordinates(MVertex *v) const
 
 void GFaceCompound::parametrize(iterationStep step, typeOfMapping tom) const
 {  
+
+linearSystem<double> *_lsys = 0;
+#if defined(HAVE_PETSC) && !defined(HAVE_TAUCS)
+  _lsys = new linearSystemPETSc<double>;
+#elif defined(HAVE_GMM) && !defined(HAVE_TAUCS)
+  linearSystemGmm<double> *_lsysb = new linearSystemGmm<double>;
+  _lsysb->setGmres(1);
+  _lsys = _lsysb;
+#elif defined(HAVE_TAUCS) 
+  _lsys = new linearSystemCSRTaucs<double>;
+#else
+  _lsys = new linearSystemFull<double>;
+#endif
+
   dofManager<double> myAssembler(_lsys);
 
   if(_type == UNITCIRCLE){
@@ -1132,20 +1138,22 @@ void GFaceCompound::parametrize(iterationStep step, typeOfMapping tom) const
     }
   }
 
-  _lsys->clear();
+  delete _lsys;
 
 }
-
 
 bool GFaceCompound::parametrize_conformal_spectral() const
 {
 #if !defined(HAVE_PETSC) && !defined(HAVE_SLEPC)
-  Msg::Error("Gmsh should be compiled with petsc and slepc for using the conformal map.");
-  Msg::Error("Switch to harmonic map or see doc on the wiki for installing petsc and slepc:");
-  Msg::Error("https://geuz.org/trac/gmsh/wiki/STLRemeshing (username:gmsh,passwd:gmsh)");
-  return false;
-  parametrize_conformal();
+
+  //Msg::Error("Gmsh should be compiled with petsc and slepc for using the conformal map.");
+  //Msg::Error("Switch to harmonic map or see doc on the wiki for installing petsc and slepc:");
+  //Msg::Error("https://geuz.org/trac/gmsh/wiki/STLRemeshing (username:gmsh,passwd:gmsh)");
+  Msg::Warning("Slepc not installed: parametrization switched to 'FE conformal' map");
+  return parametrize_conformal(0,NULL,NULL);
+
 #else
+
   linearSystem <double> *lsysA  = new linearSystemPETSc<double>;
   linearSystem <double> *lsysB  = new linearSystemPETSc<double>;
   dofManager<double> myAssembler(lsysA, lsysB);
@@ -1245,23 +1253,47 @@ bool GFaceCompound::parametrize_conformal_spectral() const
       coordinates[v] = SPoint3(paramu,paramv,0.0);
       k = k+2;
     }
-    
-    lsysA->clear();
-    lsysB->clear();
-    
-    return checkOverlap();
-    
+    delete lsysA;
+    delete lsysB;
   }
-  else return false;
+  else{
+    Msg::Warning("Slepc not converged: parametrization switched to 'FE conformal' map");
+    return parametrize_conformal(0,NULL,NULL);  
+  }
+
+   std::vector<MVertex *> vert;
+   bool hasOverlap = checkOverlap(vert);
+   if (hasOverlap){
+     Msg::Warning("!!! Overlap: parametrization switched to 'FE conformal' map");
+     printStuff(3);
+     return hasOverlap = parametrize_conformal(0, vert[0], vert[1]);
+   }
+
+   return hasOverlap;
+    
 #endif
 }
 
-bool GFaceCompound::parametrize_conformal() const
+bool GFaceCompound::parametrize_conformal(int iter, MVertex *v1, MVertex *v2) const
 {
+
+  linearSystem<double> *_lsys = 0;
+#if defined(HAVE_PETSC) && !defined(HAVE_TAUCS)
+  _lsys = new linearSystemPETSc<double>;
+#elif defined(HAVE_GMM) && !defined(HAVE_TAUCS)
+  linearSystemGmm<double> *_lsysb = new linearSystemGmm<double>;
+  _lsysb->setGmres(1);
+  _lsys = _lsysb;
+#elif defined(HAVE_TAUCS) 
+  _lsys = new linearSystemCSRTaucs<double>;
+#else
+  _lsys = new linearSystemFull<double>;
+#endif
+
   dofManager<double> myAssembler(_lsys);
 
-  MVertex *v1  = _ordered[0];
-  MVertex *v2  = _ordered[(int)ceil((double)_ordered.size()/2.)];
+  if (!v1) v1  = _ordered[0];
+  if (!v2) v2  = _ordered[(int)ceil((double)_ordered.size()/2.)];
   myAssembler.fixVertex(v1, 0, 1, 1.);
   myAssembler.fixVertex(v1, 0, 2, 0.);
   myAssembler.fixVertex(v2, 0, 1, -1.);
@@ -1323,10 +1355,20 @@ bool GFaceCompound::parametrize_conformal() const
     coordinates[v] = SPoint3(value1,value2,0.0);
   }
 
-  _lsys->clear();
+  delete _lsys; 
 
-  //check for overlapping triangles
-  return checkOverlap();
+
+  //check for overlap and compute new mapping with new pinned vertices
+  std::vector<MVertex *> vert;
+  bool hasOverlap = checkOverlap(vert);
+  if (hasOverlap && iter < 3){
+    printf("**********Loop FE conformal iter (%d) v1=%d v2=%d \n", iter, vert[0]->getNum(), vert[1]->getNum());
+     printStuff(100+iter);
+     return hasOverlap = parametrize_conformal(iter+1, vert[0],vert[1]);
+  }
+  else{
+    return hasOverlap;
+  }
 
 }
 
@@ -1379,30 +1421,16 @@ double GFaceCompound::curvatureMax(const SPoint2 &param) const
     return lt->gf->curvatureMax(pv);
   }
   else if (lt->gf->geomType() == GEntity::DiscreteSurface)  {
-
     Curvature& curvature = Curvature::getInstance();
-
     if( !Curvature::valueAlreadyComputed() ) {
-      Msg::Info("Need to compute discrete curvature for isotropic remesh");
-      Msg::Info("Getting instance of curvature!");
-
-      curvature.setGModel( model() );
-      int computeMax = 0;
-      curvature.computeCurvature_Rusinkiewicz(computeMax);
-      //curvature.computeCurvature_RBF();
-      curvature.writeToPosFile("curvature.pos");
-      curvature.writeToVtkFile("curvature.vtk");
-      Msg::Info(" ... computing curvature finished");
+      Msg::Info("Need to compute discrete curvature for isotropic remesh (in GFace)");
+      Curvature::typeOfCurvature type = Curvature::RUSIN;
+      curvature.computeCurvature(model(), type); 
     }
-
-    double c0;
-    double c1;
-    double c2;
+    double c0,c1,c2;
     curvature.triangleNodalValues(lt->tri,c0, c1, c2, 1);
-    
     double cv = (1-U-V)*c0 + U*c1 + V*c2;
     return cv;
-
   }
 
   return 0.;
@@ -1413,8 +1441,7 @@ double GFaceCompound::curvatures(const SPoint2 &param, SVector3 *dirMax, SVector
 
  if(!oct) parametrize();
  if(trivial()) {
-   //Implement this
-//    return (*(_compound.begin()))->curvatureMax(param);
+   return (*(_compound.begin()))->curvatures(param, dirMax,dirMin, curvMax, curvMin); 
  }
 
   double U, V;
@@ -1426,34 +1453,22 @@ double GFaceCompound::curvatures(const SPoint2 &param, SVector3 *dirMax, SVector
   }
 
   if(lt->gf && lt->gf->geomType() != GEntity::DiscreteSurface)  {
-      //Implement this...
-//    SPoint2 pv = lt->gfp1*(1.-U-V) + lt->gfp2*U + lt->gfp3*V;
-//    return lt->gf->curvatureMax(pv);
+    SPoint2 pv = lt->gfp1*(1.-U-V) + lt->gfp2*U + lt->gfp3*V;
+    return lt->gf->curvatures(pv, dirMax,dirMin, curvMax, curvMin);
   }
+
   else if (lt->gf->geomType() == GEntity::DiscreteSurface)  {
-
     Curvature& curvature = Curvature::getInstance();
-
     if( !Curvature::valueAlreadyComputed() ) {
-      Msg::Info("Need to compute discrete curvature for anisotropic remesh");
-      Msg::Info("Getting instance of curvature");
-
-      curvature.setGModel( model() );
-      int computeMax = 0;
-      curvature.computeCurvature_Rusinkiewicz(computeMax);
-      //curvature.computeCurvature_RBF();
-      curvature.writeToPosFile("curvature.pos");
-      //curvature.writeToVtkFile("curvature.vtk");
-      //curvature.writeDirectionsToPosFile("curvature_directions.pos");
-      Msg::Info(" ... computing curvature finished");
+      Msg::Info("Need to compute discrete curvature for anisotropic remesh (in GFace)");
+      Curvature::typeOfCurvature type = Curvature::RUSIN;//RBF
+      curvature.computeCurvature(model(), type); 
     }
 
-    std::cout << "I'm using curvatures in GFaceCompound.cpp" << std::endl;
     double cMin[3];
     double cMax[3];
     SVector3 dMin[3];
     SVector3 dMax[3];
-
     curvature.triangleNodalValuesAndDirections(lt->tri, dMax, dMin, cMax, cMin, 0);
     //curvature.triangleNodalValuesAndDirections(lt->tri, dMax, dMin, cMax, cMin, 1);
 
@@ -1463,8 +1478,6 @@ double GFaceCompound::curvatures(const SPoint2 &param, SVector3 *dirMax, SVector
     * curvMin = (1-U-V)*cMin[0] + U*cMin[1] + V*cMin[2];
 
     return * curvMax;
-
-
   }
 
   return 0.;
@@ -1634,9 +1647,9 @@ Pair<SVector3,SVector3> GFaceCompound::firstDer(const SPoint2 &param) const
 void GFaceCompound::secondDer(const SPoint2 &param, 
                               SVector3 *dudu, SVector3 *dvdv, SVector3 *dudv) const
 {
-
   if(!oct) parametrize();  
-  Msg::Fatal("Computation of the second derivatives is not implemented for compound faces");
+  //leave debug here (since outputScalarField calls curvatureDiv)
+  Msg::Debug("Computation of the second derivatives is not implemented for compound faces");
   
 }
 
@@ -1780,9 +1793,24 @@ void GFaceCompound::buildOct() const
       _gfct[count].p2 = it1->second;
       _gfct[count].p3 = it2->second;
       if((*it)->geomType() != GEntity::DiscreteSurface){
-        reparamMeshVertexOnFace(t->getVertex(0), *it, _gfct[count].gfp1); 
-        reparamMeshVertexOnFace(t->getVertex(1), *it, _gfct[count].gfp2); 
-        reparamMeshVertexOnFace(t->getVertex(2), *it, _gfct[count].gfp3); 
+	// take care of the seam !!!!
+	if (t->getVertex(0)->onWhat()->dim() == 2){
+	  reparamMeshEdgeOnFace(t->getVertex(0), t->getVertex(1),*it, _gfct[count].gfp1, _gfct[count].gfp2); 
+	  reparamMeshEdgeOnFace(t->getVertex(0), t->getVertex(2),*it, _gfct[count].gfp1, _gfct[count].gfp3); 
+	}
+	else if (t->getVertex(1)->onWhat()->dim() == 2){
+	  reparamMeshEdgeOnFace(t->getVertex(1), t->getVertex(0),*it, _gfct[count].gfp2, _gfct[count].gfp1); 
+	  reparamMeshEdgeOnFace(t->getVertex(1), t->getVertex(2),*it, _gfct[count].gfp2, _gfct[count].gfp3); 
+	}
+	else if (t->getVertex(2)->onWhat()->dim() == 2){
+	  reparamMeshEdgeOnFace(t->getVertex(2), t->getVertex(0),*it, _gfct[count].gfp3, _gfct[count].gfp1); 
+	  reparamMeshEdgeOnFace(t->getVertex(2), t->getVertex(1),*it, _gfct[count].gfp3, _gfct[count].gfp2); 
+	}
+	else {
+	  reparamMeshVertexOnFace(t->getVertex(0), *it, _gfct[count].gfp1); 
+	  reparamMeshVertexOnFace(t->getVertex(1), *it, _gfct[count].gfp2); 
+	  reparamMeshVertexOnFace(t->getVertex(2), *it, _gfct[count].gfp3); 
+	}
       }
       _gfct[count].v1 = SPoint3(t->getVertex(0)->x(), t->getVertex(0)->y(),
                                 t->getVertex(0)->z());      

@@ -10,6 +10,7 @@
 #include "GmshConfig.h"
 #include "GmshMessage.h"
 #include "GmshSocket.h"
+#include "onelab.h"
 #include "Gmsh.h"
 #include "Options.h"
 #include "Context.h"
@@ -30,7 +31,6 @@
 #if defined(HAVE_FLTK)
 #include <FL/fl_ask.H>
 #include "FlGui.h"
-#include "messageWindow.h"
 #include "extraDialogs.h"
 #endif
 
@@ -46,6 +46,8 @@ GmshMessage *Msg::_callback = 0;
 std::string Msg::_commandLine;
 std::string Msg::_launchDate;
 GmshClient *Msg::_client = 0;
+onelab::client *Msg::_onelabClient = 0;
+onelab::server *onelab::server::_server = 0;
 
 #if defined(HAVE_NO_VSNPRINTF)
 static int vsnprintf(char *str, size_t size, const char *fmt, va_list ap)
@@ -89,6 +91,7 @@ void Msg::Init(int argc, char **argv)
     if(i) _commandLine += " ";
     _commandLine += argv[i];
   }
+  InitializeOnelab("Gmsh");
 }
 
 void Msg::Exit(int level)
@@ -110,6 +113,7 @@ void Msg::Exit(int level)
 #if defined(HAVE_MPI)
     MPI_Finalize();
 #endif
+    FinalizeOnelab();
     exit(level);
   }
 
@@ -139,7 +143,7 @@ void Msg::Exit(int level)
 #if defined(HAVE_MPI)
   MPI_Finalize();
 #endif
-
+  FinalizeOnelab();
   exit(_errorCount);
 }
 
@@ -160,9 +164,9 @@ void Msg::Fatal(const char *fmt, ...)
   if(FlGui::available()){
     FlGui::instance()->check();
     std::string tmp = std::string("@C1@.") + "Fatal   : " + str;
-    FlGui::instance()->messages->add(tmp.c_str());
-    FlGui::instance()->messages->show();
-    FlGui::instance()->messages->save
+    FlGui::instance()->addMessage(tmp.c_str());
+    FlGui::instance()->showMessages();
+    FlGui::instance()->saveMessages
       ((CTX::instance()->homeDir + CTX::instance()->errorFileName).c_str());
     fl_alert("A fatal error has occurred which will force Gmsh to abort.\n"
              "The error messages have been saved in the following file:\n\n%s",
@@ -201,8 +205,8 @@ void Msg::Error(const char *fmt, ...)
   if(FlGui::available()){
     FlGui::instance()->check();
     std::string tmp = std::string("@C1@.") + "Error   : " + str;
-    FlGui::instance()->messages->add(tmp.c_str());
-    FlGui::instance()->messages->show();
+    FlGui::instance()->addMessage(tmp.c_str());
+    FlGui::instance()->showMessages();
   }
 #endif
 
@@ -233,8 +237,8 @@ void Msg::Warning(const char *fmt, ...)
 #if defined(HAVE_FLTK)
   if(FlGui::available()){
     FlGui::instance()->check();
-    std::string tmp = std::string("@C1@.") + "Warning : " + str;
-    FlGui::instance()->messages->add(tmp.c_str());
+    std::string tmp = std::string("@C5@.") + "Warning : " + str;
+    FlGui::instance()->addMessage(tmp.c_str());
   }
 #endif
 
@@ -261,7 +265,7 @@ void Msg::Info(const char *fmt, ...)
   if(FlGui::available()){
     FlGui::instance()->check();
     std::string tmp = std::string("Info    : ") + str;
-    FlGui::instance()->messages->add(tmp.c_str());
+    FlGui::instance()->addMessage(tmp.c_str());
   }
 #endif
 
@@ -301,13 +305,15 @@ void Msg::Direct(int level, const char *fmt, ...)
   if(FlGui::available()){
     FlGui::instance()->check();
     std::string tmp;
-    if(level < 3)
+    if(level < 2)
       tmp = std::string("@C1@.") + str;
+    else if(level < 3)
+      tmp = std::string("@C5@.") + str;
     else
       tmp = std::string("@C4@.") + str;
-    FlGui::instance()->messages->add(tmp.c_str());
+    FlGui::instance()->addMessage(tmp.c_str());
     if(level == 1)
-      FlGui::instance()->messages->show();
+      FlGui::instance()->showMessages();
   }
 #endif
 
@@ -338,7 +344,7 @@ void Msg::StatusBar(int num, bool log, const char *fmt, ...)
       FlGui::instance()->setStatus(str, num - 1);
     if(log){
       std::string tmp = std::string("Info    : ") + str;
-      FlGui::instance()->messages->add(tmp.c_str());
+      FlGui::instance()->addMessage(tmp.c_str());
     }
   }
 #endif
@@ -365,7 +371,7 @@ void Msg::Debug(const char *fmt, ...)
 #if defined(HAVE_FLTK)
   if(FlGui::available()){
     std::string tmp = std::string("Debug   : ") + str;
-    FlGui::instance()->messages->add(tmp.c_str());
+    FlGui::instance()->addMessage(tmp.c_str());
   }
 #endif
 
@@ -468,14 +474,14 @@ void Msg::PrintErrorCounter(const char *title)
 #if defined(HAVE_FLTK)
   if(FlGui::available()){
     std::string red("@C1@.");
-    FlGui::instance()->messages->add((red + prefix + line).c_str());
-    FlGui::instance()->messages->add((red + prefix + title).c_str());
-    FlGui::instance()->messages->add((red + prefix + warn).c_str());
-    FlGui::instance()->messages->add((red + prefix + err).c_str());
-    FlGui::instance()->messages->add((red + prefix + help).c_str());
-    FlGui::instance()->messages->add((red + prefix + line).c_str());
+    FlGui::instance()->addMessage((red + prefix + line).c_str());
+    FlGui::instance()->addMessage((red + prefix + title).c_str());
+    FlGui::instance()->addMessage((red + prefix + warn).c_str());
+    FlGui::instance()->addMessage((red + prefix + err).c_str());
+    FlGui::instance()->addMessage((red + prefix + help).c_str());
+    FlGui::instance()->addMessage((red + prefix + line).c_str());
     if(_errorCount){
-      FlGui::instance()->messages->show();
+      FlGui::instance()->showMessages();
       fl_beep();
     }
   }
@@ -568,27 +574,71 @@ int Msg::GetAnswer(const char *question, int defaultval, const char *zero,
     return atoi(ret);
 }
 
-void Msg::InitClient(std::string sockname)
+void Msg::InitializeOnelab(const std::string &name, const std::string &sockname)
 {
-  if(_client) delete _client;
-  _client = new GmshClient();
-  if(_client->Connect(sockname.c_str()) < 0){
-    Msg::Error("Unable to connect to server on %s", sockname.c_str());
-    delete _client;
-    _client = 0;
+  if(_onelabClient) delete _onelabClient;
+  if (sockname.empty())
+    _onelabClient = new onelab::localClient(name);
+  else{
+    onelab::remoteNetworkClient *c = new onelab::remoteNetworkClient(name, sockname);
+    _onelabClient = c;
+    _client = c->getGmshClient();
   }
-  else
-    _client->Start();
 }
 
-void Msg::FinalizeClient()
+void Msg::ExchangeOnelabParameter(const std::string &key,
+                                  std::vector<double> &val,
+                                  std::map<std::string, std::vector<double> > &fopt,
+                                  std::map<std::string, std::vector<std::string> > &copt)
 {
-  if(_client){
-    _client->Stop();
-    _client->Disconnect();
-    delete _client;
+  if(!_onelabClient || val.empty()) return;
+
+  std::string name(key);
+  if(copt.count("Path")){
+    std::string path = copt["Path"][0];
+    // if path ends with a number, assume it's for ordering purposes
+    if(path.size() && path[path.size() - 1] >= '0' && path[path.size() - 1] <= '9')
+      name = path + name;
+    else if(path.size() && path[path.size() - 1] == '/')
+      name = path + name;
+    else
+      name = path + "/" + name;
   }
-  _client = 0;
+
+  std::vector<onelab::number> ps;
+  _onelabClient->get(ps, name);
+  if(ps.size()){ // use value from server
+    val[0] = ps[0].getValue();
+  }
+  else{ // send value to server
+    onelab::number o(name, val[0]);
+    if(fopt.count("Range") && fopt["Range"].size() == 2){
+      o.setMin(fopt["Range"][0]); o.setMax(fopt["Range"][1]);
+    }
+    else if(fopt.count("Min") && fopt.count("Max")){
+      o.setMin(fopt["Min"][0]); o.setMax(fopt["Max"][0]);
+    }
+    else if(fopt.count("Min")){
+      o.setMin(fopt["Min"][0]); o.setMax(1.e200);
+    }
+    else if(fopt.count("Max")){
+      o.setMax(fopt["Max"][0]); o.setMin(-1.e200);
+    }
+    if(fopt.count("Step")) o.setStep(fopt["Step"][0]);
+    if(fopt.count("Choices")) o.setChoices(fopt["Choices"]);
+    if(copt.count("Help")) o.setHelp(copt["Help"][0]);
+    if(copt.count("ShortHelp")) o.setShortHelp(copt["ShortHelp"][0]);
+    _onelabClient->set(o);
+  }
+}
+
+void Msg::FinalizeOnelab()
+{
+  if(_onelabClient){
+    delete _onelabClient;
+    _onelabClient = 0;
+    _client = 0;
+  }
 }
 
 void Msg::Barrier()
@@ -613,4 +663,3 @@ int Msg::GetMaxThreads(){ return 1; }
 int Msg::GetThreadNum(){ return 0; }
 
 #endif
-

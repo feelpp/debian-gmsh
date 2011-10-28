@@ -69,31 +69,35 @@ set(GMSH_SHORT_LICENSE "GNU General Public License")
 set(GMSH_API
   ${CMAKE_CURRENT_BINARY_DIR}/Common/GmshConfig.h 
   ${CMAKE_CURRENT_BINARY_DIR}/Common/GmshVersion.h
-  Common/Gmsh.h Common/GmshDefines.h Common/GmshMessage.h Common/VertexArray.h
+  Common/Gmsh.h Common/Context.h Common/GmshDefines.h Common/GmshMessage.h
+    Common/VertexArray.h Common/Octree.h Common/OctreeInternals.h
   Numeric/Numeric.h Numeric/Gauss.h Numeric/polynomialBasis.h
     Numeric/JacobianBasis.h Numeric/fullMatrix.h
     Numeric/simpleFunction.h Numeric/cartesian.h
   Geo/GModel.h Geo/GEntity.h Geo/GPoint.h Geo/GVertex.h Geo/GEdge.h 
     Geo/GFace.h Geo/GRegion.h Geo/GEdgeLoop.h Geo/GEdgeCompound.h 
-    Geo/GFaceCompound.h Geo/GRegionCompound.h Geo/GRbf.h Geo/MVertex.h Geo/MEdge.h 
+    Geo/GFaceCompound.h Geo/GRegionCompound.h Geo/GRbf.h Geo/MVertex.h
+    Geo/MVertexBoundaryLayerData.h Geo/MEdge.h 
     Geo/MFace.h Geo/MElement.h Geo/MPoint.h Geo/MLine.h Geo/MTriangle.h 
     Geo/MQuadrangle.h Geo/MTetrahedron.h Geo/MHexahedron.h Geo/MPrism.h 
     Geo/MPyramid.h Geo/MElementCut.h Geo/discreteVertex.h Geo/discreteEdge.h
     Geo/discreteFace.h Geo/discreteRegion.h Geo/SPoint2.h Geo/SPoint3.h
     Geo/SVector3.h Geo/STensor3.h Geo/SBoundingBox3d.h Geo/Pair.h Geo/Range.h 
     Geo/SOrientedBoundingBox.h Geo/CellComplex.h Geo/ChainComplex.h Geo/Cell.h
-    Geo/Homology.h
-  Mesh/meshGEdge.h Mesh/meshGFace.h Mesh/meshGFaceOptimize.h 
-    Mesh/meshGFaceDelaunayInsertion.h Mesh/Levy3D.h
+    Geo/Homology.h Geo/partitionEdge.h Geo/CGNSOptions.h Geo/gmshLevelset.h
+  Mesh/meshGEdge.h Mesh/meshGFace.h Mesh/meshGFaceOptimize.h Mesh/meshPartition.h
+    Mesh/meshGFaceDelaunayInsertion.h Mesh/Levy3D.h Mesh/meshPartitionOptions.h
+  Numeric/mathEvaluator.h
   Solver/dofManager.h Solver/femTerm.h Solver/laplaceTerm.h Solver/elasticityTerm.h
     Solver/crossConfTerm.h Solver/orthogonalTerm.h
     Solver/linearSystem.h Solver/linearSystemGMM.h Solver/linearSystemCSR.h 
     Solver/linearSystemFull.h Solver/elasticitySolver.h
-  Post/PView.h Post/PViewData.h Plugin/PluginManager.h
+  Post/PView.h Post/PViewData.h Plugin/PluginManager.h Post/OctreePost.h
   Graphics/drawContext.h
   contrib/kbipack/gmp_normal_form.h contrib/kbipack/gmp_matrix.h 
     contrib/kbipack/gmp_blas.h contrib/kbipack/mpz.h
-  contrib/DiscreteIntegration/DILevelset.h)
+  contrib/DiscreteIntegration/Integration3D.h
+  contrib/MathEx/mathex.h)
 
 execute_process(COMMAND date "+%Y%m%d" OUTPUT_VARIABLE DATE 
                 OUTPUT_STRIP_TRAILING_WHITESPACE)
@@ -622,6 +626,7 @@ if(ENABLE_PETSC)
   set(ENV_PETSC_DIR $ENV{PETSC_DIR})
   set(ENV_PETSC_ARCH $ENV{PETSC_ARCH})
   if(EXISTS ${ENV_PETSC_DIR}/${ENV_PETSC_ARCH}/conf/petscvariables)
+    # old-style PETSc installations (using PETSC_DIR and PETSC_ARCH)
     set_config_option(HAVE_PETSC "PETSc")
     file(STRINGS ${ENV_PETSC_DIR}/${ENV_PETSC_ARCH}/conf/petscvariables 
          PETSC_VARIABLES NEWLINE_CONSUME)
@@ -649,6 +654,23 @@ if(ENABLE_PETSC)
     if(NOT PETSC_LIBS)
       find_library(PETSC_LIBS petsc PATHS ${ENV_PETSC_DIR}/${ENV_PETSC_ARCH}/lib)
     endif(NOT PETSC_LIBS)
+    # find slepc (needs to be linked in before petsc)
+    if(ENABLE_SLEPC)
+      set(ENV_SLEPC_DIR $ENV{SLEPC_DIR})
+      find_library(SLEPC_LIB slepc PATHS ${ENV_SLEPC_DIR}/${ENV_PETSC_ARCH}/lib)
+      if(SLEPC_LIB)
+        find_path(SLEPC_INC "slepc.h" PATHS ${ENV_SLEPC_DIR} PATH_SUFFIXES include 
+                  ${ENV_PETSC_ARCH}/include include/slepc)
+        if(SLEPC_INC)
+          set_config_option(HAVE_SLEPC "SLEPc")
+          list(APPEND EXTERNAL_LIBRARIES ${SLEPC_LIB})
+          list(APPEND EXTERNAL_INCLUDES ${SLEPC_INC}) 
+        endif(SLEPC_INC)
+      endif(SLEPC_LIB)
+      if(NOT HAVE_SLEPC AND NOT ENV_SLEPC_DIR)
+         message("WARNING: Export SLEPC_DIR before calling cmake")
+      endif(NOT HAVE_SLEPC AND NOT ENV_SLEPC_DIR)
+    endif(ENABLE_SLEPC)
     list(APPEND EXTERNAL_LIBRARIES ${PETSC_LIBS})
     # find additional libraries to link with
     string(REGEX MATCH "PACKAGES_LIBS = [^\n\r]*" PLIBS ${PETSC_VARIABLES})
@@ -657,6 +679,12 @@ if(ENABLE_PETSC)
       string(STRIP ${PLIBS} PLIBS)
       list(APPEND EXTERNAL_LIBRARIES "${PLIBS}")
     endif(PLIBS)
+    string(REGEX MATCH "PETSC_EXTERNAL_LIB_BASIC = [^\n\r]*" PLIBS_BASIC ${PETSC_VARIABLES})
+    if(PLIBS_BASIC)
+      string(REPLACE "PETSC_EXTERNAL_LIB_BASIC = " "" PLIBS_BASIC ${PLIBS_BASIC})
+      string(STRIP ${PLIBS_BASIC} PLIBS_BASIC)
+      list(APPEND EXTERNAL_LIBRARIES "${PLIBS_BASIC}")
+    endif(PLIBS_BASIC)
     string(REGEX MATCH "PCC_LINKER_LIBS = [^\n\r]*" LLIBS ${PETSC_VARIABLES})
     if(LLIBS)
       string(REPLACE "PCC_LINKER_LIBS = " "" LLIBS ${LLIBS})
@@ -664,10 +692,20 @@ if(ENABLE_PETSC)
       list(APPEND EXTERNAL_LIBRARIES "${LLIBS}")
     endif(LLIBS)
   else(EXISTS ${ENV_PETSC_DIR}/${ENV_PETSC_ARCH}/conf/petscvariables)
+    # new-style PETSc installations (in standard system directories)
     find_library(PETSC_LIBS petsc)
     find_path(PETSC_INC "petsc.h" PATH_SUFFIXES include/petsc)
     if(PETSC_LIBS AND PETSC_INC)
       set_config_option(HAVE_PETSC "PETSc")
+      if(ENABLE_SLEPC)
+        find_library(SLEPC_LIB slepc)
+        find_path(SLEPC_INC "slepc.h" PATH_SUFFIXES include/slepc)
+        if(SLEPC_LIB AND SLEPC_INC)
+          set_config_option(HAVE_SLEPC "SLEPc")
+          list(APPEND EXTERNAL_LIBRARIES ${SLEPC_LIB})
+          list(APPEND EXTERNAL_INCLUDES ${SLEPC_INC}) 
+        endif(SLEPC_LIB AND SLEPC_INC)
+      endif(ENABLE_SLEPC)
       list(APPEND EXTERNAL_LIBRARIES ${PETSC_LIBS})
       list(APPEND EXTERNAL_INCLUDES ${PETSC_INC}) 
     endif(PETSC_LIBS AND PETSC_INC)
@@ -680,29 +718,12 @@ if(ENABLE_PETSC)
   endif(NOT HAVE_PETSC AND NOT ENV_PETSC_ARCH)
 endif(ENABLE_PETSC)
 
-if(ENABLE_SLEPC AND HAVE_PETSC)
-  set(ENV_SLEPC_DIR $ENV{SLEPC_DIR})
-  find_library(SLEPC_LIB slepc PATHS ${ENV_SLEPC_DIR}/${ENV_PETSC_ARCH}/lib)
-  if(SLEPC_LIB)
-    find_path(SLEPC_INC "slepc.h" PATHS ${ENV_SLEPC_DIR} PATH_SUFFIXES include 
-              ${ENV_PETSC_ARCH}/include include/slepc)
-    if(SLEPC_INC)
-      set_config_option(HAVE_SLEPC "SLEPc")
-      list(APPEND EXTERNAL_LIBRARIES ${SLEPC_LIB})
-      list(APPEND EXTERNAL_INCLUDES ${SLEPC_INC}) 
-    endif(SLEPC_INC)
-  endif(SLEPC_LIB)
-  if(NOT HAVE_SLEPC AND NOT ENV_SLEPC_DIR)
-     message("WARNING: Export SLEPC_DIR before calling cmake")
-  endif(NOT HAVE_SLEPC AND NOT ENV_SLEPC_DIR)
-endif(ENABLE_SLEPC AND HAVE_PETSC)
-
 if(ENABLE_OCC)
-  if(WIN32)
+  if(WIN32 OR CYGWIN)
     set(OCC_SYS_NAME win32)
-  else(WIN32)
+  else(WIN32 OR CYGWIN)
     set(OCC_SYS_NAME ${CMAKE_SYSTEM_NAME})
-  endif(WIN32)
+  endif(WIN32 OR CYGWIN)
   set(OCC_LIBS_REQUIRED
       # subset of DataExchange
       TKSTEP TKSTEP209 TKSTEPAttr TKSTEPBase TKIGES TKXSBase
@@ -812,9 +833,9 @@ if(MSVC)
   set(GMSH_SRC ${GMSH_SRC};Fltk/Win32Icon.rc)
 endif(MSVC)
 
-if(WIN32)
+if(WIN32 OR CYGWIN)
   list(APPEND EXTERNAL_LIBRARIES wsock32 ws2_32)
-endif(WIN32)
+endif(WIN32 OR CYGWIN)
 
 list(SORT CONFIG_OPTIONS)
 set(GMSH_CONFIG_OPTIONS "")
@@ -925,7 +946,7 @@ target_link_libraries(gmsh ${LINK_LIBRARIES})
 # tet classification for large 3D Delaunay grids + force static
 # linking of system libraries with cygwin/mingw (to ease distribution 
 # andspeed up app startup time)
-if(WIN32 AND NOT MSVC)
+if(WIN32 AND NOT MSVC OR CYGWIN)
   if(HAVE_64BIT_SIZE_T)
     set_target_properties(gmsh PROPERTIES LINK_FLAGS 
       "-Wl,--stack,16777216 -mwindows -static")
@@ -938,7 +959,7 @@ if(WIN32 AND NOT MSVC)
   set(CMAKE_EXE_LINK_DYNAMIC_CXX_FLAGS)
 elseif(MSVC)
   set_target_properties(gmsh PROPERTIES LINK_FLAGS "/STACK:16777216")
-endif(WIN32 AND NOT MSVC)
+endif(WIN32 AND NOT MSVC OR CYGWIN)
 
 add_subdirectory(gmshpy)
 
@@ -991,7 +1012,7 @@ macro(unix2dos VARNAME)
   set(${VARNAME} ${UNIX2DOS_FILES})
 endmacro(unix2dos)
 
-if(WIN32)
+if(WIN32 OR CYGWIN)
   set(GMSH_BIN .)
   set(GMSH_DOC .)
   set(GMSH_MAN .)
@@ -1010,11 +1031,11 @@ elseif(APPLE)
   set(GMSH_BIN ../MacOS)
   set(GMSH_DOC ../../..)
   set(GMSH_MAN ../../..)
-else(WIN32)
+else(WIN32 OR CYGWIN)
   set(GMSH_BIN bin)
   set(GMSH_DOC share/doc/gmsh)
   set(GMSH_MAN share/man/man1)
-endif(WIN32)
+endif(WIN32 OR CYGWIN)
 
 # mark targets as optional so we can install them separately if needed
 # (e.g. "make lib" or "make shared" followed by "make install/fast")
@@ -1143,7 +1164,7 @@ if(APPLE)
   install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/Fltk/MacIconsPos.icns DESTINATION .
           RENAME GmshPos.icns)
   set(CPACK_PACKAGE_ICON ${CMAKE_CURRENT_SOURCE_DIR}/Fltk/MacIcons.icns)
-elseif(WIN32)
+elseif(WIN32 OR CYGWIN)
   set(CPACK_GENERATOR ZIP)
 else(APPLE)
   set(CPACK_GENERATOR TGZ)

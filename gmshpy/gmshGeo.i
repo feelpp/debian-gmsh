@@ -19,7 +19,9 @@
   #include "GPoint.h"
   #include "discreteFace.h"
   #include "discreteEdge.h"
+  #include "discreteRegion.h"
   #include "discreteVertex.h"
+  #include "gmshLevelset.h"
   #include "MElement.h"
   #include "MVertex.h"
   #include "MTriangle.h"
@@ -48,6 +50,7 @@ namespace std {
   %template(GFaceVectorVector) vector< std::vector< GFace *,std::allocator< GFace * > >,std::allocator< std::vector< GFace *,std::allocator< GFace * > > > >;
   %template(GFaceList) list<GFace*, std::allocator<GFace*> >;
   %template(GEdgeList) list<GEdge*, std::allocator<GEdge*> >;
+  %template(GLevelsetVector) vector<gLevelset *, std::allocator<gLevelset *> >;
 }
 
 %include "GmshConfig.h"
@@ -63,6 +66,7 @@ namespace std {
 %include "discreteFace.h"
 %include "discreteEdge.h"
 %include "discreteVertex.h"
+%include "discreteRegion.h"
 %include "MElement.h"
 %include "MVertex.h"
 %include "MTriangle.h"
@@ -77,3 +81,5 @@ namespace std {
 %include "SPoint2.h"
 %include "SBoundingBox3d.h"
 %include "Curvature.h"
+%include "gmshLevelset.h"
+
