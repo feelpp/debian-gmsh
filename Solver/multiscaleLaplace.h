@@ -27,10 +27,10 @@ class multiscaleLaplace{
 public:
   multiscaleLaplace (std::vector<MElement *> &elements, 
                      std::map<MVertex*, SPoint3> &allCoordinates); 
-  void cut (std::vector<MElement *> &elements);  
+  void cutElems   (std::vector<MElement *> &elements); 
+  void splitElems (std::vector<MElement *> &elements);  
   typedef enum {HARMONIC=1,CONFORMAL=2, CONVEXCOMBINATION=3} typeOfMapping;
 
-  linearSystem<double> *_lsys;
   multiscaleLaplaceLevel* root;
   void fillCoordinates (multiscaleLaplaceLevel & level,
                         std::map<MVertex*, SPoint3> &allCoordinates,

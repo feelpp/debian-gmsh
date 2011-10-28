@@ -14,22 +14,20 @@
 #include "GmshConfig.h"
 #include "GmshMessage.h"
 #include "GmshSocket.h"
-#include "ConnectionManager.h"
 #include "FlGui.h"
 #include "menuWindow.h"
 #include "mainWindow.h"
 #include "graphicWindow.h"
 #include "optionWindow.h"
 #include "statisticsWindow.h"
-#include "messageWindow.h"
 #include "contextWindow.h"
 #include "visibilityWindow.h"
 #include "clippingWindow.h"
 #include "manipWindow.h"
 #include "fieldWindow.h"
 #include "pluginWindow.h"
-#include "solverWindow.h"
 #include "aboutWindow.h"
+#include "onelabWindow.h"
 #include "fileDialogs.h"
 #include "extraDialogs.h"
 #include "partitionDialog.h"
@@ -167,8 +165,16 @@ static void file_clear_cb(Fl_Widget *w, void *data)
 
 static void file_remote_cb(Fl_Widget *w, void *data)
 {
-  GmshServer *server = ConnectionManager::get(99)->getServer();
-
+  onelab::localNetworkClient *c;
+  onelab::server::citer it = onelab::server::instance()->findClient("GmshRemote");
+  if(it == onelab::server::instance()->lastClient()){
+    c = new onelab::localNetworkClient("GmshRemote", "");
+    c->setSocketSwitch("-socket");
+  }
+  else
+    c = (onelab::localNetworkClient*)it->second;
+  GmshServer *server = c->getGmshServer();
+  
   std::string str((const char*)data);
 
   if(str == "start"){
@@ -176,11 +182,8 @@ static void file_remote_cb(Fl_Widget *w, void *data)
       Msg::Error("Cannot start: remote Gmsh is already running");
       return;
     }
-    ConnectionManager::get(99)->name = "Remote";
-    ConnectionManager::get(99)->socketSwitch = "-socket %s";
-    ConnectionManager::get(99)->executable = connectionChooser();
-    if(ConnectionManager::get(99)->executable.size())
-      ConnectionManager::get(99)->run("");
+    c->setCommandLine(connectionChooser());
+    if(c->getCommandLine().size()) c->run("");
   }
   else{
     if(!server){
@@ -587,7 +590,7 @@ static void help_short_cb(Fl_Widget *w, void *data)
   Msg::Direct("  Alt+Shift+y   Set -Y view"); 
   Msg::Direct("  Alt+Shift+z   Set -Z view"); 
   Msg::Direct(" ");
-  FlGui::instance()->messages->show();
+  FlGui::instance()->showMessages();
 }
 
 #undef CC
@@ -617,14 +620,14 @@ static void help_mouse_cb(Fl_Widget *w, void *data)
   Msg::Direct("  For a 1 button mouse, Middle button = Shift+Left button, "
               "Right button = Alt+Left button");
   Msg::Direct(" ");
-  FlGui::instance()->messages->show();
+  FlGui::instance()->showMessages();
 }
 
 static void help_command_line_cb(Fl_Widget *w, void *data)
 {
   Msg::Direct(" ");
   PrintUsage("gmsh");
-  FlGui::instance()->messages->show();
+  FlGui::instance()->showMessages();
 }
 
 static void help_online_cb(Fl_Widget *w, void *data)
@@ -1594,7 +1597,7 @@ static void geometry_physical_add_cb(Fl_Widget *w, void *data)
   action_point_line_surface_volume(7, 0, str.c_str());
 }
 
-static void mesh_save_cb(Fl_Widget *w, void *data)
+void mesh_save_cb(Fl_Widget *w, void *data)
 {
   std::string name = CTX::instance()->outputFileName;
   if(name.empty()){
@@ -1800,7 +1803,7 @@ static void mesh_inspect_cb(Fl_Widget *w, void *data)
         Msg::Direct("  Disto: %g", ele->distoShapeMeasure());
         CTX::instance()->mesh.changed = ENT_ALL;
         drawContext::global()->draw();
-        FlGui::instance()->messages->show();
+        FlGui::instance()->showMessages();
       }
     }
     if(ib == 'q') {
@@ -2623,7 +2626,7 @@ contextItem menu_mesh[] = {
 };  
   contextItem menu_mesh_define[] = {
     {"1Mesh>Define"} ,
-    {"Fields",      (Fl_Callback *)field_cb},
+    {"Size fields",  (Fl_Callback *)field_cb},
     {"Element size at points", (Fl_Callback *)mesh_define_length_cb  } ,
     {"Embedded points", (Fl_Callback *)mesh_define_embedded_cb, (void*)"point" } ,
     {"Recombine",   (Fl_Callback *)mesh_define_recombine_cb  } ,

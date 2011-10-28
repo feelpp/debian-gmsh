@@ -21,10 +21,9 @@
 #include "statisticsWindow.h"
 #include "visibilityWindow.h"
 #include "clippingWindow.h"
-#include "messageWindow.h"
 #include "manipWindow.h"
 #include "contextWindow.h"
-#include "solverWindow.h"
+#include "onelabWindow.h"
 #include "aboutWindow.h"
 #include "colorbarWindow.h"
 #include "fileDialogs.h"
@@ -268,13 +267,13 @@ FlGui::FlGui(int argc, char **argv)
   stats = new statisticsWindow(CTX::instance()->deltaFontSize);
   visibility = new visibilityWindow(CTX::instance()->deltaFontSize);
   clipping = new clippingWindow(CTX::instance()->deltaFontSize);
-  messages = new messageWindow(CTX::instance()->deltaFontSize);
   manip = new manipWindow(CTX::instance()->deltaFontSize);
   geoContext = new geometryContextWindow(CTX::instance()->deltaFontSize);
   meshContext = new meshContextWindow(CTX::instance()->deltaFontSize);
   about = new aboutWindow();
-  for(int i = 0; i < NB_SOLVER_MAX; i++)
-    solver.push_back(new solverWindow(i, CTX::instance()->deltaFontSize));
+#if (FL_MAJOR_VERSION == 1) && (FL_MINOR_VERSION == 3)
+  onelab = new onelabWindow();
+#endif
 
   // init solver plugin stuff
   callForSolverPlugin(-1);
@@ -667,19 +666,19 @@ int FlGui::testGlobalShortcuts(int event)
 int FlGui::testArrowShortcuts()
 {
   if(Fl::test_shortcut(FL_Left)) {
-    status_play_manual(1, -1);
+    status_play_manual(1, -CTX::instance()->post.animStep);
     return 1;
   }
   else if(Fl::test_shortcut(FL_Right)) {
-    status_play_manual(1, 1);
+    status_play_manual(1, CTX::instance()->post.animStep);
     return 1;
   }
   else if(Fl::test_shortcut(FL_Up)) {
-    status_play_manual(0, -1);
+    status_play_manual(0, -CTX::instance()->post.animStep);
     return 1;
   }
   else if(Fl::test_shortcut(FL_Down)) {
-    status_play_manual(0, 1);
+    status_play_manual(0, CTX::instance()->post.animStep);
     return 1;
   }
   return 0;
@@ -785,11 +784,9 @@ void FlGui::storeCurrentWindowsInfo()
   CTX::instance()->glPosition[0] = graph[0]->win->x();
   CTX::instance()->glPosition[1] = graph[0]->win->y();
   CTX::instance()->glSize[0] = graph[0]->win->w();
-  CTX::instance()->glSize[1] = (graph[0]->win->h() - graph[0]->bottom->h());
-  CTX::instance()->msgPosition[0] = messages->win->x();
-  CTX::instance()->msgPosition[1] = messages->win->y();
-  CTX::instance()->msgSize[0] = messages->win->w();
-  CTX::instance()->msgSize[1] = messages->win->h();
+  CTX::instance()->glSize[1] = (graph[0]->win->h() - graph[0]->bottom->h() -
+                                graph[0]->browser->h());
+  CTX::instance()->msgSize = graph[0]->browser->h();
   CTX::instance()->optPosition[0] = options->win->x();
   CTX::instance()->optPosition[1] = options->win->y();
   CTX::instance()->pluginPosition[0] = plugins->win->x();
@@ -810,8 +807,10 @@ void FlGui::storeCurrentWindowsInfo()
   CTX::instance()->manipPosition[1] = manip->win->y();
   CTX::instance()->ctxPosition[0] = geoContext->win->x();
   CTX::instance()->ctxPosition[1] = meshContext->win->y();
-  CTX::instance()->solverPosition[0] = solver[0]->win->x();
-  CTX::instance()->solverPosition[1] = solver[0]->win->y();
+#if (FL_MAJOR_VERSION == 1) && (FL_MINOR_VERSION == 3)
+  CTX::instance()->solverPosition[0] = onelab->x();
+  CTX::instance()->solverPosition[1] = onelab->y();
+#endif
   fileChooserGetPosition(&CTX::instance()->fileChooserPosition[0],
                          &CTX::instance()->fileChooserPosition[1]);
 }
@@ -852,8 +851,6 @@ void window_cb(Fl_Widget *w, void *data)
       FlGui::instance()->manip->win->iconize();
     if(FlGui::instance()->stats->win->shown())
       FlGui::instance()->stats->win->iconize();
-    if(FlGui::instance()->messages->win->shown())
-      FlGui::instance()->messages->win->iconize();
     if(FlGui::instance()->menu->win->shown())
       FlGui::instance()->menu->win->iconize();
   }
@@ -864,6 +861,8 @@ void window_cb(Fl_Widget *w, void *data)
       oldw = FlGui::instance()->graph[0]->win->w();
       oldh = FlGui::instance()->graph[0]->win->h();
       FlGui::instance()->graph[0]->win->resize(Fl::x(), Fl::y(), Fl::w(), Fl::h());
+      FlGui::instance()->graph[0]->hideMessages();
+      FlGui::check();
       //FlGui::instance()->graph[0]->win->fullscreen();
       zoom = 0;
     }
@@ -872,7 +871,6 @@ void window_cb(Fl_Widget *w, void *data)
       //FlGui::instance()->graph[0]->win->fullscreen_off(oldx, oldy, oldw, oldh);
       zoom = 1;
     }
-    FlGui::instance()->graph[0]->win->show();
     FlGui::instance()->menu->win->show();
   }
   else if(str == "front"){
@@ -889,10 +887,10 @@ void window_cb(Fl_Widget *w, void *data)
       FlGui::instance()->geoContext->win->show();
     if(FlGui::instance()->meshContext->win->shown())
       FlGui::instance()->meshContext->win->show();
-    for(unsigned int i = 0; i < FlGui::instance()->solver.size(); i++) {
-      if(FlGui::instance()->solver[i]->win->shown())
-        FlGui::instance()->solver[i]->win->show();
-    }
+#if (FL_MAJOR_VERSION == 1) && (FL_MINOR_VERSION == 3)
+    if(FlGui::instance()->onelab->shown())
+      FlGui::instance()->onelab->show();
+#endif
     if(FlGui::instance()->visibility->win->shown())
       FlGui::instance()->visibility->win->show();
     if(FlGui::instance()->clipping->win->shown())
@@ -901,9 +899,23 @@ void window_cb(Fl_Widget *w, void *data)
       FlGui::instance()->manip->win->show();
     if(FlGui::instance()->stats->win->shown())
       FlGui::instance()->stats->win->show();
-    if(FlGui::instance()->messages->win->shown())
-      FlGui::instance()->messages->win->show();
     FlGui::instance()->menu->win->show();
   }
 }
 
+void FlGui::addMessage(const char *msg)
+{
+  for(unsigned int i = 0; i < FlGui::instance()->graph.size(); i++)
+    FlGui::instance()->graph[i]->addMessage(msg);
+}
+
+void FlGui::showMessages()
+{
+  for(unsigned int i = 0; i < FlGui::instance()->graph.size(); i++)
+    FlGui::instance()->graph[i]->showMessages();
+}
+
+void FlGui::saveMessages(const char *fileName)
+{
+  FlGui::instance()->graph[0]->saveMessages(fileName);
+}

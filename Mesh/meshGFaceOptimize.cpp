@@ -604,6 +604,7 @@ static bool _isItAGoodIdeaToMoveThatVertex (GFace *gf,
   if ( surface_new - surface_old  > 1.e-10 * surface_old) {
     return false;
   }
+  //printf("returning true ... \n");
   return true;
   int nBetter=0,nWorse=0;
   int nReallyBadOld=0,nReallyBadNew=0;
@@ -846,6 +847,8 @@ static void _relocateVertexConstrained (GFace *gf,
 					const std::vector<MElement*> &lt){
   if( ver->onWhat()->dim() == 2){
 
+    MFaceVertex *fv = dynamic_cast<MFaceVertex*>(ver);
+    if (fv->bl_data)return;
 
     std::map<MVertex*,p1p2p3> ring;
     double initu,initv;
@@ -923,8 +926,13 @@ static void _relocateVertexConstrained (GFace *gf,
 static void _relocateVertex (GFace *gf,
 			     MVertex *ver,
 			     const std::vector<MElement*> &lt){
+  
   double R; SPoint3 c; bool isSphere = gf->isSphere(R,c);
   if( ver->onWhat()->dim() == 2){
+
+    MFaceVertex *fv = dynamic_cast<MFaceVertex*>(ver);
+    if (fv->bl_data)return;
+
     double initu,initv;
     ver->getParameter(0, initu);
     ver->getParameter(1, initv);
@@ -948,6 +956,7 @@ static void _relocateVertex (GFace *gf,
       }
       fact += lt[i]->getNumVertices();
     }
+    SPoint2 newp ;
     if(fact != 0.0){
       SPoint2 before(initu,initv);
       SPoint2 after(cu / fact,cv / fact);
@@ -957,17 +966,18 @@ static void _relocateVertex (GFace *gf,
       }
       bool success = false;
       double factor = 1.0;
+      SPoint2 newp;
       for (int i=0;i<10;i++){
-	SPoint2 newp = after + before*(1.-factor);
+	newp = after + before*(1.-factor);
 	success = _isItAGoodIdeaToMoveThatVertex (gf,  lt, ver,before,newp);
-	if (success)break;
+	if (success) break;
 	factor *= 0.5;
       }
 
-      if (success){ // ne devrait-on pas utiliser newp ici au lieu de after ??? (vu la boucle precedente)
-	ver->setParameter(0, after.x());
-	ver->setParameter(1, after.y());
-	GPoint pt = gf->point(after);
+      if (success){ 
+	ver->setParameter(0, newp.x());
+	ver->setParameter(1, newp.y());
+	GPoint pt = gf->point(newp);
 	if(pt.succeeded()){
 	  ver->x() = pt.x();
 	  ver->y() = pt.y();
@@ -1679,7 +1689,7 @@ static int _recombineIntoQuads(GFace *gf, int recur_level, bool cubicGraph = 1)
 	if (pairs[i].n2->onWhat()->dim() < 2)NB++;
 	if (pairs[i].n3->onWhat()->dim() < 2)NB++;
 	if (pairs[i].n4->onWhat()->dim() < 2)NB++;
-	if (elen[i] > 60 && NB > 2) {elen[i] = 1000;}
+	if (elen[i] >  gf->meshAttributes.recombineAngle && NB > 2) {elen[i] = 1000;}
       }
 
       if (cubicGraph){
@@ -1817,6 +1827,7 @@ static int _recombineIntoQuads(GFace *gf, int recur_level, bool cubicGraph = 1)
   while(itp != pairs.end()){
     // recombine if difference between max quad angle and right
     // angle is smaller than tol
+    //    printf("%g %g\n",gf->meshAttributes.recombineAngle,itp->angle);
     if(itp->angle < gf->meshAttributes.recombineAngle){
       MElement *t1 = itp->t1;
       MElement *t2 = itp->t2;
@@ -1876,8 +1887,6 @@ void recombineIntoQuads(GFace *gf,
   if (saveAll) gf->model()->writeMSH("before.msh");
   int success = _recombineIntoQuads(gf, 0);
 
-  // gf->addLayersOfQuads(1, 0);
-
   if (saveAll) gf->model()->writeMSH("raw.msh");
   if(haveParam && nodeRepositioning)
     laplaceSmoothing(gf, CTX::instance()->mesh.nbSmoothing);
@@ -1895,7 +1904,7 @@ void recombineIntoQuads(GFace *gf,
           if(x && saveAll){ sprintf(NAME,"iter%dTQ.msh",COUNT++); gf->model()->writeMSH(NAME);}
           int y = removeDiamonds(gf);
           if(y && saveAll){ sprintf(NAME,"iter%dD.msh",COUNT++); gf->model()->writeMSH(NAME); }
-          laplaceSmoothing(gf);
+          laplaceSmoothing(gf,CTX::instance()->mesh.nbSmoothing);
           int z = 0; //edgeSwapQuadsForBetterQuality(gf);
           if(z && saveAll){ sprintf(NAME,"iter%dS.msh",COUNT++); gf->model()->writeMSH(NAME); }
           if (!(x+y+z)) break;
@@ -1922,8 +1931,9 @@ void recombineIntoQuads(GFace *gf,
   Msg::Info("Simple recombination algorithm completed (%g s)", t2 - t1);
 }
 
-void quadsToTriangles(GFace *gf, double minqual = -10000.)
+void quadsToTriangles(GFace *gf, double minqual)
 {
+
   std::vector<MQuadrangle*> qds;
   for (int i=0;i<gf->quadrangles.size();i++){
     MQuadrangle *q = gf->quadrangles[i];
@@ -1964,11 +1974,11 @@ void quadsToTriangles(GFace *gf, double minqual = -10000.)
 void recombineIntoQuadsIterative(GFace *gf)
 {
   recombineIntoQuads(gf);
-  quadsToTriangles(gf,0.03);
+  //  quadsToTriangles(gf, 1. - gf->meshAttributes.recombineAngle/90. );
   return;
   int COUNT = 0;
   while (1){
-    quadsToTriangles(gf);
+    quadsToTriangles(gf,-10000);
     {char NAME[245];sprintf(NAME,"iterT%d.msh",COUNT); gf->model()->writeMSH(NAME);}
     std::set<MTri3*,compareTri3Ptr> AllTris;
     std::vector<double> vSizes, vSizesBGM, Us, Vs;
@@ -2082,6 +2092,7 @@ double Temporary::compute_alignment(const MEdge&_edge, MElement*element1, MEleme
   vertexA = _edge.getVertex(0);
   vertexB = _edge.getVertex(1);
   edge = SVector3(vertexB->x()-vertexA->x(),vertexB->y()-vertexA->y(),vertexB->z()-vertexA->z());
+  edge = edge * (1/norm(edge));
   scalar_productA = fabs(dot(gradient,edge));
   scalar_productB = fabs(dot(other_vector,edge));
   alignment = std::max(scalar_productA,scalar_productB) - sqrt(2.0)/2.0;

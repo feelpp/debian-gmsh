@@ -54,8 +54,9 @@ void GModel::_storePhysicalTagsInEntities(int dim,
       std::map<int, std::string>::const_iterator it2 = it->second.begin();
       for(; it2 != it->second.end(); ++it2){
         if(std::find(ge->physicals.begin(), ge->physicals.end(), it2->first) ==
-           ge->physicals.end())
+           ge->physicals.end()){
           ge->physicals.push_back(it2->first);
+	}
       }
     }
   }
@@ -213,12 +214,14 @@ static void getDomains(int dom1Num, int dom2Num, int type,
                       MElement *doms[])
 {
   int domNums[2] = {dom1Num, dom2Num};
+  int nbD = (dom1Num == 0 || dom2Num == 0) ? 1 : 2;
+  if(dom1Num == 0) domNums[0] = dom2Num;
   switch(type){
   case MSH_LIN_B :
-    getElementsByNum(domNums, elements[8], false, doms, 2);
+    getElementsByNum(domNums, elements[8], false, doms, nbD);
     return;
   case MSH_TRI_B : case MSH_POLYG_B :
-    getElementsByNum(domNums, elements[9], false, doms, 2);
+    getElementsByNum(domNums, elements[9], false, doms, nbD);
     return;
   }
 }
@@ -461,11 +464,11 @@ int GModel::readMSH(const std::string &name)
           if(dom1) {
             getDomains(dom1, dom2, type, elements, doms);
             if(!doms[0]) Msg::Error("Domain element %d not found for element %d", dom1, num);
-            if(!doms[1]) Msg::Error("Domain element %d not found for element %d", dom2, num);
+            if(dom2 && !doms[1]) Msg::Error("Domain element %d not found for element %d", dom2, num);
           }
           MElement *e = createElementMSH(this, num, type, physical, elementary,
                                          partition, vertices, elements, physicals,
-                                         own, p, doms[1], doms[0]);
+                                         own, p, doms[0], doms[1]);
           for(unsigned int j = 0; j < ghosts.size(); j++)
             _ghostCells.insert(std::pair<MElement*, short>(e, ghosts[j]));
           if(numElements > 100000)
@@ -649,6 +652,7 @@ static int getNumElementsMSH(GEntity *ge, bool saveAll, int saveSinglePartition)
 
 static int getNumElementsMSH(GModel *m, bool saveAll, int saveSinglePartition)
 {
+
   int n = 0;
   for(GModel::viter it = m->firstVertex(); it != m->lastVertex(); ++it)
     n += getNumElementsMSH(*it, saveAll, saveSinglePartition);
@@ -702,8 +706,8 @@ int GModel::writeMSH(const std::string &name, double version, bool binary,
     version = 1.0;
 
   // if there are no physicals we save all the elements
-  if(noPhysicalGroups())    saveAll = true;
-  
+  if(noPhysicalGroups()) saveAll = true;
+
   // get the number of vertices and index the vertices in a continuous
   // sequence
   int numVertices = indexMeshVertices(saveAll, saveSinglePartition);
@@ -767,7 +771,7 @@ int GModel::writeMSH(const std::string &name, double version, bool binary,
   _elementIndexCache.clear();
 
   //parents
-  if ( !CTX::instance()->mesh.saveTri){
+  if (!CTX::instance()->mesh.saveTri){
    for(eiter it = firstEdge(); it != lastEdge(); ++it)
      for(unsigned int i = 0; i < (*it)->lines.size(); i++)
        if((*it)->lines[i]->ownsParent())
@@ -784,17 +788,14 @@ int GModel::writeMSH(const std::string &name, double version, bool binary,
          writeElementMSH(fp, this, (*it)->polyhedra[i]->getParent(),
                          saveAll, version, binary, num, (*it)->tag(), (*it)->physicals);
   }
-
   // points
   for(viter it = firstVertex(); it != lastVertex(); ++it)
     writeElementsMSH(fp, this, (*it)->points, saveAll, saveSinglePartition,
                      version, binary, num, (*it)->tag(), (*it)->physicals);
-
   // lines
   for(eiter it = firstEdge(); it != lastEdge(); ++it)
     writeElementsMSH(fp, this, (*it)->lines, saveAll, saveSinglePartition,
                      version, binary, num, (*it)->tag(), (*it)->physicals);
-
   // triangles
   for(fiter it = firstFace(); it != lastFace(); ++it)
     writeElementsMSH(fp, this, (*it)->triangles, saveAll, saveSinglePartition,
@@ -804,12 +805,10 @@ int GModel::writeMSH(const std::string &name, double version, bool binary,
   for(fiter it = firstFace(); it != lastFace(); ++it)
     writeElementsMSH(fp, this, (*it)->quadrangles, saveAll, saveSinglePartition,
                      version, binary, num, (*it)->tag(), (*it)->physicals);
-
   // polygons
   for(fiter it = firstFace(); it != lastFace(); it++)
     writeElementsMSH(fp, this, (*it)->polygons, saveAll, saveSinglePartition,
                      version, binary, num, (*it)->tag(), (*it)->physicals);
-
   // tets
   for(riter it = firstRegion(); it != lastRegion(); ++it)
     writeElementsMSH(fp, this, (*it)->tetrahedra, saveAll, saveSinglePartition,
@@ -835,7 +834,7 @@ int GModel::writeMSH(const std::string &name, double version, bool binary,
     writeElementsMSH(fp, this, (*it)->polyhedra, saveAll, saveSinglePartition,
                      version, binary, num, (*it)->tag(), (*it)->physicals);
 
-  // borders
+  // level set faces
   for(fiter it = firstFace(); it != lastFace(); ++it) {
     for(unsigned int i = 0; i < (*it)->triangles.size(); i++) {
       MTriangle *t = (*it)->triangles[i];
@@ -854,7 +853,8 @@ int GModel::writeMSH(const std::string &name, double version, bool binary,
                         getMeshElementIndex(p->getDomain(1)));
     }
   }
-  for(eiter it = firstEdge(); it != lastEdge(); ++it) //border lines after border surfaces
+  //level set lines
+  for(eiter it = firstEdge(); it != lastEdge(); ++it) {
     for(unsigned int i = 0; i < (*it)->lines.size(); i++) {
       MLine *l = (*it)->lines[i];
       if(l->getDomain(0))
@@ -863,6 +863,7 @@ int GModel::writeMSH(const std::string &name, double version, bool binary,
                         getMeshElementIndex(l->getDomain(0)),
                         getMeshElementIndex(l->getDomain(1)));
     }
+  }
 
   if(binary) fprintf(fp, "\n");
 
@@ -888,7 +889,7 @@ int GModel::writePartitionedMSH(const std::string &baseName, bool binary,
     int partition = *it;
 
     std::ostringstream sstream;
-    sstream << baseName << "_" << std::setw(3) << std::setfill('0') << partition;
+    sstream << baseName << "_" << std::setw(6) << std::setfill('0') << partition;
 
     int startNum = index ? getNumElementsMSH(this, saveAll, partition) : 0;
     Msg::Info("Writing partition %d in file '%s'", partition, sstream.str().c_str());

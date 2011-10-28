@@ -28,8 +28,8 @@ Recombine2D::Recombine2D(GFace *gf, int horizon)
   
   //return;
   
-  laplaceSmoothing(gf,100);
-  gf->model()->writeMSH("befSquare.msh");
+  //laplaceSmoothing(gf,100);
+  //gf->model()->writeMSH("befSquare.msh");
   
   Msg::Info("Branching with horizon %d", _horizon = HORIZ);
   
@@ -120,7 +120,7 @@ void Recombine2D::_buildEdgeToElement(std::vector<E*> &elements, e2t_cont &adj)
 
 void Recombine2D::_recombine()
 {
-  SetBoundingBox();
+  //SetBoundingBox();
   
   /*Map_Tri_Recomb::iterator itt;
   
@@ -326,9 +326,9 @@ int Recombine2D::apply()
   _gf->quadrangles = _quads;
   
   _applied = true;
-  _gf->model()->writeMSH("recSquare.msh");
-  laplaceSmoothing(_gf,100);
-  _gf->model()->writeMSH("aftSquare.msh");
+  //_gf->model()->writeMSH("recSquare.msh");
+  laplaceSmoothing(_gf,10);
+  //_gf->model()->writeMSH("aftSquare.msh");
   return 1;
 }
 

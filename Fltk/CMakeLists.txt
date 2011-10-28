@@ -15,16 +15,15 @@ set(SRC
     statisticsWindow.cpp
     visibilityWindow.cpp
     clippingWindow.cpp
-    messageWindow.cpp
     manipWindow.cpp
     contextWindow.cpp
-    solverWindow.cpp
     aboutWindow.cpp
     fileDialogs.cpp
     extraDialogs.cpp
     projectionEditor.cpp
     classificationEditor.cpp
     partitionDialog.cpp
+    onelabWindow.cpp
 )
 
 file(GLOB HDR RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.h) 

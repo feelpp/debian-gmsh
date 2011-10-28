@@ -93,6 +93,15 @@ unsigned int GFace::getNumMeshElements()
   return triangles.size() + quadrangles.size() + polygons.size();
 }
 
+unsigned int GFace::getNumMeshParentElements()
+{
+  unsigned int n = 0;
+  for(unsigned int i = 0; i < polygons.size(); i++)
+    if(polygons[i]->ownsParent())
+      n++;
+  return n;
+}
+
 void GFace::getNumMeshElements(unsigned *const c) const
 {
   c[0] += triangles.size();
@@ -233,12 +242,19 @@ std::list<GVertex*> GFace::vertices() const
 
 void GFace::setVisibility(char val, bool recursive)
 {
-  GEntity::setVisibility(val);
-  if(recursive){
-    std::list<GEdge*>::iterator it = l_edges.begin();
-    while (it != l_edges.end()){
-      (*it)->setVisibility(val, recursive);
-      ++it;
+  if (getCompound() && CTX::instance()->compoundOnly) {
+    GEntity::setVisibility(0);
+    for (std::list<GEdge*>::iterator it = l_edges.begin(); it != l_edges.end(); ++it)
+      (*it)->setVisibility(0, true);
+    std::list<GEdge*> edgesComp = getCompound()->edges();
+    //show edges of the compound surface
+    for (std::list<GEdge*>::iterator it = edgesComp.begin(); it != edgesComp.end(); ++it)
+      (*it)->setVisibility(1, true);
+  } else {
+    GEntity::setVisibility(val);
+    if(recursive){
+      for (std::list<GEdge*>::iterator it = l_edges.begin(); it != l_edges.end(); ++it)
+        (*it)->setVisibility(val, recursive);
     }
   }
 }
@@ -623,6 +639,7 @@ void GFace::getMeanPlaneData(double plan[3][3]) const
 
 double GFace::curvatureDiv(const SPoint2 &param) const
 {
+
   if (geomType() == Plane) return 0;
 
   // X=X(u,v) Y=Y(u,v) Z=Z(u,v)
@@ -687,7 +704,6 @@ double GFace::curvatureMax(const SPoint2 &param) const
 double GFace::curvatures(const SPoint2 &param, SVector3 *dirMax, SVector3 *dirMin,
                          double *curvMax, double *curvMin) const
 {
-  printf("in curv face \n");
   Pair<SVector3, SVector3> D1 = firstDer(param);
 
   if(geomType() == Plane){
@@ -729,6 +745,7 @@ double GFace::getMetricEigenvalue(const SPoint2 &)
 void GFace::getMetricEigenVectors(const SPoint2 &param,
                                   double eigVal[2], double eigVec[4]) const
 {
+
   // first derivatives
   Pair<SVector3,SVector3> D1 = firstDer(param);
   SVector3 du = D1.first();

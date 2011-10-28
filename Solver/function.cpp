@@ -206,7 +206,7 @@ void dataCacheDouble::_eval()
 const function * dataCacheMap::_translate(const function *f) const 
 {
   //special case
-  if (f == function::getSolution()) {
+  if (f == function::getSolution() || f == _containerSolution) {
     f = _functionSolution;
     if (f == NULL) {
       dataCacheMap *parent = _parent;
@@ -218,7 +218,7 @@ const function * dataCacheMap::_translate(const function *f) const
       if (f == NULL) 
         Msg::Error ("solution function has not been set");
     }
-  } else if (f == function::getSolutionGradient()) {
+  } else if (f == function::getSolutionGradient() || f == _containerSolutionGradient) {
     f = _functionSolutionGradient;
     if (f == NULL) {
       dataCacheMap *parent = _parent;
@@ -260,7 +260,7 @@ dataCacheDouble *dataCacheMap::get(const function *f, dataCacheDouble *caller, b
       if (it->iMap > _parent->_secondaryCaches.size())
         okFromParent = false;
       dataCacheMap *m = getSecondaryCache(it->iMap);
-      if (m->_cacheDoubleMap.find(it->f) != m->_cacheDoubleMap.end()) {
+      if (m->_cacheDoubleMap.find(_translate(it->f)) != m->_cacheDoubleMap.end()) {
         okFromParent = false;
         break;
       }
@@ -482,8 +482,8 @@ class functionLevelsetSmooth : public function {
 
         //double Heps = 0.5 * (1 + phi / _E + 1. / M_PI * sin(M_PI * phi / _E));
 	//double Heps = 0.5 + 1./32.*(45.*phi/_E - 50.*pow(phi/_E,3.) + 21.*pow(phi/_E,5.)  );
-	//double Heps = 0.5*(1+tanh(M_PI*phi/_E));
-	double Heps = 0.75 * (phi/_E - 0.33*pow(phi/_E,3.0)) + 0.5;
+	double Heps = 0.5*(1+tanh(M_PI*phi/_E));
+	//double Heps = 0.75 * (phi/_E - 0.33*pow(phi/_E,3.0)) + 0.5;
 
         //if (fabs(phi) < _E)  val(i, j) = 1./(Heps * ivalPlus + (1 - Heps) * ivalMin);
         //else if (phi >  _E)  val(i, j) = 1./ivalPlus;
@@ -497,7 +497,7 @@ class functionLevelsetSmooth : public function {
   }
   functionLevelsetSmooth(const function *f0, const double valMin, const double valPlus, const double E) : function(f0->getNbCol()) 
   {
-    printf("Levelset bandwidth is E = %g \n", E);
+    //printf("Levelset bandwidth is E = %g \n", E);
     setArgument (_f0, f0);
     _valMin  = valMin;
     _valPlus = valPlus;
