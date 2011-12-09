@@ -7,9 +7,9 @@
 #define _BACKGROUND_MESH_H_
 
 #include "STensor3.h"
-#include "simpleFunction.h"
 #include <vector>
 #include <list>
+#include "simpleFunction.h"
 
 class MElementOctree;
 class GFace;
@@ -56,11 +56,13 @@ class backgroundMesh : public simpleFunction<double>
   void updateSizes(GFace *);
   double operator () (double u, double v, double w) const;
   double getAngle(double u, double v, double w) const ; 
-  void print (const std::string &filename, GFace *gf, const std::map<MVertex*,double>&) const;
-  void print (const std::string &filename, GFace *gf, int choice = 0) const {
+  void print(const std::string &filename, GFace *gf, 
+              const std::map<MVertex*, double>&) const;
+  void print(const std::string &filename, GFace *gf, int choice = 0) const
+  {
     switch(choice) {
-    case 0 : print(filename,gf,_sizes); return;
-    default : print(filename,gf,_angles); return;
+    case 0 : print(filename, gf, _sizes); return;
+    default : print(filename, gf, _angles); return;
     }
   }
   MElementOctree* get_octree();
@@ -72,6 +74,5 @@ bool Extend1dMeshIn2dSurfaces();
 bool Extend2dMeshIn3dVolumes();
 SMetric3 max_edge_curvature_metric(const GVertex *gv, double &l);
 SMetric3 max_edge_curvature_metric(const GEdge *ge, double u, double &l);
-void replaceMeshCompound(GFace*,std::list<GEdge*>&);
 
 #endif

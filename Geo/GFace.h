@@ -254,7 +254,7 @@ class GFace : public GEntity
   void setCompound(GFaceCompound *gfc) { compound = gfc; }
   GFaceCompound *getCompound() const { return compound; }
 
-  // add points (and optionalluy normals) in vectors so that two
+  // add points (and optionally normals) in vectors so that two
   // points are at most maxDist apart
   bool fillPointCloud(double maxDist, std::vector<SPoint3> *points,
                       std::vector<SVector3> *normals=0);
@@ -290,9 +290,8 @@ class GFace : public GEntity
     // edge loops
   } meshAttributes ;
 
-  typedef enum {PENDING, DONE, FAILED} meshGenerationStatus;
   struct {
-    mutable meshGenerationStatus status;
+    mutable GEntity::MeshGenerationStatus status;
     double worst_element_shape, best_element_shape, average_element_shape;
     double smallest_edge_length, longest_edge_length, efficiency_index;
     int nbEdge, nbTriangle;

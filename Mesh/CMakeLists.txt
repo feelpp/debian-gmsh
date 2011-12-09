@@ -17,6 +17,7 @@ set(SRC
       meshGRegionDelaunayInsertion.cpp meshGRegionTransfinite.cpp 
       meshGRegionExtruded.cpp  meshGRegionCarveHole.cpp 
       meshGRegionLocalMeshMod.cpp meshGRegionMMG3D.cpp
+    meshMetric.cpp
     BackgroundMesh.cpp 
     qualityMeasures.cpp 
     BoundaryLayers.cpp 
@@ -25,7 +26,6 @@ set(SRC
       highOrderSmoother.cpp 
       highOrderTools.cpp 
     meshPartition.cpp
-    meshPartitionOptions.cpp
     meshRefine.cpp
     multiscalePartition.cpp
     QuadTriUtils.cpp

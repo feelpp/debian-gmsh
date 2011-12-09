@@ -9,6 +9,7 @@
 #include "GmshMessage.h"
 #include "GModel.h"
 #include "GModelFactory.h"
+#include "GFaceCompound.h"
 #include "MPoint.h"
 #include "MLine.h"
 #include "MTriangle.h"
@@ -32,6 +33,7 @@
 #include "MVertexPositionSet.h"
 #include "OpenFile.h"
 #include "CreateFile.h"
+#include "Options.h"
 
 #if defined(HAVE_MESH)
 #include "Field.h"
@@ -39,6 +41,9 @@
 #include "meshGFaceOptimize.h"
 #include "meshPartition.h"
 #include "HighOrder.h"
+#include "meshMetric.h"
+#include "meshGRegionMMG3D.h"
+#include "meshGFaceBamg.h"
 #endif
 
 std::vector<GModel*> GModel::list;
@@ -81,7 +86,7 @@ GModel::~GModel()
 GModel *GModel::current(int index)
 {
   if(list.empty()){
-    Msg::Warning("No current model available: creating one");
+    Msg::Info("No current model available: creating one");
     new GModel();
   }
   if(index >= 0) _current = index;
@@ -482,23 +487,6 @@ void GModel::setSelection(int val)
   }
 }
 
-void GModel::updateUpperTopology()
-{
-  for(eiter it = firstEdge(); it != lastEdge(); ++it) {
-    if(!(*it)->getCompound() && !edgesUpper.count((*it)))
-      edgesUpper.insert((*it));
-  }
-  for(fiter it = firstFace(); it != lastFace(); ++it) {
-    if(!(*it)->getCompound() && !facesUpper.count((*it)))
-      facesUpper.insert((*it));
-  }
-  for(riter it = firstRegion(); it != lastRegion(); ++it) {
-    if(!(*it)->getCompound() && !regionsUpper.count((*it)))
-      regionsUpper.insert((*it));
-  }
-}
-
-
 SBoundingBox3d GModel::bounds(bool aroundVisible)
 {
   std::vector<GEntity*> entities;
@@ -524,6 +512,86 @@ int GModel::mesh(int dimension)
 #else
   Msg::Error("Mesh module not compiled");
   return false;
+#endif
+}
+
+
+int GModel::adaptMesh(int technique, simpleFunction<double> *f, std::vector<double> parameters)
+{
+#if defined(HAVE_MESH)
+
+  if (getNumMeshElements() == 0) mesh(getDim());
+  meshMetric *mm; 
+ 
+  int ITER = 0;
+  while(1){
+    std::vector<MElement*> elements;
+
+    if (getDim() == 2){
+      for (fiter fit = firstFace(); fit != lastFace(); ++fit){
+	if ((*fit)->quadrangles.size())return -1;
+	for (int i=0;i<(*fit)->triangles.size();i++){
+	  elements.push_back((*fit)->triangles[i]);
+	}
+      }
+    }
+    else if (getDim() == 3){
+      for (riter rit = firstRegion(); rit != lastRegion(); ++rit){
+	if ((*rit)->hexahedra.size())return -1;
+	for (int i=0;i<(*rit)->tetrahedra.size();i++){
+	  elements.push_back((*rit)->tetrahedra[i]);
+	}
+      }
+    }
+
+    if (elements.size() == 0)return -1;
+
+    double lcmin = parameters.size() >=3 ? parameters[1] : CTX::instance()->mesh.lcMin;
+    double lcmax = parameters.size() >=3 ? parameters[2] : CTX::instance()->mesh.lcMax;
+    int niter = parameters.size() >=4 ? (int) parameters[3] : 3;
+
+    switch(technique){
+    case 1 : 
+      mm = new meshMetric (elements, f, meshMetric::LEVELSET,lcmin,lcmax,parameters[0], 0);
+      break;
+    case 2 :
+      mm = new meshMetric (elements, f, meshMetric::HESSIAN,lcmin,lcmax,0, parameters[0]);
+      break;
+    case 3 :
+      mm = new meshMetric (elements, f, meshMetric::FREY,lcmin,lcmax,parameters[0], 0);
+      break;
+    default : Msg::Error("Unknown Adaptive Strategy");return -1;
+    }
+    // the background mesh is the mesh metric
+    mm->setAsBackgroundMesh (this);
+    if (getDim() == 2){
+      for (fiter fit = firstFace(); fit != lastFace(); ++fit){
+	if((*fit)->geomType() != GEntity::DiscreteSurface){
+	  opt_mesh_lc_from_points(0, GMSH_SET, 0);
+
+	  meshGFaceBamg(*fit);
+	  laplaceSmoothing(*fit,CTX::instance()->mesh.nbSmoothing);
+	}
+	if(_octree) delete _octree;
+	_octree = 0;
+      }
+    }
+    else if (getDim() == 3){
+      for (riter rit = firstRegion(); rit != lastRegion(); ++rit){
+	refineMeshMMG(*rit);
+	if(_octree) delete _octree;
+	_octree = 0;
+      }
+    }
+    delete mm;
+    if (++ITER > niter) break;
+
+  }
+
+  return 0;
+#else
+  Msg::Error("Mesh module not compiled");
+  return -1;
 #endif
 }
 
@@ -1260,7 +1328,7 @@ void GModel::makeDiscreteRegionsSimplyConnected()
     
     std::vector<std::vector<MElement*> > conRegions;
     int nbRegions = connectedVolumes(allElements, conRegions);
-    remove(*itR);
+    if (nbRegions > 1) remove(*itR);
 
     for(int ire  = 0; ire < nbRegions; ire++){
       int numR = (nbRegions == 1) ? (*itR)->tag() : getMaxElementaryNumber(3) + 1;
@@ -1319,7 +1387,7 @@ void GModel::makeDiscreteFacesSimplyConnected()
     
     std::vector<std::vector<MElement*> > conFaces;
     int nbFaces = connectedSurfaces(allElements, conFaces);
-    remove(*itF);
+    if (nbFaces > 1) remove(*itF);
 
     for(int ifa  = 0; ifa < nbFaces; ifa++){
       int numF = (nbFaces == 1) ? (*itF)->tag() : getMaxElementaryNumber(2) + 1;
@@ -1821,6 +1889,7 @@ GModel *GModel::buildCutGModel(gLevelset *ls, bool cutElem, bool saveTri)
 
   GModel *cutGM = buildCutMesh(this, ls, elements, vertexMap, physicals, cutElem);
 
+
   for(int i = 0; i < (int)(sizeof(elements) / sizeof(elements[0])); i++)
     cutGM->_storeElementsInEntities(elements[i]);
   cutGM->_associateEntityWithMeshVertices();
@@ -1836,6 +1905,7 @@ GModel *GModel::buildCutGModel(gLevelset *ls, bool cutElem, bool saveTri)
           cutGM->setPhysicalName(it2->second, i, it2->first);
     }
   }
+
 
   Msg::Info("Mesh cutting completed (%g s)", Cpu() - t1);
 

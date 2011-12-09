@@ -17,6 +17,7 @@
 #include "GRegion.h"
 #include "SPoint3.h"
 #include "SBoundingBox3d.h"
+template <class scalar> class simpleFunction;
 
 class FM_Internals;
 class GEO_Internals;
@@ -117,12 +118,6 @@ class GModel
   std::set<GEdge*, GEntityLessThan> edges;
   std::set<GVertex*, GEntityLessThan> vertices;
   
-  // represents uppermost topology level, when using compounds
-  // same as normal regions, edges, vertices but without entities contained in compounds
-  std::set<GRegion*, GEntityLessThan> regionsUpper;
-  std::set<GFace*, GEntityLessThan> facesUpper;
-  std::set<GEdge*, GEntityLessThan> edgesUpper;
-
   // map between the pair <dimension, elementary or physical number>
   // and an optional associated name
   std::map<std::pair<int, int>, std::string> physicalNames, elementaryNames;
@@ -164,9 +159,6 @@ class GModel
   FM_Internals *getFMInternals() { return _fm_internals; }
   ACIS_Internals *getACISInternals(){ return _acis_internals; }
   
-  // if model has been loaded or changed fill facesUpper, edgesUpper
-  void updateUpperTopology();
-
   // access characteristic length (mesh size) fields
   FieldManager *getFields(){ return _fields; }
 
@@ -199,13 +191,13 @@ class GModel
   typedef std::set<GVertex*, GEntityLessThan>::iterator viter;
 
   // get an iterator initialized to the first/last entity in this model
-  riter firstRegion(const bool upper = false) { return upper ? regionsUpper.begin() : regions.begin(); }
-  fiter firstFace(const bool upper = false)   { return upper ? facesUpper.begin() : faces.begin(); }
-  eiter firstEdge(const bool upper = false)   { return upper ? edgesUpper.begin() : edges.begin(); }
+  riter firstRegion() { return regions.begin(); }
+  fiter firstFace() { return faces.begin(); }
+  eiter firstEdge() { return edges.begin(); }
   viter firstVertex() { return vertices.begin(); }
-  riter lastRegion(const bool upper = false)  { return upper ? regionsUpper.end() : regions.end(); }
-  fiter lastFace(const bool upper = false)    { return upper ? facesUpper.end() : faces.end(); }
-  eiter lastEdge(const bool upper = false)    { return upper ? edgesUpper.end() : edges.end(); }
+  riter lastRegion() { return regions.end(); }
+  fiter lastFace() { return faces.end(); }
+  eiter lastEdge() { return edges.end(); }
   viter lastVertex() { return vertices.end(); }
 
   // find the entity with the given tag
@@ -370,6 +362,26 @@ class GModel
 
   // mesh the model
   int mesh(int dimension);
+
+  // adapt the mesh anisotropically using a metric that is computed from a function f(x,y,z). 
+  // One can either 
+  //   For all algorithms
+  //           parameters[1] = lcmin (default : in global gmsh options CTX::instance()->mesh.lcMin) 
+  //           parameters[2] = lcmax (default : in global gmsh options CTX::instance()->mesh.lcMax) 
+  //           parameters[3] = nb iterations
+  //    1) Assume that the function is a levelset -> adapt using Coupez technique (technique = 1)
+  //           parameters[0] = thickness of the interface (mandatory)
+  //    2) Assume that the function is a physical quantity -> adapt using the Hessain (technique = 2)
+  //           parameters[0] = N, the final number of elements
+  //    3) A variant of 1) by P. Frey
+  //           parameters[0] = thickness of the interface (mandatory)
+  // The algorithm first generate a mesh if no one is available 
+
+  // In this first attempt, only the highest dimensional mesh is adapted, which is ok if
+  // we assume that boundaries are already adapted.
+  // This should be fixed.
+  
+  int adaptMesh (int technique, simpleFunction<double> *f, std::vector<double> parameters);
 
   // make the mesh a high order mesh at order N
   // linear is 1 if the high order points are not placed on the geometry of the model 

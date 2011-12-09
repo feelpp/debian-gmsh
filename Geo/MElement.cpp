@@ -166,7 +166,7 @@ double MElement::getVolume()
   double vol = 0.;
   for (int i = 0; i < npts; i++){
     vol += getJacobianDeterminant(pts[i].pt[0], pts[i].pt[1], pts[i].pt[2])
-      * pts[i].weight;    
+      * pts[i].weight;
   }
   return vol;
 }
@@ -547,19 +547,19 @@ double MElement::integrateCirc(double val[], int edge, int pOrder, int order)
     Msg::Error("No edge %d for this element", edge);
     return 0;
   }
-  
+
   std::vector<MVertex*> v;
   getEdgeVertices(edge, v);
   MElementFactory f;
   int type = getLineType(getPolynomialOrder());
   MElement* ee = f.create(type, v);
-  
+
   double intv[3];
   for(int i = 0; i < 3; i++){
     intv[i] = ee->integrate(&val[i], pOrder, 3, order);
-  }  
+  }
   delete ee;
-  
+
   double t[3] = {v[1]->x() - v[0]->x(), v[1]->y() - v[0]->y(), v[1]->z() - v[0]->z()};
   norme(t);
   double result;
@@ -582,7 +582,7 @@ double MElement::integrateFlux(double val[], int face, int pOrder, int order)
   case TYPE_TET : type = getTriangleType(getPolynomialOrder()); break;
   case TYPE_QUA : type = getQuadType(getPolynomialOrder());     break;
   case TYPE_HEX : type = getQuadType(getPolynomialOrder());     break;
-  case TYPE_PYR : 
+  case TYPE_PYR :
     if(face < 4) type = getTriangleType(getPolynomialOrder());
     else type = getQuadType(getPolynomialOrder());
     break;
@@ -630,13 +630,13 @@ void MElement::writeMSH(FILE *fp, double version, bool binary, int num,
   if(CTX::instance()->mesh.saveTri && poly){
     for (int i = 0; i < getNumChildren() ; i++){
        MElement *t = getChild(i);
-       t->writeMSH(fp, version, binary, num, elementary, physical, 0, 0, 0, ghosts);
+       t->writeMSH(fp, version, binary, num++, elementary, physical, 0, 0, 0, ghosts);
     }
     return;
   }
   else if(CTX::instance()->mesh.saveTri && polyl){
     MLine *l = new MLine(getVertex(0), getVertex(1));
-    l->writeMSH(fp, version, binary, num, elementary, physical, 0, 0, 0, ghosts);
+    l->writeMSH(fp, version, binary, num++, elementary, physical, 0, 0, 0, ghosts);
     delete l;
     return;
   }
@@ -690,7 +690,8 @@ void MElement::writeMSH(FILE *fp, double version, bool binary, int num,
 
   if(physical < 0) revert();
 
-  int *verts = getVerticesIdForMSH();
+  std::vector<int> verts;
+  getVerticesIdForMSH(verts);
 
   if(!binary){
     for(int i = 0; i < n; i++)
@@ -698,12 +699,10 @@ void MElement::writeMSH(FILE *fp, double version, bool binary, int num,
     fprintf(fp, "\n");
   }
   else{
-    fwrite(verts, sizeof(int), n, fp);
+    fwrite(&verts[0], sizeof(int), n, fp);
   }
 
   if(physical < 0) revert();
-
-  delete [] verts;
 }
 
 void MElement::writePOS(FILE *fp, bool printElementary, bool printElementNumber,
@@ -1072,13 +1071,12 @@ int MElement::getInfoMSH(const int typeMSH, const char **const name)
   }
 }
 
-int *MElement::getVerticesIdForMSH()
+void MElement::getVerticesIdForMSH(std::vector<int> &verts)
 {
   int n = getNumVerticesForMSH();
-  int *verts = new int[n];
+  verts.resize(n);
   for(int i = 0; i < n; i++)
     verts[i] = getVertex(i)->getIndex();
-  return verts;
 }
 
 MElement *MElement::copy(std::map<int, MVertex*> &vertexMap,
@@ -1093,7 +1091,7 @@ MElement *MElement::copy(std::map<int, MVertex*> &vertexMap,
   if(getNumChildren() == 0) {
     for(int i = 0; i < getNumVertices(); i++) {
       MVertex *v = getVertex(i);
-      int numV = v->getNum();
+      int numV = v->getNum(); //Index();
       if(vertexMap.count(numV))
         vmv.push_back(vertexMap[numV]);
       else {
@@ -1107,7 +1105,7 @@ MElement *MElement::copy(std::map<int, MVertex*> &vertexMap,
     for(int i = 0; i < getNumChildren(); i++) {
       for(int j = 0; j < getChild(i)->getNumVertices(); j++) {
         MVertex *v = getChild(i)->getVertex(j);
-        int numV = v->getNum();
+        int numV = v->getNum(); //Index();
         if(vertexMap.count(numV))
           vmv.push_back(vertexMap[numV]);
         else {
@@ -1131,7 +1129,7 @@ MElement *MElement::copy(std::map<int, MVertex*> &vertexMap,
       newParent = it->second;
     parent = newParent;
   }
-  
+
   MElementFactory factory;
   MElement *newEl = factory.create(eType, vmv, getNum(), _partition, ownsParent(), parent);
 

@@ -2,6 +2,9 @@
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
+//
+// Contributor(s):
+//   Gaetan Bricteux
 
 #ifndef _GMSH_LEVELSET_H_
 #define _GMSH_LEVELSET_H_
@@ -12,9 +15,12 @@
 #include <stdlib.h> // for abs()
 #include <vector>
 #include "fullMatrix.h"
+#include "GModel.h"
 #include "MVertex.h"
 #include "GmshConfig.h"
 #include "mathEvaluator.h"
+#include "cartesian.h"
+#include "simpleFunction.h"
 
 #if defined(HAVE_POST)
 #include "PView.h"
@@ -41,7 +47,7 @@
 #define INTER     14
 #define CRACK     15
 
-class gLevelset
+class gLevelset : public simpleFunction<double>
 {
 protected:
   static const short insideDomain = -1; // negative values of the levelset are inside the domain.
@@ -92,7 +98,7 @@ public:
 
 // ----------------------------------------------------------------------------------------------------------
 // PRIMITIVES
-class gLevelsetPrimitive : public gLevelset
+class gLevelsetPrimitive : public gLevelset  
 {
 public:
   gLevelsetPrimitive() : gLevelset() {}
@@ -122,7 +128,7 @@ protected:
 public:
   gLevelsetSphere (const double &x, const double &y, const double &z, const double &R, int tag=1) : gLevelsetPrimitive(tag), xc(x), yc(y), zc(z), r(R) {}
   virtual double operator () (const double x, const double y, const double z) const
-    {return sqrt((xc - x) * (xc - x) + (yc - y) * (yc - y) + (zc - z) * (zc - z)) - r;}
+    {return (sqrt((xc - x) * (xc - x) + (yc - y) * (yc - y) + (zc - z) * (zc - z)) - abs(r)) * r / abs(r);}
   int type() const {return SPHERE;}
 };
 
@@ -247,6 +253,16 @@ class gLevelsetMathEval: public gLevelsetPrimitive
 public:
   gLevelsetMathEval(std::string f, int tag=1);
   ~gLevelsetMathEval(){ if (_expr) delete _expr; }
+  double operator () (const double x, const double y, const double z) const;
+  int type() const { return UNKNOWN; }
+};
+
+class gLevelsetDistGeom: public gLevelsetPrimitive
+{
+  cartesianBox<double> *_box;
+public:
+  gLevelsetDistGeom(std::string g, std::string f, int tag=1);
+  ~gLevelsetDistGeom(){if (_box) delete _box; }
   double operator () (const double x, const double y, const double z) const;
   int type() const { return UNKNOWN; }
 };

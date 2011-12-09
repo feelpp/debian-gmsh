@@ -6,6 +6,7 @@
 #include "Octree.h"
 #include "OctreePost.h"
 #include "PView.h"
+#include "PViewData.h"
 #include "PViewDataList.h"
 #include "PViewDataGModel.h"
 #include "Numeric.h"
@@ -59,49 +60,49 @@ static void centroid(int n, double *X, double *Y, double *Z, double *c)
   c[2] *= oc;
 }
 
-void linBB(void *a, double *min, double *max)
+static void linBB(void *a, double *min, double *max)
 {
   double *X = (double*) a, *Y = &X[2], *Z = &X[4];
   minmax(2, X, Y, Z, min, max);
 }
 
-void triBB(void *a, double *min, double *max)
+static void triBB(void *a, double *min, double *max)
 {
   double *X = (double*) a, *Y = &X[3], *Z = &X[6];
   minmax(3, X, Y, Z, min, max);
 }
 
-void quaBB(void *a, double *min, double *max)
+static void quaBB(void *a, double *min, double *max)
 {
   double *X = (double*) a, *Y = &X[4], *Z = &X[8];
   minmax(4, X, Y, Z, min, max);
 }
 
-void tetBB(void *a, double *min, double *max)
+static void tetBB(void *a, double *min, double *max)
 {
   double *X = (double*) a, *Y = &X[4], *Z = &X[8];
   minmax(4, X, Y, Z, min, max);
 }
 
-void hexBB(void *a, double *min, double *max)
+static void hexBB(void *a, double *min, double *max)
 {
   double *X = (double*) a, *Y = &X[8], *Z = &X[16];
   minmax(8, X, Y, Z, min, max);
 }
 
-void priBB(void *a, double *min, double *max)
+static void priBB(void *a, double *min, double *max)
 {
   double *X = (double*) a, *Y = &X[6], *Z = &X[12];
   minmax(6, X, Y, Z, min, max);
 }
 
-void pyrBB(void *a, double *min, double *max)
+static void pyrBB(void *a, double *min, double *max)
 {
   double *X = (double*) a, *Y = &X[5], *Z = &X[10];
   minmax(5, X, Y, Z, min, max);
 }
 
-int linInEle(void *a, double *x)
+static int linInEle(void *a, double *x)
 {
   double *X = (double*) a, *Y = &X[2], *Z = &X[4], uvw[3];
   line lin(X, Y, Z);
@@ -109,7 +110,7 @@ int linInEle(void *a, double *x)
   return lin.isInside(uvw[0], uvw[1], uvw[2]);
 }
 
-int triInEle(void *a, double *x)
+static int triInEle(void *a, double *x)
 {
   double *X = (double*) a, *Y = &X[3], *Z = &X[6], uvw[3];
   triangle tri(X, Y, Z);
@@ -117,7 +118,7 @@ int triInEle(void *a, double *x)
   return tri.isInside(uvw[0], uvw[1], uvw[2]);
 }
 
-int quaInEle(void *a, double *x)
+static int quaInEle(void *a, double *x)
 {
   double *X = (double*) a, *Y = &X[4], *Z = &X[8], uvw[3];
   quadrangle qua(X, Y, Z);
@@ -125,7 +126,7 @@ int quaInEle(void *a, double *x)
   return qua.isInside(uvw[0], uvw[1], uvw[2]);
 }
 
-int tetInEle(void *a, double *x)
+static int tetInEle(void *a, double *x)
 {
   double *X = (double*) a, *Y = &X[4], *Z = &X[8], uvw[3];
   tetrahedron tet(X, Y, Z);
@@ -133,7 +134,7 @@ int tetInEle(void *a, double *x)
   return tet.isInside(uvw[0], uvw[1], uvw[2]);
 }
 
-int hexInEle(void *a, double *x)
+static int hexInEle(void *a, double *x)
 {
   double *X = (double*) a, *Y = &X[8], *Z = &X[16], uvw[3];
   hexahedron hex(X, Y, Z);
@@ -141,7 +142,7 @@ int hexInEle(void *a, double *x)
   return hex.isInside(uvw[0], uvw[1], uvw[2]);
 }
 
-int priInEle(void *a, double *x)
+static int priInEle(void *a, double *x)
 {
   double *X = (double*) a, *Y = &X[6], *Z = &X[12], uvw[3];
   prism pri(X, Y, Z);
@@ -149,7 +150,7 @@ int priInEle(void *a, double *x)
   return pri.isInside(uvw[0], uvw[1], uvw[2]);
 }
 
-int pyrInEle(void *a, double *x)
+static int pyrInEle(void *a, double *x)
 {
   double *X = (double*) a, *Y = &X[5], *Z = &X[10], uvw[3];
   pyramid pyr(X, Y, Z);
@@ -157,43 +158,43 @@ int pyrInEle(void *a, double *x)
   return pyr.isInside(uvw[0], uvw[1], uvw[2]);
 }
 
-void linCentroid(void *a, double *x)
+static void linCentroid(void *a, double *x)
 {
   double *X = (double*) a, *Y = &X[2], *Z = &X[4];
   centroid(2, X, Y, Z, x);
 }
 
-void triCentroid(void *a, double *x)
+static void triCentroid(void *a, double *x)
 {
   double *X = (double*) a, *Y = &X[3], *Z = &X[6];
   centroid(3, X, Y, Z, x);
 }
 
-void quaCentroid(void *a, double *x)
+static void quaCentroid(void *a, double *x)
 {
   double *X = (double*) a, *Y = &X[4], *Z = &X[8];
   centroid(4, X, Y, Z, x);
 }
 
-void tetCentroid(void *a, double *x)
+static void tetCentroid(void *a, double *x)
 {
   double *X = (double*) a, *Y = &X[4], *Z = &X[8];
   centroid(4, X, Y, Z, x);
 }
 
-void hexCentroid(void *a, double *x)
+static void hexCentroid(void *a, double *x)
 {
   double *X = (double*) a, *Y = &X[8], *Z = &X[16];
   centroid(8, X, Y, Z, x);
 }
 
-void priCentroid(void *a, double *x)
+static void priCentroid(void *a, double *x)
 {
   double *X = (double*) a, *Y = &X[6], *Z = &X[12];
   centroid(6, X, Y, Z, x);
 }
 
-void pyrCentroid(void *a, double *x)
+static void pyrCentroid(void *a, double *x)
 {
   double *X = (double*) a, *Y = &X[5], *Z = &X[10];
   centroid(5, X, Y, Z, x);
@@ -219,22 +220,33 @@ OctreePost::~OctreePost()
 }
 
 OctreePost::OctreePost(PView *v) 
-  : _SL(0), _VL(0), _TL(0), _ST(0), _VT(0), _TT(0), _SQ(0), _VQ(0), _TQ(0), 
-    _SS(0), _VS(0), _TS(0), _SH(0), _VH(0), _TH(0), _SI(0), _VI(0), _TI(0),
-    _SY(0), _VY(0), _TY(0),
-    _theView(v), _theViewDataList(0), _theViewDataGModel(0)
 {
-  _theViewDataGModel = dynamic_cast<PViewDataGModel*>(_theView->getData());
+  _create(v->getData(true)); // use adaptive data if available
+}
+
+OctreePost::OctreePost(PViewData *data) 
+{
+  _create(data);
+}
+
+void OctreePost::_create(PViewData *data)
+{
+  _SL = _VL = _TL = _ST = _VT = _TT = _SQ = _VQ = _TQ = 0; 
+  _SS = _VS = _TS = _SH = _VH = _TH = _SI = _VI = _TI = 0;
+  _SY = _VY = _TY = 0;
+  _theViewDataList = 0;
+  _theViewDataGModel = 0;
+
+  _theViewDataGModel = dynamic_cast<PViewDataGModel*>(data);
 
   if(_theViewDataGModel) return; // the octree is already available in the model
 
-  // use adaptive data if available
-  _theViewDataList = dynamic_cast<PViewDataList*>(_theView->getData(true));
+  _theViewDataList = dynamic_cast<PViewDataList*>(data);
 
   if(_theViewDataList){
     PViewDataList *l = _theViewDataList;
 
-    if(l->haveInterpolationMatrices() && !_theView->getData()->isAdaptive()){
+    if(l->haveInterpolationMatrices() && !l->isAdapted()){
       Msg::Error("Cannot create octree for non-adapted high-order list-based view: you need");
       Msg::Error("to select 'Adapt visualization grid' first");
       return;
@@ -403,9 +415,14 @@ bool OctreePost::searchScalar(double x, double y, double z, double *values,
 {
   double P[3] = {x, y, z};
 
-  if(step < 0)
-    for(int i = 0; i < _theView->getData()->getNumTimeSteps(); i++)
+  if(step < 0){
+    int numSteps = 1;
+    if(_theViewDataList) numSteps = _theViewDataList->getNumTimeSteps();
+    else if(_theViewDataGModel) numSteps = _theViewDataGModel->getNumTimeSteps();
+    for(int i = 0; i < numSteps; i++){
       values[i] = 0.0; 
+    }
+  }
   else
     values[0] = 0.0;
 
@@ -450,9 +467,13 @@ bool OctreePost::searchVector(double x, double y, double z, double *values,
 {
   double P[3] = {x, y, z};
 
-  if(step < 0)
-    for(int i = 0; i < 3 * _theView->getData()->getNumTimeSteps(); i++)
+  if(step < 0){
+    int numSteps = 1;
+    if(_theViewDataList) numSteps = _theViewDataList->getNumTimeSteps();
+    else if(_theViewDataGModel) numSteps = _theViewDataGModel->getNumTimeSteps();
+    for(int i = 0; i < 3 * numSteps; i++)
       values[i] = 0.0; 
+  }
   else
     for(int i = 0; i < 3; i++)
       values[i] = 0.0;
@@ -482,9 +503,13 @@ bool OctreePost::searchTensor(double x, double y, double z, double *values,
 {
   double P[3] = {x, y, z};
 
-  if(step < 0)
-    for(int i = 0; i < 9 * _theView->getData()->getNumTimeSteps(); i++)
+  if(step < 0){
+    int numSteps = 1;
+    if(_theViewDataList) numSteps = _theViewDataList->getNumTimeSteps();
+    else if(_theViewDataGModel) numSteps = _theViewDataGModel->getNumTimeSteps();
+    for(int i = 0; i < 9 * numSteps; i++)
       values[i] = 0.0; 
+  }
   else
     for(int i = 0; i < 9; i++)
       values[i] = 0.0;

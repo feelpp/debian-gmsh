@@ -1,7 +1,166 @@
-#include "gmshLevelset.h"
+// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+//
+// See the LICENSE.txt file for license information. Please report all
+// bugs and problems to <gmsh@geuz.org>.
+//
+// Contributor(s):
+//   Gaetan Bricteux
+//
+
 #include <queue>
 #include <stack>
+#include <math.h>
+#include "gmshLevelset.h"
 #include "fullMatrix.h"
+#include "GModel.h"
+#include "MElement.h"
+#include "Numeric.h"
+#include "cartesian.h"
+
+void insertActiveCells(double x, double y, double z, double rmax,
+                       cartesianBox<double> &box)
+{
+  int id1 = box.getCellContainingPoint(x - rmax, y - rmax, z - rmax);
+  int id2 = box.getCellContainingPoint(x + rmax, y + rmax, z + rmax);
+  int i1, j1 ,k1;
+  box.getCellIJK(id1, i1, j1, k1);
+  int i2, j2, k2;
+  box.getCellIJK(id2, i2, j2, k2);
+  for (int i = i1; i <= i2; i++)
+    for (int j = j1; j <= j2; j++)
+      for (int k = k1; k <= k2; k++)
+        box.insertActiveCell(box.getCellIndex(i, j, k));
+}
+void fillPointCloud(GEdge *ge, double sampling, std::vector<SPoint3> &points)
+{
+  Range<double> t_bounds = ge->parBounds(0);
+  double t_min = t_bounds.low();
+  double t_max = t_bounds.high();
+  double length = ge->length(t_min, t_max, 20);
+  int N = length / sampling;
+  for(int i = 0; i < N; i++) {
+    double t = t_min + (double)i / (double)(N - 1) * (t_max - t_min);
+    GPoint p = ge->point(t);
+    points.push_back(SPoint3(p.x(), p.y(), p.z()));
+  }
+}
+
+int removeBadChildCells(cartesianBox<double> *parent)
+{
+  cartesianBox<double> *child = parent->getChildBox();
+  if(!child) return 0;
+  int I = parent->getNxi();
+  int J = parent->getNeta();
+  int K = parent->getNzeta();
+  for(int i = 0; i < I; i++)
+    for(int j = 0; j < J; j++)
+      for(int k = 0; k < K; k++){
+        // remove children if they do not entirely fill parent, or if
+        // there is no parent on the boundary
+        int idx[8] = {child->getCellIndex(2 * i, 2 * j, 2 * k),
+                      child->getCellIndex(2 * i, 2 * j, 2 * k + 1),
+                      child->getCellIndex(2 * i, 2 * j + 1, 2 * k),
+                      child->getCellIndex(2 * i, 2 * j + 1, 2 * k + 1),
+                      child->getCellIndex(2 * i + 1, 2 * j, 2 * k),
+                      child->getCellIndex(2 * i + 1, 2 * j, 2 * k + 1),
+                      child->getCellIndex(2 * i + 1, 2 * j + 1, 2 * k),
+                      child->getCellIndex(2 * i + 1, 2 * j + 1, 2 * k + 1)};
+        bool exist[8], atLeastOne = false, butNotAll = false;
+        for(int ii = 0; ii < 8; ii++){
+          exist[ii] = child->activeCellExists(idx[ii]);
+          if(exist[ii]) atLeastOne = true;
+          if(!exist[ii]) butNotAll = true;
+        }
+        if(atLeastOne && 
+           (butNotAll ||
+            (i != 0 && !parent->activeCellExists(parent->getCellIndex(i - 1, j, k))) ||
+            (i != I - 1 && !parent->activeCellExists(parent->getCellIndex(i + 1, j, k))) ||
+            (j != 0 && !parent->activeCellExists(parent->getCellIndex(i, j - 1, k))) ||
+            (j != J - 1 && !parent->activeCellExists(parent->getCellIndex(i, j + 1, k))) ||
+            (k != 0 && !parent->activeCellExists(parent->getCellIndex(i, j, k - 1))) ||
+            (k != K - 1 && !parent->activeCellExists(parent->getCellIndex(i, j, k + 1)))))
+            for(int ii = 0; ii < 8; ii++) child->eraseActiveCell(idx[ii]);
+      }
+  return removeBadChildCells(child);
+}
+
+void removeParentCellsWithChildren(cartesianBox<double> *box)
+{
+  if(!box->getChildBox()) return;
+  for(int i = 0; i < box->getNxi(); i++)
+    for(int j = 0; j < box->getNeta(); j++)
+      for(int k = 0; k < box->getNzeta(); k++){
+        if(box->activeCellExists(box->getCellIndex(i, j, k))){
+          cartesianBox<double> *parent = box, *child;
+          int ii = i, jj = j, kk = k;
+          while((child = parent->getChildBox())){
+            ii *= 2; jj *= 2; kk *= 2;
+            if(child->activeCellExists(child->getCellIndex(ii, jj, kk))){
+              box->eraseActiveCell(box->getCellIndex(i, j, k));
+              break;
+            }
+            parent = child;
+          }
+        }
+      }
+  removeParentCellsWithChildren(box->getChildBox());
+}
+
+void computeLevelset(GModel *gm, cartesianBox<double> &box)
+{
+  // tolerance for desambiguation
+  const double tol = box.getLC() * 1.e-12;
+  std::vector<SPoint3> nodes;
+  std::vector<int> indices;
+  for (cartesianBox<double>::valIter it = box.nodalValuesBegin(); 
+       it != box.nodalValuesEnd(); ++it){
+    nodes.push_back(box.getNodeCoordinates(it->first));
+    indices.push_back(it->first);
+  }
+  Msg::Info("  %d nodes in the grid at level %d", (int)nodes.size(), box.getLevel());
+  std::vector<double> dist, localdist;
+  std::vector<SPoint3> dummy;
+  for (GModel::fiter fit = gm->firstFace(); fit != gm->lastFace(); fit++){
+   if((*fit)->geomType() == GEntity::DiscreteSurface){
+      for(unsigned int k = 0; k < (*fit)->getNumMeshElements(); k++){ 
+	  std::vector<double> iDistances;
+	  std::vector<SPoint3> iClosePts;
+          std::vector<double> iDistancesE;
+	  MElement *e = (*fit)->getMeshElement(k);
+	  if(e->getType() == TYPE_TRI){
+	    MVertex *v1 = e->getVertex(0);
+	    MVertex *v2 = e->getVertex(1);
+	    MVertex *v3 = e->getVertex(2);
+	    SPoint3 p1(v1->x(),v1->y(),v1->z());
+	    SPoint3 p2(v2->x(),v2->y(),v2->z());
+	    SPoint3 p3(v3->x(),v3->y(),v3->z());
+	    //sign plus if in the direction of the normal
+	    signedDistancesPointsTriangle(localdist, dummy, nodes, p2, p1, p3);
+	  }
+	  if(dist.empty()) 
+	    dist = localdist;
+	  else{ 
+	    for (unsigned int j = 0; j < localdist.size(); j++){
+	      dist[j] = (fabs(dist[j]) < fabs(localdist[j])) ? dist[j] : localdist[j];
+	    }
+	  }
+      }
+    }
+    else{
+      printf(" CAD surface \n");
+      //look in utils_api_demos maincartesian
+      // for (GModel::fiter fit = _model->firstFace(); fit != _model->lastFace(); fit++){
+      // for (int i = 0; i < (*fit)->stl_triangles.size(); i += 3){
+    }
+  }
+
+  for (unsigned int j = 0; j < dist.size(); j++)
+    box.setNodalValue(indices[j], dist[j]);
+
+  if(box.getChildBox()) computeLevelset(gm, *box.getChildBox());
+}
+
+
 
 
 inline double det3(double d11, double d12, double d13, double d21, double d22, double d23, double d31, double d32, double d33) {
@@ -467,6 +626,31 @@ double gLevelsetQuadric::operator()(const double x, const double y, const double
         + 2. * A[1][2] * y * z + A[2][2] * z * z + B[0] * x + B[1] * y + B[2] * z + C);
 }
 
+// gLevelsetPopcorn::gLevelsetPopcorn(int tag) : gLevelsetPrimitive(tag) {
+// }
+
+// double gLevelsetPopcorn::operator() (const double x, const double y, const double z) const {
+//   double r0 = 0.25;
+//   double r = sqrt((x-0.5)*(x-0.5)+(y-0.5)*(y-0.5)+(z-0.5)*(z-0.5));
+//   double  val = r - r0;
+//   for (int k = 0; k< 5; k++){
+//     double xk = r0/sqrt(5)*(2.*cos(2*k*pi/5));
+//     double yk = r0/sqrt(5)*(2.*sin(2*k*pi/5));
+//     double zk = 1.0;
+//     val +=  -4.*exp(((x-0.5-xk)*(x-0.5-xk)+(y-0.5-yk)*(y-0.5-yk)+(z-0.5-zk)*(z-0.5-zk))/0.01);
+//     }
+//   for (int k = 0; k< 5; k++){
+//     xk = r0/sqrt(5)*(2*cos(2*((k-5)-1)*pi/5));
+//     yk = r0/sqrt(5)*(2*sin(2*((k-5)-1)*pi/5));
+//     zk = 1.0;
+//     val += 4.*exp(((x-0.5-xk)*(x-0.5-xk)+(y-0.5-yk)*(y-0.5-yk)+(z-0.5-zk)*(z-0.5-zk))/0.01);
+//   }
+//   val  += -4.*exp(((x-0.5-xk)*(x-0.5-xk)+(y-0.5-yk)*(y-0.5-yk)+(z-0.5-zk)*(z-0.5-zk))/0.01);
+//   val  += -4.*math.exp(((x-0.5)**2+(y-0.5)**2+(z-0.5+r0)**2)/0.01);
+//   return val;
+// }
+
+
 gLevelsetMathEval::gLevelsetMathEval(std::string f, int tag) : gLevelsetPrimitive(tag) {
     std::vector<std::string> expressions(1, f);
     std::vector<std::string> variables(3);
@@ -485,6 +669,128 @@ double gLevelsetMathEval::operator() (const double x, const double y, const doub
     return 1.;
 }
 
+gLevelsetDistGeom::gLevelsetDistGeom(std::string geomBox, std::string name, int tag) : gLevelsetPrimitive(tag) {
+  
+  GModel *gmg = new GModel();
+  gmg->load(geomBox+std::string(".msh"));
+  GModel *gm = new GModel();
+  gm->load(name);
+  
+  double lx = 0.5, ly = 0.5, lz = 0.5;
+  int levels = 3;
+  int refineCurvedSurfaces = 0;
+
+  double rmax = 0.1;
+  double sampling = std::min(rmax, std::min(lx, std::min(ly, lz)));
+  double rtube = std::max(lx, std::max(ly, lz))*2.;
+
+  Msg::Info("Filling coarse point cloud on surfaces");
+  std::vector<SPoint3> points;
+  std::vector<SPoint3> refinePoints;
+  for(GModel::viter vit = gmg->firstVertex(); vit != gmg->lastVertex(); vit++){
+    for(unsigned int k = 0; k < (*vit)->getNumMeshVertices(); k++){ 
+      MVertex  *v = (*vit)->getMeshVertex(k);
+       SPoint3 p(v->x(), v->y(), v->z());
+      points.push_back(p);
+    }
+  }
+  for (GModel::eiter eit = gmg->firstEdge(); eit != gmg->lastEdge(); eit++){
+    for(unsigned int k = 0; k < (*eit)->getNumMeshVertices(); k++){ 
+      MVertex  *ve = (*eit)->getMeshVertex(k);
+      SPoint3 pe(ve->x(), ve->y(), ve->z());
+      points.push_back(pe);
+    }
+  }
+
+  //FOR DISCRETE GEOMETRIES
+  for (GModel::fiter fit = gm->firstFace(); fit != gm->lastFace(); fit++){
+    for(unsigned int k = 0; k < (*fit)->getNumMeshVertices(); k++){ 
+      MVertex  *vf = (*fit)->getMeshVertex(k);
+      SPoint3 pf(vf->x(), vf->y(), vf->z());
+      points.push_back(pf);
+    }
+    for(unsigned int k = 0; k < (*fit)->getNumMeshElements(); k++){ 
+      MElement *e =  (*fit)->getMeshElement(k);
+      if (e->getType() == TYPE_TRI){
+	MVertex *v1 = e->getVertex(0);
+	MVertex *v2 = e->getVertex(1);
+	MVertex *v3 = e->getVertex(2);
+	SPoint3 cg( (v1->x()+v2->x()+v3->x())/3.,
+		    (v1->y()+v2->y()+v3->y())/3.,
+		    (v1->z()+v2->z()+v3->z())/3.);
+	refinePoints.push_back(cg);
+      }
+    }
+  }
+  //FOR CAD
+  //for (GModel::fiter fit = gm->firstFace(); fit != gm->lastFace(); fit++)
+  //   (*fit)->fillPointCloud(sampling, &points);
+
+  Msg::Info("  %d points in the surface cloud", (int)points.size());
+  if (points.size() == 0) {Msg::Fatal("No points on surfaces \n"); };
+
+  SBoundingBox3d bb;
+  for(unsigned int i = 0; i < points.size(); i++) bb += points[i]; 
+  for(unsigned int i = 0; i < refinePoints.size(); i++) bb += refinePoints[i]; 
+  //bb.scale(1.01, 1.01, 1.01);
+  SVector3 range = bb.max() - bb.min(); 
+  int NX = range.x() / lx; 
+  int NY = range.y() / ly; 
+  int NZ = range.z() / lz; 
+  if(NX < 2) NX = 2;
+  if(NY < 2) NY = 2;
+  if(NZ < 2) NZ = 2;
+
+  Msg::Info("  bounding box min: %g %g %g -- max: %g %g %g",
+            bb.min().x(), bb.min().y(), bb.min().z(),
+            bb.max().x(), bb.max().y(), bb.max().z());
+  Msg::Info("  Nx=%d Ny=%d Nz=%d", NX, NY, NZ);
+  
+  _box = new cartesianBox<double>(bb.min().x(), bb.min().y(), bb.min().z(), 
+				 SVector3(range.x(), 0, 0),
+				 SVector3(0, range.y(), 0),
+				 SVector3(0, 0, range.z()),
+				 NX, NY, NZ, levels);
+  Msg::Info("Inserting the active cells in the cartesian grid");
+  for (int i = 0; i < NX; i++)
+    for (int j = 0; j < NY; j++)
+      for (int k = 0; k < NZ; k++)
+        _box->insertActiveCell(_box->getCellIndex(i, j, k));
+
+  cartesianBox<double> *parent = _box, *child;
+  while((child = parent->getChildBox())){
+    Msg::Info("  level %d ", child->getLevel());
+    for(unsigned int i = 0; i < refinePoints.size(); i++)
+      insertActiveCells(refinePoints[i].x(), refinePoints[i].y(), refinePoints[i].z(), 
+                         rtube / pow(2., (levels - child->getLevel())), *child);
+    parent = child;
+  }
+
+  Msg::Info("Removing cells to match mesh topology constraints");
+  removeBadChildCells(_box);
+  removeParentCellsWithChildren(_box);
+
+  Msg::Info("Initializing nodal values in the cartesian grid");
+  _box->createNodalValues();
+
+  Msg::Info("Computing levelset on the cartesian grid");  
+  computeLevelset(gm, *_box);
+
+  Msg::Info("Renumbering mesh vertices across levels");
+  _box->renumberNodes();
+  
+  _box->writeMSH("yeah.msh", false);
+
+  delete gm;
+  delete gmg;
+ 
+}
+
+double gLevelsetDistGeom::operator() (const double x, const double y, const double z) const {
+
+  double dist = _box->getValueContainingPoint(x,y,z);
+  return dist;
+}
 
 #if defined (HAVE_POST)
 gLevelsetPostView::gLevelsetPostView(int index, int tag) : gLevelsetPrimitive(tag), _viewIndex(index){
@@ -497,7 +803,6 @@ gLevelsetPostView::gLevelsetPostView(int index, int tag) : gLevelsetPrimitive(ta
     _octree = 0;
   }
 }
-#endif
 
 double gLevelsetPostView::operator () (const double x, const double y, const double z) const  {
   if(!_octree) return 1.;
@@ -505,6 +810,7 @@ double gLevelsetPostView::operator () (const double x, const double y, const dou
   _octree->searchScalar(x, y, z, &val, 0);
   return val;
 }
+#endif
 
 gLevelsetGenCylinder::gLevelsetGenCylinder(const double *pt, const double *dir, const double &R,
                                            int tag) : gLevelsetQuadric(tag) {

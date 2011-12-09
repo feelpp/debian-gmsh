@@ -16,9 +16,7 @@
 #include "MFace.h"
 #include "polynomialBasis.h"
 #include "JacobianBasis.h"
-#include "Gauss.h"
-
-//class GFace; ??
+#include "GaussIntegration.h"
 
 // A mesh element.
 class MElement
@@ -80,13 +78,13 @@ class MElement
     verts.resize(N);
     for(int i = 0; i < N; i++) verts[i] = getVertex(i);
   }
-  virtual void setVertex(int num, MVertex *v) 
+  virtual void setVertex(int num, MVertex *v)
   {
     Msg::Error("Vertex set not supported for this element");
   }
 
   // give an MVertex as input and get its local number
-  virtual void getVertexInfo(const MVertex *vertex, int &ithVertex) const 
+  virtual void getVertexInfo(const MVertex *vertex, int &ithVertex) const
   {
     Msg::Error("Vertex information not available for this element");
   }
@@ -188,7 +186,7 @@ class MElement
   // otherwise get the minimum radius of all the circles/spheres
   // tangent to the most boundaries of the element.
   virtual double getInnerRadius(){ return 0.; }
-  
+
   // get the radius of the circumscribed circle/sphere if it exists,
   // otherwise get the maximum radius of all the circles/spheres
   // tangent to the most boundaries of the element.
@@ -336,7 +334,7 @@ class MElement
   // 'name' != 0
   static int getInfoMSH(const int typeMSH, const char **const name=0);
   virtual int getNumVerticesForMSH() { return getNumVertices(); }
-  virtual int *getVerticesIdForMSH();
+  virtual void getVerticesIdForMSH(std::vector<int> &verts);
 
   // copy element and parent if any, vertexMap contains the new vertices
   virtual MElement *copy(std::map<int, MVertex*> &vertexMap,

@@ -9,6 +9,8 @@
 #include "GModel.h"
 #include "GFace.h"
 #include "GEdge.h"
+#include "GFaceCompound.h"
+#include "GEdgeCompound.h"
 #include "MTriangle.h"
 #include "MQuadrangle.h"
 #include "MElementCut.h"
@@ -242,14 +244,19 @@ std::list<GVertex*> GFace::vertices() const
 
 void GFace::setVisibility(char val, bool recursive)
 {
-  if (getCompound() && CTX::instance()->compoundOnly) {
+  if (getCompound() && !CTX::instance()->showCompounds) {
     GEntity::setVisibility(0);
     for (std::list<GEdge*>::iterator it = l_edges.begin(); it != l_edges.end(); ++it)
       (*it)->setVisibility(0, true);
     std::list<GEdge*> edgesComp = getCompound()->edges();
+    bool val2 = getCompound()->getVisibility();
     //show edges of the compound surface
-    for (std::list<GEdge*>::iterator it = edgesComp.begin(); it != edgesComp.end(); ++it)
-      (*it)->setVisibility(1, true);
+    for (std::list<GEdge*>::iterator it = edgesComp.begin(); it != edgesComp.end(); ++it) {
+      if((*it)->getCompound())
+        (*it)->getCompound()->setVisibility(val2, true);
+      else
+        (*it)->setVisibility(val2, true);
+    }
   } else {
     GEntity::setVisibility(val);
     if(recursive){
@@ -1010,10 +1017,10 @@ bool GFace::buildSTLTriangulation(bool force)
       stl_vertices.clear();
       stl_triangles.clear();
     }
-    else
+    else{
       return true;
+    }
   }
-
   // Build a simple triangulation for surfaces which we know are not
   // trimmed
   if(geomType() == ParametricSurface || geomType() == ProjectionFace){

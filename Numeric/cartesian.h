@@ -13,6 +13,8 @@
 #include "SVector3.h"
 #include "SPoint3.h"
 #include "GmshMessage.h"
+#include "MHexahedron.h"
+#include "MVertex.h"
 
 // A cartesian grid that encompasses an oriented 3-D box, with values
 // stored at vertices:
@@ -45,7 +47,7 @@ class cartesianBox {
   // stored a node tag (used for global numbering of the nodes across
   // the grid levels)
   typename std::map<int, std::pair<scalar, int> > _nodalValues;
-  // level of the box (coarset box has highest level; finest box has
+  // level of the box (coarsest box has highest level; finest box has
   // level==1)
   int _level;
   // pointer to a finer (refined by 2) level box, if any
@@ -170,6 +172,78 @@ class cartesianBox {
             values.push_back(0.);
           }
         }
+  }
+  double getValueContainingPoint(double x, double y, double z) 
+  {
+
+    SVector3 DP (x - _X, y - _Y, z - _Z);
+    double xa = dot(DP, _xiAxis);
+    double ya = dot(DP, _etaAxis);
+    double za = dot(DP, _zetaAxis);
+
+    int t = getCellContainingPoint(x, y,z);
+    int i, j, k;
+    getCellIJK(t, i, j, k);
+
+    //printf("xyz = %g %g %g \n",x, y, z);
+    //printf("ijk =%d %d %d \n", i, j, k);
+
+    valIter it1 = _nodalValues.find(getNodeIndex(i, j, k));
+    valIter it2 = _nodalValues.find(getNodeIndex(i + 1, j, k));
+    valIter it3 = _nodalValues.find(getNodeIndex(i + 1, j + 1, k));
+    valIter it4 = _nodalValues.find(getNodeIndex(i, j + 1, k));
+    valIter it5 = _nodalValues.find(getNodeIndex(i, j, k + 1));
+    valIter it6 = _nodalValues.find(getNodeIndex(i + 1, j, k + 1));
+    valIter it7 = _nodalValues.find(getNodeIndex(i + 1, j + 1, k + 1));
+    valIter it8 = _nodalValues.find(getNodeIndex(i, j + 1, k + 1));
+
+    if(it1 == _nodalValues.end()) return _childBox->getValueContainingPoint(x,y,z);
+    if(it2 == _nodalValues.end()) return _childBox->getValueContainingPoint(x,y,z);
+    if(it3 == _nodalValues.end()) return _childBox->getValueContainingPoint(x,y,z);
+    if(it4 == _nodalValues.end()) return _childBox->getValueContainingPoint(x,y,z);
+    if(it5 == _nodalValues.end()) return _childBox->getValueContainingPoint(x,y,z);
+    if(it6 == _nodalValues.end()) return _childBox->getValueContainingPoint(x,y,z);
+    if(it7 == _nodalValues.end()) return _childBox->getValueContainingPoint(x,y,z);
+    if(it8 == _nodalValues.end()) return _childBox->getValueContainingPoint(x,y,z);
+
+    double vals[8];
+    vals[0]  = it1->second.first;
+    vals[1]  = it2->second.first;
+    vals[2]  = it3->second.first;
+    vals[3]  = it4->second.first;
+    vals[4]  = it5->second.first;
+    vals[5]  = it6->second.first;
+    vals[6]  = it7->second.first;
+    vals[7]  = it8->second.first;
+    //for (int i= 0; i< 8; i++) printf("vals %d = %g \n", i, vals[i]);
+
+    SPoint3 p1 = getNodeCoordinates(it1->first);
+    SPoint3 p2 = getNodeCoordinates(it2->first);
+    SPoint3 p3 = getNodeCoordinates(it3->first);
+    SPoint3 p4 = getNodeCoordinates(it4->first);
+    SPoint3 p5 = getNodeCoordinates(it5->first);
+    SPoint3 p6 = getNodeCoordinates(it6->first);
+    SPoint3 p7 = getNodeCoordinates(it7->first);
+    SPoint3 p8 = getNodeCoordinates(it8->first);
+
+    MVertex *v1 = new MVertex(p1.x(), p1.y(), p1.z());
+    MVertex *v2 = new MVertex(p2.x(), p2.y(), p2.z());
+    MVertex *v3 = new MVertex(p3.x(), p3.y(), p3.z());
+    MVertex *v4 = new MVertex(p4.x(), p4.y(), p4.z());
+    MVertex *v5 = new MVertex(p5.x(), p5.y(), p5.z());
+    MVertex *v6 = new MVertex(p6.x(), p6.y(), p6.z());
+    MVertex *v7 = new MVertex(p7.x(), p7.y(), p7.z());
+    MVertex *v8 = new MVertex(p8.x(), p8.y(), p8.z());
+
+    MHexahedron *newElem = new MHexahedron(v1, v2, v3, v4, v5, v6, v7, v8);
+    double uvw[3];
+    double xyz[3] = {x,y,z};
+    newElem->xyz2uvw(xyz, uvw);
+    //printf("uvw =%g %g %g \n", uvw[0],uvw[1],uvw[2]);
+    double val = newElem->interpolate(vals, uvw[0], uvw[1], uvw[2]);
+
+    delete newElem;
+    return val;
   }
   int getCellContainingPoint(double x, double y, double z) const
   {

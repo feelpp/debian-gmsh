@@ -188,7 +188,10 @@ int ParseFile(std::string fileName, bool close, bool warnIfMissing)
     }
   }
 
-  if(close) fclose(gmsh_yyin);
+  if(close){
+    gmsh_yyflush();
+    fclose(gmsh_yyin);
+  }
 
   gmsh_yyname = old_yyname;
   gmsh_yyin = old_yyin;
@@ -504,14 +507,8 @@ void OpenProject(std::string fileName)
 void OpenProjectMacFinder(const char *fileName)
 {
 #if defined(HAVE_FLTK)
-  static int first = 1;
-  if(first || !FlGui::available()){
-    // just copy the filename: it will be opened when the GUI is ready
-    // in main()
-    GModel::current()->setFileName(fileName);
-    first = 0;
-  }
-  else{
+  if(FlGui::available()){
+    FlGui::instance()->setOpenedThroughMacFinder(true);
     OpenProject(fileName);
     drawContext::global()->draw();
   }
