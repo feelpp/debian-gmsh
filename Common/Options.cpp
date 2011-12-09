@@ -1207,7 +1207,7 @@ std::string opt_view_name(OPT_ARGS_STR)
     FlGui::instance()->options->view.input[0]->value(data->getName().c_str());
   }
 #endif
-  return data->getName().c_str();
+  return data->getName();
 #else
   return "";
 #endif
@@ -5654,7 +5654,7 @@ double opt_view_timestep(OPT_ARGS_NUM)
       opt->timeStep = 0;
     else if(opt->timeStep < 0)
       opt->timeStep = data->getNumTimeSteps() - 1;
-    if(data->isAdaptive())
+    if(data->getAdaptiveData())
       data->getAdaptiveData()->changeResolution
         (opt->timeStep, opt->maxRecursionLevel, opt->targetError);
     if(view) view->setChanged(true);
@@ -6297,7 +6297,7 @@ double opt_view_max_recursion_level(OPT_ARGS_NUM)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->maxRecursionLevel = (int)val;
-    if(data && data->isAdaptive()){
+    if(data && data->getAdaptiveData()){
       data->getAdaptiveData()->changeResolution
         (opt->timeStep, opt->maxRecursionLevel, opt->targetError);
       view->setChanged(true);
@@ -6320,7 +6320,7 @@ double opt_view_target_error(OPT_ARGS_NUM)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->targetError = val;
-    if(data && data->isAdaptive()){
+    if(data && data->getAdaptiveData()){
       data->getAdaptiveData()->changeResolution
         (opt->timeStep, opt->maxRecursionLevel, opt->targetError);
       view->setChanged(true);

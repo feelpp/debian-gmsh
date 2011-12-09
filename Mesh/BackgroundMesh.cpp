@@ -10,6 +10,7 @@
 #include "GVertex.h"
 #include "GEdge.h"
 #include "GFace.h"
+#include "GFaceCompound.h"
 #include "GModel.h"
 #include "Field.h"
 #include "MElement.h"
@@ -55,7 +56,7 @@ SMetric3 buildMetricTangentToCurve (SVector3 &t, double curvature, double &lambd
   lambda =  ((2 * M_PI) /( fabs(curvature) *  CTX::instance()->mesh.minCircPoints ) );
 
   SMetric3 curvMetric (1./(lambda*lambda),1.e-10,1.e-10,t,b,c);
-    //SMetric3 curvMetric (1./(lambda*lambda));
+  //SMetric3 curvMetric (1./(lambda*lambda));
   return curvMetric;
 }
 
@@ -177,7 +178,8 @@ static SMetric3 metric_based_on_surface_curvature(const GEdge *ge, double u)
   std::list<GFace *>::iterator it = faces.begin();
   int count = 0;
   while(it != faces.end()){
-    if ( ((*it)->geomType() != GEntity::CompoundSurface) && ((*it)->geomType() != GEntity::DiscreteSurface) ){
+    if (((*it)->geomType() != GEntity::CompoundSurface) &&
+        ((*it)->geomType() != GEntity::DiscreteSurface)){
       SPoint2 par = ge->reparamOnFace((*it), u, 1);
       SMetric3 m = metric_based_on_surface_curvature (*it, par.x(), par.y());
       if (!count) mesh_size = m;
@@ -231,7 +233,7 @@ static double LC_MVertex_CURV(GEntity *ge, double U, double V)
   case 1:
     {
       GEdge *ged = (GEdge *)ge;
-      Crv = ged->curvature(U)*2;
+      Crv = ged->curvature(U);
       Crv = std::max(Crv, max_surf_curvature(ged, U));
       //Crv = max_surf_curvature(ged, U);      
     }
@@ -319,9 +321,7 @@ double BGM_MeshSize(GEntity *ge, double U, double V,
   FieldManager *fields = ge->model()->getFields();
   if(fields->background_field > 0){
     Field *f = fields->get(fields->background_field);
-    //printf("field %p %s %d %p\n",f,f->getName(),fields->size(), ge->model());
     if(f) l4 = (*f)(X, Y, Z, ge);
-    //printf("X Y Z =%g %g %g L4=%g L3=%g L2=%g L1=%g\n", X, Y, Z, l4, l3, l2, l1);
   }
 
   // take the minimum, then constrain by lcMin and lcMax
@@ -335,15 +335,15 @@ double BGM_MeshSize(GEntity *ge, double U, double V,
     lc = l1;
   }
 
-  //printf("BGM X Y Z =%g %g %g L4=%g L3=%g L2=%g L1=%g LC=%g LFINAL=%g \n", X, Y, Z, l4, l3, l2, l1, lc , lc* CTX::instance()->mesh.lcFactor);
+  // Msg::Debug("BGM X,Y,Z=%g,%g,%g L4=%g L3=%g L2=%g L1=%g LC=%g LFINAL=%g",
+  //            X, Y, Z, l4, l3, l2, l1, lc, lc * CTX::instance()->mesh.lcFactor);
 
   return lc * CTX::instance()->mesh.lcFactor;
 }
 
 
-// anisotropic version of the background field
-// for now, only works with bamg in 2D, work
-// in progress
+// anisotropic version of the background field - for now, only works
+// with bamg in 2D, work in progress
 
 SMetric3 BGM_MeshMetric(GEntity *ge, 
                         double U, double V, 
@@ -368,8 +368,14 @@ SMetric3 BGM_MeshMetric(GEntity *ge,
   if(fields->background_field > 0){
     Field *f = fields->get(fields->background_field);
     if(f){
-      if (!f->isotropic())
+      if (!f->isotropic()){
         (*f)(X, Y, Z, l4,ge);
+	/*
+	if (ge->tag() == 3){
+	  printf("X = %12.5E , l4 = %12.5E %12.5E %12.5E l2 = %12.5E\n",X,l4(0,0),l4(1,1),l4(0,1),l2);
+	}
+	*/
+      }
       else{
 	double L = (*f)(X, Y, Z, ge);
         l4 = SMetric3(1/(L*L));
@@ -404,8 +410,6 @@ bool Extend2dMeshIn3dVolumes()
 {
   return CTX::instance()->mesh.lcExtendFromBoundary ? true : false;
 }
-
-// ---------- backgroundMesh class -----------
 
 void backgroundMesh::set(GFace *gf)
 {
@@ -474,8 +478,8 @@ backgroundMesh::~backgroundMesh()
   delete _octree;
 }
 
-static void propagateValuesOnFace (GFace *_gf, 				  
-				   std::map<MVertex*,double> &dirichlet)
+static void propagateValuesOnFace(GFace *_gf, 				  
+                                  std::map<MVertex*,double> &dirichlet)
 {
 #if defined(HAVE_SOLVER)
   linearSystem<double> *_lsys = 0;
@@ -530,27 +534,6 @@ static void propagateValuesOnFace (GFace *_gf,
 #endif
 }
 
-void replaceMeshCompound(GFace *gf, std::list<GEdge*> &edges)
-{
-#if defined(HAVE_SOLVER)
-  std::list<GEdge*> e = gf->edges();
-  //Replace edges by their compounds
-  std::set<GEdge*> mySet;
-  std::list<GEdge*>::iterator it = e.begin();
-  while(it != e.end()){
-    if((*it)->getCompound()){
-      mySet.insert((*it)->getCompound());
-    }
-    else{ 
-      mySet.insert(*it);
-    }
-    ++it;
-  }
-  edges.clear();
-  edges.insert(edges.begin(), mySet.begin(), mySet.end());
-#endif
-}
-
 void backgroundMesh::propagate1dMesh(GFace *_gf)
 {
   std::list<GEdge*> e;// = _gf->edges();
@@ -589,8 +572,6 @@ void backgroundMesh::propagate1dMesh(GFace *_gf)
   }
 }
 
-// C R O S S   F I E L D S 
-
 crossField2d::crossField2d(MVertex* v, GEdge* ge)
 {
   double p;
@@ -610,8 +591,7 @@ void backgroundMesh::propagatecrossField(GFace *_gf)
 {
   std::map<MVertex*,double> _cosines4,_sines4;
 
-  std::list<GEdge*> e;// = _gf->edges();
-
+  std::list<GEdge*> e;
   replaceMeshCompound(_gf, e);
 
   std::list<GEdge*>::const_iterator it = e.begin();
@@ -644,9 +624,7 @@ void backgroundMesh::propagatecrossField(GFace *_gf)
     }
   }
 
-  // ------------------------------------------------------------
-  // -------- Force Smooth Transition ---------------------------
-  // ------------------------------------------------------------
+  // force smooth transition
   const int nbSmooth = 0;
   const double threshold_angle = 2. * M_PI/180.;
   for (int SMOOTH_ITER = 0 ; SMOOTH_ITER < nbSmooth ; SMOOTH_ITER++){
@@ -676,8 +654,6 @@ void backgroundMesh::propagatecrossField(GFace *_gf)
       }
     }
   }
-  // ------------------------------------------------------------
-
 
   propagateValuesOnFace(_gf,_cosines4);
   propagateValuesOnFace(_gf,_sines4);
@@ -712,14 +688,14 @@ void backgroundMesh::updateSizes(GFace *_gf)
       bool success = reparamMeshVertexOnFace(v, _gf, p);       
       lc = BGM_MeshSize(_gf, p.x(), p.y(), v->x(), v->y(), v->z());
     }
-    //    printf("2D -- %g %g 3D -- %g %g\n",p.x(),p.y(),v->x(),v->y());
+    // printf("2D -- %g %g 3D -- %g %g\n",p.x(),p.y(),v->x(),v->y());
     itv->second = std::min(lc,itv->second);
     itv->second = std::max(itv->second, CTX::instance()->mesh.lcMin);
     itv->second = std::min(itv->second, CTX::instance()->mesh.lcMax);
   }  
   // do not allow large variations in the size field
-  // INTERNATIONAL JOURNAL FOR NUMERICAL METHODS IN ENGINEERING Int. J. Numer. Meth. Engng. 43, 1143–1165 (1998)
-  // MESH GRADATION CONTROL, BOROUCHAKI, HECHT, FREY
+  // (Int. J. Numer. Meth. Engng. 43, 1143-1165 (1998) MESH GRADATION
+  // CONTROL, BOROUCHAKI, HECHT, FREY)
   std::set<MEdge,Less_Edge> edges;
   for (int i=0;i < _triangles.size();i++){
     for (int j=0;j< _triangles[i]->getNumEdges();j++){

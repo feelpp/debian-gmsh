@@ -12,11 +12,18 @@
 
 #include "Levy3D.h"
 #include "polynomialBasis.h"
-#include "Gauss.h"
+#include "GaussIntegration.h"
 #include "GModel.h"
 #include "MElement.h"
 #include "MElementOctree.h"
 #include "meshGRegion.h"
+#include "ap.h"
+#include "alglibinternal.h"
+#include "alglibmisc.h" 
+#include "linalg.h"
+#include "optimization.h"
+
+void call_back(const alglib::real_1d_array&,double&,alglib::real_1d_array&,void*);
 
 /*********class VoronoiVertex*********/
 
@@ -1037,7 +1044,7 @@ void LpSmoother::improve_region(GRegion* gr){
 	  interior_vertices.push_back(*it);
 	}
   }
-  printf("%d\n",interior_vertices.size());
+  printf("%d\n", (int) interior_vertices.size());
 	
   deleter(gr);
   //std::vector<GRegion*> regions;

@@ -6,12 +6,16 @@
 #include <FL/Fl.H>
 #include "GmshMessage.h"
 #include "onelab.h"
+
 #if (FL_MAJOR_VERSION == 1) && (FL_MINOR_VERSION == 3)
-#include <FL/Fl_Value_Input.H>
-#include <FL/Fl_Input_Choice.H>
+
 #include <FL/Fl_Check_Button.H>
 #include <FL/Fl_Box.H>
+#include <FL/Fl_Input_Choice.H>
+#include "inputRange.h"
 #include "Context.h"
+#include "GModel.h"
+#include "GmshDefines.h"
 #include "Options.h"
 #include "OS.h"
 #include "StringUtils.h"
@@ -19,6 +23,7 @@
 #include "CreateFile.h"
 #include "drawContext.h"
 #include "PView.h"
+#include "PViewOptions.h"
 #include "FlGui.h"
 #include "paletteWindow.h"
 #include "menuWindow.h"
@@ -99,10 +104,7 @@ bool onelab::localNetworkClient::run(const std::string &what)
 
   std::string command = FixWindowsPath(_commandLine);
   if(command.size()){
-    command += " " + what +  " " + _socketSwitch + " " + sockname;
-#if !defined(WIN32)
-    command += " &";
-#endif
+    command += " " + what + " " + _socketSwitch + " ";
   }
   else{
     Msg::Info("Listening on socket '%s'", sockname.c_str());
@@ -166,12 +168,12 @@ bool onelab::localNetworkClient::run(const std::string &what)
         if(type == "number"){
           onelab::number p;
           p.fromChar(message);
-          set(p, false);
+          set(p);
         }
         else if(type == "string"){
           onelab::string p;
           p.fromChar(message);
-          set(p, false);
+          set(p);
         }
         else
           Msg::Error("FIXME not done for this parameter type");
@@ -224,6 +226,7 @@ bool onelab::localNetworkClient::run(const std::string &what)
     case GmshSocket::GMSH_MERGE_FILE:
       {
         int n = PView::list.size();
+        for(int i = 0; i < n; i++) PView::list[i]->getOptions()->visible = 0;
         MergeFile(message);
         drawContext::global()->draw();
         if(n != (int)PView::list.size()) 
@@ -297,9 +300,133 @@ static std::string getMshFileName(onelab::client *c)
         name = GetDefaultFileName(CTX::instance()->mesh.fileFormat);
     }
     onelab::string o("Gmsh/MshFileName", name, "Mesh name");
+    o.setKind("file");
     c->set(o);
     return name;
   }
+}
+
+static std::string getModelName(onelab::client *c)
+{
+  std::vector<onelab::string> ps;
+  c->get(ps, c->getName() + "/1ModelName");
+  if(ps.size()){
+    return ps[0].getValue();
+  }
+  else{
+    std::vector<std::string> split = SplitFileName(GModel::current()->getFileName());
+    std::string ext = FlGui::instance()->onelab->getModelExtension();
+    std::string name(split[0] + split[1] + ext);
+    onelab::string o(c->getName() + "/1ModelName", name, "Model name");
+    o.setKind("file");
+    c->set(o);
+    return name;
+  }
+}
+
+static void initializeLoop(std::string level)
+{
+  bool changed = false;
+  std::vector<onelab::number> numbers;
+  onelab::server::instance()->get(numbers);
+  for(unsigned int i = 0; i < numbers.size(); i++){
+    if(numbers[i].getAttribute("loop") == level){
+      if(numbers[i].getChoices().size() > 1){
+        numbers[i].setValue(numbers[i].getChoices()[0]);
+        onelab::server::instance()->set(numbers[i]);
+        changed = true;
+      }
+      else if(numbers[i].getMin() != -onelab::parameter::maxNumber() &&
+              numbers[i].getStep()){
+        numbers[i].setValue(numbers[i].getMin());
+        onelab::server::instance()->set(numbers[i]);
+        changed = true;
+      }
+    }
+  }
+
+  // force this to make sure that we remesh, even if a mesh exists and
+  // we did not actually change a Gmsh parameter
+  if(changed)
+    onelab::server::instance()->setChanged(true, "Gmsh");
+}
+
+static bool incrementLoop(std::string level)
+{
+  bool recompute = false, loop = false;
+  std::vector<onelab::number> numbers;
+  onelab::server::instance()->get(numbers);
+  for(unsigned int i = 0; i < numbers.size(); i++){
+    if(numbers[i].getAttribute("loop") == level){
+      loop = true;
+      if(numbers[i].getChoices().size() > 1){
+        // FIXME should store loopVariable attribute in the parameter
+        // -- the following test will loop forever if 2 values are
+        // identical in the list of choices
+        std::vector<double> choices(numbers[i].getChoices());
+        for(unsigned int j = 0; j < choices.size() - 1; j++){
+          if(numbers[i].getValue() == choices[j]){
+            numbers[i].setValue(choices[j + 1]);
+            onelab::server::instance()->set(numbers[i]);
+            Msg::Info("Recomputing with new choice %s=%g", 
+                      numbers[i].getName().c_str(), numbers[i].getValue());
+            recompute = true;
+            break;
+          }
+        }
+      }
+      else if(numbers[i].getMax() != onelab::parameter::maxNumber() &&
+              numbers[i].getValue() < numbers[i].getMax() && 
+              numbers[i].getStep()){
+        numbers[i].setValue(numbers[i].getValue() + numbers[i].getStep());
+        onelab::server::instance()->set(numbers[i]);
+        Msg::Info("Recomputing with new step %s=%g",
+                  numbers[i].getName().c_str(), numbers[i].getValue());
+        recompute = true;
+      }
+    }
+  }
+
+  if(loop && !recompute) // end of this loop level
+    initializeLoop(level);
+
+  return recompute;
+}
+
+static void initializeLoop()
+{
+  initializeLoop("1");
+  initializeLoop("2");
+  initializeLoop("3");
+
+  if(onelab::server::instance()->getChanged())
+    FlGui::instance()->onelab->rebuildTree();
+}
+
+static bool incrementLoop()
+{
+  bool ret = false;
+  if(incrementLoop("3"))      ret = true;
+  else if(incrementLoop("2")) ret = true;
+  else if(incrementLoop("1")) ret = true;
+
+  if(onelab::server::instance()->getChanged())
+    FlGui::instance()->onelab->rebuildTree();
+  
+  return ret;
+}
+
+static bool stopOnError(const std::string &client)
+{
+  if(Msg::GetErrorCount() > 0 && !CTX::instance()->expertMode){
+    Msg::ResetErrorCounter();
+    std::string msg
+      (client + " reported an error: do you really want to continue?\n\n"
+       "(To disable this warning in the future, select `Enable expert mode'\n"
+       "in the option dialog.)");
+    if(Msg::GetAnswer(msg.c_str(), 1, "Stop", "Continue") == 0) return true;
+  }
+  return false;
 }
 
 void onelab_cb(Fl_Widget *w, void *data)
@@ -307,101 +434,115 @@ void onelab_cb(Fl_Widget *w, void *data)
   if(!data) return;
   std::string action((const char*)data);
 
-  if(action == "edit model"){
-    std::string prog = FixWindowsPath(CTX::instance()->editor);
-    std::string file = FixWindowsPath(FlGui::instance()->onelab->getModelName());
-    SystemCall(ReplaceSubString("%s", file, prog));
-    return;
-  }
-
   if(action == "reset"){
+    // clear everything except model names
+    std::vector<onelab::string> modelNames;
+    for(onelab::server::citer it = onelab::server::instance()->firstClient();
+      it != onelab::server::instance()->lastClient(); it++){
+      onelab::client *c = it->second;
+      std::vector<onelab::string> ps;
+      c->get(ps, c->getName() + "/1ModelName");
+      if(ps.size()) modelNames.push_back(ps[0]);
+    }
     onelab::server::instance()->clear();
     if(onelab::server::instance()->findClient("Gmsh") != 
        onelab::server::instance()->lastClient())
       geometry_reload_cb(0, 0);
-    action = "initial check";
-  }
-
-  if(action == "choose model"){
-    if(fileChooser(FILE_CHOOSER_SINGLE, "Choose", "*.pro"))
-      FlGui::instance()->onelab->setModelName(fileChooserGetName(1));
+    for(unsigned int i = 0; i < modelNames.size(); i++)
+      onelab::server::instance()->set(modelNames[i]);
     action = "check";
   }
 
-  if(FlGui::instance()->onelab->getModelName().empty()){
-    std::vector<std::string> split = SplitFileName(GModel::current()->getFileName());
-    FlGui::instance()->onelab->setModelName(split[0] + split[1] + ".pro");
-  }
-
   FlGui::instance()->onelab->deactivate();
-  
-  // the Gmsh client is special: it always gets executed first. (The
-  // meta-model will allow more flexibility: but in the simple GUI we
-  // can assume this)
-  onelab::server::citer it = onelab::server::instance()->findClient("Gmsh");
-  if(it != onelab::server::instance()->lastClient()){
-    onelab::client *c = it->second;
-    std::string mshFileName = getMshFileName(c);
-    static std::string modelName = GModel::current()->getName();
-    if(action == "check"){
-      if(onelab::server::instance()->getChanged("Gmsh") ||
-         modelName != GModel::current()->getName()){
-        // reload geometry if Gmsh parameters have been modified or if
-        // the model name has changed
-        modelName = GModel::current()->getName();
-        geometry_reload_cb(0, 0);
-      }
-    }
-    else if(action == "compute"){
-      if(onelab::server::instance()->getChanged("Gmsh") ||
-         modelName != GModel::current()->getName()){
-        // reload the geometry, mesh it and save the mesh if Gmsh
-        // parameters have been modified or if the model name has
-        // changed
-        modelName = GModel::current()->getName();
-        geometry_reload_cb(0, 0);
-        if(FlGui::instance()->onelab->meshAuto()){
-          mesh_3d_cb(0, 0);
-          CreateOutputFile(mshFileName, CTX::instance()->mesh.fileFormat);
-        }
-      }
-      else if(StatFile(mshFileName)){
-        // mesh+save if the mesh file does not exist
-        if(FlGui::instance()->onelab->meshAuto()){
-          mesh_3d_cb(0, 0);
-          CreateOutputFile(mshFileName, CTX::instance()->mesh.fileFormat);
-        }
-      }
-      onelab::server::instance()->setChanged(false, "Gmsh");
-    }
-  }
 
-  // Iterate over all other clients
-  for(onelab::server::citer it = onelab::server::instance()->firstClient();
-      it != onelab::server::instance()->lastClient(); it++){
-    onelab::client *c = it->second;
-    if(c->getName() == "Gmsh" || // local Gmsh client
-       c->getName() == "Listen" || // unknown client connecting through "-listen"
-       c->getName() == "GmshRemote") // distant post-processing Gmsh client
-      continue;
-    std::string what = FlGui::instance()->onelab->getModelName();
-    if(action == "initial check" || action == "check"){
-      c->run(what);
+  if(action == "compute") initializeLoop();
+
+  bool stop = false;
+
+  do{ // enter computation loop
+
+    // the Gmsh client is special: it always gets executed first. (The
+    // meta-model will allow more flexibility: but in the simple GUI we
+    // can assume this)
+    onelab::server::citer it = onelab::server::instance()->findClient("Gmsh");
+    if(it != onelab::server::instance()->lastClient()){
+      onelab::client *c = it->second;
+      std::string mshFileName = getMshFileName(c);
+      static std::string modelName = "";
+      if(modelName.empty()){
+        // first pass is special to prevent model reload, as well as
+        // remeshing if a mesh file already exists on disk
+        modelName = GModel::current()->getName();
+        if(!StatFile(mshFileName))
+          onelab::server::instance()->setChanged(false, "Gmsh");
+      }
+      if(action == "check"){
+        if(onelab::server::instance()->getChanged("Gmsh") ||
+           modelName != GModel::current()->getName()){
+          // reload geometry if Gmsh parameters have been modified or if
+          // the model name has changed
+          modelName = GModel::current()->getName();
+          geometry_reload_cb(0, 0);
+        }
+      }
+      else if(action == "compute"){
+        if(onelab::server::instance()->getChanged("Gmsh") ||
+           modelName != GModel::current()->getName()){
+          // reload the geometry, mesh it and save the mesh if Gmsh
+          // parameters have been modified or if the model name has
+          // changed
+          modelName = GModel::current()->getName();
+          geometry_reload_cb(0, 0);
+          if(FlGui::instance()->onelab->meshAuto()){
+            mesh_3d_cb(0, 0);
+            CreateOutputFile(mshFileName, CTX::instance()->mesh.fileFormat);
+          }
+        }
+        else if(StatFile(mshFileName)){
+          // mesh+save if the mesh file does not exist
+          if(FlGui::instance()->onelab->meshAuto()){
+            mesh_3d_cb(0, 0);
+            CreateOutputFile(mshFileName, CTX::instance()->mesh.fileFormat);
+          }
+        }
+        onelab::server::instance()->setChanged(false, "Gmsh");
+      }
     }
-    else if(action == "compute"){
-      // get command line from the server
-      std::vector<onelab::string> ps;
-      onelab::server::instance()->get(ps, c->getName() + "/9Compute");
-      if(ps.size()) what += " " + ps[0].getValue();
-      c->run(what);
+    stop = stopOnError("Gmsh");
+    if(stop) break;
+    
+    // Iterate over all other clients
+    for(onelab::server::citer it = onelab::server::instance()->firstClient();
+        it != onelab::server::instance()->lastClient(); it++){
+      onelab::client *c = it->second;
+      if(c->getName() == "Gmsh" || // local Gmsh client
+         c->getName() == "Listen" || // unknown client connecting through "-listen"
+         c->getName() == "GmshRemote") // distant post-processing Gmsh client
+        continue;
+      std::string what = getModelName(c);
+      if(action == "check"){
+        c->run(what);
+      }
+      else if(action == "compute"){
+        // get command line from the server
+        std::vector<onelab::string> ps;
+        onelab::server::instance()->get(ps, c->getName() + "/9Compute");
+        if(ps.size()) what += " " + ps[0].getValue();
+        c->run(what);
+      }
+      else if(action == "kill"){
+        c->kill();
+      }
+      
+      stop = stopOnError(c->getName());
+      if(stop) break;
     }
-  }
+
+    FlGui::instance()->onelab->rebuildTree();
+
+  } while(action == "compute" && incrementLoop() && !stop);
 
   FlGui::instance()->onelab->activate();
-
-  printf("Gmsh ONELAB db:\n%s\n", onelab::server::instance()->toChar().c_str());
-
-  FlGui::instance()->onelab->rebuildTree();
   FlGui::instance()->onelab->show();
 }
 
@@ -412,19 +553,26 @@ static void onelab_check_button_cb(Fl_Widget *w, void *data)
   std::vector<onelab::number> numbers;
   onelab::server::instance()->get(numbers, name);
   if(numbers.size()){
-    numbers[0].setValue(((Fl_Check_Button*)w)->value());
+    Fl_Check_Button *o = (Fl_Check_Button*)w;
+    numbers[0].setValue(o->value());
     onelab::server::instance()->set(numbers[0]);
   }
 }
 
-static void onelab_value_input_cb(Fl_Widget *w, void *data)
+static void onelab_input_range_cb(Fl_Widget *w, void *data)
 {
   if(!data) return;
   std::string name = FlGui::instance()->onelab->getPath((Fl_Tree_Item*)data);
   std::vector<onelab::number> numbers;
   onelab::server::instance()->get(numbers, name);
   if(numbers.size()){
-    numbers[0].setValue(((Fl_Value_Input*)w)->value());
+    inputRange *o = (inputRange*)w;
+    numbers[0].setValue(o->value());
+    numbers[0].setMin(o->minimum());
+    numbers[0].setMax(o->maximum());
+    numbers[0].setStep(o->step());
+    numbers[0].setChoices(o->choices());
+    numbers[0].setAttribute("loop", o->loop());
     onelab::server::instance()->set(numbers[0]);
   }
 }
@@ -436,9 +584,27 @@ static void onelab_input_choice_cb(Fl_Widget *w, void *data)
   std::vector<onelab::string> strings;
   onelab::server::instance()->get(strings, name);
   if(strings.size()){
-    strings[0].setValue(((Fl_Input_Choice*)w)->value());
+    Fl_Input_Choice *o = (Fl_Input_Choice*)w;
+    strings[0].setValue(o->value());
     onelab::server::instance()->set(strings[0]);
   }
+}
+
+static void onelab_input_choice_file_chooser_cb(Fl_Widget *w, void *data)
+{
+  Fl_Input_Choice *but = (Fl_Input_Choice*)w->parent();
+  if(fileChooser(FILE_CHOOSER_SINGLE, "Choose", "")){
+    but->value(fileChooserGetName(1).c_str());
+    but->do_callback(but, data);
+  }
+}
+
+static void onelab_input_choice_file_edit_cb(Fl_Widget *w, void *data)
+{
+  Fl_Input_Choice *but = (Fl_Input_Choice*)w->parent();
+  std::string prog = FixWindowsPath(CTX::instance()->editor);
+  std::string file = FixWindowsPath(but->value());
+  SystemCall(ReplaceSubString("%s", file, prog));
 }
 
 static void onelab_choose_executable_cb(Fl_Widget *w, void *data)
@@ -462,27 +628,23 @@ static void onelab_remove_solver_cb(Fl_Widget *w, void *data)
   FlGui::instance()->onelab->removeSolver(c->getName());
 }
 
+static void onelab_dump_cb(Fl_Widget *w, void *data)
+{
+  printf("ONELAB dump:\n%s\n", onelab::server::instance()->toChar().c_str());
+}
+
 onelabWindow::onelabWindow(int deltaFontSize)
 {
   FL_NORMAL_SIZE -= deltaFontSize;
 
-  int width = 25 * FL_NORMAL_SIZE;
+  int width = 29 * FL_NORMAL_SIZE;
   int height = 15 * BH + 3 * WB;
   
   _win = new paletteWindow
     (width, height, CTX::instance()->nonModalWindows ? true : false, "ONELAB");
   _win->box(GMSH_WINDOW_BOX);
 
-  _model = new Fl_Input(WB, WB, width - 2*WB - BB/3, BH);
-  _model->align(FL_ALIGN_RIGHT);
-  _model->callback(onelab_cb, (void*)"check");
-  _model->when(FL_WHEN_RELEASE|FL_WHEN_ENTER_KEY);
-
-  Fl_Menu_Button *menu = new Fl_Menu_Button(width - WB - BB/3, WB, BB/3, BH);
-  menu->add("Choose new model", 0, onelab_cb, (void*)"choose model");
-  menu->add("Edit model",  0, onelab_cb, (void*)"edit model");
-
-  _tree = new Fl_Tree(WB, WB+BH, width - 2 * WB, height - 3 * WB - 2 * BH);
+  _tree = new Fl_Tree(WB, WB, width - 2 * WB, height - 3 * WB - BH);
   _tree->connectorstyle(FL_TREE_CONNECTOR_SOLID);
   _tree->showroot(0);
 
@@ -490,14 +652,21 @@ onelabWindow::onelabWindow(int deltaFontSize)
   _butt[0]->callback(onelab_cb, (void*)"compute");
   _butt[1] = new Fl_Button(width - 2*WB - 2*BB, height - WB - BH, BB, BH, "Check");
   _butt[1]->callback(onelab_cb, (void*)"check");
+
   _gear = new Fl_Menu_Button
     (_butt[1]->x() - WB - BB/2, _butt[1]->y(), BB/2, BH, "@-1gmsh_gear");
+  _gear->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
   _gear->add("Reset database", 0, onelab_cb, (void*)"reset");
-  _gear->add("Mesh automatically", 0, 0, 0, FL_MENU_TOGGLE);
-  ((Fl_Menu_Item*)_gear->menu())[1].set();
-  
-  Fl_Box *resbox = new Fl_Box(WB, height - BH - 3 * WB, WB, WB);
+  _gear->add("Print database", 0, onelab_dump_cb);
+  _gear->add("Remesh automatically", 0, 0, 0, FL_MENU_TOGGLE);
+  ((Fl_Menu_Item*)_gear->menu())[2].set();
+  _gearFrozenMenuSize = _gear->menu()->size();
+
+  Fl_Box *resbox = new Fl_Box(WB, WB, 
+                              width - 2 * BB - BB / 2 - 4 * WB,
+                              height - 3 * WB - BH);
   _win->resizable(resbox);
+  _win->size_range(2 * BB + BB / 2 + 4 * WB + 1, 2 * BH + 3 * WB);
 
   _win->position
     (CTX::instance()->solverPosition[0], CTX::instance()->solverPosition[1]);
@@ -521,9 +690,12 @@ static std::string getShortName(const std::string &name)
 
 void onelabWindow::rebuildTree()
 {
+  int width = (int)(0.5 * _tree->w());
+
   _tree->clear();
   _tree->sortorder(FL_TREE_SORT_ASCENDING);
   _tree->selectmode(FL_TREE_SELECT_NONE);
+
   for(unsigned int i = 0; i < _treeWidgets.size(); i++)
     Fl::delete_widget(_treeWidgets[i]);
   _treeWidgets.clear();
@@ -532,13 +704,13 @@ void onelabWindow::rebuildTree()
   onelab::server::instance()->get(numbers);
   for(unsigned int i = 0; i < numbers.size(); i++){
     Fl_Tree_Item *n = _tree->add(numbers[i].getName().c_str());
-    n->labelsize(FL_NORMAL_SIZE + 2);
+    n->labelsize(FL_NORMAL_SIZE + 5);
     std::string label = numbers[i].getShortHelp();
     if(label.empty()) label = getShortName(numbers[i].getName());
     _tree->begin();
     if(numbers[i].getChoices().size() == 2 &&
        numbers[i].getChoices()[0] == 0 && numbers[i].getChoices()[1] == 1){
-      Fl_Check_Button *but = new Fl_Check_Button(1,1,IW,1);
+      Fl_Check_Button *but = new Fl_Check_Button(1, 1, width, 1);
       _treeWidgets.push_back(but);
       but->copy_label(label.c_str());
       but->value(numbers[i].getValue());
@@ -546,19 +718,19 @@ void onelabWindow::rebuildTree()
       n->widget(but);
     }
     else{
-      Fl_Value_Input *but = new Fl_Value_Input(1,1,IW,1);
+      inputRange *but = new inputRange
+        (1, 1, width, 1, onelab::parameter::maxNumber());
       _treeWidgets.push_back(but);
       but->copy_label(label.c_str());
       but->value(numbers[i].getValue());
-      if(numbers[i].getMin() != -1.e200)
-        but->minimum(numbers[i].getMin());
-      if(numbers[i].getMax() != 1.e200)
-        but->maximum(numbers[i].getMax());
-      if(numbers[i].getStep())
-        but->step(numbers[i].getStep());
+      but->minimum(numbers[i].getMin());
+      but->maximum(numbers[i].getMax());
+      but->step(numbers[i].getStep());
+      but->choices(numbers[i].getChoices());
+      but->loop(numbers[i].getAttribute("loop"));
       but->align(FL_ALIGN_RIGHT);
-      but->callback(onelab_value_input_cb, (void*)n);
-      but->when(FL_WHEN_RELEASE|FL_WHEN_ENTER_KEY);
+      but->callback(onelab_input_range_cb, (void*)n);
+      but->when(FL_WHEN_RELEASE | FL_WHEN_ENTER_KEY);
       n->widget(but);
     }
     _tree->end();
@@ -568,19 +740,33 @@ void onelabWindow::rebuildTree()
   onelab::server::instance()->get(strings);
   for(unsigned int i = 0; i < strings.size(); i++){
     Fl_Tree_Item *n = _tree->add(strings[i].getName().c_str());
-    n->labelsize(FL_NORMAL_SIZE + 2);
+    n->labelsize(FL_NORMAL_SIZE + 5);
     std::string label = strings[i].getShortHelp();
     if(label.empty()) label = getShortName(strings[i].getName());
     _tree->begin();
-    Fl_Input_Choice *but = new Fl_Input_Choice(1,1,IW,1);
+    Fl_Input_Choice *but = new Fl_Input_Choice(1, 1, width, 1);
     _treeWidgets.push_back(but);
     but->copy_label(label.c_str());
-    for(unsigned int j = 0; j < strings[i].getChoices().size(); j++)
-      but->add(strings[i].getChoices()[j].c_str());
+    std::vector<Fl_Menu_Item> menu;
+    for(unsigned int j = 0; j < strings[i].getChoices().size(); j++){
+      Fl_Menu_Item it = {strings[i].getChoices()[j].c_str(), 0, 0, 0, 
+                         (strings[i].getKind() == "file" && 
+                          j == strings[i].getChoices().size() - 1) ? FL_MENU_DIVIDER : 0};
+      menu.push_back(it);
+    }
+    if(strings[i].getKind() == "file"){
+      Fl_Menu_Item it = {"Choose...", 0, onelab_input_choice_file_chooser_cb, (void*)n};
+      menu.push_back(it);
+      Fl_Menu_Item it2 = {"Edit...", 0, onelab_input_choice_file_edit_cb, (void*)n};
+      menu.push_back(it2);
+    }
+    Fl_Menu_Item it = {0};
+    menu.push_back(it);
+    but->menubutton()->copy(&menu[0]);
     but->value(strings[i].getValue().c_str());
     but->align(FL_ALIGN_RIGHT);
     but->callback(onelab_input_choice_cb, (void*)n);
-    but->when(FL_WHEN_RELEASE|FL_WHEN_ENTER_KEY);
+    but->when(FL_WHEN_RELEASE | FL_WHEN_ENTER_KEY);
     n->widget(but);
     _tree->end();
   }
@@ -588,7 +774,7 @@ void onelabWindow::rebuildTree()
   for(Fl_Tree_Item *n = _tree->first(); n; n = n->next()){
     if(n->has_children()){
       _tree->begin();
-      Fl_Box *but = new Fl_Box(1,1,IW,1);
+      Fl_Box *but = new Fl_Box(1, 1, width, 1);
       but->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
       _treeWidgets.push_back(but);
       but->copy_label(getShortName(n->label()).c_str());
@@ -602,9 +788,9 @@ void onelabWindow::rebuildTree()
 
 void onelabWindow::rebuildSolverList()
 {
-  for(int i = _gear->menu()->size(); i >= 2; i--){
+  for(int i = _gear->menu()->size(); i >= _gearFrozenMenuSize - 1; i--)
     _gear->remove(i);
-  }
+
   _title = "ONELAB";
   for(onelab::server::citer it = onelab::server::instance()->firstClient();
       it != onelab::server::instance()->lastClient(); it++){
@@ -621,6 +807,20 @@ void onelabWindow::rebuildSolverList()
   _win->label(_title.c_str());
 }
 
+void onelabWindow::activate()
+{
+  _butt[0]->label("Compute");
+  _butt[0]->callback(onelab_cb, (void*)"compute");
+  _butt[1]->activate(); 
+}
+
+void onelabWindow::deactivate()
+{
+  _butt[0]->label("Kill");
+  _butt[0]->callback(onelab_cb, (void*)"kill");
+  _butt[1]->deactivate();
+}
+
 void onelabWindow::addSolver(const std::string &name, const std::string &commandLine,
                              int index)
 {
@@ -629,6 +829,10 @@ void onelabWindow::addSolver(const std::string &name, const std::string &command
     onelab::localNetworkClient *c = new onelab::localNetworkClient(name, commandLine);
     c->setIndex(index);
     if(commandLine.empty()) onelab_choose_executable_cb(0, (void *)c);
+    if(name == "GetDP")
+      setModelExtension(".pro");
+    else
+      setModelExtension(".py");
   }
   FlGui::instance()->onelab->rebuildSolverList();
 }
@@ -653,7 +857,7 @@ void solver_cb(Fl_Widget *w, void *data)
   std::string exe = opt_solver_executable(num, GMSH_GET, "");
   FlGui::instance()->onelab->addSolver(name, exe, num);
 
-  onelab_cb(0, (void*)"initial check");
+  onelab_cb(0, (void*)"check");
 }
 
 #else

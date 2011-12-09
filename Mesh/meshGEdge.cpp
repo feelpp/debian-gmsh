@@ -67,6 +67,11 @@ static double F_Lc_aniso(GEdge *ge, double t)
 
   double lSquared = dot(der, lc_here, der);
 
+  /*
+  if (ge->tag() == 3){
+    printf("%12.5E %12.5E\n",p.x(),1./sqrt(lSquared));
+  }
+  */
   //  der.normalize();
   //  printf("in the function %g n %g %g\n", sqrt(lSquared),der.x(),der.y());
 
@@ -319,8 +324,8 @@ void meshGEdge::operator() (GEdge *ge)
     N = ge->meshAttributes.nbPointsTransfinite;
   }
   else{
-    if (CTX::instance()->mesh.algo2d == ALGO_2D_BAMG || blf/*|| 1  || // FIXME
-							     CTX::instance()->mesh.algo2d == ALGO_2D_FRONTAL_QUAD */) {
+    if (CTX::instance()->mesh.algo2d == ALGO_2D_BAMG || blf
+        /* FIXME || CTX::instance()->mesh.algo2d == ALGO_2D_FRONTAL_QUAD */) {
       a = Integration(ge, t_begin, t_end, F_Lc_aniso, Points,
                       CTX::instance()->mesh.lcIntegrationPrecision);
     }

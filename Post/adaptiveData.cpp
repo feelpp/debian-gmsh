@@ -1066,8 +1066,11 @@ void adaptiveElements<T>::adapt(double tol, int numComp,
       it != T::all.end(); it++)
     (*it)->visible = false;
   
-  if(!plug || tol != 0.)
-    T::error(fabs(maxVal - minVal), tol);
+  if(!plug || tol != 0.){
+    double avg = fabs(maxVal - minVal);
+    if(tol < 0) avg = 1.; // force visibility to the smallest subdivision
+    T::error(avg, tol);
+  }
   
   if(plug)
     plug->assignSpecificVisibility();
@@ -1192,7 +1195,7 @@ adaptiveData::adaptiveData(PViewData *data)
     _points(0), _lines(0), _triangles(0), _quadrangles(0), 
     _tetrahedra(0), _hexahedra(0), _prisms(0)
 {
-  _outData = new PViewDataList();
+  _outData = new PViewDataList(true);
   _outData->setName(data->getName() + "_adapted");
   std::vector<fullMatrix<double>*> p;
   if(_inData->getNumPoints()){

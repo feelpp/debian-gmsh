@@ -12,7 +12,7 @@
 #include "GmshDefines.h"
 #include "GmshMessage.h"
 #include "polynomialBasis.h"
-#include "Gauss.h"
+#include "GaussIntegration.h"
 
 static void printClosure(polynomialBasis::clCont &fullClosure, std::vector<int> &closureRef,
                          polynomialBasis::clCont &closures)
@@ -1399,7 +1399,7 @@ const polynomialBasis *polynomialBases::find(int tag)
   case MSH_LIN_1   : F.parentType = TYPE_LIN; F.order = 0; F.serendip = false; break;
   case MSH_LIN_2   : F.parentType = TYPE_LIN; F.order = 1; F.serendip = false; break;
   case MSH_LIN_3   : F.parentType = TYPE_LIN; F.order = 2; F.serendip = false; break;
-  case MSH_LIN_4   : printf("line 4 \n"); F.parentType = TYPE_LIN; F.order = 3; F.serendip = false; break;
+  case MSH_LIN_4   : F.parentType = TYPE_LIN; F.order = 3; F.serendip = false; break;
   case MSH_LIN_5   : F.parentType = TYPE_LIN; F.order = 4; F.serendip = false; break;
   case MSH_LIN_6   : F.parentType = TYPE_LIN; F.order = 5; F.serendip = false; break;
   case MSH_LIN_7   : F.parentType = TYPE_LIN; F.order = 6; F.serendip = false; break;

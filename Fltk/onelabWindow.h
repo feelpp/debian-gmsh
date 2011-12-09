@@ -21,10 +21,11 @@ class onelabWindow{
   Fl_Window *_win;
   Fl_Tree *_tree;
   Fl_Button *_butt[2];
-  Fl_Input *_model;
   Fl_Menu_Button *_gear;
+  int _gearFrozenMenuSize;
   std::vector<Fl_Widget*> _treeWidgets;
   std::string _title;
+  std::string _modelExtension;
  public:
   onelabWindow(int deltaFontSize=0);
   int x(){ return _win->x(); }
@@ -32,13 +33,13 @@ class onelabWindow{
   void rebuildSolverList();
   void rebuildTree();
   void redrawTree(){ _tree->redraw(); }
-  void activate(){ _butt[0]->activate(); _butt[1]->activate(); }
-  void deactivate(){ _butt[0]->deactivate(); _butt[1]->deactivate(); }
+  void activate();
+  void deactivate();
   void show(){ _win->show(); }
   int shown(){ return _win->shown(); }
-  std::string getModelName(){ return _model->value(); }
-  void setModelName(const std::string &name){ _model->value(name.c_str()); }
-  int meshAuto(){ return _gear->menu()[1].value(); }
+  std::string getModelExtension(){ return _modelExtension; }
+  void setModelExtension(const std::string &ext){ _modelExtension = ext; }
+  int meshAuto(){ return _gear->menu()[2].value(); }
   std::string getPath(Fl_Tree_Item *item)
   {
     char path[1024];

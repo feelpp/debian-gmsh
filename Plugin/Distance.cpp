@@ -8,7 +8,6 @@
 #include "GmshConfig.h"
 #include "GModel.h"
 #include "Distance.h"
-#include "simpleFunction.h"
 #include "distanceTerm.h"
 #include "Context.h"
 #include "Numeric.h"
@@ -20,6 +19,7 @@
 #include "laplaceTerm.h"
 #include "crossConfTerm.h"
 
+template <class scalar> class simpleFunction;
 
 StringXNumber DistanceOptions_Number[] = {
   {GMSH_FULLRC, "PhysPoint", NULL, 0.},
@@ -35,7 +35,6 @@ StringXString DistanceOptions_String[] = {
   {GMSH_FULLRC, "Filename", NULL, "distance.pos"}
 };
 
-
 extern "C"
 {
   GMSH_Plugin *GMSH_RegisterDistancePlugin()
@@ -43,6 +42,7 @@ extern "C"
     return new GMSH_DistancePlugin();
   }
 }
+
 GMSH_DistancePlugin::GMSH_DistancePlugin() 
 {
   _fileName = "text";
@@ -56,14 +56,18 @@ std::string GMSH_DistancePlugin::getHelp() const
 {
   return "Plugin(Distance) computes distances to physical entities in "
     "a mesh.\n\n"
-    
-    "Define the physical entities to which the distance is computed. If Point=0, Line=0, and Surface=0, then the distance is computed to all the boundaries of the mesh (edges in 2D and faces in 3D).\n\n"
-
-    "Computation<0. computes the geometrical euclidian distance (warning: different than the geodesic distance), and  Computation=a>0.0 solves a PDE on the mesh with the diffusion constant mu = a*bbox, with bbox being the max size of the bounding box of the mesh (see paper Legrand 2006).\n\n"
-
-    "Min Scale and max Scale, scale the distance function. If min Scale<0 and max Scale<0, then no scaling is applied to the distance function.\n\n"
-
-    "Plugin(Distance) creates a new distance view and also saves the view in the fileName.pos file.";
+    "Define the physical entities to which the distance is computed. "
+    "If Point=0, Line=0, and Surface=0, then the distance is computed "
+    "to all the boundaries of the mesh (edges in 2D and faces in 3D).\n\n"
+    "Computation<0. computes the geometrical euclidian distance "
+    "(warning: different than the geodesic distance), and  Computation=a>0.0 "
+    "solves a PDE on the mesh with the diffusion constant mu = a*bbox, with "
+    "bbox being the max size of the bounding box of the mesh (see paper "
+    "Legrand 2006).\n\n"
+    "Min Scale and max Scale, scale the distance function. If min Scale<0 "
+    "and max Scale<0, then no scaling is applied to the distance function.\n\n"
+    "Plugin(Distance) creates a new distance view and also saves the view "
+    "in the fileName.pos file.";
 }
 
 int GMSH_DistancePlugin::getNbOptions() const
@@ -89,7 +93,6 @@ StringXString *GMSH_DistancePlugin::getOptionStr(int iopt)
 void GMSH_DistancePlugin::printView(std::vector<GEntity*> _entities,  
 				    std::map<MVertex*,double > _distance_map )
 {
-
   _fileName = DistanceOptions_String[0].def;    
   _minScale = (double) DistanceOptions_Number[4].def;
   _maxScale = (double) DistanceOptions_Number[5].def;
@@ -145,12 +148,10 @@ void GMSH_DistancePlugin::printView(std::vector<GEntity*> _entities,
   }
   fprintf(fName,"};\n");
   fclose(fName);
-
 }
 
 PView *GMSH_DistancePlugin::execute(PView *v)
 {
-
   int id_pt =     (int) DistanceOptions_Number[0].def;
   int id_line =   (int) DistanceOptions_Number[1].def;
   int id_face =   (int) DistanceOptions_Number[2].def;
@@ -159,7 +160,8 @@ PView *GMSH_DistancePlugin::execute(PView *v)
   
   PView *view = new PView();
   _data = getDataList(view);
-#ifdef HAVE_TAUCS
+#if defined(HAVE_SOLVER)
+#if defined(HAVE_TAUCS)
   linearSystemCSRTaucs<double> *lsys = new linearSystemCSRTaucs<double>;
 #else
   linearSystemCSRGmm<double> *lsys = new linearSystemCSRGmm<double>;
@@ -168,7 +170,8 @@ PView *GMSH_DistancePlugin::execute(PView *v)
   lsys->setPrec(5.e-8);
 #endif
   dofManager<double> * dofView = new dofManager<double>(lsys);
-    
+#endif
+
   std::vector<GEntity*> _entities;
   GModel::current()->getEntities(_entities);
   GEntity* ge = _entities[_entities.size()-1];
@@ -198,16 +201,16 @@ PView *GMSH_DistancePlugin::execute(PView *v)
   distances.reserve(totNumNodes);
   pt2Vertex.reserve(totNumNodes);
 
-    std::map<MVertex*,double> _distanceE_map;
-    std::map<MVertex*,int> _isInYarn_map;
-    std::vector<int> index;
-    std::vector<double> distancesE;
-    std::vector<int> isInYarn;
-    std::vector<SPoint3> closePts;
-    std::vector<double> distances2;
-    std::vector<double> distancesE2;
-    std::vector<int> isInYarn2;
-    std::vector<SPoint3> closePts2;
+  std::map<MVertex*,double> _distanceE_map;
+  std::map<MVertex*,int> _isInYarn_map;
+  std::vector<int> index;
+  std::vector<double> distancesE;
+  std::vector<int> isInYarn;
+  std::vector<SPoint3> closePts;
+  std::vector<double> distances2;
+  std::vector<double> distancesE2;
+  std::vector<int> isInYarn2;
+  std::vector<SPoint3> closePts2;
 
   for (int i = 0; i < totNumNodes; i++) {
     distances.push_back(1.e22);
@@ -488,8 +491,6 @@ PView *GMSH_DistancePlugin::execute(PView *v)
   
 #endif
   }
-
-  //-------------------------------------------------
   
   return view;
 }

@@ -18,9 +18,10 @@ project(gmsh CXX C)
 
 option(ENABLE_ACIS "Enable ACIS geometrical models" ON)
 option(ENABLE_ANN "Enable ANN to compute Approximate Nearest Neighbors" ON)
+option(ENABLE_APP_BUNDLE "Create .app bundle on Mac when installing" ON)
 option(ENABLE_BAMG "Enable Bamg mesh generator" ON)
 option(ENABLE_BFGS "Enable BFGS" ON)
-option(ENABLE_BLAS_LAPACK "Use BLAS/Lapack for basic linear algebra" ON)
+option(ENABLE_BLAS_LAPACK "Use BLAS and Lapack for linear algebra" ON)
 option(ENABLE_BLOSSOM "Enable Blossom algo (based on MATCH and concorde97)" ON)
 option(ENABLE_CGNS "Enable CGNS mesh export" OFF)
 option(ENABLE_CHACO "Enable Chaco mesh partitioner" ON)
@@ -47,15 +48,16 @@ option(ENABLE_PARSER "Build the GEO file parser" ON)
 option(ENABLE_PETSC "Enable PETSc linear algebra solvers" ON)
 option(ENABLE_PLUGINS "Build the post-processing plugins" ON)
 option(ENABLE_POST "Build the post-processing module" ON)
-option(ENABLE_QT "Build QT GUI" OFF)
+option(ENABLE_QT "Build proof-of-concept QT GUI" OFF)
 option(ENABLE_RBF "Enable RBF project" OFF)
 option(ENABLE_SALOME "Enable Salome routines for CAD healing" ON)
 option(ENABLE_SLEPC "Enable SLEPc eigensolvers" ON)
 option(ENABLE_SOLVER "Enable solver components" ON)
-option(ENABLE_SWIG "Enable swig" ON)
 option(ENABLE_TAUCS "Enable Taucs linear algebra solver" ON)
 option(ENABLE_TETGEN "Enable Tetgen mesh generator" ON)
 option(ENABLE_TETGEN_NEW "Enable experimental version of Tetgen" OFF)
+option(ENABLE_WRAP_JAVA "Build Java wrappers" OFF)
+option(ENABLE_WRAP_PYTHON "Build Python wrappers" ON)
 
 set(GMSH_MAJOR_VERSION 2)
 set(GMSH_MINOR_VERSION 5)
@@ -71,7 +73,7 @@ set(GMSH_API
   ${CMAKE_CURRENT_BINARY_DIR}/Common/GmshVersion.h
   Common/Gmsh.h Common/Context.h Common/GmshDefines.h Common/GmshMessage.h
     Common/VertexArray.h Common/Octree.h Common/OctreeInternals.h
-  Numeric/Numeric.h Numeric/Gauss.h Numeric/polynomialBasis.h
+  Numeric/Numeric.h Numeric/GaussIntegration.h Numeric/polynomialBasis.h
     Numeric/JacobianBasis.h Numeric/fullMatrix.h
     Numeric/simpleFunction.h Numeric/cartesian.h
   Geo/GModel.h Geo/GEntity.h Geo/GPoint.h Geo/GVertex.h Geo/GEdge.h 
@@ -134,8 +136,7 @@ include(CheckFunctionExists)
 include(CheckIncludeFile)
 
 if(MSVC)
-  # remove really annoying (and stupid, and wrong) warning about
-  # bool/int cast performance in Visual C++
+  # remove annoying warning about bool/int cast performance
   set(GMSH_CONFIG_PRAGMAS "#pragma warning(disable:4800)")
   if(ENABLE_MSVC_STATIC_RUNTIME)
     foreach(VAR
@@ -224,6 +225,11 @@ if(ENABLE_BLAS_LAPACK)
     endif(HAVE_64BIT_SIZE_T)
     set(MKL_LIBS_REQUIRED mkl_gf_lp64 iomp5 mkl_gnu_thread mkl_core guide pthread)
     find_all_libraries(LAPACK_LIBRARIES MKL_LIBS_REQUIRED "" ${MKL_PATH})
+    if(NOT LAPACK_LIBRARIES)
+      #match lapack 9.0 on 64bit
+      set(MKL_LIBS_REQUIRED mkl_lapack mkl_em64t guide)
+      find_all_libraries(LAPACK_LIBRARIES MKL_LIBS_REQUIRED "" ${MKL_PATH})
+    endif(NOT LAPACK_LIBRARIES)
     if(LAPACK_LIBRARIES)
       set_config_option(HAVE_BLAS "Blas(IntelMKL)")
       set_config_option(HAVE_LAPACK "Lapack(IntelMKL)")
@@ -399,7 +405,7 @@ if(HAVE_FLTK OR HAVE_QT OR ENABLE_GRAPHICS)
   if(NOT HAVE_MESH OR NOT HAVE_POST OR NOT HAVE_PLUGINS)
     message(SEND_ERROR "Cannot compile GUI without Mesh, Post or Plugin modules")
   endif(NOT HAVE_MESH OR NOT HAVE_POST OR NOT HAVE_PLUGINS)
-  # get jpeg lib (if we have fltk first try to get the local jpeg lib)
+  # get jpeg lib
   if(FLTK_JPEG)
     set_config_option(HAVE_LIBJPEG "Jpeg(Fltk)")
   else(FLTK_JPEG)
@@ -410,7 +416,7 @@ if(HAVE_FLTK OR HAVE_QT OR ENABLE_GRAPHICS)
       list(APPEND EXTERNAL_INCLUDES ${JPEG_INCLUDE_DIR})
     endif(JPEG_FOUND)
   endif(FLTK_JPEG)
-  # get zlib (if we have fltk first try to get the local zlib)
+  # get zlib
   if(FLTK_Z)
     set_config_option(HAVE_LIBZ "Zlib(Fltk)")
   else(FLTK_Z)
@@ -421,7 +427,7 @@ if(HAVE_FLTK OR HAVE_QT OR ENABLE_GRAPHICS)
       list(APPEND EXTERNAL_INCLUDES ${ZLIB_INCLUDE_DIR})
     endif(ZLIB_FOUND)
   endif(FLTK_Z)
-  # get png lib (if we have fltk first try to get the local png lib)
+  # get png lib
   if(HAVE_LIBZ)
     if(FLTK_PNG)
       set_config_option(HAVE_LIBPNG "Png(Fltk)")
@@ -939,6 +945,8 @@ elseif(HAVE_QT)
   add_executable(gmsh WIN32 Qt/Main.cpp ${GMSH_SRC} ${GMSH_MOC_SRC})
 else(HAVE_FLTK)
   add_executable(gmsh Common/Main.cpp ${GMSH_SRC})
+  add_executable(gmsh_dynamic EXCLUDE_FROM_ALL Common/Main.cpp)
+  target_link_libraries(gmsh_dynamic shared)
 endif(HAVE_FLTK)
 target_link_libraries(gmsh ${LINK_LIBRARIES})
 
@@ -960,8 +968,6 @@ if(WIN32 AND NOT MSVC OR CYGWIN)
 elseif(MSVC)
   set_target_properties(gmsh PROPERTIES LINK_FLAGS "/STACK:16777216")
 endif(WIN32 AND NOT MSVC OR CYGWIN)
-
-add_subdirectory(gmshpy)
 
 find_program(BISON bison)
 find_program(FLEX flex)
@@ -1024,10 +1030,9 @@ if(WIN32 OR CYGWIN)
     unix2dos(TUTORIAL_FILES)
     unix2dos(DEMO_FILES)
   endif(CYGWIN)
-elseif(APPLE)
+elseif(APPLE AND ENABLE_APP_BUNDLE)
   # set these so that the files get installed nicely in the MacOSX
-  # .app bundle (FIXME: this screws up a standard "make install" on
-  # MacOS)
+  # .app bundle
   set(GMSH_BIN ../MacOS)
   set(GMSH_DOC ../../..)
   set(GMSH_MAN ../../..)
@@ -1149,7 +1154,7 @@ if(UNIX)
   set(CPACK_INSTALL_COMMANDS "rm -rf ${CMAKE_CURRENT_BINARY_DIR}/_CPack_Packages")
 endif(UNIX)
 
-if(APPLE)
+if(APPLE AND ENABLE_APP_BUNDLE)
   set(CPACK_GENERATOR Bundle)
   set(CPACK_BUNDLE_NAME Gmsh)
   file(READ ${CMAKE_CURRENT_SOURCE_DIR}/utils/misc/gmsh_app.plist F0)
@@ -1166,9 +1171,98 @@ if(APPLE)
   set(CPACK_PACKAGE_ICON ${CMAKE_CURRENT_SOURCE_DIR}/Fltk/MacIcons.icns)
 elseif(WIN32 OR CYGWIN)
   set(CPACK_GENERATOR ZIP)
-else(APPLE)
+else(APPLE AND ENABLE_APP_BUNDLE)
   set(CPACK_GENERATOR TGZ)
-endif(APPLE)
+endif(APPLE AND ENABLE_APP_BUNDLE)
+
+if(ENABLE_WRAP_PYTHON)
+  find_package(SWIG)
+  find_package(PythonLibs)
+  if(SWIG_FOUND AND PYTHONLIBS_FOUND)
+    message(STATUS "Found SWIG version " ${SWIG_VERSION})
+    string(SUBSTRING ${SWIG_VERSION} 0 1 SWIG_MAJOR_VERSION)
+    if(SWIG_MAJOR_VERSION EQUAL 1)
+      message("WARNING: Python bindings require SWIG >= 2: disabling Python")
+    else(SWIG_MAJOR_VERSION EQUAL 1)
+      add_subdirectory(gmshpy)
+    endif(SWIG_MAJOR_VERSION EQUAL 1)
+  endif(SWIG_FOUND AND PYTHONLIBS_FOUND)
+endif(ENABLE_WRAP_PYTHON)
+
+if(ENABLE_WRAP_JAVA)
+  include_directories(
+    ${CMAKE_CURRENT_SOURCE_DIR}/WrappingJava/src/main/java/org/geuz/gmsh/utils)
+  # flag used to compilation during Java wrapping
+  set(CMAKE_CXX_FLAGS "-fno-strict-aliasing")
+  # find SWIG and include the swig file
+  find_package(SWIG REQUIRED)
+  include(${SWIG_USE_FILE})
+  # find Java and JNI and include files required
+  find_package(Java REQUIRED)
+  find_package(JNI REQUIRED)
+  include_directories(${JNI_INCLUDE_DIRS})
+  include_directories(${JAVA_INCLUDE_PATH})
+  include_directories(${JAVA_INCLUDE_PATH2})
+  include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+  # define where the interface file (used by SWIG) are
+  set(SWIG_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/WrapGmsh.i)
+  # let swig know that example.i is c++
+  set_source_files_properties(${SWIG_SOURCES} PROPERTIES CPLUSPLUS ON) 
+  # define where the Java files generated by SWIG will be stored
+  set(CMAKE_SWIG_OUTDIR ${CMAKE_CURRENT_BINARY_DIR}/WrappingJava/org/geuz/gmsh/generated/)
+  # defines the packaging of Java files generated by SWIG
+  set(JAVAPACKAGENAME "org.geuz.gmsh.generated") 
+  set(CMAKE_SWIG_FLAGS -package ${JAVAPACKAGENAME})
+  # create the swig module called WrapGmsh
+  # using the SWIG_SOURCE flag defined previously
+  # swig will be used to create WrapGmshJAVA_wrap.cxx from SWIG_SOURCE
+  swig_add_module(WrapGmsh java ${SWIG_SOURCES})
+  # link dynamic library called libWrapGmsh with the help of "shared" library
+  swig_link_libraries(WrapGmsh shared)
+  # define a good name for the dynamic libraty which depends on the OS
+  if(WIN32)
+    set_target_properties(WrapGmsh PROPERTIES PREFIX "")
+  endif(WIN32)
+  if(UNIX)
+    set_target_properties(WrapGmsh PROPERTIES PREFIX "lib")
+  endif(UNIX)		
+  add_custom_command(TARGET gmsh 
+    POST_BUILD # do the rest of the command after the build period
+    # write on the output consol
+    COMMAND cmake -E echo "Compiling Java files..."
+    #compilation of Java files generated by SWIG
+    COMMAND ${JAVA_COMPILE} 
+      ${CMAKE_CURRENT_BINARY_DIR}/WrappingJava/org/geuz/gmsh/generated/*.java
+      -classpath ${CMAKE_CURRENT_BINARY_DIR}/WrappingJava/
+      -d ${CMAKE_CURRENT_BINARY_DIR}/WrappingJava/
+    # compilation of Java files used by wrapping		               
+    COMMAND ${JAVA_COMPILE} 
+      ${CMAKE_CURRENT_SOURCE_DIR}/WrappingJava/src/main/java/org/geuz/gmsh/utils/*.java
+      -classpath ${CMAKE_CURRENT_BINARY_DIR}/WrappingJava/
+      -d ${CMAKE_CURRENT_BINARY_DIR}/WrappingJava/
+    # compilation of Java files used as demonstration
+    COMMAND ${JAVA_COMPILE} 
+      ${CMAKE_CURRENT_SOURCE_DIR}/WrappingJava/src/main/java/com/artenum/sample/*.java
+      -classpath ${CMAKE_CURRENT_BINARY_DIR}/WrappingJava/
+      -d ${CMAKE_CURRENT_BINARY_DIR}/WrappingJava/
+    # create a jar file which contains the files with a .class extension
+    COMMAND cmake -E echo "Creating jar file..."
+    COMMAND ${JAVA_ARCHIVE} cvf ${CMAKE_CURRENT_BINARY_DIR}/WrappingJava/WrapGmsh.jar 
+      -C ${CMAKE_CURRENT_BINARY_DIR}/WrappingJava/ org
+    COMMAND ${JAVA_ARCHIVE} cvf ${CMAKE_CURRENT_BINARY_DIR}/WrappingJava/Sample.jar 
+      -C ${CMAKE_CURRENT_BINARY_DIR}/WrappingJava/ com
+    # create a jar from Sample
+    COMMAND ${CMAKE_COMMAND} -E copy 
+      ${CMAKE_CURRENT_SOURCE_DIR}/WrappingJava/src/main/java/t5.geo 
+      ${CMAKE_CURRENT_BINARY_DIR}/WrappingJava/
+    # copy the build.xml file to run the ant script
+    COMMAND ${CMAKE_COMMAND} -E copy 
+      ${CMAKE_CURRENT_SOURCE_DIR}/WrappingJava/build.xml 
+      ${CMAKE_CURRENT_BINARY_DIR}/WrappingJava/)
+  install(TARGETS WrapGmsh shared DESTINATION lib OPTIONAL)
+  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/WrappingJava/WrapGmsh.jar 
+          DESTINATION lib)
+endif(ENABLE_WRAP_JAVA)
 
 include(CPack)
 
@@ -1191,4 +1285,3 @@ message("")
 
 mark_as_advanced(BISON FLEX GMP_LIB GMSH_EXTRA_VERSION HDF5_LIB MAKEINFO 
                  MED_LIB OCC_INC SZ_LIB TAUCS_LIB ACIS_LIB TEXI2PDF)
-

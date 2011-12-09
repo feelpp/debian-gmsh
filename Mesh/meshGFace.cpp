@@ -391,7 +391,8 @@ static bool recoverEdge(BDS_Mesh *m, GEdge *ge,
   return true;
 }
 
-void BDS2GMSH ( BDS_Mesh *m, GFace *gf, std::map<BDS_Point*, MVertex*> &recoverMap){ 
+void BDS2GMSH(BDS_Mesh *m, GFace *gf, std::map<BDS_Point*, MVertex*> &recoverMap)
+{
   {
     std::set<BDS_Point*,PointLessThan>::iterator itp = m->points.begin();
     while (itp != m->points.end()){
@@ -438,15 +439,50 @@ bool meshGenerator(GFace *gf, int RECUR_ITER,
 		   bool debug = true,
 		   std::list<GEdge*> *replacement_edges = 0);
 
-static void addOrRemove ( MVertex *v1, MVertex *v2, std::set<MEdge,Less_Edge> & bedges){
+static void addOrRemove(MVertex *v1, MVertex *v2, std::set<MEdge,Less_Edge> & bedges)
+{
   MEdge e(v1,v2);
   std::set<MEdge,Less_Edge>::iterator it = bedges.find(e);
   if (it == bedges.end())bedges.insert(e);
   else bedges.erase(it);
 }
 
-void modifyInitialMeshForTakingIntoAccountBoundaryLayers  (GFace *gf){
+void filterOverlappingElements(int dim, std::vector<MElement*> &e,
+                               std::vector<MElement*> &eout,
+                               std::vector<MElement*> &einter)
+{
+  eout.clear();
+  MElementOctree octree (e);
+  for (int i=0;i<e.size();++i){
+    MElement *el = e[i];
+    bool intersection = false;
+    for (int j=0;j<el->getNumVertices();++j){
+      MVertex *v = el->getVertex(j);
+      std::vector<MElement *> inters = octree.findAll(v->x(),v->y(),v->z(),dim);
+      std::vector<MElement *> inters2;      
+      for (int k=0;k<inters.size();k++){
+	bool found = false;
+	for (int l=0;l<inters[k]->getNumVertices();l++){
+	  if (inters[k]->getVertex(l) == v)found = true;
+	}
+	if (!found)inters2.push_back(inters[k]);
+      }
+      if (inters2.size() >= 1 ){
+	intersection = true;
+      }
+    }
+    if (intersection){
+      printf("intersection found\n");
+      einter.push_back(el);       
+    }
+    else {
+      eout.push_back(el);
+    }
+  }
+}
 
+void modifyInitialMeshForTakingIntoAccountBoundaryLayers(GFace *gf)
+{
   BoundaryLayerColumns *_columns = buidAdditionalPoints2D (gf, M_PI/6.);
 
   if (!_columns)return;
@@ -456,6 +492,8 @@ void modifyInitialMeshForTakingIntoAccountBoundaryLayers  (GFace *gf){
   std::vector<MQuadrangle*> blQuads;
   std::vector<MTriangle*> blTris;
   std::list<GEdge*> edges = gf->edges();
+  std::list<GEdge*> embedded_edges = gf->embeddedEdges();
+  edges.insert(edges.begin(), embedded_edges.begin(),embedded_edges.end());
   std::list<GEdge*>::iterator ite = edges.begin();
   FILE *ff2 = fopen ("tato.pos","w");
   fprintf(ff2,"View \" \"{\n");
@@ -466,11 +504,11 @@ void modifyInitialMeshForTakingIntoAccountBoundaryLayers  (GFace *gf){
       MVertex *v2 = (*ite)->lines[i]->getVertex(1);
       MEdge dv(v1,v2);
       addOrRemove(v1,v2,bedges);
-      int nbCol1 = _columns->getNbColumns(v1);
-      int nbCol2 = _columns->getNbColumns(v2);
-      if (nbCol1 > 0 && nbCol2 > 0){ 
-	const BoundaryLayerData & c1 = _columns->getColumn(v1,MEdge(v1,v2));
-	const BoundaryLayerData & c2 = _columns->getColumn(v2,MEdge(v1,v2));
+
+      for (int SIDE = 0 ; SIDE < _columns->_normals.count(dv) ; SIDE ++){
+	edgeColumn ec =  _columns->getColumns(v1,v2,SIDE);
+	const BoundaryLayerData & c1 = ec._c1;
+	const BoundaryLayerData & c2 = ec._c2;
 	int N = std::min(c1._column.size(),c2._column.size());
 	for (int l=0;l < N ;++l){
 	  MVertex *v11,*v12,*v21,*v22;
@@ -488,115 +526,85 @@ void modifyInitialMeshForTakingIntoAccountBoundaryLayers  (GFace *gf){
 
 	  //avoid convergent errors
 	  if (dv2.length() < 0.5 * dv.length())break;
-	  //	printf("quadrangle generated\n");
 	  blQuads.push_back(new MQuadrangle(v11,v12,v22,v21));
-	  //blTris.push_back(new MTriangle(v11,v12,v22));
-	  //	  blTris.push_back(new MTriangle(v11,v22,v21));
-	  addOrRemove(v11,v12,bedges);
-	  addOrRemove(v12,v22,bedges);
-	  addOrRemove(v22,v21,bedges);
-	  addOrRemove(v21,v11,bedges);
-	  if(v11->onWhat() == gf)verts.insert(v11);
-	  if(v21->onWhat() == gf)verts.insert(v21);
-	  if(v12->onWhat() == gf)verts.insert(v12);
-	  if(v22->onWhat() == gf)verts.insert(v22);
 	  fprintf(ff2,"SQ (%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g){1,1,1,1};\n",
 		  v11->x(),v11->y(),v11->z(),
 		  v12->x(),v12->y(),v12->z(),
 		  v22->x(),v22->y(),v22->z(),
 		  v21->x(),v21->y(),v21->z());
 	}
-	int M = std::max(c1._column.size(),c2._column.size());
+	//	int M = std::max(c1._column.size(),c2._column.size());
 
-	/*
-	if (M>N) M = N+1;
-	// close with triangles
- 	for (int l=N-1;l < M-1 ;++l){
-	  MVertex *v11,*v12,*v21,*v22;
-	  v11 = c1._column[l>=c1._column.size() ? c1._column.size() -1 : l];
-	  v12 = c2._column[l>=c2._column.size() ? c2._column.size() -1 : l];
-	  v21 = c1._column[(l+1)>=c1._column.size() ? c1._column.size() -1 : l+1];
-	  v22 = c2._column[(l+1)>=c2._column.size() ? c2._column.size() -1 : l+1];
-
-	  MTriangle *nt = (v11 == v21) ? new MTriangle(v11,v12,v22) : new MTriangle(v11,v12,v21) ;
-	  blTris.push_back(nt);
-	  v11 = nt->getVertex(0);
-	  v12 = nt->getVertex(1);
-	  v21 = nt->getVertex(2);
-
-	  addOrRemove(v11,v12,bedges);
-	  addOrRemove(v12,v21,bedges);
-	  addOrRemove(v21,v11,bedges);
-	  if(v11->onWhat() == gf)verts.insert(v11);
-	  if(v21->onWhat() == gf)verts.insert(v21);
-	  if(v12->onWhat() == gf)verts.insert(v12);
-	  fprintf(ff2,"ST (%g,%g,%g,%g,%g,%g,%g,%g,%g){1,1,1};\n",
-		  v11->x(),v11->y(),v11->z(),
-		  v12->x(),v12->y(),v12->z(),
-		  v21->x(),v21->y(),v21->z());
-	}
-	*/
       }
    }
     ++ite;
   }
 
-  if (1){
-    for (BoundaryLayerColumns::iterf itf = _columns->beginf();
-	 itf != _columns->endf() ; ++itf){
-      MVertex *v = itf->first;
-      int nbCol = _columns->getNbColumns(v);
-      
-      for (int i=0;i<nbCol-1;i++){
-	//	printf("permut %d %d\n",permut[i],permut[i+1]);
-	const BoundaryLayerData & c1 = _columns->getColumn(v,i);
-	const BoundaryLayerData & c2 = _columns->getColumn(v,i+1);
-	int N = std::min(c1._column.size(),c2._column.size());
-	for (int l=0;l < N ;++l){
-	  MVertex *v11,*v12,*v21,*v22;
-	  v21 = c1._column[l];
-	  v22 = c2._column[l];	    
-	  if (l == 0){
-	    v11 = v;
-	    v12 = v;
-	  }
-	  else {
-	    v11 = c1._column[l-1];
-	    v12 = c2._column[l-1];	    
-	  }
-	  //	printf("quadrangle generated\n");
-	  if (v11 != v12){
-	    addOrRemove(v11,v12,bedges);
-	    addOrRemove(v12,v22,bedges);
-	    addOrRemove(v22,v21,bedges);
-	    addOrRemove(v21,v11,bedges);
-	    blQuads.push_back(new MQuadrangle(v11,v12,v22,v21));
-	    fprintf(ff2,"SQ (%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g){1,1,1,1};\n",
-		    v11->x(),v11->y(),v11->z(),
+  for (BoundaryLayerColumns::iterf itf = _columns->beginf();
+       itf != _columns->endf() ; ++itf){
+    MVertex *v = itf->first;
+    int nbCol = _columns->getNbColumns(v);
+    
+    for (int i=0;i<nbCol-1;i++){
+      const BoundaryLayerData & c1 = _columns->getColumn(v,i);
+      const BoundaryLayerData & c2 = _columns->getColumn(v,i+1);
+      int N = std::min(c1._column.size(),c2._column.size());
+      for (int l=0;l < N ;++l){
+	MVertex *v11,*v12,*v21,*v22;
+	v21 = c1._column[l];
+	v22 = c2._column[l];	    
+	if (l == 0){
+	  v11 = v;
+	  v12 = v;
+	}
+	else {
+	  v11 = c1._column[l-1];
+	  v12 = c2._column[l-1];	    
+	}
+	if (v11 != v12){
+	  blQuads.push_back(new MQuadrangle(v11,v12,v22,v21));
+	  fprintf(ff2,"SQ (%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g){1,1,1,1};\n",
+		  v11->x(),v11->y(),v11->z(),
 		    v12->x(),v12->y(),v12->z(),
-		    v22->x(),v22->y(),v22->z(),
-		    v21->x(),v21->y(),v21->z());
-	  }
-	  else {
-	    addOrRemove(v,v22,bedges);
-	    addOrRemove(v22,v21,bedges);
-	    addOrRemove(v21,v,bedges);
-	    blTris.push_back(new MTriangle(v,v22,v21));
-	    fprintf(ff2,"ST (%g,%g,%g,%g,%g,%g,%g,%g,%g){1,1,1,1};\n",
-		    v->x(),v->y(),v->z(),
-		    v22->x(),v22->y(),v22->z(),
-		    v21->x(),v21->y(),v21->z());
-	  }
-	  if(v11->onWhat() == gf)verts.insert(v11);
-	  if(v21->onWhat() == gf)verts.insert(v21);
-	  if(v12->onWhat() == gf)verts.insert(v12);
-	  if(v22->onWhat() == gf)verts.insert(v22);
+		  v22->x(),v22->y(),v22->z(),
+		  v21->x(),v21->y(),v21->z());
+	}
+	else {
+	  blTris.push_back(new MTriangle(v,v22,v21));
+	  fprintf(ff2,"ST (%g,%g,%g,%g,%g,%g,%g,%g,%g){1,1,1,1};\n",
+		  v->x(),v->y(),v->z(),
+		  v22->x(),v22->y(),v22->z(),
+		  v21->x(),v21->y(),v21->z());
 	}
       }
     }
   }
+
   fprintf(ff2,"};\n");
   fclose(ff2);
+  
+  std::vector<MElement*> els,newels,oldels;
+  for (int i=0;i<blQuads.size();i++)els.push_back(blQuads[i]);
+  filterOverlappingElements (2,els,newels,oldels);
+  blQuads.clear();
+  for (int i=0;i<newels.size();i++)blQuads.push_back((MQuadrangle*)newels[i]);
+  for (int i=0;i<oldels.size();i++)delete oldels[i];
+  
+  for (int i=0;i<blQuads.size();i++){    
+    addOrRemove(blQuads[i]->getVertex(0),blQuads[i]->getVertex(1),bedges);
+    addOrRemove(blQuads[i]->getVertex(1),blQuads[i]->getVertex(2),bedges);
+    addOrRemove(blQuads[i]->getVertex(2),blQuads[i]->getVertex(3),bedges);
+    addOrRemove(blQuads[i]->getVertex(3),blQuads[i]->getVertex(0),bedges);
+    for (int j=0;j<4;j++) 
+      if(blQuads[i]->getVertex(j)->onWhat() == gf)verts.insert(blQuads[i]->getVertex(j));
+  }
+  for (int i=0;i<blTris.size();i++){    
+    addOrRemove(blTris[i]->getVertex(0),blTris[i]->getVertex(1),bedges);
+    addOrRemove(blTris[i]->getVertex(1),blTris[i]->getVertex(2),bedges);
+    addOrRemove(blTris[i]->getVertex(2),blTris[i]->getVertex(0),bedges);
+    for (int j=0;j<3;j++) 
+      if(blTris[i]->getVertex(j)->onWhat() == gf)verts.insert(blTris[i]->getVertex(j));
+  }
 
   discreteEdge ne (gf->model(), 444444,0,
 		   (*edges.begin())->getEndVertex());
@@ -634,7 +642,6 @@ bool meshGenerator(GFace *gf, int RECUR_ITER,
 		   bool debug,
 		   std::list<GEdge*> *replacement_edges)
 {
-
   BDS_GeomEntity CLASS_F(1, 2);
   BDS_GeomEntity CLASS_EXTERIOR(1, 3);
   std::map<BDS_Point*, MVertex*> recoverMap;
@@ -841,7 +848,8 @@ bool meshGenerator(GFace *gf, int RECUR_ITER,
         sstream << " " << itr->ge->tag();
       Msg::Warning(":-( There are %d intersections in the 1D mesh (curves%s)",
                    edgesNotRecovered.size(), sstream.str().c_str());
-      if (repairSelfIntersecting1dMesh) Msg::Warning("8-| Gmsh splits those edges and tries again");
+      if (repairSelfIntersecting1dMesh) 
+        Msg::Warning("8-| Gmsh splits those edges and tries again");
     
       if(debug){
         char name[245];
@@ -874,7 +882,8 @@ bool meshGenerator(GFace *gf, int RECUR_ITER,
       delete m;
       if(RECUR_ITER < 10 && facesToRemesh.size() == 0)
         return meshGenerator
-          (gf, RECUR_ITER + 1, repairSelfIntersecting1dMesh, onlyInitialMesh, debug,replacement_edges);
+          (gf, RECUR_ITER + 1, repairSelfIntersecting1dMesh, onlyInitialMesh,
+           debug, replacement_edges);
       return false;
     }
 
@@ -1024,7 +1033,7 @@ bool meshGenerator(GFace *gf, int RECUR_ITER,
     outputScalarField(m->triangles, name, 1);
   }
   
-  if(0){
+  if(1){
     std::list<BDS_Face*>::iterator itt = m->triangles.begin();
     while (itt != m->triangles.end()){
       BDS_Face *t = *itt;
@@ -1114,6 +1123,7 @@ bool meshGenerator(GFace *gf, int RECUR_ITER,
       bowyerWatson(gf);
     else {
       bowyerWatson(gf);
+      printf("in bamg *** \n");
       meshGFaceBamg(gf);
     }
     laplaceSmoothing(gf,CTX::instance()->mesh.nbSmoothing);
@@ -1713,8 +1723,10 @@ static bool meshGeneratorPeriodic(GFace *gf, bool debug = true)
     else if(CTX::instance()->mesh.algo2d == ALGO_2D_DELAUNAY ||
             CTX::instance()->mesh.algo2d == ALGO_2D_AUTO)
       bowyerWatson(gf);
-    else 
+    else {
+      printf("in bamg \n");
       meshGFaceBamg(gf);
+    }
     laplaceSmoothing(gf,CTX::instance()->mesh.nbSmoothing);
   }
   
@@ -1783,8 +1795,6 @@ void meshGFace::operator() (GFace *gf)
 
   const char *algo = "Unknown";
 
-
-
   switch(CTX::instance()->mesh.algo2d){
   case ALGO_2D_MESHADAPT : algo = "MeshAdapt"; break;
   case ALGO_2D_FRONTAL : algo = "Frontal"; break;
@@ -1800,7 +1810,6 @@ void meshGFace::operator() (GFace *gf)
   if (!algoDelaunay2D(gf)){
     algo = "MeshAdapt";
   }
-
 
   Msg::Info("Meshing surface %d (%s, %s)", gf->tag(), gf->getTypeString().c_str(), algo);
 
@@ -1886,8 +1895,7 @@ void partitionAndRemesh(GFaceCompound *gf)
 {
 #if defined(HAVE_SOLVER) && (defined(HAVE_CHACO) || defined(HAVE_METIS))
 
-  //Partition the mesh and createTopology for new faces
-  //-----------------------------------------------------
+  // Partition the mesh and createTopology for new faces
   double tbegin = Cpu();
   std::list<GFace*> cFaces = gf->getCompounds();
   std::vector<MElement *> elements;
@@ -1917,8 +1925,7 @@ void partitionAndRemesh(GFaceCompound *gf)
             NF, tmult - tbegin);
   gf->model()->writeMSH("multiscalePARTS.msh", 2.2, false, true);
  
-  //Remesh new faces (Compound Lines and Compound Surfaces)
-  //-----------------------------------------------------
+  // Remesh new faces (Compound Lines and Compound Surfaces)
   Msg::Info("*** Starting parametrize compounds:");
   double t0 = Cpu();
 
@@ -1937,7 +1944,7 @@ void partitionAndRemesh(GFaceCompound *gf)
     gec->parametrize();
   }
 
-  //Parametrize Compound surfaces
+  // Parametrize Compound surfaces
   std::set<MVertex*> allNod; 
   std::list<GEdge*> U0;
   for (int i=0; i < NF; i++){
@@ -1971,7 +1978,7 @@ void partitionAndRemesh(GFaceCompound *gf)
 
   Msg::Info("*** Starting Mesh of surface %d ...", gf->tag());
 
-  //lloydAlgorithm
+  // lloydAlgorithm
   for (int i=0; i < NF; i++){
     GFace *gfc =  gf->model()->getFaceByTag(numf + NF + i );
     meshGFace mgf;
@@ -1999,7 +2006,7 @@ void partitionAndRemesh(GFaceCompound *gf)
  
   }
 
-  //Removing discrete Vertices - Edges - Faces
+  // Removing discrete Vertices - Edges - Faces
   int NV = gf->model()->getMaxElementaryNumber(0) - numv + 1;
   for (int i=0; i < NV; i++){
     GVertex *pv = gf->model()->getVertexByTag(numv+i);
@@ -2018,14 +2025,12 @@ void partitionAndRemesh(GFaceCompound *gf)
     gf->model()->remove(gfc);
   }
 
-  //Put new mesh in a new discreteFace
-  //-----------------------------------------------------
+  // Put new mesh in a new discreteFace
   for(std::set<MVertex*>::iterator it = allNod.begin(); it != allNod.end(); ++it){
     gf->mesh_vertices.push_back(*it);
   }
 
-  //Remove mesh_vertices that belong to l_edges
-  //-----------------------------------------------------
+  // Remove mesh_vertices that belong to l_edges
   std::list<GEdge*> l_edges = gf->edges();
   for(std::list<GEdge*>::iterator it = l_edges.begin(); it != l_edges.end(); it++){
     std::vector<MVertex*> edge_vertices = (*it)->mesh_vertices;
@@ -2099,7 +2104,6 @@ void orientMeshGFace::operator()(GFace *gf)
   // * it failed with OpenCASCADE geometries, where surface orientions
   //   do not seem to be consistent with the orientation of the
   //   bounding edges
-
 
   // first, try to find an element with one vertex categorized on the
   // surface and for which we have valid surface parametric
