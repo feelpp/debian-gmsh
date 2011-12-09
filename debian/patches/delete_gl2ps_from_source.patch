@@ -1,6 +1,6 @@
 Description: delete gl2ps and use packaged version.
 Author: Anton Gladky <gladky.anton@gmail.com>, Julian Taylor <jtaylor.debian@googlemail.com>
-Last-Update: 2011-07-10
+Last-Update: 2011-12-09
 
 --- a/Graphics/CMakeLists.txt
 +++ b/Graphics/CMakeLists.txt
@@ -14,7 +14,7 @@ Last-Update: 2011-07-10
    gl2png.cpp
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -912,7 +912,7 @@
+@@ -933,7 +933,7 @@
    message("WARNING: By enabling ENABLE_MSVC_STATIC_RUNTIME, shared library wont link. "
            "Change in msvc /MT flag to /MD in the shared project properties")
  endif(MSVC AND ENABLE_MSVC_STATIC_RUNTIME)		  
@@ -23,9 +23,9 @@ Last-Update: 2011-07-10
  
  # binary targets
  if(HAVE_FLTK)
-@@ -925,7 +925,7 @@
- else(HAVE_FLTK)
-   add_executable(gmsh Common/Main.cpp ${GMSH_SRC})
+@@ -948,7 +948,7 @@
+   add_executable(gmsh_dynamic EXCLUDE_FROM_ALL Common/Main.cpp)
+   target_link_libraries(gmsh_dynamic shared)
  endif(HAVE_FLTK)
 -target_link_libraries(gmsh ${LINK_LIBRARIES})
 +target_link_libraries(gmsh ${LINK_LIBRARIES} -lgl2ps -lGL -lglut)

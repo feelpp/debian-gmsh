@@ -1,10 +1,10 @@
 Description: Switch off some options.
 Author: Anton Gladky <gladky.anton@gmail.com>
-Last-Update: 2011-07-06
+Last-Update: 2011-12-09
 
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -34,7 +34,7 @@
+@@ -35,7 +35,7 @@
  option(ENABLE_MATHEX "Enable MathEx expression parser" ON)
  option(ENABLE_MED "Enable MED mesh and post-processing file formats" ON)
  option(ENABLE_MESH "Build the mesh module" ON)
@@ -13,14 +13,14 @@ Last-Update: 2011-07-06
  option(ENABLE_MMG3D "Enable 3D Mobile Mesh Generation" ON)
  option(ENABLE_MPEG_ENCODE "Enable built-in MPEG encoder" ON)
  option(ENABLE_MPI "Enable MPI parallelization" OFF)
-@@ -54,8 +54,8 @@
+@@ -53,8 +53,8 @@
+ option(ENABLE_SALOME "Enable Salome routines for CAD healing" ON)
  option(ENABLE_SLEPC "Enable SLEPc eigensolvers" ON)
  option(ENABLE_SOLVER "Enable solver components" ON)
- option(ENABLE_SWIG "Enable swig" ON)
 -option(ENABLE_TAUCS "Enable Taucs linear algebra solver" ON)
 -option(ENABLE_TETGEN "Enable Tetgen mesh generator" ON)
 +option(ENABLE_TAUCS "Enable Taucs linear algebra solver" OFF)
 +option(ENABLE_TETGEN "Enable Tetgen mesh generator" OFF)
  option(ENABLE_TETGEN_NEW "Enable experimental version of Tetgen" OFF)
- 
- set(GMSH_MAJOR_VERSION 2)
+ option(ENABLE_WRAP_JAVA "Build Java wrappers" OFF)
+ option(ENABLE_WRAP_PYTHON "Build Python wrappers" ON)
