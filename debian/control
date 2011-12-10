@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Debian Science Maintainers <debian-science-maintainers@lists.alioth.debian.org>
 Uploaders: Christophe Prud'homme <prudhomm@debian.org>, Anton Gladky <gladky.anton@gmail.com>
 Build-Depends: debhelper (>= 8), cmake, gfortran, libgl1-mesa-dev,
- libglu1-mesa-dev, libfltk1.1-dev (>=1.1.7),
+ libglu1-mesa-dev, libfltk1.3-dev (>=1.1.7),
  libpng12-dev, libjpeg-dev, zlib1g-dev, texlive, texinfo,
  mpi-default-dev,
  libopencascade-modeling-dev,
@@ -12,7 +12,9 @@ Build-Depends: debhelper (>= 8), cmake, gfortran, libgl1-mesa-dev,
  libmed-dev (>= 2.3.6), libmedc-dev (>= 2.3.6) [alpha amd64 i386 ia64 kfreebsd-amd64 kfreebsd-i386 powerpc sparc], 
  libhdf5-mpi-dev [alpha amd64 i386 ia64 kfreebsd-amd64 kfreebsd-i386 powerpc sparc],
  libscotchmetis-dev,
- libblas-dev, liblapack-dev, libgl2ps-dev, freeglut3-dev
+ libblas-dev, liblapack-dev, libgl2ps-dev, freeglut3-dev,
+ libpetsc3.1-dev, libslepc3.1-dev,
+ python-dev (>= 2.6.6-3~), swig2.0
 Standards-Version: 3.9.2
 DM-Upload-Allowed: yes
 Vcs-Git: git://git.debian.org/git/debian-science/packages/gmsh.git
