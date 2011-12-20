@@ -1,13 +1,15 @@
 gmsh (2.5.1~beta2~svn10664~dfsg-1) unstable; urgency=low
 
-  [ Anton Gladky ] 
-  * [71f7616] Imported Upstream version 2.5.1~beta2~svn10664~dfsg
-  
   [ Christophe Trophime ]
   * [6fe1e7e] Replace patch for switching-off metis and tetgen by options.
   * [6af457b] Enable python-interface (not functional yet).
+  
+  [ Anton Gladky ] 
+  * [71f7616] Imported Upstream version 2.5.1~beta2~svn10664~dfsg
+  * [0f8b6e5] Disable python-modules for a while, because they require
+              a workaround to use iy, have a rpath-issue.
 
- -- Anton Gladky <gladky.anton@gmail.com>  Sat, 17 Dec 2011 20:10:35 +0100
+ -- Anton Gladky <gladky.anton@gmail.com>  Tue, 20 Dec 2011 19:30:55 +0100
 
 gmsh (2.5.1~beta2~svn10284~dfsg-1) unstable; urgency=low
 
