@@ -1,3 +1,10 @@
+gmsh (2.5.1~beta2~svn10664~dfsg-2) unstable; urgency=low
+
+  * [a9ae56b] Let med-format be available on all platforms.
+  * [7508887] Restrict PETSC on kfreebsd* platforms (causes FTBFS).
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Wed, 21 Dec 2011 20:04:01 +0100
+
 gmsh (2.5.1~beta2~svn10664~dfsg-1) unstable; urgency=low
 
   [ Christophe Trophime ]
