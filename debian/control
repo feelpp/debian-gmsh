@@ -13,7 +13,8 @@ Build-Depends: debhelper (>= 8), cmake, gfortran, libgl1-mesa-dev,
  libhdf5-mpi-dev [alpha amd64 i386 ia64 kfreebsd-amd64 kfreebsd-i386 powerpc sparc],
  libscotchmetis-dev,
  libblas-dev, liblapack-dev, libgl2ps-dev, freeglut3-dev,
- libpetsc3.1-dev, libslepc3.1-dev,
+ libpetsc3.1-dev [!kfreebsd-amd64, !kfreebsd-i386], 
+ libslepc3.1-dev [!kfreebsd-amd64, !kfreebsd-i386, !sparc],
  python-dev (>= 2.6.6-3~), swig2.0
 Standards-Version: 3.9.2
 DM-Upload-Allowed: yes
