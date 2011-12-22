@@ -1,3 +1,11 @@
+gmsh (2.5.1~beta2~svn10664~dfsg-3) unstable; urgency=low
+
+  * [980797d] Remove slepc, because it is not in testing.
+  * [6a1fd65] Prevent petsc on platforms, where lam is used.
+              Causes FTBFS.
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Thu, 22 Dec 2011 18:55:41 +0100
+
 gmsh (2.5.1~beta2~svn10664~dfsg-2) unstable; urgency=low
 
   * [a9ae56b] Let med-format be available on all platforms.
