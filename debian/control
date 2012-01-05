@@ -14,7 +14,8 @@ Build-Depends: debhelper (>= 8), cmake, gfortran, libgl1-mesa-dev,
  libscotchmetis-dev,
  libblas-dev, liblapack-dev, libgl2ps-dev, freeglut3-dev,
  libpetsc3.1-dev [!kfreebsd-amd64 !kfreebsd-i386 !armel !mips !mipsel !s390 !sparc], 
- python-dev (>= 2.6.6-3~), swig2.0
+ python-dev (>= 2.6.6-3~), swig2.0,
+ chrpath
 Standards-Version: 3.9.2
 DM-Upload-Allowed: yes
 X-Python-Version: current
