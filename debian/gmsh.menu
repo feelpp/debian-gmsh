@@ -3,4 +3,4 @@
   section="Applications/Science/Engineering" \
   title="Gmsh"                \
   command="/usr/bin/gmsh"     \
-  icon="/usr/share/pixmaps/gmsh16x16-smooth.xpm"
+  icon="/usr/share/pixmaps/gmsh_32x32.xpm"

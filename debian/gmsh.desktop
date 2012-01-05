@@ -4,7 +4,7 @@ Name=Gmsh Mesh Generator
 GenericName=Gmsh
 Comment=3-D finite element mesh generator
 Exec=gmsh
-Icon=gmsh16x16-smooth
+Icon=Icon=/usr/share/pixmaps/gmsh_32x32.xpm
 Type=Application
 Terminal=false
 Categories=Education;Math;Science;

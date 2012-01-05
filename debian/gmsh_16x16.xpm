@@ -1,5 +1,5 @@
 /* XPM */
-static char * gmsh16x16_smooth_xpm[] = {
+static char * gmsh_16x16_xpm[] = {
 "16 16 53 1",
 " 	c None",
 ".	c #C8C8C8",

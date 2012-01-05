@@ -1,3 +1,3 @@
-debian/gmsh16x16-smooth.xpm /usr/share/pixmaps
+debian/*.xpm /usr/share/pixmaps
 debian/gmsh.desktop /usr/share/applications
 
