@@ -2,7 +2,7 @@
 BUILDDIR = $(CURDIR)/debian/build
 
 %:
-	dh $@ --buildsystem=cmake --builddirectory=$(BUILDDIR) --with python2
+	dh $@ --buildsystem=cmake --builddirectory=$(BUILDDIR) --with python2 --parallel
 
 extra_flags += -DCMAKE_CXX_FLAGS="-DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX -fopenmp -lgl2ps -lGL -lglut" \
 -DCMAKE_INCLUDE_PATH:="/usr/include/mpi"\
