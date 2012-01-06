@@ -1,4 +1,5 @@
-Desctiption: enable tetgen on systems, where it is available. Needs package-rebuilding
+Description: Enable tetgen on systems, where it is available. 
+ Needs package-rebuilding.
 Author: Christophe Trophime <christophe.trophime@lncmi.cnrs.fr>
 Reviewed-by: Anton Gladky <gladky.anton@gmail.com>
 Last-Update: 2012-01-05
