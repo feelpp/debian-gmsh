@@ -12,7 +12,7 @@
 enum MESHING2_RESULT
 {
   MESHING2_OK = 0,
-  MESHING2_GIVEUP = 1,
+  MESHING2_GIVEUP = 1
 };
 
 
@@ -31,9 +31,9 @@ class Meshing2
   /// the current advancing front
   AdFront2 * adfront;
   /// rules for mesh generation
-  ARRAY<netrule*> rules;
+  Array<netrule*> rules;
   /// statistics
-  ARRAY<int> ruleused, canuse, foundmap;
+  Array<int> ruleused, canuse, foundmap;
   /// 
   Box<3> boundingbox;
   ///
@@ -41,25 +41,32 @@ class Meshing2
   ///
   double maxarea;
 
+  Vec3d ex, ey;
+  Point3d globp1;
+
 public:
   ///
-  Meshing2 (const Box<3> & aboundingbox);
+  DLL_HEADER Meshing2 (const MeshingParameters & mp, const Box<3> & aboundingbox);
 
   ///
-  virtual ~Meshing2 ();
+  DLL_HEADER virtual ~Meshing2 ();
 
   /// Load rules, either from file, or compiled rules
-  void LoadRules (const char * filename);
+  void LoadRules (const char * filename, bool quad);
 
   /// 
-  MESHING2_RESULT GenerateMesh (Mesh & mesh, double gh, int facenr);
+  DLL_HEADER MESHING2_RESULT GenerateMesh (Mesh & mesh, const MeshingParameters & mp, double gh, int facenr);
+
+  DLL_HEADER void Delaunay (Mesh & mesh, int domainnr, const MeshingParameters & mp);
+  DLL_HEADER void BlockFillLocalH (Mesh & mesh, const MeshingParameters & mp);
+
 
   ///
-  void AddPoint (const Point3d & p, PointIndex globind, MultiPointGeomInfo * mgi = NULL,
+  DLL_HEADER void AddPoint (const Point3d & p, PointIndex globind, MultiPointGeomInfo * mgi = NULL,
 		 bool pointonsurface = true);
 
   ///
-  void AddBoundaryElement (INDEX i1, INDEX i2,
+  DLL_HEADER void AddBoundaryElement (INDEX i1, INDEX i2,
 			   const PointGeomInfo & gi1, const PointGeomInfo & gi2);
   
   ///
@@ -119,22 +126,23 @@ protected:
   /*
     get (projected) boundary of current chart
    */
-  virtual void GetChartBoundary (ARRAY<Point2d> & points, 
-				 ARRAY<Point3d> & points3d,
-				 ARRAY<INDEX_2> & lines, double p) const;
+  virtual void GetChartBoundary (Array<Point2d> & points, 
+				 Array<Point3d> & points3d,
+				 Array<INDEX_2> & lines, double p) const;
 
   virtual double Area () const;
 
 
 /** Applies 2D rules.
  Tests all 2D rules */
-  int ApplyRules (ARRAY<Point2d> & lpoints, 
-		  ARRAY<int> & legalpoints,
+  int ApplyRules (Array<Point2d> & lpoints, 
+		  Array<int> & legalpoints,
 		  int maxlegalpoint,
-		  ARRAY<INDEX_2> & llines,
+		  Array<INDEX_2> & llines,
 		  int maxlegelline,
-		  ARRAY<Element2d> & elements, ARRAY<INDEX> & dellines,
-		  int tolerance);
+		  Array<Element2d> & elements, Array<INDEX> & dellines,
+		  int tolerance,
+		  const MeshingParameters & mp);
   
 
 };

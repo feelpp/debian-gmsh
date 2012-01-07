@@ -5,7 +5,10 @@
 namespace netgen
 {
 
-
+  void Refinement :: MakeSecondOrder (Mesh & mesh) const
+  {
+    const_cast<Refinement&> (*this).MakeSecondOrder(mesh);
+  }
 
   
   void Refinement :: MakeSecondOrder (Mesh & mesh)
@@ -30,22 +33,22 @@ namespace netgen
       {
 	Segment & el = mesh.LineSegment(si);
 
-	INDEX_2 i2 = INDEX_2::Sort (el.p1, el.p2);
+	INDEX_2 i2 = INDEX_2::Sort (el[0], el[1]);
 
 	if (between.Used(i2))
-	  el.pmid = between.Get(i2);
+	  el[2] = between.Get(i2);
 	else
 	  {
 	    Point<3> pb;
 	    EdgePointGeomInfo ngi;
-            PointBetween (mesh.Point (el.p1),
-                          mesh.Point (el.p2), 0.5,
+            PointBetween (mesh.Point (el[0]),
+                          mesh.Point (el[1]), 0.5,
 			  el.surfnr1, el.surfnr2,
 			  el.epgeominfo[0], el.epgeominfo[1],
 			  pb, ngi);
 	  
-	    el.pmid = mesh.AddPoint (pb);
-	    between.Set (i2, el.pmid);
+	    el[2] = mesh.AddPoint (pb);
+	    between.Set (i2, el[2]);
 	  }
       }
 
@@ -73,7 +76,7 @@ namespace netgen
 	    { 3, 2, 5 },
 	    { 0, 3, 6 },
 	    { 1, 2, 7 } };
-	int (*betw)[3](NULL);
+	int (*betw)[3] = NULL;
       
 	switch (el.GetType())
 	  {
@@ -169,7 +172,7 @@ namespace netgen
 	    { 3, 4, 10 },
 	    { 4, 5, 11 },
 	  };
-	int (*betw)[3](NULL);
+	int (*betw)[3] = NULL;
 
 	switch (el.GetType())
 	  {
@@ -224,7 +227,7 @@ namespace netgen
     // update identification tables
     for (int i = 1; i <= mesh.GetIdentifications().GetMaxNr(); i++)
       {
-	ARRAY<int,PointIndex::BASE> identmap;
+	Array<int,PointIndex::BASE> identmap;
 	mesh.GetIdentifications().GetMap (i, identmap);
 
 	for (INDEX_2_HASHTABLE<int>::Iterator it = between.Begin();
@@ -287,7 +290,7 @@ namespace netgen
       }
 
     mesh.ComputeNVertices();
-  
+    mesh.RebuildSurfaceElementLists();
     //  ValidateSecondOrder (mesh);
   }
 
@@ -298,7 +301,7 @@ namespace netgen
     int np = mesh.GetNP();
     int ne = mesh.GetNE();
     // int i, j;
-    ARRAY<INDEX_2> parents(np);
+    Array<INDEX_2> parents(np);
   
     for (int i = 1; i <= np; i++)
       parents.Elem(i) = INDEX_2(0,0);
@@ -332,7 +335,7 @@ namespace netgen
 
   void Refinement ::
   ValidateRefinedMesh (Mesh & mesh, 
-		       ARRAY<INDEX_2> & parents)
+		       Array<INDEX_2> & parents)
   {
     // int i, j, k;
   
@@ -363,8 +366,8 @@ namespace netgen
 	cout << "WARNING: " << wrongels << " illegal element(s) found" << endl;
 
 	int np = mesh.GetNP();
-	ARRAY<Point<3> > should(np);
-	ARRAY<Point<3> > can(np);
+	Array<Point<3> > should(np);
+	Array<Point<3> > can(np);
 
 	for (int i = 1; i <= np; i++)
 	  {
@@ -454,7 +457,8 @@ namespace netgen
 	    while (wrongels && cnttrials > 0);
 
 	    mesh.CalcSurfacesOfNode();
-	    mesh.ImproveMeshJacobian (OPT_WORSTCASE);	      
+	    MeshingParameters dummymp;
+	    mesh.ImproveMeshJacobian (dummymp, OPT_WORSTCASE);	      
 	  
 	    facok = factry;
 	    for (int i = 1; i <= np; i++)

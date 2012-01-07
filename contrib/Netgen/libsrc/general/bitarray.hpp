@@ -9,6 +9,10 @@
 
 #include <limits.h>
 
+namespace netgen
+{
+
+
 /**
    data type BitArray
    
@@ -155,7 +159,7 @@ template <int BASE = 1>
 class BitArrayChar
 {
   ///
-  ARRAY<char,BASE> data;
+  Array<char,BASE> data;
 
 public:
   ///
@@ -218,5 +222,6 @@ inline ostream & operator<< (ostream & s, const BitArrayChar<BASE> & a)
   return s;
 }
 
+}
 
 #endif

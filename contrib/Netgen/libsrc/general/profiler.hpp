@@ -17,7 +17,8 @@
   #define VT_TRACER(n)
 #endif
 
-
+namespace netgen
+{
 
 class NgProfiler
 {
@@ -38,7 +39,8 @@ public:
   static void StartTimer (int nr) 
   { 
     starttimes[nr] = clock(); counts[nr]++; 
-    VT_USER_START (const_cast<char*> (names[nr].c_str())); 
+    // VT_USER_START (const_cast<char*> (names[nr].c_str())); 
+    VT_USER_START ( (char * const) (names[nr].c_str())); 
   }
   static void StopTimer (int nr) 
   { 
@@ -58,5 +60,7 @@ public:
     ~RegionTimer () { StopTimer (nr); }
   };
 };
+
+}
 
 #endif

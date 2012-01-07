@@ -1,6 +1,8 @@
 #include <mystdlib.h>
 #include "meshing.hpp"
 
+#define noDEBUG
+
 
 namespace netgen
 {
@@ -17,6 +19,8 @@ namespace netgen
   typedef MoveableArray<MarkedTri> T_MTRIS;
   typedef MoveableArray<MarkedQuad> T_MQUADS;
 
+  
+  
   class MarkedTet
   {
   public:
@@ -32,14 +36,19 @@ namespace netgen
     /// tetedge (local coordinates 0..3)
     unsigned int tetedge1:3;
     unsigned int tetedge2:3;
-    /// marked edge of faces
-			  /// face_j : face without node j,
-			  /// mark_k : edge without node k
-    unsigned char faceedges[4];
-
+    // marked edge of faces
+    // face_j : face without node j,
+    // mark_k : edge without node k
+    
+    char faceedges[4];
+    // unsigned char faceedges[4];
     bool incorder;
     unsigned int order:6;
 
+    MarkedTet()
+    { 
+      for (int i = 0; i < 4; i++) { faceedges[i] = 255; }
+    }
   };
 
   ostream & operator<< (ostream & ost, const MarkedTet & mt)
@@ -49,9 +58,11 @@ namespace netgen
 
     ost << mt.matindex << " " << int(mt.marked) << " " << int(mt.flagged) << " " << int(mt.tetedge1) << " " << int(mt.tetedge2) << " ";
     
+    ost << "faceedges = ";
     for(int i=0; i<4; i++)
-      ost << char(mt.faceedges[i]) << " ";
+      ost << int(mt.faceedges[i]) << " ";
 
+    ost << " order = ";
     ost << mt.incorder << " " << int(mt.order) << "\n";
     return ost;
   }
@@ -270,7 +281,7 @@ namespace netgen
 	    ost << " " << mt.pnums[j];
 	for(int i=0; i<3; i++)
 	  for(int j=i+1; j<4; j++)
-	    if(i != k && j != k && mt.faceedges[k] == 6-k-i-j)
+	    if(i != k && j != k && int(mt.faceedges[k]) == 6-k-i-j)
 	      ost << " marked edge " << mt.pnums[i] << " " << mt.pnums[j] << endl;
       }
     ost << endl;
@@ -280,7 +291,7 @@ namespace netgen
 
 
   int BTSortEdges (const Mesh & mesh,
-		   const ARRAY< ARRAY<int,PointIndex::BASE>* > & idmaps,
+		   const Array< Array<int,PointIndex::BASE>* > & idmaps,
 		   INDEX_2_CLOSED_HASHTABLE<int> & edgenumber)
   {
     PrintMessage(4,"sorting ... ");
@@ -290,8 +301,8 @@ namespace netgen
       {
 	// new, fast version
       
-	ARRAY<INDEX_2> edges;
-	ARRAY<int> eclasses;
+	Array<INDEX_2> edges;
+	Array<int> eclasses;
       
 	int i, j, k;
 	int cntedges = 0;
@@ -351,6 +362,8 @@ namespace netgen
 		  ned = 6;
 		  break;
 		}
+              default:
+                throw NgException("Bisect, element type not handled in switch");
 	      }
 	      
 	    for (j = 0; j < ned; j++)
@@ -451,7 +464,7 @@ namespace netgen
 		  { { 1, 2, 4, 3 },
 		    { 1, 5, 4, 5 },
 		    { 2, 5, 3, 5 } };
-		      
+                
 		int (*pairs)[4] = NULL;
 		switch (el.GetType())
 		  {
@@ -466,6 +479,8 @@ namespace netgen
 		      pairs = pyramidpairs;
 		      break;
 		    }
+                  default:
+                    throw NgException("Bisect, element type not handled in switch, 2");
 		  }
 
 		for (j = 0; j < 3; j++)
@@ -558,7 +573,7 @@ namespace netgen
 // 	  }
 	
 	// compute classlength:
-	ARRAY<double> edgelength(cntedges);
+	Array<double> edgelength(cntedges);
 
 	/*
 	for (i = 1; i <= cntedges; i++)
@@ -649,9 +664,9 @@ namespace netgen
 
 
 	// sort edges:
-	ARRAY<int> sorted(cntedges);
+	Array<int> sorted(cntedges);
       
-	QickSort (edgelength, sorted);
+	QuickSort (edgelength, sorted);
       
 	int cnt = 0;
 	for (i = 1; i <= cntedges; i++)
@@ -733,6 +748,8 @@ namespace netgen
 		      ned = 6;
 		      break;
 		    }
+                  default:
+                    throw NgException("Bisect, element type not handled in switch, 3");
 		  }
 	      
 		for (j = 0; j < ned; j++)
@@ -791,6 +808,8 @@ namespace netgen
 			      pairs = pyramidpairs;
 			      break;
 			    }
+                          default:
+                            throw NgException("Bisect, element type not handled in switch, 3a");
 			  }
 
 			for (j = 0; j < 3; j++)
@@ -877,7 +896,8 @@ namespace netgen
 		if (hval > val)
 		  {
 		    val = hval;
-		    mt.faceedges[k] = 6 - k - i - j;
+                    int hi = 6 - k - i - j;
+                    mt.faceedges[k] = char(hi);
 		  }
 	      }
       }
@@ -945,7 +965,7 @@ namespace netgen
 
   bool BTDefineMarkedId(const Element2d & el, 
 			INDEX_2_CLOSED_HASHTABLE<int> & edgenumber, 
-			const ARRAY<int,PointIndex::BASE> & idmap,
+			const Array<int,PointIndex::BASE> & idmap,
 			MarkedIdentification & mi)
   {
 
@@ -1071,26 +1091,23 @@ namespace netgen
 		  T_MPRISMS & mprisms,
 		  const Mesh & mesh)
   {
-    int i, j, k;
-    int step;
-
     int marked = 0;
 
     int np = mesh.GetNP();
     Vector hv(np);
-    for (i = 1; i <= np; i++)
-      hv.Elem(i) = mesh.GetH (mesh.Point(i));
+    for (int i = 0; i < np; i++)
+      hv(i) = mesh.GetH (mesh.Point(i+1));
 
     double hfac = 1;
   
-    for (step = 1; step <= 2; step++)
+    for (int step = 1; step <= 2; step++)
       {
-	for (i = 1; i <= mtets.Size(); i++)
+	for (int i = 1; i <= mtets.Size(); i++)
 	  {
 	    double h = 0;
 	  
-	    for (j = 0; j < 3; j++)
-	      for (k = j+1; k < 4; k++)
+	    for (int j = 0; j < 3; j++)
+	      for (int k = j+1; k < 4; k++)
 		{
 		  const Point<3> & p1 = mesh.Point (mtets.Get(i).pnums[j]);
 		  const Point<3> & p2 = mesh.Point (mtets.Get(i).pnums[k]);
@@ -1100,9 +1117,9 @@ namespace netgen
 	    h = sqrt (h);
 	  
 	    double hshould = 1e10;
-	    for (j = 0; j < 4; j++)
+	    for (int j = 0; j < 4; j++)
 	      {
-		double hi = hv.Get (mtets.Get(i).pnums[j]);
+		double hi = hv (mtets.Get(i).pnums[j]-1);
 		if (hi < hshould)
 		  hshould = hi;
 	      }
@@ -1125,12 +1142,12 @@ namespace netgen
 	      }
 	  
 	  }
-	for (i = 1; i <= mprisms.Size(); i++)
+	for (int i = 1; i <= mprisms.Size(); i++)
 	  {
 	    double h = 0;
 	  
-	    for (j = 0; j < 2; j++)
-	      for (k = j+1; k < 3; k++)
+	    for (int j = 0; j < 2; j++)
+	      for (int k = j+1; k < 3; k++)
 		{
 		  const Point<3> & p1 = mesh.Point (mprisms.Get(i).pnums[j]);
 		  const Point<3> & p2 = mesh.Point (mprisms.Get(i).pnums[k]);
@@ -1140,9 +1157,9 @@ namespace netgen
 	    h = sqrt (h);
 	  
 	    double hshould = 1e10;
-	    for (j = 0; j < 6; j++)
+	    for (int j = 0; j < 6; j++)
 	      {
-		double hi = hv.Get (mprisms.Get(i).pnums[j]);
+		double hi = hv (mprisms.Get(i).pnums[j]-1);
 		if (hi < hshould)
 		  hshould = hi;
 	      }
@@ -1196,6 +1213,10 @@ namespace netgen
   void BTBisectTet (const MarkedTet & oldtet, int newp, 
 		    MarkedTet & newtet1, MarkedTet & newtet2)
   {
+#ifdef DEBUG
+    *testout << "bisect tet " << oldtet << endl;
+#endif    
+    
     int i, j, k;
   
   
@@ -1205,6 +1226,9 @@ namespace netgen
     while (vis1 == oldtet.tetedge1 || vis1 == oldtet.tetedge2)
       vis1++;
     vis2 = 6 - vis1 - oldtet.tetedge1 - oldtet.tetedge2;
+
+
+    
 
 
     // is tet of type P ?
@@ -1234,6 +1258,10 @@ namespace netgen
     newtet1.marked = nm;
     newtet2.marked = nm;
 
+#ifdef DEBUG
+    *testout << "newtet1,before = " << newtet1 << endl;
+    *testout << "newtet2,before = " << newtet2 << endl;
+#endif
 
     for (i = 0; i < 4; i++)
       {
@@ -1253,10 +1281,27 @@ namespace netgen
 
 	    // new face:
 	    if (istypep && oldtet.flagged)
-	      newtet2.faceedges[oldtet.tetedge2] = 
-		6 - oldtet.tetedge1 - j - k;
+              {
+                int hi = 6 - oldtet.tetedge1 - j - k;
+                newtet2.faceedges[oldtet.tetedge2] = char(hi);
+              }
 	    else
 	      newtet2.faceedges[oldtet.tetedge2] = oldtet.tetedge1;
+            
+#ifdef DEBUG
+            *testout << "i = " << i << ", j = " << j << " k = " << k 
+                     << " oldtet.tetedge1 = " << oldtet.tetedge1 
+                     << " oldtet.tetedge2 = " << oldtet.tetedge2
+                     << "   6-oldtet.tetedge1-j-k = " <<  6 - oldtet.tetedge1 - j - k 
+                     << "   6-oldtet.tetedge1-j-k = " <<  short(6 - oldtet.tetedge1 - j - k)
+                     << endl;
+            *testout << "vis1 = " << vis1 << ", vis2 = " << vis2 << endl;
+            for (int j = 0; j < 4; j++)
+              if (newtet2.faceedges[j] > 3)
+                {
+                  *testout << "ERROR1" << endl;
+                }
+#endif
 	  }
 
 	if (i == oldtet.tetedge2)
@@ -1274,10 +1319,20 @@ namespace netgen
 
 	    // new face:
 	    if (istypep && oldtet.flagged)
-	      newtet1.faceedges[oldtet.tetedge1] = 
-		6 - oldtet.tetedge2 - j - k;
+              {
+                int hi = 6 - oldtet.tetedge2 - j - k;
+                newtet1.faceedges[oldtet.tetedge1] = char(hi);
+              }
 	    else
 	      newtet1.faceedges[oldtet.tetedge1] = oldtet.tetedge2;
+
+#ifdef DEBUG
+            for (int j = 0; j < 4; j++)
+              if (newtet2.faceedges[j] > 3)
+                {
+                  *testout << "ERROR2" << endl;
+                }
+#endif
 	  }
       }
 
@@ -1287,6 +1342,9 @@ namespace netgen
     newtet1.order = oldtet.order;
     newtet2.incorder = 0;
     newtet2.order = oldtet.order;
+
+    *testout << "newtet1 =  " << newtet1 << endl;
+    *testout << "newtet2 =  " << newtet2 << endl;
   }
 
 
@@ -1332,7 +1390,7 @@ namespace netgen
 
 
   void BTBisectIdentification (const MarkedIdentification & oldid,
-			       ARRAY<int> & newp,
+			       Array<int> & newp,
 			       MarkedIdentification & newid1,
 			       MarkedIdentification & newid2)
   {
@@ -1566,10 +1624,10 @@ namespace netgen
   {
     int i,j,k;
 
-    ARRAY< ARRAY<int,PointIndex::BASE>* > idmaps;
+    Array< Array<int,PointIndex::BASE>* > idmaps;
     for(i=1; i<=mesh.GetIdentifications().GetMaxNr(); i++)
       {
-	idmaps.Append(new ARRAY<int,PointIndex::BASE>);
+	idmaps.Append(new Array<int,PointIndex::BASE>);
 	mesh.GetIdentifications().GetMap(i,*idmaps.Last());
       }
 
@@ -1774,7 +1832,7 @@ namespace netgen
 
 
   void ConnectToNodeRec (int node, int tonode, 
-			 const TABLE<int> & conto, ARRAY<int> & connecttonode)
+			 const TABLE<int> & conto, Array<int> & connecttonode)
   {
     int i, n2;
     //  (*testout) << "connect " << node << " to " << tonode << endl;
@@ -1845,14 +1903,14 @@ namespace netgen
     ist >> size;
     mtets.SetSize(size);
     for(int i=0; i<size; i++)
-		{
-			ist >> mtets[i];
-			if(mtets[i].pnums[0] > mesh.GetNV() || 
-				mtets[i].pnums[1] > mesh.GetNV() || 
-				mtets[i].pnums[2] > mesh.GetNV() || 
-				mtets[i].pnums[3] > mesh.GetNV())
-				return false;
-		}
+      {
+        ist >> mtets[i];
+        if(mtets[i].pnums[0] > mesh.GetNV() || 
+           mtets[i].pnums[1] > mesh.GetNV() || 
+           mtets[i].pnums[2] > mesh.GetNV() || 
+           mtets[i].pnums[3] > mesh.GetNV())
+          return false;
+      }
 
     ist >> size;
     mprisms.SetSize(size);
@@ -1883,7 +1941,7 @@ namespace netgen
 
   void BisectTetsCopyMesh (Mesh & mesh, const class CSGeometry *,
 			   BisectionOptions & opt,
-			   const ARRAY< ARRAY<int,PointIndex::BASE>* > & idmaps,
+			   const Array< Array<int,PointIndex::BASE>* > & idmaps,
 			   const string & refinfofile)
   {
     mtets.SetName ("bisection, tets");
@@ -2047,6 +2105,8 @@ namespace netgen
 		  mprisms.Append (mp);
 		  break;
 		}
+              default:
+                throw NgException("Bisect, element type not handled in switch, 4");
 	      }
 	  }
 	
@@ -2098,24 +2158,24 @@ namespace netgen
 
   /*
   void UpdateEdgeMarks2(Mesh & mesh,
-			const ARRAY< ARRAY<int,PointIndex::BASE>* > & idmaps)
+			const Array< Array<int,PointIndex::BASE>* > & idmaps)
   {
-    ARRAY< ARRAY<MarkedTet>*,PointIndex::BASE > mtets_old(mesh.GetNP());
-    ARRAY< ARRAY<MarkedPrism>*,PointIndex::BASE > mprisms_old(mesh.GetNP());
-    ARRAY< ARRAY<MarkedIdentification>*,PointIndex::BASE > mids_old(mesh.GetNP());
-    ARRAY< ARRAY<MarkedTri>*,PointIndex::BASE > mtris_old(mesh.GetNP());
-    ARRAY< ARRAY<MarkedQuad>*,PointIndex::BASE > mquads_old(mesh.GetNP());
+    Array< Array<MarkedTet>*,PointIndex::BASE > mtets_old(mesh.GetNP());
+    Array< Array<MarkedPrism>*,PointIndex::BASE > mprisms_old(mesh.GetNP());
+    Array< Array<MarkedIdentification>*,PointIndex::BASE > mids_old(mesh.GetNP());
+    Array< Array<MarkedTri>*,PointIndex::BASE > mtris_old(mesh.GetNP());
+    Array< Array<MarkedQuad>*,PointIndex::BASE > mquads_old(mesh.GetNP());
 
     for(int i=PointIndex::BASE; i<mesh.GetNP()+PointIndex::BASE; i++)
-      mtets_old[i] = new ARRAY<MarkedTet>;
+      mtets_old[i] = new Array<MarkedTet>;
     for(int i=PointIndex::BASE; i<mesh.GetNP()+PointIndex::BASE; i++)
-      mprisms_old[i] = new ARRAY<MarkedPrism>;
+      mprisms_old[i] = new Array<MarkedPrism>;
     for(int i=PointIndex::BASE; i<mesh.GetNP()+PointIndex::BASE; i++)
-      mids_old[i] = new ARRAY<MarkedIdentification>;
+      mids_old[i] = new Array<MarkedIdentification>;
     for(int i=PointIndex::BASE; i<mesh.GetNP()+PointIndex::BASE; i++)
-      mtris_old[i] = new ARRAY<MarkedTri>;
+      mtris_old[i] = new Array<MarkedTri>;
     for(int i=PointIndex::BASE; i<mesh.GetNP()+PointIndex::BASE; i++)
-      mquads_old[i] = new ARRAY<MarkedQuad>;
+      mquads_old[i] = new Array<MarkedQuad>;
 
     for(int i=0; i<mtets.Size(); i++)
       mtets_old[mtets[i].pnums[0]]->Append(mtets[i]);
@@ -2351,11 +2411,11 @@ namespace netgen
 
   
   void UpdateEdgeMarks (Mesh & mesh,
-			const ARRAY< ARRAY<int,PointIndex::BASE>* > & idmaps)
-  //const ARRAY < ARRAY<Element>* > & elements_before,
-  //const ARRAY < ARRAY<int>* > & markedelts_num,
-  //		const ARRAY < ARRAY<Element2d>* > & surfelements_before,
-  //		const ARRAY < ARRAY<int>* > & markedsurfelts_num)
+			const Array< Array<int,PointIndex::BASE>* > & idmaps)
+  //const Array < Array<Element>* > & elements_before,
+  //const Array < Array<int>* > & markedelts_num,
+  //		const Array < Array<Element2d>* > & surfelements_before,
+  //		const Array < Array<int>* > & markedsurfelts_num)
   {
     T_MTETS mtets_old; mtets_old.Copy(mtets);
     T_MPRISMS mprisms_old; mprisms_old.Copy(mprisms);
@@ -2407,7 +2467,7 @@ namespace netgen
 	for(int k=0; k<4; k++)
 	  for(int i=0; i<3; i++)
 	    for(int j=i+1; i != k && j<4; j++)
-	      if(j != k && mt.faceedges[k] == 6-k-i-j)
+	      if(j != k && int(mt.faceedges[k]) == 6-k-i-j)
 		{
 		  edge[0] = mt.pnums[i];
 		  edge[1] = mt.pnums[j];
@@ -2470,6 +2530,8 @@ namespace netgen
 		   << endl;
 	      break;
 	    }
+          default:
+            throw NgException("Bisect, element type not handled in switch, 6");
 	  }
 	
       }
@@ -2510,6 +2572,8 @@ namespace netgen
 	       mquads.Append (mt);
 	       break;
 	     }
+           default:
+             throw NgException("Bisect, element type not handled in switch, 5");
 	   }
 
 	 
@@ -2574,22 +2638,27 @@ namespace netgen
 
   void Refinement :: Bisect (Mesh & mesh, 
 			     BisectionOptions & opt,
-			     ARRAY<double> * quality_loss)
+			     Array<double> * quality_loss) const
   {
     PrintMessage(1,"Mesh bisection");
     PushStatus("Mesh bisection");
+
+    static int timer = NgProfiler::CreateTimer ("Bisect");
+    NgProfiler::RegionTimer reg1 (timer);
+    
+    
 
     static int localizetimer = NgProfiler::CreateTimer("localize edgepoints");
     NgProfiler::RegionTimer * loct = new NgProfiler::RegionTimer(localizetimer);   
     LocalizeEdgePoints(mesh);
     delete loct;
 
-    ARRAY< ARRAY<int,PointIndex::BASE>* > idmaps;
+    Array< Array<int,PointIndex::BASE>* > idmaps;
     for(int i=1; i<=mesh.GetIdentifications().GetMaxNr(); i++)
       {
 	if(mesh.GetIdentifications().GetType(i) == Identifications::PERIODIC)
 	  {
-	    idmaps.Append(new ARRAY<int,PointIndex::BASE>);
+	    idmaps.Append(new Array<int,PointIndex::BASE>);
 	    mesh.GetIdentifications().GetMap(i,*idmaps.Last(),true);
 	  }
       }
@@ -2648,7 +2717,6 @@ namespace netgen
     */
 
 
-
     if (opt.refine_p)   
       {
 	int ne = mesh.GetNE();
@@ -2671,10 +2739,9 @@ namespace netgen
 		mesh[sei].SetOrder(ox+2,oy+2);
 	    }
 
-	/*
 	  #ifndef SABINE //Nachbarelemente mit ordx,ordy,ordz 
       
-	  ARRAY<int,PointIndex::BASE> v_order (mesh.GetNP());
+	  Array<int,PointIndex::BASE> v_order (mesh.GetNP());
 	  v_order = 0;
 
 	  for (ElementIndex ei = 0; ei < ne; ei++)
@@ -2698,7 +2765,6 @@ namespace netgen
 	  mesh[sei].SetOrder(v_order[mesh[sei][j]]-1);
 	    
 	  #endif
-	*/
 
 	PopStatus();
 	return;
@@ -3035,8 +3101,8 @@ namespace netgen
 		for (i = 1; i <= mesh.GetNSeg(); i++)
 		  {
 		    const Segment & seg = mesh.LineSegment(i);
-		    singv.Set (seg.p1);
-		    singv.Set (seg.p2);
+		    singv.Set (seg[0]);
+		    singv.Set (seg[1]);
 		  }
 		/*
 		  for ( i=1; i<= mesh.GetNSE(); i++)
@@ -3050,14 +3116,14 @@ namespace netgen
 	    else
 	      {
 		// vertices with 2 different bnds
-		ARRAY<int> bndind(np);
+		Array<int> bndind(np);
 		bndind = 0;
 		for (i = 1; i <= mesh.GetNSeg(); i++)
 		  {
 		    const Segment & seg = mesh.LineSegment(i);
 		    for (j = 0; j < 2; j++)
 		      {
-			int pi = (j == 0) ? seg.p1 : seg.p2;
+			int pi = (j == 0) ? seg[0] : seg[1];
 			if (bndind.Elem(pi) == 0)
 			  bndind.Elem(pi) = seg.edgenr;
 			else if (bndind.Elem(pi) != seg.edgenr)
@@ -3117,8 +3183,6 @@ namespace netgen
 
 
 
-
-
 	int hangingvol, hangingsurf, hangingedge;
 
 	//cout << "write?" << endl;
@@ -3161,6 +3225,10 @@ namespace netgen
 
 		  mtets.Elem(i) = newtet1;
 		  mtets.Append (newtet2);
+
+#ifdef DEBUG
+                  *testout << "tet1 has elnr = " << i << ", tet2 has elnr = " << mtets.Size() << endl;
+#endif
 		  //if(yn == "y")
 		  //  (*testout) << "and got " << newtet1 << "and " << newtet2 << endl;
 
@@ -3220,11 +3288,11 @@ namespace netgen
 	      if (mids.Elem(i).marked)
 		{
 		  MarkedIdentification oldid,newid1,newid2;
-		  ARRAY<int> newp;
+		  Array<int> newp;
 
 		  oldid = mids.Get(i);
 		  
-		  ARRAY<INDEX_2> edges;
+		  Array<INDEX_2> edges;
 		  edges.Append(INDEX_2(oldid.pnums[oldid.markededge],
 				       oldid.pnums[(oldid.markededge+1)%oldid.np]));
 		  edges.Append(INDEX_2(oldid.pnums[oldid.markededge + oldid.np],
@@ -3423,7 +3491,7 @@ namespace netgen
 	    for (i = 1; i <= nseg; i++)
 	      {
 		Segment & seg = mesh.LineSegment (i);
-		INDEX_2 edge(seg.p1, seg.p2);
+		INDEX_2 edge(seg[0], seg[1]);
 		edge.Sort();
 		if (cutedges.Used (edge))
 		  {
@@ -3433,15 +3501,15 @@ namespace netgen
 		  
 		    int newpi = cutedges.Get(edge);
 		  
-		    nseg1.p2 = newpi;
-		    nseg2.p1 = newpi;
+		    nseg1[1] = newpi;
+		    nseg2[0] = newpi;
 		  
 		    EdgePointGeomInfo newepgi;
 		  
  
 //                     
 //                     cerr << "move edgepoint " << newpi << " from " << mesh.Point(newpi);
-		    PointBetween (mesh.Point (seg.p1), mesh.Point (seg.p2),
+		    PointBetween (mesh.Point (seg[0]), mesh.Point (seg[1]),
 				  0.5, seg.surfnr1, seg.surfnr2, 
 				  seg.epgeominfo[0], seg.epgeominfo[1],
 				  mesh.Point (newpi), newepgi);
@@ -3458,6 +3526,7 @@ namespace netgen
 	  }
 	while (hangingvol || hangingsurf || hangingedge);
         
+	/*
         if (printmessage_importance>0)
 	  {
 	    ostringstream strstr;
@@ -3470,8 +3539,16 @@ namespace netgen
 	      }
 	    strstr << mesh.GetNP() << " points";
 	    PrintMessage(4,strstr.str());
-	    
 	  }
+	*/
+	PrintMessage (4, mtets.Size(), " tets");
+	PrintMessage (4, mtris.Size(), " trigs");
+	if (mprisms.Size())
+	  {
+	    PrintMessage (4, mprisms.Size(), " prisms");
+	    PrintMessage (4, mquads.Size(), " quads");
+	  }
+	PrintMessage (4, mesh.GetNP(), " points");
       }
 
 
@@ -3480,7 +3557,7 @@ namespace netgen
     if (opt.refine_hp)
       {
 	//
-	ARRAY<int> v_order (mesh.GetNP());
+	Array<int> v_order (mesh.GetNP());
 	v_order = 0;
 	if (mesh.GetDimension() == 3)
 	  {
@@ -3524,7 +3601,7 @@ namespace netgen
     mtris.SetAllocSize (mtris.Size());
     mquads.SetAllocSize (mquads.Size());
   
-  
+    
     mesh.ClearVolumeElements();
     mesh.VolumeElements().SetAllocSize (mtets.Size()+mprisms.Size());
     for (i = 1; i <= mtets.Size(); i++)
@@ -3720,13 +3797,13 @@ namespace netgen
 
 
     mesh.ComputeNVertices();
-
+    mesh.RebuildSurfaceElementLists();
   
     
     // update identification tables
     for (i = 1; i <= mesh.GetIdentifications().GetMaxNr(); i++)
       {
-	ARRAY<int,PointIndex::BASE> identmap;
+	Array<int,PointIndex::BASE> identmap;
 
 	mesh.GetIdentifications().GetMap (i, identmap);
 
@@ -3766,11 +3843,11 @@ namespace netgen
 	    }
       }
 
-    
 
+    // Repair works only for tets!
+    bool do_repair = mesh.PureTetMesh ();
 
-    
-    bool do_repair = true;
+    do_repair = false;   // JS, March 2009: multigrid crashes
 
     //if(mesh.mglevels == 3)
     //  noprojection = true;
@@ -3784,16 +3861,14 @@ namespace netgen
 	  {
 	    if(isnewpoint.Test(ii) && mesh.mlbetweennodes[ii][0] > 0)
 	      {
-		mesh.Point(ii) = Center(mesh.Point(mesh.mlbetweennodes[ii][0]),mesh.Point(mesh.mlbetweennodes[ii][1]));
+		mesh.Point(ii) = Center(mesh.Point(mesh.mlbetweennodes[ii][0]),
+                                        mesh.Point(mesh.mlbetweennodes[ii][1]));
 	      }
 	  }
       }
 
 
     // Check/Repair
-
-	//cout << "Hallo Welt" << endl;
-	//getchar();
 
     static bool repaired_once;
     if(mesh.mglevels == 1)
@@ -3805,8 +3880,8 @@ namespace netgen
 	NgProfiler::RegionTimer * regt(NULL);
     regt = new NgProfiler::RegionTimer(reptimer); 
 
-    ARRAY<ElementIndex> bad_elts;
-    ARRAY<double> pure_badness;
+    Array<ElementIndex> bad_elts;
+    Array<double> pure_badness;
    
     if(do_repair || quality_loss != NULL)
       {
@@ -3815,7 +3890,7 @@ namespace netgen
       }
 
 
-    if(do_repair)
+    if(do_repair)  // by Markus W
       {
 	const double max_worsening = 1;
 	
@@ -3894,15 +3969,14 @@ namespace netgen
 
 
     
-    
-
-
-
     for(i=0; i<idmaps.Size(); i++)
       delete idmaps[i];
     idmaps.DeleteAll();
 
     mesh.UpdateTopology();
+
+
+
 
     if(refelementinfofilewrite != "")
       {
@@ -3914,6 +3988,8 @@ namespace netgen
 	ofst.close();
       }
 
+
+    mesh.CalcSurfacesOfNode();
 
     PrintMessage (1, "Bisection done");
 
@@ -3951,7 +4027,7 @@ namespace netgen
 				   int surfi, 
 				   const PointGeomInfo & gi1, 
 				   const PointGeomInfo & gi2,
-				   Point<3> & newp, PointGeomInfo & newgi)
+				   Point<3> & newp, PointGeomInfo & newgi) const
   {
     newp = p1+secpoint*(p2-p1);
   }
@@ -3960,8 +4036,9 @@ namespace netgen
 				   int surfi1, int surfi2, 
 				   const EdgePointGeomInfo & ap1, 
 				   const EdgePointGeomInfo & ap2,
-				   Point<3> & newp, EdgePointGeomInfo & newgi)
+				   Point<3> & newp, EdgePointGeomInfo & newgi) const
   {
+    cout << "base class edge point between" << endl;
     newp = p1+secpoint*(p2-p1);
   }
 
@@ -3981,7 +4058,7 @@ namespace netgen
   }
 
 
-  void Refinement :: ProjectToSurface (Point<3> & p, int surfi)
+  void Refinement :: ProjectToSurface (Point<3> & p, int surfi) const
   {
     if (printmessage_importance>0)
       cerr << "Refinement :: ProjectToSurface    ERROR: no geometry set" << endl;

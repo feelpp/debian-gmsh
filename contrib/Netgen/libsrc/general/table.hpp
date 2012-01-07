@@ -7,6 +7,10 @@
 /* Date:   01. Jun. 95                                                    */
 /**************************************************************************/
 
+namespace netgen
+{
+
+
 /// Base class to generic class TABLE.
 class BASE_TABLE
 {
@@ -25,7 +29,7 @@ protected:
   };
   
   ///
-  ARRAY<linestruct> data;
+  Array<linestruct> data;
   char * oneblock;
 
 public:
@@ -48,8 +52,18 @@ public:
     else
       IncSize2 (i, elsize);
   }
+
+  void SetEntrySize (int i, int newsize, int elsize)
+  {
+    if (newsize < data[i].maxsize)
+      data[i].size = newsize;
+    else
+      SetEntrySize2 (i, newsize, elsize);
+  }
+
   ///
   void IncSize2 (int i, int elsize);
+  void SetEntrySize2 (int i, int newsize, int elsize);
 
   //  void DecSize (int i);
 
@@ -217,6 +231,8 @@ inline ostream & operator<< (ostream & ost, const TABLE<T,BASE> & table)
       ost << endl;
     }
   return ost;
+}
+
 }
 
 #endif

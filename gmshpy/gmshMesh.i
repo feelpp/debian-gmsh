@@ -12,7 +12,13 @@
   #include "meshPartitionOptions.h"
   #include "Levy3D.h"
   #include "meshPartition.h"
+  #include "meshMetric.h"
 %}
+
+%include std_vector.i
+namespace std {
+ %template(DoubleVector) vector<double, std::allocator<double> >;
+}
 
 %include "GmshConfig.h"
 %include "Generator.h"
@@ -22,3 +28,4 @@
 %include "meshPartitionOptions.h"
 %include "Levy3D.h"
 %include "meshPartition.h"
+%include "meshMetric.h"

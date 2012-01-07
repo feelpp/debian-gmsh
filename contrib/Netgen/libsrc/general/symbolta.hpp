@@ -8,6 +8,9 @@
 /* Date:   01. Jun. 95                                                    */
 /**************************************************************************/
 
+namespace netgen
+{
+
 /**
    Base class for the generic SYMBOLTABLE.
    An array of identifiers is maintained.
@@ -16,7 +19,7 @@ class BASE_SYMBOLTABLE
 {
 protected:
   /// identifiers
-  ARRAY <char*> names;
+  Array <char*> names;
   
 public:
   /// Constructor
@@ -41,7 +44,7 @@ class SYMBOLTABLE : public BASE_SYMBOLTABLE
 {
 private:
   /// Associated data
-  ARRAY <T> data;
+  Array <T> data;
   
 public:
   /// Creates a symboltable
@@ -154,5 +157,5 @@ inline void SYMBOLTABLE<T> :: DeleteAll ()
   data.DeleteAll();
 }
 
-
+}
 #endif

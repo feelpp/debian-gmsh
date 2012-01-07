@@ -1,4 +1,4 @@
-// ONELAB - Copyright (C) 2011 ULg-UCL
+// OneLab - Copyright (C) 2011 ULg-UCL
 //
 // Permission is hereby granted, free of charge, to any person
 // obtaining a copy of this software and associated documentation
@@ -45,11 +45,11 @@ namespace onelab{
     // numbers to force their relative ordering (such numbers are
     // automatically hidden in the interface).
     std::string _name;
-    // help strings (the short serves as a better way to display the
-    // parameter in the interface). Should allow richer encoding (UTF?
-    // HTML?)
+    // help strings (if provided, the short help serves as a better
+    // way to display the parameter in the interface). Richer encoding
+    // (UTF? HTML?) might be used in the future.
     std::string _shortHelp, _help;
-    // clients (computing steps) that use this parameter
+    // clients that use this parameter
     std::set<std::string> _clients;
     // flag to check if the parameter has been changed since the last
     // run()
@@ -104,8 +104,18 @@ namespace onelab{
       return _attributes; 
     }
     const std::set<std::string> &getClients() const { return _clients; }
-    static char charSep() { return '|' /* '\0' */; }
+    static char charSep() { return '\0'; }
     static double maxNumber() { return 1e200; }
+    static std::string version() { return "1.0"; }
+    static std::string getNextToken(const std::string &msg, 
+                                    std::string::size_type &first)
+    {
+      if(first == std::string::npos) return "";
+      std::string::size_type last = msg.find_first_of(charSep(), first);
+      std::string next = msg.substr(first, last - first);
+      first = (last == std::string::npos) ? last : last + 1;
+      return next;
+    }
     std::string sanitize(const std::string &in) const
     {
       std::string out(in);
@@ -116,7 +126,7 @@ namespace onelab{
     virtual std::string toChar() const
     {
       std::ostringstream sstream;
-      sstream << getType() << charSep() 
+      sstream << version() << charSep() << getType() << charSep() 
               << sanitize(getName()) << charSep() 
               << sanitize(getShortHelp()) << charSep() 
               << sanitize(getHelp()) << charSep() 
@@ -124,16 +134,18 @@ namespace onelab{
               << _attributes.size() << charSep();
       for(std::map<std::string, std::string>::const_iterator it = _attributes.begin();
           it != _attributes.end(); it++)
-        sstream << it->first << charSep() << it->second << charSep();
+        sstream << sanitize(it->first) << charSep() 
+                << sanitize(it->second) << charSep();
       sstream << getClients().size() << charSep();
       for(std::set<std::string>::const_iterator it = getClients().begin();
           it != getClients().end(); it++)
-        sstream << *it << charSep();
+        sstream << sanitize(*it) << charSep();
       return sstream.str();
     }
     virtual std::string::size_type fromChar(const std::string &msg)
     {
       std::string::size_type pos = 0;
+      if(getNextToken(msg, pos) != version()) return 0;
       if(getNextToken(msg, pos) != getType()) return 0;
       setName(getNextToken(msg, pos));
       setShortHelp(getNextToken(msg, pos));
@@ -151,18 +163,11 @@ namespace onelab{
       }
       return pos;
     }
-    static std::string getNextToken(const std::string &msg, 
-                                    std::string::size_type &first)
-    {
-      std::string::size_type last = msg.find_first_of(charSep(), first);
-      std::string next = msg.substr(first, last - first);
-      first = (last == std::string::npos) ? last : last + 1;
-      return next;
-    }
-    static void getTypeAndNameFromChar(const std::string &msg, std::string &type, 
-                                       std::string &name)
+    static void getInfoFromChar(const std::string &msg, std::string &version, 
+                                std::string &type, std::string &name)
     {
       std::string::size_type first = 0;
+      version = getNextToken(msg, first);
       type = getNextToken(msg, first);
       name = getNextToken(msg, first);
     }
@@ -179,8 +184,8 @@ namespace onelab{
   // The number class. Numbers are stored internally as double
   // precision real numbers. Currently all more complicated types
   // (complex numbers, vectors, etc.) are supposed to be encapsulated
-  // in functions. We will probably add more base types in the future
-  // to make the interface nicer.
+  // in functions. We might add more base types in the future to make
+  // the interface more expressive.
   class number : public parameter{
   private:
     double _value, _min, _max, _step;
@@ -333,7 +338,7 @@ namespace onelab{
       sstream << parameter::toChar() << _value << charSep() 
               << _choices.size() << charSep();
       for(unsigned int i = 0; i < _choices.size(); i++)
-        sstream << _choices[i] << charSep();
+        sstream << sanitize(_choices[i]) << charSep();
       return sstream.str();
     }
   };
@@ -344,9 +349,7 @@ namespace onelab{
   // regions.
   class function : public parameter{
   private:
-    // TODO: change this to onelab::string
     std::string _value;
-    // TODO: change this into std::map<onelab::region, onelab::string> 
     std::map<std::string, std::string> _pieceWiseValues;
     std::vector<std::string> _choices;
   public:
@@ -522,7 +525,7 @@ namespace onelab{
         if(client.empty() || (*it)->hasClient(client))
           (*it)->setChanged(changed);
     }
-    // print the parameter space (optinally only print those
+    // serialize the parameter space (optinally only serialize those
     // parameters that depend on the given client)
     std::string toChar(const std::string &client="") const
     {
@@ -544,7 +547,7 @@ namespace onelab{
     std::string _name;
     // the id of the client, used to create a unique socket for this client
     int _id;
-    // the index of the client in an external solver list (if any)
+    // the index of the client in an external client list (if any)
     int _index;
   public:
     client(const std::string &name) : _name(name), _id(0), _index(-1){}
@@ -578,7 +581,7 @@ namespace onelab{
   // and interacts with onelab clients.
   class server{
   private:
-    // the unique server
+    // the unique server (singleton behaviour due to the "static" specifier)
     static server *_server;
     // the address of the server
     std::string _address;
@@ -604,18 +607,17 @@ namespace onelab{
     {
       return _parameterSpace.get(ps, name, client); 
     }
-    bool registerClient(client *c)
-    {
-      _clients[c->getName()] = c;
-      c->setId(_clients.size());
-      return true;
-    }
     typedef std::map<std::string, client*>::iterator citer;
     citer firstClient(){ return _clients.begin(); }
     citer lastClient(){ return _clients.end(); }
+    int getNumClients() { return _clients.size(); };
     citer findClient(const std::string &name){ return _clients.find(name); }
-    citer removeClient(const std::string &name){ _clients.erase(name); }
-    int getNumClients(){ return _clients.size(); }
+    void registerClient(client *c)
+    {
+      _clients[c->getName()] = c;
+      c->setId(_clients.size());
+    }
+    void unregisterClient(client *c){ _clients.erase(c->getName()); }
     void setChanged(bool changed, const std::string &client="")
     {
       _parameterSpace.setChanged(changed, client);
@@ -632,24 +634,21 @@ namespace onelab{
     
   class localClient : public client{
   private:
-    // the pointer to the server
-    server *_server;
     template <class T> bool _set(const T &p)
     {
-      _server->set(p, _name);
+      server::instance()->set(p, _name);
       return true;
     }
     template <class T> bool _get(std::vector<T> &ps,
                                  const std::string &name="")
     {
-      _server->get(ps, name, _name);
+      server::instance()->get(ps, name, _name);
       return true;
     }
   public:
     localClient(const std::string &name) : client(name)
     {
-      _server = server::instance();
-      _server->registerClient(this);
+      server::instance()->registerClient(this);
     }
     virtual ~localClient(){}
     virtual bool set(const number &p){ return _set(p); }
@@ -714,7 +713,11 @@ namespace onelab{
       if(!_gmshClient) return false;
       T p(name);
       std::string msg = p.toChar();
-      _gmshClient->SendMessage(GmshSocket::GMSH_PARAMETER_QUERY, msg.size(), &msg[0]);
+      if (name.size())
+	_gmshClient->SendMessage(GmshSocket::GMSH_PARAMETER_QUERY, msg.size(), &msg[0]);
+      else //get all parameters
+	_gmshClient->SendMessage(GmshSocket::GMSH_PARAM_QUERY_ALL, msg.size(), &msg[0]);
+
       while(1){
         // stop if we have no communications for 10 secs
         int ret = _gmshClient->Select(10, 0);
@@ -742,8 +745,17 @@ namespace onelab{
           ps.push_back(p);
           return true;
         }
+        if(type == GmshSocket::GMSH_PARAM_QUERY_ALL){
+          T p;
+          p.fromChar(msg);
+          ps.push_back(p);
+          // do NOT return until all parameters have been downloaded
+        }
+        else if(type == GmshSocket::GMSH_PARAM_QUERY_END){
+          return true;
+        }
         else if(type == GmshSocket::GMSH_INFO){
-          // parameter not found
+          // parameter not found or all aparameters have been sent
           return true;
         }
         else{

@@ -6,15 +6,16 @@
 #ifndef _ONELAB_WINDOW_H_
 #define _ONELAB_WINDOW_H_
 
-#include "onelab.h"
+#include "GmshConfig.h"
 #include <FL/Fl.H>
 
-#if (FL_MAJOR_VERSION == 1) && (FL_MINOR_VERSION == 3)
+#if defined(HAVE_ONELAB) && (FL_MAJOR_VERSION == 1) && (FL_MINOR_VERSION == 3)
 #include <vector>
 #include <FL/Fl_Window.H>
 #include <FL/Fl_Tree.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Input.H>
+#include "onelab.h"
 
 class onelabWindow{
  private:
@@ -26,6 +27,8 @@ class onelabWindow{
   std::vector<Fl_Widget*> _treeWidgets;
   std::string _title;
   std::string _modelExtension;
+  int _deltaFontSize;
+  bool _stop;
  public:
   onelabWindow(int deltaFontSize=0);
   int x(){ return _win->x(); }
@@ -33,13 +36,13 @@ class onelabWindow{
   void rebuildSolverList();
   void rebuildTree();
   void redrawTree(){ _tree->redraw(); }
-  void activate();
-  void deactivate();
+  void setButtonMode(const std::string &mode);
   void show(){ _win->show(); }
   int shown(){ return _win->shown(); }
   std::string getModelExtension(){ return _modelExtension; }
   void setModelExtension(const std::string &ext){ _modelExtension = ext; }
   int meshAuto(){ return _gear->menu()[2].value(); }
+  int hideNewViews(){ return _gear->menu()[3].value(); }
   std::string getPath(Fl_Tree_Item *item)
   {
     char path[1024];
@@ -49,6 +52,9 @@ class onelabWindow{
   void addSolver(const std::string &name, const std::string &commandLine,
                  int index);
   void removeSolver(const std::string &name);
+  void checkForErrors(const std::string &client);
+  bool stop(){ return _stop; }
+  void stop(bool val){ _stop = val; }
 };
 
 void onelab_cb(Fl_Widget *w, void *data);

@@ -117,7 +117,7 @@ void computeLevelset(GModel *gm, cartesianBox<double> &box)
     nodes.push_back(box.getNodeCoordinates(it->first));
     indices.push_back(it->first);
   }
-  Msg::Info("  %d nodes in the grid at level %d", (int)nodes.size(), box.getLevel());
+  //Msg::Info("  %d nodes in the grid at level %d", (int)nodes.size(), box.getLevel());
   std::vector<double> dist, localdist;
   std::vector<SPoint3> dummy;
   for (GModel::fiter fit = gm->firstFace(); fit != gm->lastFace(); fit++){
@@ -626,30 +626,36 @@ double gLevelsetQuadric::operator()(const double x, const double y, const double
         + 2. * A[1][2] * y * z + A[2][2] * z * z + B[0] * x + B[1] * y + B[2] * z + C);
 }
 
-// gLevelsetPopcorn::gLevelsetPopcorn(int tag) : gLevelsetPrimitive(tag) {
-// }
+gLevelsetPopcorn::gLevelsetPopcorn(double _xc, double _yc, double _zc, double _r0, double _A, double _sigma, int tag) : gLevelsetPrimitive(tag) {
+  A = _A;
+  sigma = _sigma;
+  r0 = _r0;
+  xc = _xc; 
+  yc = _yc;
+  zc = _zc;
+}
 
-// double gLevelsetPopcorn::operator() (const double x, const double y, const double z) const {
-//   double r0 = 0.25;
-//   double r = sqrt((x-0.5)*(x-0.5)+(y-0.5)*(y-0.5)+(z-0.5)*(z-0.5));
-//   double  val = r - r0;
-//   for (int k = 0; k< 5; k++){
-//     double xk = r0/sqrt(5)*(2.*cos(2*k*pi/5));
-//     double yk = r0/sqrt(5)*(2.*sin(2*k*pi/5));
-//     double zk = 1.0;
-//     val +=  -4.*exp(((x-0.5-xk)*(x-0.5-xk)+(y-0.5-yk)*(y-0.5-yk)+(z-0.5-zk)*(z-0.5-zk))/0.01);
-//     }
-//   for (int k = 0; k< 5; k++){
-//     xk = r0/sqrt(5)*(2*cos(2*((k-5)-1)*pi/5));
-//     yk = r0/sqrt(5)*(2*sin(2*((k-5)-1)*pi/5));
-//     zk = 1.0;
-//     val += 4.*exp(((x-0.5-xk)*(x-0.5-xk)+(y-0.5-yk)*(y-0.5-yk)+(z-0.5-zk)*(z-0.5-zk))/0.01);
-//   }
-//   val  += -4.*exp(((x-0.5-xk)*(x-0.5-xk)+(y-0.5-yk)*(y-0.5-yk)+(z-0.5-zk)*(z-0.5-zk))/0.01);
-//   val  += -4.*math.exp(((x-0.5)**2+(y-0.5)**2+(z-0.5+r0)**2)/0.01);
-//   return val;
-// }
-
+double gLevelsetPopcorn::operator() (const double x, const double y, const double z) const {
+  double s2 = (sigma)*(sigma);
+  double r = sqrt((x-xc)*(x-xc)+(y-yc)*(y-yc)+(z-zc)*(z-zc));
+  //printf("z=%g zc=%g r=%g \n", z, zc, r);
+  double  val = r - r0;
+  for (int k = 0; k< 5; k++){
+    double xk = r0/sqrt(5.0)*(2.*cos(2*k*M_PI/5.0));
+    double yk = r0/sqrt(5.0)*(2.*sin(2*k*M_PI/5.0));
+    double zk = r0/sqrt(5.0);
+    val -=  A*exp(-((x-xc-xk)*(x-xc-xk)+(y-yc-yk)*(y-yc-yk)+(z-zc-zk)*(z-zc-zk))/s2);
+  }
+  for (int k = 5; k< 10; k++){
+    double xk = r0/sqrt(5.0)*(2.*cos((2.*(k-5.)-1.)*M_PI/5.0));
+    double yk = r0/sqrt(5.0)*(2.*sin((2.*(k-5.)-1.)*M_PI/5.0));
+    double zk = -r0/sqrt(5.0);
+    val -= A*exp(-((x-xc-xk)*(x-xc-xk)+(y-yc-yk)*(y-yc-yk)+(z-zc-zk)*(z-zc-zk))/s2);
+  }
+  val  -= A*exp(-((x-xc)*(x-xc)+(y-yc)*(y-yc)+(z-zc-r0)*(z-zc-r0))/s2);
+  val  -= A*exp(-((x-xc)*(x-xc)+(y-yc)*(y-yc)+(z-zc+r0)*(z-zc+r0))/s2);
+  return val;
+}
 
 gLevelsetMathEval::gLevelsetMathEval(std::string f, int tag) : gLevelsetPrimitive(tag) {
     std::vector<std::string> expressions(1, f);
@@ -684,7 +690,7 @@ gLevelsetDistGeom::gLevelsetDistGeom(std::string geomBox, std::string name, int 
   double sampling = std::min(rmax, std::min(lx, std::min(ly, lz)));
   double rtube = std::max(lx, std::max(ly, lz))*2.;
 
-  Msg::Info("Filling coarse point cloud on surfaces");
+  //FILLING POINTS FROM GEOMBOX
   std::vector<SPoint3> points;
   std::vector<SPoint3> refinePoints;
   for(GModel::viter vit = gmg->firstVertex(); vit != gmg->lastVertex(); vit++){
@@ -702,7 +708,7 @@ gLevelsetDistGeom::gLevelsetDistGeom(std::string geomBox, std::string name, int 
     }
   }
 
-  //FOR DISCRETE GEOMETRIES
+  //FILLING POINTS FROM STL
   for (GModel::fiter fit = gm->firstFace(); fit != gm->lastFace(); fit++){
     for(unsigned int k = 0; k < (*fit)->getNumMeshVertices(); k++){ 
       MVertex  *vf = (*fit)->getMeshVertex(k);
@@ -726,7 +732,6 @@ gLevelsetDistGeom::gLevelsetDistGeom(std::string geomBox, std::string name, int 
   //for (GModel::fiter fit = gm->firstFace(); fit != gm->lastFace(); fit++)
   //   (*fit)->fillPointCloud(sampling, &points);
 
-  Msg::Info("  %d points in the surface cloud", (int)points.size());
   if (points.size() == 0) {Msg::Fatal("No points on surfaces \n"); };
 
   SBoundingBox3d bb;
@@ -741,42 +746,41 @@ gLevelsetDistGeom::gLevelsetDistGeom(std::string geomBox, std::string name, int 
   if(NY < 2) NY = 2;
   if(NZ < 2) NZ = 2;
 
-  Msg::Info("  bounding box min: %g %g %g -- max: %g %g %g",
-            bb.min().x(), bb.min().y(), bb.min().z(),
-            bb.max().x(), bb.max().y(), bb.max().z());
-  Msg::Info("  Nx=%d Ny=%d Nz=%d", NX, NY, NZ);
+  // Msg::Info("  bounding box min: %g %g %g -- max: %g %g %g",
+  //           bb.min().x(), bb.min().y(), bb.min().z(),
+  //           bb.max().x(), bb.max().y(), bb.max().z());
+  // Msg::Info("  Nx=%d Ny=%d Nz=%d", NX, NY, NZ);
   
   _box = new cartesianBox<double>(bb.min().x(), bb.min().y(), bb.min().z(), 
 				 SVector3(range.x(), 0, 0),
 				 SVector3(0, range.y(), 0),
 				 SVector3(0, 0, range.z()),
 				 NX, NY, NZ, levels);
-  Msg::Info("Inserting the active cells in the cartesian grid");
-  for (int i = 0; i < NX; i++)
+   for (int i = 0; i < NX; i++)
     for (int j = 0; j < NY; j++)
       for (int k = 0; k < NZ; k++)
         _box->insertActiveCell(_box->getCellIndex(i, j, k));
 
   cartesianBox<double> *parent = _box, *child;
   while((child = parent->getChildBox())){
-    Msg::Info("  level %d ", child->getLevel());
+    //Msg::Info("  level %d ", child->getLevel());
     for(unsigned int i = 0; i < refinePoints.size(); i++)
       insertActiveCells(refinePoints[i].x(), refinePoints[i].y(), refinePoints[i].z(), 
                          rtube / pow(2., (levels - child->getLevel())), *child);
     parent = child;
   }
 
-  Msg::Info("Removing cells to match mesh topology constraints");
+  //Msg::Info("Removing cells to match mesh topology constraints");
   removeBadChildCells(_box);
   removeParentCellsWithChildren(_box);
 
-  Msg::Info("Initializing nodal values in the cartesian grid");
+  //Msg::Info("Initializing nodal values in the cartesian grid");
   _box->createNodalValues();
 
-  Msg::Info("Computing levelset on the cartesian grid");  
+  //Msg::Info("Computing levelset on the cartesian grid");  
   computeLevelset(gm, *_box);
 
-  Msg::Info("Renumbering mesh vertices across levels");
+  //Msg::Info("Renumbering mesh vertices across levels");
   _box->renumberNodes();
   
   _box->writeMSH("yeah.msh", false);

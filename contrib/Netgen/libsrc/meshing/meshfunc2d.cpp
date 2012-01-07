@@ -4,7 +4,7 @@
 namespace netgen
 {
 
-  void Optimize2d (Mesh & mesh, MeshingParameters & mp)
+  DLL_HEADER void Optimize2d (Mesh & mesh, MeshingParameters & mp)
   {
     int i;
 
@@ -41,7 +41,7 @@ namespace netgen
 	      {
 		MeshOptimize2d meshopt;
 		meshopt.SetMetricWeight (1);
-		meshopt.ImproveMesh(mesh);
+		meshopt.ImproveMesh(mesh, mp);
 		break;
 	      }
 	    

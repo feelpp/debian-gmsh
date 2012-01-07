@@ -21,20 +21,9 @@
 #include <linalg.hpp>
 #include <gprim.hpp>
 
-/*
-#include <iostream.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <math.h>
-#include <fstream.h>
-#include "mystring.hh"
-
- */
 
 namespace netgen
 {
-
 
   void ReadEnclString(istream & in, string & str, const char encl)
   {
@@ -42,7 +31,7 @@ namespace netgen
     str = "";
 
     in.get(currchar);
-    while(in && currchar == ' ' || currchar == '\t' || currchar == '\n')
+    while(in && (currchar == ' ' || currchar == '\t' || currchar == '\n') )
       in.get(currchar);
 	
     if(currchar == encl)

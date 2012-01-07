@@ -176,11 +176,11 @@ public:
 class AdFront3
 {
   ///
-ARRAY<FrontPoint3, PointIndex::BASE> points;
+Array<FrontPoint3, PointIndex::BASE> points;
   ///
-ARRAY<FrontFace> faces;
+Array<FrontFace> faces;
   ///
-ARRAY<PointIndex> delpointl;
+Array<PointIndex> delpointl;
 
   /// which points are connected to pi ?
 TABLE<int, PointIndex::BASE> * connectedpairs;
@@ -208,7 +208,9 @@ int rebuildcounter;
 int lasti;
   /// minimal selection-value of baseelements
 int minval;
-
+  Array<int, PointIndex::BASE> invpindex;
+  Array<char> pingroup;
+  
   ///
 class Box3dTree * facetree;
 public:
@@ -218,7 +220,7 @@ public:
   ///
   ~AdFront3 ();
   ///
-  void GetPoints (ARRAY<Point<3> > & apoints) const;
+  void GetPoints (Array<Point<3> > & apoints) const;
   ///
   int GetNP() const 
   { return points.Size(); }
@@ -251,17 +253,17 @@ public:
 
   ///
   void GetIntersectingFaces (const Point<3> & pmin, const Point<3> & pmax, 
-			     ARRAY<int> & ifaces) const;
+			     Array<int> & ifaces) const;
 
   ///
   void GetFaceBoundingBox (int i, Box3d & box) const;
 
   ///
   int GetLocals (int baseelement,
-		 ARRAY<Point3d > & locpoints,
-                 ARRAY<MiniElement2d> & locfaces,   // local index
-                 ARRAY<PointIndex> & pindex,
-                 ARRAY<INDEX> & findex,
+		 Array<Point3d > & locpoints,
+                 Array<MiniElement2d> & locfaces,   // local index
+                 Array<PointIndex> & pindex,
+                 Array<INDEX> & findex,
 		 INDEX_2_HASHTABLE<int> & connectedpairs,
                  float xh,
 		 float relh,
@@ -269,11 +271,10 @@ public:
   
   ///
   void GetGroup (int fi,
-                 ARRAY<MeshPoint> & grouppoints,
-                 ARRAY<MiniElement2d> & groupelements,
-                 ARRAY<PointIndex> & pindex,
-                 ARRAY<INDEX> & findex
-                 ) const;
+                 Array<MeshPoint> & grouppoints,
+                 Array<MiniElement2d> & groupelements,
+                 Array<PointIndex> & pindex,
+                 Array<INDEX> & findex);
 
   ///
   void DeleteFace (INDEX fi);
@@ -298,7 +299,7 @@ public:
   bool Inside (const Point<3> & p) const;
   /// both points on same side ?
   int SameSide (const Point<3> & lp1, const Point<3> & lp2, 
-		const ARRAY<int> * testfaces = NULL) const;
+		const Array<int> * testfaces = NULL) const;
 
 
   ///

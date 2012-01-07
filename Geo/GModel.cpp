@@ -34,6 +34,9 @@
 #include "OpenFile.h"
 #include "CreateFile.h"
 #include "Options.h"
+#include "meshGEdge.h"
+#include "meshGFace.h"
+#include "meshGRegion.h"
 
 #if defined(HAVE_MESH)
 #include "Field.h"
@@ -515,78 +518,109 @@ int GModel::mesh(int dimension)
 #endif
 }
 
-
-int GModel::adaptMesh(int technique, simpleFunction<double> *f, std::vector<double> parameters)
+int GModel::adaptMesh(int technique, simpleFunction<double> *f, 
+                      std::vector<double> parameters, bool meshAll)
 {
 #if defined(HAVE_MESH)
 
   if (getNumMeshElements() == 0) mesh(getDim());
-  meshMetric *mm; 
- 
+  int nbElemsOld = getNumMeshElements();
+  int nbElems;
+  int niter = parameters.size() >=4 ? (int) parameters[3] : 3;
+
+  FieldManager *fields = getFields();
+  fields->reset();
+
   int ITER = 0;
-  while(1){
-    std::vector<MElement*> elements;
+  if (meshAll){
 
-    if (getDim() == 2){
-      for (fiter fit = firstFace(); fit != lastFace(); ++fit){
-	if ((*fit)->quadrangles.size())return -1;
-	for (int i=0;i<(*fit)->triangles.size();i++){
-	  elements.push_back((*fit)->triangles[i]);
-	}
-      }
+    while(1){
+      Msg::Info("-- adaptMesh (allDim) ITER =%d ", ITER);
+
+      fields->reset();
+      int id = fields->newId();
+      (*fields)[id] = new meshMetric(this, technique, f, parameters);;
+      fields->background_field = id;    
+
+      opt_mesh_lc_integration_precision(0, GMSH_SET, 1.e-4);
+      opt_mesh_algo2d(0, GMSH_SET, 7.0); //bamg
+      opt_mesh_algo3d(0, GMSH_SET, 7.0); //mmg3d
+      opt_mesh_lc_from_points(0, GMSH_SET, 0.0); //do not mesh lines with lc
+
+      std::for_each(firstEdge(), lastEdge(), deMeshGEdge());
+      std::for_each(firstFace(), lastFace(), deMeshGFace());
+      std::for_each(firstRegion(), lastRegion(), deMeshGRegion());
+
+      GenerateMesh(this, getDim());
+      nbElems = getNumMeshElements();
+
+      char name[256];
+      sprintf(name, "meshAdapt-%d.msh", ITER);
+      writeMSH(name);
+            
+      if (ITER++ >= niter)  break;
+      if (ITER > 5 && fabs((double)(nbElems - nbElemsOld)) < 0.0 * nbElemsOld) break;
+	   
+      nbElemsOld = nbElems;  
     }
-    else if (getDim() == 3){
-      for (riter rit = firstRegion(); rit != lastRegion(); ++rit){
-	if ((*rit)->hexahedra.size())return -1;
-	for (int i=0;i<(*rit)->tetrahedra.size();i++){
-	  elements.push_back((*rit)->tetrahedra[i]);
-	}
-      }
-    }
-
-    if (elements.size() == 0)return -1;
-
-    double lcmin = parameters.size() >=3 ? parameters[1] : CTX::instance()->mesh.lcMin;
-    double lcmax = parameters.size() >=3 ? parameters[2] : CTX::instance()->mesh.lcMax;
-    int niter = parameters.size() >=4 ? (int) parameters[3] : 3;
-
-    switch(technique){
-    case 1 : 
-      mm = new meshMetric (elements, f, meshMetric::LEVELSET,lcmin,lcmax,parameters[0], 0);
-      break;
-    case 2 :
-      mm = new meshMetric (elements, f, meshMetric::HESSIAN,lcmin,lcmax,0, parameters[0]);
-      break;
-    case 3 :
-      mm = new meshMetric (elements, f, meshMetric::FREY,lcmin,lcmax,parameters[0], 0);
-      break;
-    default : Msg::Error("Unknown Adaptive Strategy");return -1;
-    }
-    // the background mesh is the mesh metric
-    mm->setAsBackgroundMesh (this);
-    if (getDim() == 2){
-      for (fiter fit = firstFace(); fit != lastFace(); ++fit){
-	if((*fit)->geomType() != GEntity::DiscreteSurface){
-	  opt_mesh_lc_from_points(0, GMSH_SET, 0);
-
-	  meshGFaceBamg(*fit);
-	  laplaceSmoothing(*fit,CTX::instance()->mesh.nbSmoothing);
-	}
-	if(_octree) delete _octree;
-	_octree = 0;
-      }
-    }
-    else if (getDim() == 3){
-      for (riter rit = firstRegion(); rit != lastRegion(); ++rit){
-	refineMeshMMG(*rit);
-	if(_octree) delete _octree;
-	_octree = 0;
-      }
-    }
-    delete mm;
-    if (++ITER > niter) break;
-
   }
+  else{
+
+    while(1) {
+      Msg::Info("-- adaptMesh ITER =%d ", ITER);
+      std::vector<MElement*> elements;
+
+      if (getDim() == 2){
+	for (fiter fit = firstFace(); fit != lastFace(); ++fit){
+	  if ((*fit)->quadrangles.size())return -1;
+	  for (unsigned i=0;i<(*fit)->triangles.size();i++){
+	    elements.push_back((*fit)->triangles[i]);
+	  }
+	}
+      }
+      else if (getDim() == 3){
+	for (riter rit = firstRegion(); rit != lastRegion(); ++rit){
+	  if ((*rit)->hexahedra.size())return -1;
+	  for (unsigned i=0;i<(*rit)->tetrahedra.size();i++){
+	    elements.push_back((*rit)->tetrahedra[i]);
+	  }
+	}
+      }
+
+      if (elements.size() == 0)return -1;
+ 
+      fields->reset();
+      int id = fields->newId();
+      (*fields)[id] = new meshMetric(this, technique, f, parameters);
+      fields->background_field = id;
+
+      if (getDim() == 2){
+	for (fiter fit = firstFace(); fit != lastFace(); ++fit){
+	  if((*fit)->geomType() != GEntity::DiscreteSurface){
+	    meshGFaceBamg(*fit);
+	    laplaceSmoothing(*fit,CTX::instance()->mesh.nbSmoothing);
+	  }
+	  if(_octree) delete _octree;
+	  _octree = 0;
+	}
+      }
+      else if (getDim() == 3){
+	for (riter rit = firstRegion(); rit != lastRegion(); ++rit){
+	  refineMeshMMG(*rit);
+	  if(_octree) delete _octree;
+	  _octree = 0;
+	}
+      }
+     
+      nbElems = getNumMeshElements();
+      if (++ITER >= niter) break;
+      if (fabs((double)(nbElems - nbElemsOld)) < 0.01 * nbElemsOld) break;
+
+      nbElemsOld = nbElems;
+    }
+  }
+
+  fields->reset();
 
   return 0;
 #else
@@ -691,6 +725,14 @@ MElement *GModel::getMeshElementByCoord(SPoint3 &p, int dim)
     _octree = new MElementOctree(this);
   }
   return _octree->find(p.x(), p.y(), p.z(), dim);
+}
+std::vector<MElement*> GModel::getMeshElementsByCoord(SPoint3 &p, int dim)
+{
+  if(!_octree){
+    Msg::Debug("Rebuilding mesh element octree");
+    _octree = new MElementOctree(this);
+  }
+  return _octree->findAll(p.x(), p.y(), p.z(), dim);
 }
 
 MVertex *GModel::getMeshVertexByTag(int n)
@@ -1430,7 +1472,6 @@ void GModel::createTopologyFromMesh(int ignoreHoles)
   double t1 = Cpu();
 
   removeDuplicateMeshVertices(CTX::instance()->geom.tolerance);
-
   makeDiscreteRegionsSimplyConnected();
   makeDiscreteFacesSimplyConnected();
 
@@ -1442,13 +1483,13 @@ void GModel::createTopologyFromMesh(int ignoreHoles)
   createTopologyFromRegions(discRegions);
  
   // create topology for all discrete faces
-   std::vector<discreteFace*> discFaces;
-   for(fiter it = firstFace(); it != lastFace(); it++)
-     if((*it)->geomType() == GEntity::DiscreteSurface)
-       discFaces.push_back((discreteFace*) *it);
-   createTopologyFromFaces(discFaces, ignoreHoles);
-
-  //create old format (necessary for boundary layers)
+  std::vector<discreteFace*> discFaces;
+  for(fiter it = firstFace(); it != lastFace(); it++)
+    if((*it)->geomType() == GEntity::DiscreteSurface)
+      discFaces.push_back((discreteFace*) *it);
+  createTopologyFromFaces(discFaces, ignoreHoles);
+  
+  //create old format (necessary e.g. for old-style extruded boundary layers)
   exportDiscreteGEOInternals();
  
   double t2 = Cpu();
@@ -1681,7 +1722,7 @@ void GModel::createTopologyFromFaces(std::vector<discreteFace*> &discFaces, int 
         for (unsigned int i = 0; i < (*itE)->getNumMeshElements(); i++){
           MEdge me = (*itE)->getMeshElement(i)->getEdge(0);
           std::set<MEdge, Less_Edge >::iterator itset = myEdges.find(me);
-          myEdges.erase(itset);
+          if (itset != myEdges.end()) myEdges.erase(itset);
         }
         for (std::vector<int>::iterator itFace = tagFaces.begin(); 
              itFace != tagFaces.end(); itFace++) {
@@ -1703,7 +1744,7 @@ void GModel::createTopologyFromFaces(std::vector<discreteFace*> &discFaces, int 
     //EMI RBF fix
     if (ignoreHoles && nbBounds > 0){
       int index = 0;
-      int boundSize = 0;
+      unsigned boundSize = 0;
       for (int ib = 0; ib < nbBounds; ib++){
 	if (boundaries[ib].size() > boundSize){
 	  boundSize = boundaries[ib].size() ;
@@ -1712,11 +1753,11 @@ void GModel::createTopologyFromFaces(std::vector<discreteFace*> &discFaces, int 
       }
       std::vector<std::vector<MEdge> > new_boundaries;
       new_boundaries.push_back(boundaries[index]);
-      boundaries =  new_boundaries;
+      boundaries = new_boundaries;
     }
 
     // create new discrete edges
-    for (int ib = 0; ib < boundaries.size(); ib++){
+    for (unsigned ib = 0; ib < boundaries.size(); ib++){
       int numE = getMaxElementaryNumber(1) + 1;
       discreteEdge *e = new discreteEdge(this, numE, 0, 0);
       add(e);
@@ -1793,9 +1834,6 @@ void GModel::createTopologyFromFaces(std::vector<discreteFace*> &discFaces, int 
   //    edgeLoops.push_back(el);
   //  }
 
-  Msg::Debug("Done creating topology for edges...");
-
-
   // we need to recreate all mesh elements because some mesh vertices
   // might have been changed during the parametrization process
   // (MVertices became MEdgeVertices)
@@ -1869,7 +1907,7 @@ void GModel::createTopologyFromFaces(std::vector<discreteFace*> &discFaces, int 
     gr->pyramids = newPyramids;
   }
 
-  Msg::Debug("Done creating topology from edges");
+  Msg::Debug("Done creating topology for edges");
 }
 
 GModel *GModel::buildCutGModel(gLevelset *ls, bool cutElem, bool saveTri)
@@ -1889,7 +1927,6 @@ GModel *GModel::buildCutGModel(gLevelset *ls, bool cutElem, bool saveTri)
 
   GModel *cutGM = buildCutMesh(this, ls, elements, vertexMap, physicals, cutElem);
 
-
   for(int i = 0; i < (int)(sizeof(elements) / sizeof(elements[0])); i++)
     cutGM->_storeElementsInEntities(elements[i]);
   cutGM->_associateEntityWithMeshVertices();
@@ -1905,7 +1942,6 @@ GModel *GModel::buildCutGModel(gLevelset *ls, bool cutElem, bool saveTri)
           cutGM->setPhysicalName(it2->second, i, it2->first);
     }
   }
-
 
   Msg::Info("Mesh cutting completed (%g s)", Cpu() - t1);
 

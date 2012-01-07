@@ -13,8 +13,6 @@
     Advancing front class for surfaces
 
 */
-class AdFront2
-{
 
   ///
   class FrontPoint2
@@ -163,22 +161,25 @@ class AdFront2
   };
 
 
+class AdFront2
+{
 
   ///
-  ARRAY<FrontPoint2> points;  /// front points
-  ARRAY<FrontLine> lines;     /// front lines
+  Array<FrontPoint2> points;  /// front points
+  Array<FrontLine> lines;     /// front lines
 
   Box3d boundingbox;
   Box3dTree linesearchtree;       /// search tree for lines
   Point3dTree pointsearchtree;    /// search tree for points
   Point3dTree cpointsearchtree;   /// search tree for cone points (not used ???)
 
-  ARRAY<int> delpointl;     /// list of deleted front points
-  ARRAY<int> dellinel;      /// list of deleted front lines
+  Array<int> delpointl;     /// list of deleted front points
+  Array<int> dellinel;      /// list of deleted front lines
 
   int nfl;                  /// number of front lines;
   INDEX_2_HASHTABLE<int> * allflines; /// all front lines ever have been
 
+  Array<int> invpindex;
 
   int minval;
   int starti;
@@ -191,7 +192,7 @@ public:
   ~AdFront2 ();
 
   ///
-  // void GetPoints (ARRAY<Point<3> > & apoints) const;
+  // void GetPoints (Array<Point<3> > & apoints) const;
   ///
   void Print (ostream & ost) const;
 
@@ -202,6 +203,11 @@ public:
   }
   ///
   int GetNFL () const { return nfl; }
+
+  const FrontLine & GetLine (int nr) { return lines[nr]; }
+  const FrontPoint2 & GetPoint (int nr) { return points[nr]; }
+
+
   ///
   int SelectBaseLine (Point<3> & p1, Point<3> & p2, 
 		      const PointGeomInfo *& geominfo1,
@@ -210,11 +216,11 @@ public:
 
   ///
   int GetLocals (int baseline, 
-		 ARRAY<Point3d> & locpoints,
-		 ARRAY<MultiPointGeomInfo> & pgeominfo,
-                 ARRAY<INDEX_2> & loclines,   // local index
-                 ARRAY<int> & pindex,
-                 ARRAY<int> & lindex,
+		 Array<Point3d> & locpoints,
+		 Array<MultiPointGeomInfo> & pgeominfo,
+                 Array<INDEX_2> & loclines,   // local index
+                 Array<int> & pindex,
+                 Array<int> & lindex,
                  double xh);
 
   ///
@@ -250,6 +256,18 @@ public:
   {
     return points[pi].GlobalIndex();
   }
+
+
+  /// is Point p inside Surface (flat geometry only)
+  bool Inside (const Point<2> & p) const;
+
+  bool SameSide (const Point<2> & lp1, const Point<2> & lp2, 
+                 const Array<int> * /* testfaces */ = NULL) const
+  {
+    return Inside (lp1) == Inside (lp2);
+  }
+
+
   ///
   void SetStartFront ();
   ///

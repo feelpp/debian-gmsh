@@ -1,11 +1,5 @@
-#include <iostream>
-#include <iomanip>
-
-#ifdef SSE
-#include <emmintrin.h>
-#endif
-
 #include <myadt.hpp>
+
 using namespace std;
 
 namespace netgen
@@ -140,8 +134,8 @@ namespace netgen
   }
 
 
-#pragma warning(push)
 #ifdef __INTEL_COMPILER
+#pragma warning(push)
 #pragma warning(disable:1684)
 #endif
 
@@ -173,10 +167,11 @@ namespace netgen
     
     {
 
+      /*
     BaseMoveableMem * pm = BaseMoveableMem::first;
     while (pm)
       {
-        long unsigned hptr = (long unsigned) p->ptr;
+        long unsigned hptr = (long unsigned) pm->ptr;
         // uintptr_t hptr = reinterpret_cast<uintptr_t>(pm->ptr);
 
 	hptr /= (1024*1024);
@@ -192,11 +187,15 @@ namespace netgen
 
 	pm = pm->next;
       }
+      */
     }
 
 
 
   }
 
+#ifdef __INTEL_COMPILER
 #pragma warning(pop)
+#endif
+
 }

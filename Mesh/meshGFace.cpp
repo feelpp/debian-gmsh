@@ -433,11 +433,6 @@ void BDS2GMSH(BDS_Mesh *m, GFace *gf, std::map<BDS_Point*, MVertex*> &recoverMap
   }
 }
 
-bool meshGenerator(GFace *gf, int RECUR_ITER, 
-		   bool repairSelfIntersecting1dMesh,
-		   bool onlyInitialMesh,
-		   bool debug = true,
-		   std::list<GEdge*> *replacement_edges = 0);
 
 static void addOrRemove(MVertex *v1, MVertex *v2, std::set<MEdge,Less_Edge> & bedges)
 {
@@ -1104,10 +1099,10 @@ bool meshGenerator(GFace *gf, int RECUR_ITER,
   gf->meshStatistics.status = GFace::DONE;
 
   // fill the small gmsh structures
-  BDS2GMSH ( m, gf, recoverMap);
+  BDS2GMSH(m, gf, recoverMap);
 
   // BOUNDARY LAYER
-  if (!onlyInitialMesh)modifyInitialMeshForTakingIntoAccountBoundaryLayers  (gf);
+  if (!onlyInitialMesh) modifyInitialMeshForTakingIntoAccountBoundaryLayers(gf);
     
   // the delaunay algo is based directly on internal gmsh structures
   // BDS mesh is passed in order not to recompute local coordinates of
@@ -1123,10 +1118,9 @@ bool meshGenerator(GFace *gf, int RECUR_ITER,
       bowyerWatson(gf);
     else {
       bowyerWatson(gf);
-      printf("in bamg *** \n");
       meshGFaceBamg(gf);
     }
-    laplaceSmoothing(gf,CTX::instance()->mesh.nbSmoothing);
+    laplaceSmoothing(gf, CTX::instance()->mesh.nbSmoothing);
   }
 
   if(debug){
@@ -1723,10 +1717,8 @@ static bool meshGeneratorPeriodic(GFace *gf, bool debug = true)
     else if(CTX::instance()->mesh.algo2d == ALGO_2D_DELAUNAY ||
             CTX::instance()->mesh.algo2d == ALGO_2D_AUTO)
       bowyerWatson(gf);
-    else {
-      printf("in bamg \n");
+    else 
       meshGFaceBamg(gf);
-    }
     laplaceSmoothing(gf,CTX::instance()->mesh.nbSmoothing);
   }
   

@@ -15,41 +15,51 @@ namespace netgen
 #include "writeuser.hpp"
 
 
-void RegisterUserFormats (ARRAY<const char*> & names)
+  void RegisterUserFormats (Array<const char*> & names,
+			    Array<const char*> & extensions)
+			    
 {
   const char *types[] =
     {
-      "Neutral Format",
-      "Surface Mesh Format" ,
-      "DIFFPACK Format",
-      "TecPlot Format",     
-      "Tochnog Format",
-      "Abaqus Format",
-      "Fluent Format",
-      "Permas Format",
-      "FEAP Format",
-      "Elmer Format",
-      "STL Format",
-      "VRML Format",
-      "Gmsh Format",
-      "JCMwave Format",
-      "TET Format",
+      "Neutral Format",  ".mesh",
+      "Surface Mesh Format", ".mesh" ,
+      "DIFFPACK Format", ".mesh",
+      "TecPlot Format", ".mesh",
+      "Tochnog Format", ".mesh",
+      "Abaqus Format", ".mesh",
+      "Fluent Format", ".mesh",
+      "Permas Format", ".mesh",
+      "FEAP Format", ".mesh",
+      "Elmer Format", "*",
+      "STL Format", ".stl",
+      "STL Extended Format", ".stl",
+      "VRML Format", ".*",
+      "Gmsh Format", ".gmsh",
+      "Gmsh2 Format", ".gmsh2",
+      "OpenFOAM 1.5+ Format", "*",
+      "JCMwave Format", ".jcm",
+      "TET Format", ".tet",
       //      { "Chemnitz Format" },
       0
     };
-
-  for (int i = 0; types[i]; i++)
-    names.Append (types[i]);
+  
+  for (int i = 0; types[2*i]; i++)
+    {
+      names.Append (types[2*i]);
+      extensions.Append (types[2*i+1]);
+    }
 }
-
+  
 
 
 bool WriteUserFormat (const string & format,
 		      const Mesh & mesh,
-		      const CSGeometry & geom, 
+		      const NetgenGeometry & hgeom,
 		      const string & filename)
 {
-  PrintMessage (1, "Export mesh to file ", filename, 
+  const CSGeometry & geom = *dynamic_cast<const CSGeometry*> (&hgeom);
+
+  PrintMessage (1, "Export mesh to file ", filename,
 		", format is ", format);
 
   if (format == "Neutral Format")
@@ -86,6 +96,13 @@ bool WriteUserFormat (const string & format,
   else if (format == "STL Format")
     WriteSTLFormat (mesh, filename);
 
+  // Philippose - 16 August 2010
+  // Added additional STL Export in which
+  // each face of the geometry is treated
+  // as a separate "solid" entity
+  else if (format == "STL Extended Format")
+	WriteSTLExtFormat (mesh, filename);
+
   else if (format == "VRML Format")
     WriteVRMLFormat (mesh, 1, filename);
 
@@ -100,7 +117,17 @@ bool WriteUserFormat (const string & format,
 
   else if (format == "Gmsh Format")
     WriteGmshFormat (mesh, geom, filename);
- 
+
+  // Philippose - 29/01/2009
+  // Added Gmsh v2.xx Mesh export capability
+  else if (format == "Gmsh2 Format")
+    WriteGmsh2Format (mesh, geom, filename);
+
+  // Philippose - 25/10/2009
+  // Added OpenFOAM 1.5+ Mesh export capability
+  else if (format == "OpenFOAM 1.5+ Format")
+    WriteOpenFOAM15xFormat (mesh, filename);
+
   else if (format == "JCMwave Format")
     WriteJCMFormat (mesh, geom, filename);
 
@@ -109,7 +136,7 @@ bool WriteUserFormat (const string & format,
     WriteTETFormat( mesh, filename);//, "High Frequency" );
 #endif
 
-  else 
+  else
     {
       return 1;
     }
@@ -135,7 +162,7 @@ void WriteNeutralFormat (const Mesh & mesh,
   int nse = mesh.GetNSE();
   int nseg = mesh.GetNSeg();
   int i, j;
-  
+
   int inverttets = mparam.inverttets;
   int invertsurf = mparam.inverttrigs;
 
@@ -144,13 +171,13 @@ void WriteNeutralFormat (const Mesh & mesh,
   outfile.precision(6);
   outfile.setf (ios::fixed, ios::floatfield);
   outfile.setf (ios::showpoint);
-  
+
   outfile << np << "\n";
-  
+
   for (i = 1; i <= np; i++)
     {
       const Point3d & p = mesh.Point(i);
-      
+
       outfile.width(10);
       outfile << p.X() << " ";
       outfile.width(9);
@@ -212,10 +239,10 @@ void WriteNeutralFormat (const Mesh & mesh,
 
 	  outfile << " ";
 	  outfile.width(8);
-	  outfile << seg.p1;
+	  outfile << seg[0];
 	  outfile << " ";
 	  outfile.width(8);
-	  outfile << seg.p2;
+	  outfile << seg[1];
 
 	  outfile << "\n";
 	}
@@ -235,13 +262,13 @@ void WriteSurfaceFormat (const Mesh & mesh,
 {
   // surface mesh
   int i, j;
-  
+
   cout << "Write Surface Mesh" << endl;
-  
+
   ofstream outfile (filename.c_str());
-  
+
   outfile << "surfacemesh" << endl;
-  
+
   outfile << mesh.GetNP() << endl;
   for (i = 1; i <= mesh.GetNP(); i++)
     {
@@ -276,41 +303,130 @@ void WriteSTLFormat (const Mesh & mesh,
 		     const string & filename)
 {
   cout << "\nWrite STL Surface Mesh" << endl;
-  
+
   ofstream outfile (filename.c_str());
-  
+
   int i;
-  
+
   outfile.precision(10);
-  
+
   outfile << "solid" << endl;
-  
+
   for (i = 1; i <= mesh.GetNSE(); i++)
     {
       outfile << "facet normal ";
       const Point3d& p1 = mesh.Point(mesh.SurfaceElement(i).PNum(1));
       const Point3d& p2 = mesh.Point(mesh.SurfaceElement(i).PNum(2));
       const Point3d& p3 = mesh.Point(mesh.SurfaceElement(i).PNum(3));
-      
+
       Vec3d normal = Cross(p2-p1,p3-p1);
       if (normal.Length() != 0)
 	{
-	  normal /= (normal.Length());		  
+	  normal /= (normal.Length());
 	}
-      
+
       outfile << normal.X() << " " << normal.Y() << " " << normal.Z() << "\n";
       outfile << "outer loop\n";
-      
+
       outfile << "vertex " << p1.X() << " " << p1.Y() << " " << p1.Z() << "\n";
       outfile << "vertex " << p2.X() << " " << p2.Y() << " " << p2.Z() << "\n";
       outfile << "vertex " << p3.X() << " " << p3.Y() << " " << p3.Z() << "\n";
-      
+
       outfile << "endloop\n";
-      outfile << "endfacet\n"; 
+      outfile << "endfacet\n";
     }
   outfile << "endsolid" << endl;
 }
 
+
+
+
+
+/*
+ *  Philippose - 16 August 2010
+ *  Save surface mesh as STL file
+ *  with a separate solid definition
+ *  for each face
+ *  - This helps in splitting up the
+ *    STL into named boundary faces
+ *    when using a third-party mesher
+ */
+void WriteSTLExtFormat (const Mesh & mesh,
+		     const string & filename)
+{
+  cout << "\nWrite STL Surface Mesh (with separated boundary faces)" << endl;
+
+  ofstream outfile (filename.c_str());
+
+  outfile.precision(10);
+
+  int numBCs = 0;
+
+  Array<int> faceBCs;
+  TABLE<int> faceBCMapping;
+
+  faceBCs.SetSize(mesh.GetNFD());
+  faceBCMapping.SetSize(mesh.GetNFD());
+
+  faceBCs = -1;
+
+  // Collect the BC numbers used in the mesh
+  for(int faceNr = 1; faceNr <= mesh.GetNFD(); faceNr++)
+  {
+	  int bcNum = mesh.GetFaceDescriptor(faceNr).BCProperty();
+
+	  if(faceBCs.Pos(bcNum) < 0)
+	  {
+        numBCs++;
+		  faceBCs.Set(numBCs,bcNum);
+        faceBCMapping.Add1(numBCs,faceNr);        
+	  }
+     else
+     {
+        faceBCMapping.Add1(faceBCs.Pos(bcNum)+1,faceNr);
+     }
+  }
+
+  faceBCs.SetSize(numBCs);
+  faceBCMapping.ChangeSize(numBCs);
+
+  // Now actually write the data to file
+  for(int bcInd = 1; bcInd <= faceBCs.Size(); bcInd++)
+  {
+      outfile << "solid Boundary_" << faceBCs.Elem(bcInd) << "\n";
+
+      for(int faceNr = 1;faceNr <= faceBCMapping.EntrySize(bcInd); faceNr++)
+      {
+          Array<SurfaceElementIndex> faceSei;
+          mesh.GetSurfaceElementsOfFace(faceBCMapping.Get(bcInd,faceNr),faceSei);
+
+          for (int i = 0; i < faceSei.Size(); i++)
+          {
+        	  outfile << "facet normal ";
+        	  const Point3d& p1 = mesh.Point(mesh.SurfaceElement(faceSei[i]).PNum(1));
+        	  const Point3d& p2 = mesh.Point(mesh.SurfaceElement(faceSei[i]).PNum(2));
+        	  const Point3d& p3 = mesh.Point(mesh.SurfaceElement(faceSei[i]).PNum(3));
+
+        	  Vec3d normal = Cross(p2-p1,p3-p1);
+        	  if (normal.Length() != 0)
+        	  {
+        		  normal /= (normal.Length());
+        	  }
+
+        	  outfile << normal.X() << " " << normal.Y() << " " << normal.Z() << "\n";
+        	  outfile << "outer loop\n";
+
+        	  outfile << "vertex " << p1.X() << " " << p1.Y() << " " << p1.Z() << "\n";
+        	  outfile << "vertex " << p2.X() << " " << p2.Y() << " " << p2.Z() << "\n";
+        	  outfile << "vertex " << p3.X() << " " << p3.Y() << " " << p3.Z() << "\n";
+
+        	  outfile << "endloop\n";
+        	  outfile << "endfacet\n";
+          }
+      }
+      outfile << "endsolid Boundary_" << faceBCs.Elem(bcInd) << "\n";
+  }
+}
 
 
 
@@ -329,7 +445,7 @@ void WriteVRMLFormat (const Mesh & mesh,
   if (faces)
 
     {
-      // Output in VRML, IndexedFaceSet is used 
+      // Output in VRML, IndexedFaceSet is used
       // Bartosz Sawicki <sawickib@ee.pw.edu.pl>
 
       int np = mesh.GetNP();
@@ -351,8 +467,8 @@ void WriteVRMLFormat (const Mesh & mesh,
 		 "Shape{ \n"
 		 "appearance Appearance { material Material { }} \n"
                  "geometry IndexedFaceSet { \n"
-                 "coord Coordinate { point [ \n";  
-	        
+                 "coord Coordinate { point [ \n";
+
 
       for (i = 1; i <= np; i++)
         {
@@ -364,12 +480,12 @@ void WriteVRMLFormat (const Mesh & mesh,
 	}
 
       outfile << "  ] } \n"
-                 "coordIndex [ \n";               
-	
+                 "coordIndex [ \n";
+
       for (i = 1; i <= nse; i++)
 	{
 	  const Element2d & el = mesh.SurfaceElement(i);
-      
+
 	  for (j = 1; j <= 3; j++)
 	    {
 	      outfile.width(8);
@@ -377,19 +493,19 @@ void WriteVRMLFormat (const Mesh & mesh,
 	    }
 	  outfile << " -1 \n";
 	}
-      
+
       outfile << "  ] \n";
 
       //define number and RGB definitions of colors
       outfile << "color Color { color [1 0 0, 0 1 0, 0 0 1, 1 1 0]} \n"
                  "colorIndex [\n";
-      
+
       for (i = 1; i <= nse; i++)
 	{
-	  outfile << mesh.GetFaceDescriptor(mesh.SurfaceElement(i).GetIndex ()).BCProperty();      
+	  outfile << mesh.GetFaceDescriptor(mesh.SurfaceElement(i).GetIndex ()).BCProperty();
           outfile << endl;
 	}
-      
+
       outfile << " ] \n"
                  "colorPerVertex FALSE \n"
                  "creaseAngle 0 \n"
@@ -398,7 +514,7 @@ void WriteVRMLFormat (const Mesh & mesh,
 		 "convex TRUE \n"
                  "} } # end of Shape\n"
 		 "] }\n";
-                         
+
     } /* end of VRMLFACES */
 
 
@@ -427,8 +543,8 @@ void WriteVRMLFormat (const Mesh & mesh,
 	         "Shape{ \n"
 		 "appearance Appearance { material Material { }} \n"
                  "geometry IndexedLineSet { \n"
-                 "coord Coordinate { point [ \n";  
-	        
+                 "coord Coordinate { point [ \n";
+
 
       for (i = 1; i <= np; i++)
         {
@@ -440,40 +556,40 @@ void WriteVRMLFormat (const Mesh & mesh,
 	}
 
       outfile << "  ] } \n"
-                 "coordIndex [ \n";               
-	
+                 "coordIndex [ \n";
+
       for (i = 1; i <= nse; i++)
 	{
 	  const Element2d & el = mesh.SurfaceElement(i);
-      
+
 	  for (j = 1; j <= 3; j++)
 	    {
 	      outfile.width(8);
 	      outfile << el.PNum(j)-1;
 	    }
-	  outfile.width(8);  
-	  outfile << el.PNum(1)-1; 
+	  outfile.width(8);
+	  outfile << el.PNum(1)-1;
 	  outfile << " -1 \n";
 	}
-      
+
       outfile << "  ] \n";
 
-/* Uncomment if you want color mesh    
+/* Uncomment if you want color mesh
       outfile << "color Color { color [1 1 1, 0 1 0, 0 0 1, 1 1 0]} \n"
                  "colorIndex [\n";
-      
+
       for (i = 1; i <= nse; i++)
 	{
-	  outfile << mesh.GetFaceDescriptor(mesh.SurfaceElement(i).GetIndex ()).BCProperty();      
+	  outfile << mesh.GetFaceDescriptor(mesh.SurfaceElement(i).GetIndex ()).BCProperty();
           outfile << endl;
 	}
-      
+
       outfile << " ] \n"
-*/ 
+*/
       outfile << "colorPerVertex FALSE \n"
                  "} } #end of Shape\n"
 		 "] } \n";
-                         
+
     }
 
 }
@@ -490,7 +606,7 @@ void WriteFEPPFormat (const Mesh & mesh,
 		      const CSGeometry & geom,
 		      const string & filename)
 {
-  
+
   ofstream outfile (filename.c_str());
 
   if (mesh.GetDimension() == 3)
@@ -498,7 +614,7 @@ void WriteFEPPFormat (const Mesh & mesh,
     {
 
       // output for FEPP
-      
+
       int np = mesh.GetNP();
       int ne = mesh.GetNE();
       int nse = mesh.GetNSE();
@@ -508,7 +624,7 @@ void WriteFEPPFormat (const Mesh & mesh,
       outfile.precision(5);
       outfile.setf (ios::fixed, ios::floatfield);
       outfile.setf (ios::showpoint);
-      
+
       outfile << "volumemesh4" << endl;
       outfile << nse << endl;
       for (i = 1; i <= nse; i++)
@@ -561,7 +677,7 @@ void WriteFEPPFormat (const Mesh & mesh,
 	  outfile << p.Z() << "\n";
 	}
 
-      /*      
+      /*
       if (typ == WRITE_FEPPML)
 	{
 	  int nbn =  mesh.mlbetweennodes.Size();
@@ -569,7 +685,7 @@ void WriteFEPPFormat (const Mesh & mesh,
 	  for (i = 1; i <= nbn; i++)
 	    outfile << mesh.mlbetweennodes.Get(i).I1() << " "
 		    << mesh.mlbetweennodes.Get(i).I2() << "\n";
-	  
+
 
 	  //	  int ncon = mesh.connectedtonode.Size();
 	  //	  outfile << ncon << "\n";
@@ -586,15 +702,15 @@ void WriteFEPPFormat (const Mesh & mesh,
 	  for (i = 1; i <= ns; i++)
 	    geom.GetSurface(mesh.GetFaceDescriptor(i).SurfNr())->Print(outfile);
 	}
-      else 
+      else
 	outfile << "0" << endl;
     }
 
-  
+
   else
-    
+
     { // 2D fepp format
-      
+
       ;
       /*
       extern SplineGeometry2d * geometry2d;
@@ -628,10 +744,10 @@ void WriteEdgeElementFormat (const Mesh & mesh,
   int nsurfelem = mesh.GetNSE();
   int nedges = top->GetNEdges();
   int i, j;
-  
+
   int inverttets = mparam.inverttets;
   int invertsurf = mparam.inverttrigs;
-  ARRAY<int> edges;
+  Array<int> edges;
 
   ofstream outfile (filename.c_str());
 
@@ -640,12 +756,12 @@ void WriteEdgeElementFormat (const Mesh & mesh,
   outfile.setf (ios::showpoint);
 
 
-  // vertices with coordinates  
+  // vertices with coordinates
   outfile << npoints << "\n";
   for (i = 1; i <= npoints; i++)
     {
       const Point3d & p = mesh.Point(i);
-      
+
       outfile.width(10);
       outfile << p.X() << " ";
       outfile.width(9);
@@ -761,7 +877,7 @@ void WriteFile (int typ,
 		double h)
 {
 
-  
+
   int inverttets = mparam.inverttets;
   int invertsurf = mparam.inverttrigs;
 
@@ -788,11 +904,11 @@ void WriteFile (int typ,
       INDEX_2_HASHTABLE<int> edgeht(mesh.GetNP());
 
       // list of edges
-      ARRAY<INDEX_2> edgelist;
+      Array<INDEX_2> edgelist;
 
       // edge (point) on boundary ?
       BitArray bedge, bpoint(mesh.GetNP());
-      
+
       static int eledges[6][2] = { { 1, 2 } , { 1, 3 } , { 1, 4 },
 				   { 2, 3 } , { 2, 4 } , { 3, 4 } };
 
@@ -815,7 +931,7 @@ void WriteFile (int typ,
 	    }
 	}
 
-      
+
       // set bedges, bpoints
       bedge.SetSize (edgelist.Size());
       bedge.Clear();
@@ -844,7 +960,7 @@ void WriteFile (int typ,
       for (i = 1; i <= mesh.GetNE(); i++)
 	{
 	  const Element & el = mesh.VolumeElement(i);
-	  
+
 	  outfile.width(8);
 	  outfile << i;
 	  for (j = 1; j <= 4; j++)
@@ -878,7 +994,7 @@ void WriteFile (int typ,
       for (i = 1; i <= mesh.GetNP(); i++)
 	{
 	  const Point3d & p = mesh.Point(i);
-	  
+
 	  for (j = 1; j <= 3; j++)
 	    {
 	      outfile.width(8);

@@ -117,7 +117,7 @@ namespace netgen
           
   }
 
-  void HPRefElement :: SetType( HPREF_ELEMENT_TYPE t) 
+  void HPRefElement :: SetType (HPREF_ELEMENT_TYPE t) 
   {
     type = t; 
     switch(type)
@@ -129,11 +129,17 @@ namespace netgen
       case HP_PRISM: np=6; break; 
       case HP_PYRAMID: np=5; break; 
       case HP_HEX: np=8; break;      
+
+      default:
+        cerr << "HPRefElement: illegal type " << type << endl;
+        throw NgException ("HPRefElement::SetType: illegal type");
       } 
-    for(int k=0;k<8;k++)
+
+    for(int k = 0; k < 8;k++)
       {
 	pnums[k]=0;
-	for(int l=0;l<3;l++) param[k][l]=0.;
+	for(int l = 0; l < 3; l++) 
+          param[k][l]=0.;
       }
   }
   
@@ -561,57 +567,53 @@ namespace netgen
 
   bool CheckSingularities(Mesh & mesh, INDEX_2_HASHTABLE<int> & edges, INDEX_2_HASHTABLE<int> & edgepoiclt_dom, 
 		       BitArray & cornerpoint, BitArray & edgepoint, INDEX_3_HASHTABLE<int> & faces, INDEX_2_HASHTABLE<int> & face_edges, 
-			INDEX_2_HASHTABLE<int> & surf_edges, ARRAY<int, PointIndex::BASE> & facepoint, int & levels, int & act_ref); 
+			INDEX_2_HASHTABLE<int> & surf_edges, Array<int, PointIndex::BASE> & facepoint, int & levels, int & act_ref); 
 
-  bool ClassifyHPElements (Mesh & mesh, ARRAY<HPRefElement> & elements, int & act_ref, int & levels);
+  bool ClassifyHPElements (Mesh & mesh, Array<HPRefElement> & elements, int & act_ref, int & levels);
   
   
-  void  InitHPElements(Mesh & mesh, ARRAY<HPRefElement> & elements) 
+  void  InitHPElements(Mesh & mesh, Array<HPRefElement> & elements) 
   { 
-    for(ElementIndex i=0;i<mesh.GetNE();i++) 
+    for(ElementIndex i = 0; i < mesh.GetNE(); i++) 
       {
 	HPRefElement hpel(mesh[i]); 
-	hpel.coarse_elnr=i; 
+	hpel.coarse_elnr = i; 
 	
 	switch (mesh[i].GetType()) 
 	  { 
-	  case PRISM:
-	    hpel.type = HP_PRISM; 
-	    break; 
-	  case HEX:
-	    hpel.type = HP_HEX; 
-	    break; 
-	  case TET: 
-	    hpel.type = HP_TET; 
-	    break; 
-	  case PYRAMID: 
-	    hpel.type = HP_PYRAMID; 
-	    break; 
+	  case PRISM:   hpel.type = HP_PRISM;   break; 
+	  case HEX:     hpel.type = HP_HEX;     break; 
+	  case TET:     hpel.type = HP_TET;     break; 
+	  case PYRAMID: hpel.type = HP_PYRAMID; break; 
+
+          default:
+            cerr << "HPRefElement: illegal elementtype (1) " << mesh[i].GetType() << endl;
+            throw NgException ("HPRefElement: illegal elementtype (1)");
 	  } 
 	elements.Append(hpel); 
       }
 	    
-    for(SurfaceElementIndex i=0;i<mesh.GetNSE();i++)
+    for(SurfaceElementIndex i = 0; i < mesh.GetNSE(); i++)
       {
-	HPRefElement hpel(mesh.SurfaceElement(i));
+	HPRefElement hpel(mesh[i]);
 	hpel.coarse_elnr = i; 
-	switch(mesh.SurfaceElement(i).GetType())
+	switch(mesh[i].GetType())
 	  { 
-	  case TRIG: 
-	    hpel.type = HP_TRIG;
-	    break; 
-	  case QUAD: 
-	    hpel.type = HP_QUAD; 
-	    break; 
+	  case TRIG: hpel.type = HP_TRIG; break; 
+	  case QUAD: hpel.type = HP_QUAD; break; 
+
+          default:
+            cerr << "HPRefElement: illegal elementtype (1b) " << mesh[i].GetType() << endl;
+            throw NgException ("HPRefElement: illegal elementtype (1b)");
 	  } 
 	elements.Append(hpel);
       } 
         
-    for(int i=1;i<=mesh.GetNSeg();i++) 
+    for(SegmentIndex i = 0; i < mesh.GetNSeg(); i++) 
       { 
-	Segment & seg = mesh.LineSegment(i); 
-	HPRefElement hpel(seg); 
-	hpel.coarse_elnr = i-1; 
+	Segment & seg = mesh[i];
+	HPRefElement hpel(mesh[i]);
+	hpel.coarse_elnr = i; 
 	hpel.type = HP_SEGM; 
 	hpel.index = seg.edgenr + 10000*seg.si; 
 	if(seg.edgenr >= 10000)
@@ -619,14 +621,13 @@ namespace netgen
 	    throw NgException("assumption that seg.edgenr < 10000 is wrong");
 	  }
 	elements.Append(hpel); 
-
       }
   }
 
  
  
   /* *******************************  DoRefinement *************************************** */
-  void DoRefinement (Mesh & mesh, ARRAY<HPRefElement> & elements,
+  void DoRefinement (Mesh & mesh, Array<HPRefElement> & elements,
 		     Refinement * ref, double fac1) 
   {
     elements.SetAllocSize (5 * elements.Size());
@@ -700,7 +701,7 @@ namespace netgen
 	HPRef_Struct * hprs = Get_HPRef_Struct (el.type);
 	int newlevel = el.levelx + 1;
 
-	int oldnp(0);
+	int oldnp = 0;
 	switch (hprs->geom)
 	  {
 	  case HP_SEGM: oldnp = 2; break;
@@ -710,6 +711,10 @@ namespace netgen
 	  case HP_PYRAMID: oldnp = 5; break;
 	  case HP_PRISM: oldnp = 6; break;
 	  case HP_HEX: oldnp = 8; break;
+            
+          default:
+            cerr << "HPRefElement: illegal type (3) " << hprs->geom << endl;
+            throw NgException ("HPRefElement::SetType: illegal type (3)");
 	  }
 
 
@@ -830,6 +835,8 @@ namespace netgen
 	      case HP_PRISM: newel.np=6; break;
 	      case HP_TET: newel.np=4; break; 
 	      case HP_PYRAMID: newel.np=5; break; 
+              default:
+                throw NgException (string("hprefinement.cpp: illegal type"));
 	      }
 
 	    for (int k = 0; k < newel.np; k++)
@@ -868,7 +875,7 @@ namespace netgen
 
   /* ************************** DoRefineDummies ******************************** */
 
-  void DoRefineDummies (Mesh & mesh, ARRAY<HPRefElement> & elements,
+  void DoRefineDummies (Mesh & mesh, Array<HPRefElement> & elements,
 			Refinement * ref)
   {
     int oldelsize = elements.Size();
@@ -915,6 +922,11 @@ namespace netgen
 	      case HP_PRISM: newel.np=6; break;
 	      case HP_TET: newel.np=4; break; 
 	      case HP_PYRAMID: newel.np=5; break; 
+
+              default:
+                cerr << "HPRefElement: illegal type (4) " << hprsnew->geom << endl;
+                throw NgException ("HPRefElement: illegal type (4)");
+                
 	      }
 	    newel.type = hprs->neweltypes[j];
 	    for (int k = 0; k < 8; k++)
@@ -942,7 +954,7 @@ namespace netgen
 
 
 
-  void SubdivideDegeneratedHexes (Mesh & mesh, ARRAY<HPRefElement> & elements, double fac1)
+  void SubdivideDegeneratedHexes (Mesh & mesh, Array<HPRefElement> & elements, double fac1)
   {
     int oldne = elements.Size();
     for (int i = 0; i < oldne; i++)
@@ -979,11 +991,11 @@ namespace netgen
 
 	      int npi = mesh.AddPoint (center);
 
-	      const ELEMENT_FACE * faces = MeshTopology::GetFaces (HEX);
+	      const ELEMENT_FACE * faces = MeshTopology::GetFaces1 (HEX);
 
 	      for (int j = 0; j < 6; j++)  
 		{
-		  ARRAY<int> pts;
+		  Array<int> pts;
 		  for (int k = 0; k < 4; k++)
 		    {
 		      bool same = 0;
@@ -1081,7 +1093,7 @@ namespace netgen
   }
 
 
-  void CalcStatistics (ARRAY<HPRefElement> & elements)
+  void CalcStatistics (Array<HPRefElement> & elements)
   {
     return;
 #ifdef ABC    
@@ -1233,9 +1245,9 @@ namespace netgen
 
 
 
-  void ReorderPoints (Mesh & mesh, ARRAY<HPRefElement> & hpelements)
+  void ReorderPoints (Mesh & mesh, Array<HPRefElement> & hpelements)
   {
-    ARRAY<int, 1> map (mesh.GetNP());
+    Array<int, 1> map (mesh.GetNP());
     
     for (int i = 1; i <= mesh.GetNP(); i++)
       map[i] = i;
@@ -1276,7 +1288,7 @@ namespace netgen
     cout << nwrong << " wrong prisms, " << nright << " right prisms" << endl;
 
 
-    ARRAY<MeshPoint, 1> hpts(mesh.GetNP());
+    Array<MeshPoint, 1> hpts(mesh.GetNP());
 
     for (int i = 1; i <= mesh.GetNP(); i++)
       hpts[map[i]] = mesh.Point(i);
@@ -1301,29 +1313,29 @@ namespace netgen
     PrintMessage (1, "HP Refinement called, levels = ", levels);
 
  
-    NgLock mem_lock (mem_mutex,1);
+    // NgLock mem_lock (mem_mutex,1);
 
     mesh.coarsemesh = new Mesh; 
     *mesh.coarsemesh = mesh;
     
-#ifdef CURVEDELEMS_NEW
+    // #ifdef CURVEDELEMS_NEW
     const_cast<CurvedElements&> (mesh.coarsemesh->GetCurvedElements() ).
       BuildCurvedElements (ref, mesh.GetCurvedElements().GetOrder());
-#endif
+    // #endif
 
 
     delete mesh.hpelements;
-    mesh.hpelements = new ARRAY<HPRefElement>;
+    mesh.hpelements = new Array<HPRefElement>;
         
-    ARRAY<HPRefElement> & hpelements = *mesh.hpelements; 
+    Array<HPRefElement> & hpelements = *mesh.hpelements; 
         
     InitHPElements(mesh,hpelements); 
     
-    ARRAY<int> nplevel;
+    Array<int> nplevel;
     nplevel.Append (mesh.GetNP());
     
     int act_ref=1;
-    bool sing = ClassifyHPElements(mesh,hpelements, act_ref, levels); 
+    bool sing = ClassifyHPElements (mesh,hpelements, act_ref, levels); 
 
     sing = true; // iterate at least once
     while(sing) 
@@ -1353,8 +1365,8 @@ namespace netgen
 		case HP_SEGM:
 		  {
 		    Segment seg;
-		    seg.p1 = hpel.pnums[0];
-		    seg.p2 = hpel.pnums[1];
+		    seg[0] = hpel.pnums[0];
+		    seg[1] = hpel.pnums[1];
 		    // NOTE: only for less than 10000 elements (HACK) !!!
 		    seg.edgenr = hpel.index % 10000;
 		    seg.si     = hpel.index / 10000;
@@ -1436,7 +1448,7 @@ namespace netgen
 	  { 
 	    Element el = mesh[i] ;
 	    HPRefElement & hpel = hpelements[mesh[i].hp_elnr];
-	    const ELEMENT_EDGE * edges = MeshTopology::GetEdges (mesh[i].GetType());
+	    const ELEMENT_EDGE * edges = MeshTopology::GetEdges1 (mesh[i].GetType());
 	    double dist[3] = {0,0,0}; 
 	    int ord_dir[3] = {0,0,0}; 
 	    int edge_dir[12] = {0,0,0,0,0,0,0,0,0,0,0,0}; 
@@ -1477,6 +1489,12 @@ namespace netgen
 		ord_dir[2] = 2; 
 		ned = 8;  
 		break; 
+
+
+              default:
+                cerr << "HPRefElement: illegal elementtype (2) " << mesh[i].GetType() << endl;
+                throw NgException ("HPRefElement: illegal elementtype (2)");
+                
 	      }
 	
 	    for (int j=0;j<ned;j++) 
@@ -1502,7 +1520,7 @@ namespace netgen
 	  { 
 	    Element2d el = mesh[i] ;
 	    HPRefElement & hpel = hpelements[mesh[i].hp_elnr];
-	    const ELEMENT_EDGE * edges = MeshTopology::GetEdges (mesh[i].GetType());
+	    const ELEMENT_EDGE * edges = MeshTopology::GetEdges1 (mesh[i].GetType());
 	    double dist[3] = {0,0,0}; 
 	    int ord_dir[3] = {0,0,0}; 
 	    int  edge_dir[4] = {0,0,0,0} ; 
@@ -1548,15 +1566,15 @@ namespace netgen
 
 bool CheckSingularities(Mesh & mesh, INDEX_2_HASHTABLE<int> & edges, INDEX_2_HASHTABLE<int> & edgepoint_dom, 
 		       BitArray & cornerpoint, BitArray & edgepoint, INDEX_3_HASHTABLE<int> & faces, INDEX_2_HASHTABLE<int> & face_edges, 
-			INDEX_2_HASHTABLE<int> & surf_edges, ARRAY<int, PointIndex::BASE> & facepoint, int & levels, int & act_ref)
+			INDEX_2_HASHTABLE<int> & surf_edges, Array<int, PointIndex::BASE> & facepoint, int & levels, int & act_ref)
 { 
-  bool sing=0; 
+  bool sing = 0; 
   if (mesh.GetDimension() == 3)
-      {
+    {
 	/*
 	// check, if point has as least 3 different surfs:
 
-	ARRAY<INDEX_3, PointIndex::BASE> surfonpoint(mesh.GetNP());
+	Array<INDEX_3, PointIndex::BASE> surfonpoint(mesh.GetNP());
   	surfonpoint = INDEX_3(0,0,0);
 
 	for (SurfaceElementIndex sei = 0; sei < mesh.GetNSE(); sei++)
@@ -1593,8 +1611,8 @@ bool CheckSingularities(Mesh & mesh, INDEX_2_HASHTABLE<int> & edges, INDEX_2_HAS
 	for (int i = 1; i <= mesh.GetNSeg(); i++)
 	  if (mesh.LineSegment(i).singedge_left * levels >= act_ref)
 	    {
-	      INDEX_2 i2 (mesh.LineSegment(i).p1, 
-			  mesh.LineSegment(i).p2);
+	      INDEX_2 i2 (mesh.LineSegment(i)[0], 
+			  mesh.LineSegment(i)[1]);
 
 	      /*
 		// before
@@ -1619,7 +1637,7 @@ bool CheckSingularities(Mesh & mesh, INDEX_2_HASHTABLE<int> & edges, INDEX_2_HAS
 	for (int i = 1; i <= mesh.GetNE(); i++)
 	  {
 	    const Element & el = mesh.VolumeElement(i);
-	    const ELEMENT_EDGE * eledges = MeshTopology::GetEdges (el.GetType());
+	    const ELEMENT_EDGE * eledges = MeshTopology::GetEdges1 (el.GetType());
 	    int nedges = MeshTopology::GetNEdges (el.GetType());
 	    for (int j = 0; j < nedges; j++)
 	      for (int k = 0; k < nedges; k++)
@@ -1650,21 +1668,21 @@ bool CheckSingularities(Mesh & mesh, INDEX_2_HASHTABLE<int> & edges, INDEX_2_HAS
 	    const FaceDescriptor & fd = mesh.GetFaceDescriptor (el.GetIndex());
 	  
 	    int domnr = 0;
-	    if (fd.domin_singular * levels < act_ref && fd.domout_singular * levels < act_ref) 
+	    if (fd.DomainInSingular() * levels < act_ref && fd.DomainOutSingular() * levels < act_ref) 
 	      { domnr=0;  continue;}
 	    
-	    if (fd.domin_singular * levels >= act_ref) 
+	    if (fd.DomainInSingular() * levels >= act_ref) 
 	      {
 		domnr = fd.DomainIn();
 		sing = 1;
 	      }
-	    if (fd.domout_singular * levels >= act_ref)
+	    if (fd.DomainOutSingular() * levels >= act_ref)
 	      {
 		domnr = fd.DomainOut();
 		sing = 1; 
 	      } 
-	    if (fd.domin_singular * levels >= act_ref 
-		&& fd.domout_singular * levels >= act_ref) 
+	    if (fd.DomainInSingular() * levels >= act_ref 
+		&& fd.DomainOutSingular() * levels >= act_ref) 
 	      {
 		domnr = -1;
 		sing = 1;
@@ -1699,59 +1717,58 @@ bool CheckSingularities(Mesh & mesh, INDEX_2_HASHTABLE<int> & edges, INDEX_2_HAS
 	// 2D case
 
 	// check, if point has as least 3 different surfs:
-	ARRAY<INDEX_3, PointIndex::BASE> surfonpoint(mesh.GetNP());
+	Array<INDEX_3, PointIndex::BASE> surfonpoint(mesh.GetNP());
 
 	for (int i = 1; i <= mesh.GetNP(); i++)
 	  surfonpoint.Elem(i) = INDEX_3(0,0,0);
-      
+	
 	for (int i = 1; i <= mesh.GetNSeg(); i++)
 	  {
 	    const Segment & seg = mesh.LineSegment(i);
 	    int ind = seg.edgenr;
-
-	   
-		if (seg.singedge_left * levels >= act_ref)
-		  {
-		    INDEX_2 i2 (mesh.LineSegment(i).p1, 
-				mesh.LineSegment(i).p2);
-		    edges.Set(i2,1); 
-		    edgepoint.Set(i2.I1());
-		    edgepoint.Set(i2.I2());
-		    *testout << " singleft " << endl;  
-		    *testout << " mesh.LineSegment(i).domout " << mesh.LineSegment(i).domout << endl;      
-		    *testout << " mesh.LineSegment(i).domin " << mesh.LineSegment(i).domin << endl;      
-		    edgepoint_dom.Set (INDEX_2(mesh.LineSegment(i).domin, i2.I1()), 1);
-		    edgepoint_dom.Set (INDEX_2(mesh.LineSegment(i).domin, i2.I2()), 1);
-		    sing = 1; 
-		    
-		  }
+	    
+	    if (seg.singedge_left * levels >= act_ref)
+	      {
+		INDEX_2 i2 (mesh.LineSegment(i)[0], 
+			    mesh.LineSegment(i)[1]);
+		edges.Set(i2,1); 
+		edgepoint.Set(i2.I1());
+		edgepoint.Set(i2.I2());
+		*testout << " singleft " << endl;  
+		*testout << " mesh.LineSegment(i).domout " << mesh.LineSegment(i).domout << endl;      
+		*testout << " mesh.LineSegment(i).domin " << mesh.LineSegment(i).domin << endl;      
+		edgepoint_dom.Set (INDEX_2(mesh.LineSegment(i).domin, i2.I1()), 1);
+		edgepoint_dom.Set (INDEX_2(mesh.LineSegment(i).domin, i2.I2()), 1);
+		sing = 1; 
 		
-		  if (seg.singedge_right * levels >= act_ref)
-		    {
-		      INDEX_2 i2 (mesh.LineSegment(i).p2, 
-				  mesh.LineSegment(i).p1);  
-		      edges.Set (i2, 1);
-		      edgepoint.Set(i2.I1());
-		      edgepoint.Set(i2.I2());
-
-		      *testout << " singright " << endl;  
-		      *testout << " mesh.LineSegment(i).domout " << mesh.LineSegment(i).domout << endl;      
-		      *testout << " mesh.LineSegment(i).domin " << mesh.LineSegment(i).domin << endl;      
-		      
-		      edgepoint_dom.Set (INDEX_2(mesh.LineSegment(i).domout, i2.I1()), 1);
-		      edgepoint_dom.Set (INDEX_2(mesh.LineSegment(i).domout, i2.I2()), 1);
-		      sing = 1;
-		    }
-	
-	    // (*testout) << "seg = " << ind << ", " << seg.p1 << "-" << seg.p2 << endl;
-
+	      }
+	    
+	    if (seg.singedge_right * levels >= act_ref)
+	      {
+		INDEX_2 i2 (mesh.LineSegment(i)[1], 
+			    mesh.LineSegment(i)[0]);  
+		edges.Set (i2, 1);
+		edgepoint.Set(i2.I1());
+		edgepoint.Set(i2.I2());
+		
+		*testout << " singright " << endl;  
+		*testout << " mesh.LineSegment(i).domout " << mesh.LineSegment(i).domout << endl;      
+		*testout << " mesh.LineSegment(i).domin " << mesh.LineSegment(i).domin << endl;      
+		
+		edgepoint_dom.Set (INDEX_2(mesh.LineSegment(i).domout, i2.I1()), 1);
+		edgepoint_dom.Set (INDEX_2(mesh.LineSegment(i).domout, i2.I2()), 1);
+		sing = 1;
+	      }
+	    
+	    // (*testout) << "seg = " << ind << ", " << seg[0] << "-" << seg[1] << endl;
+	    
 
 	    if (seg.singedge_left * levels >= act_ref
 		|| seg.singedge_right* levels >= act_ref)
 	      {
 		for (int j = 0; j < 2; j++)
 		  {
-		    int pi = (j == 0) ? seg.p1 : seg.p2;
+		    int pi = (j == 0) ? seg[0] : seg[1];
 		    INDEX_3 & i3 = surfonpoint.Elem(pi);
 		    if (ind != i3.I1() &&
 			ind != i3.I2())
@@ -1769,7 +1786,7 @@ bool CheckSingularities(Mesh & mesh, INDEX_2_HASHTABLE<int> & edges, INDEX_2_HAS
 	    // mark points for refinement that are in corners between two anisotropic edges 
 	    if (surfonpoint.Get(i).I1())
 	      {
-		cornerpoint.Set(i);
+		// cornerpoint.Set(i);    // disabled by JS, Aug 2009
 		edgepoint.Set(i);
 	      }
 	
@@ -1792,18 +1809,15 @@ bool CheckSingularities(Mesh & mesh, INDEX_2_HASHTABLE<int> & edges, INDEX_2_HAS
       }
 
     if (!sing)
-      {
-	cout << "PrepareElements no more to do for actual refinement " << act_ref << endl; 
-	return(sing);
-      } 
+      cout << "PrepareElements no more to do for actual refinement " << act_ref << endl; 
+
     return(sing); 
 }
 
 
 
-  bool ClassifyHPElements (Mesh & mesh, ARRAY<HPRefElement> & elements, int & act_ref, int & levels)
+  bool ClassifyHPElements (Mesh & mesh, Array<HPRefElement> & elements, int & act_ref, int & levels)
   {
-    
     INDEX_2_HASHTABLE<int> edges(mesh.GetNSeg()+1);
     BitArray edgepoint(mesh.GetNP());
     INDEX_2_HASHTABLE<int> edgepoint_dom(mesh.GetNSeg()+1);
@@ -1817,7 +1831,7 @@ bool CheckSingularities(Mesh & mesh, INDEX_2_HASHTABLE<int> & edges, INDEX_2_HAS
     INDEX_3_HASHTABLE<int> faces(mesh.GetNSE()+1);
     INDEX_2_HASHTABLE<int> face_edges(mesh.GetNSE()+1);
     INDEX_2_HASHTABLE<int> surf_edges(mesh.GetNSE()+1);
-    ARRAY<int, PointIndex::BASE> facepoint(mesh.GetNP());
+    Array<int, PointIndex::BASE> facepoint(mesh.GetNP());
 
     bool sing = CheckSingularities(mesh, edges, edgepoint_dom, 
 			      cornerpoint, edgepoint, faces, face_edges, 
@@ -1826,7 +1840,7 @@ bool CheckSingularities(Mesh & mesh, INDEX_2_HASHTABLE<int> & edges, INDEX_2_HAS
     if(sing==0) return(sing); 
 
     int cnt_undef = 0, cnt_nonimplement = 0;
-    ARRAY<int> misses(10000);
+    Array<int> misses(10000);
     misses = 0;
 
     (*testout) << "edgepoint_dom = " << endl << edgepoint_dom << endl;

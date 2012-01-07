@@ -57,7 +57,8 @@ static bool getGraphData(PView *p, std::vector<double> &x, double &xmin,
   if(data->hasMultipleMeshes()) return false; // cannot handle multi-mesh
 
   int numy = 0;
-  if(opt->type == PViewOptions::Plot2DSpace){
+  if(opt->type == PViewOptions::Plot2D || 
+     opt->type == PViewOptions::Plot2DSpace){
     numy = 1;
   }
   else if(opt->type == PViewOptions::Plot2DTime){
@@ -76,7 +77,8 @@ static bool getGraphData(PView *p, std::vector<double> &x, double &xmin,
   if(!numy) return false;
   y.resize(numy);
 
-  bool space = (opt->type == PViewOptions::Plot2DSpace);
+  bool space = (opt->type == PViewOptions::Plot2D || 
+                opt->type == PViewOptions::Plot2DSpace);
 
   SPoint3 p0(0., 0., 0.);
 
@@ -109,14 +111,21 @@ static bool getGraphData(PView *p, std::vector<double> &x, double &xmin,
           for(int k = 0; k < numComp; k++)
             data->getValue(ts, ent, ele, reorder[j], k, val[k]);
           double vy = ComputeScalarRep(numComp, val);
-          if(space){
-            // store offset to origin + distance to first point
+
+          if(opt->type == PViewOptions::Plot2D){
+            x.push_back(xyz[0]);
+            y[0].push_back(vy);
+          }
+          else if(opt->type == PViewOptions::Plot2DSpace){
+            // compute curvilinear coordinate
             if(x.empty()){
               p0 = SPoint3(xyz[0], xyz[1], xyz[2]);
               x.push_back(ComputeScalarRep(3, xyz));
             }
             else{
-              x.push_back(x[0] + p0.distance(SPoint3(xyz[0], xyz[1], xyz[2])));
+              SPoint3 p1(xyz[0], xyz[1], xyz[2]);
+              x.push_back(x.back() + p0.distance(p1));
+              p0 = p1;
             }
             y[0].push_back(vy);
           }
@@ -124,6 +133,7 @@ static bool getGraphData(PView *p, std::vector<double> &x, double &xmin,
             if(!numy) x.push_back(data->getTime(ts));
             y[numy].push_back(vy);
           }
+
         }
       }
       numy++;
@@ -133,24 +143,10 @@ static bool getGraphData(PView *p, std::vector<double> &x, double &xmin,
   if(x.empty()) return false;
 
   if(space){
-    bool monotone = true;
+    xmin = xmax = x[0];
     for(unsigned int i = 1; i < x.size(); i++){
-      if(x[i] < x[i - 1]){
-        monotone = false;
-        break;
-      }
-    }
-    if(monotone){ // use the "coordinate"
-      xmin = xmax = x[0];
-      for(unsigned int i = 1; i < x.size(); i++){
-        xmin = std::min(xmin, x[i]);
-        xmax = std::max(xmax, x[i]);
-      }
-    }
-    else{ // just use an index
-      for(unsigned int i = 0; i < x.size(); i++) x[i] = i;
-      xmin = 0;
-      xmax = x.size() - 1;
+      xmin = std::min(xmin, x[i]);
+      xmax = std::max(xmax, x[i]);
     }
   }
   else{
@@ -200,7 +196,8 @@ static void drawGraphAxes(drawContext *ctx, PView *p, double xleft, double ytop,
   glEnd();
 
   // y label
-  if(opt->type == PViewOptions::Plot2DSpace){
+  if(opt->type == PViewOptions::Plot2D ||
+     opt->type == PViewOptions::Plot2DSpace){
     int nt = data->getNumTimeSteps();
     if((opt->showTime == 1 && nt > 1) || opt->showTime == 2){
       char tmp[256];
@@ -217,7 +214,7 @@ static void drawGraphAxes(drawContext *ctx, PView *p, double xleft, double ytop,
     sprintf(label, "%s", data->getName().c_str());
   glRasterPos2d(xleft, ytop + font_h + tic);
   ctx->drawStringCenter(label);
-  
+
   // x label
   sprintf(label, "%s", opt->axesLabel[0].c_str());
   glRasterPos2d(xleft + width / 2, ytop - height - 2 * font_h - 2 * tic);

@@ -1,27 +1,33 @@
 #include <mystdlib.h>
 #include "meshing.hpp"
 
+
 namespace netgen
 {
-  ostream * testout = &cout;
+  // stringstream emptystr;
+  // ostream * testout = &emptystr;
+  // testout -> clear(ios::failbit);
+
+  // ostream * testout = &cout;
+  ostream * testout = new ostream(0);
+
+  // NetgenOutStream * testout = new NetgenOutStream;
 
   ostream * mycout = &cout;
   ostream * myerr = &cerr;
 
 
-  // Flags globflags; // not used anymoure
-  Flags parameters;
+  //  Flags parameters;
 
 
   int silentflag = 0;
   int testmode = 0;
 
-  MeshingParameters mparam;
   volatile multithreadt multithread;
 
   string ngdir = ".";
 
-  ARRAY<int> tets_in_qualclass;
+  Array<int> tets_in_qualclass;
 
 
   multithreadt :: multithreadt()

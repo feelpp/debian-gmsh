@@ -9,13 +9,15 @@
 /* *************************************************************************/
 
 
+namespace netgen
+{
 
 /**
   Alternating Digital Tree
  */
 
-#include "../include/mystdlib.h"
-#include "../include/myadt.hpp"
+// #include "../include/mystdlib.h"
+// #include "../include/myadt.hpp"
 
 class ADTreeNode
 {
@@ -49,11 +51,11 @@ class ADTree
   int dim;
   ADTreeNode * root;
   float *cmin, *cmax;
-  ARRAY<ADTreeNode*> ela;
+  Array<ADTreeNode*> ela;
   const ADTreeCriterion * criterion; 
 
-  ARRAY<ADTreeNode*> stack;
-  ARRAY<int> stackdir;
+  Array<ADTreeNode*> stack;
+  Array<int> stackdir;
   int stackindex;
 
 public:
@@ -63,11 +65,11 @@ public:
 
   void Insert (const float * p, int pi);
   // void GetIntersecting (const float * bmin, const float * bmax,
-  //			ARRAY<int> & pis) const;
+  //			Array<int> & pis) const;
   void SetCriterion (ADTreeCriterion & acriterion);
   void Reset ();
   int Next ();
-  void GetMatch (ARRAY<int> & matches);
+  void GetMatch (Array<int> & matches);
 
   void DeleteElement (int pi);
 
@@ -103,7 +105,7 @@ class ADTree3
 {
   ADTreeNode3 * root;
   float cmin[3], cmax[3];
-  ARRAY<ADTreeNode3*> ela;
+  Array<ADTreeNode3*> ela;
 
 public:
   ADTree3 (const float * acmin, 
@@ -112,7 +114,7 @@ public:
 
   void Insert (const float * p, int pi);
   void GetIntersecting (const float * bmin, const float * bmax,
-			ARRAY<int> & pis) const;
+			Array<int> & pis) const;
   
   void DeleteElement (int pi);
 
@@ -153,7 +155,7 @@ class ADTree3Div
 {
   ADTreeNode3Div * root;
   float cmin[3], cmax[3];
-  ARRAY<ADTreeNode3Div*> ela;
+  Array<ADTreeNode3Div*> ela;
 
 public:
   ADTree3Div (const float * acmin, 
@@ -162,7 +164,7 @@ public:
 
   void Insert (const float * p, int pi);
   void GetIntersecting (const float * bmin, const float * bmax,
-			ARRAY<int> & pis) const;
+			Array<int> & pis) const;
   
   void DeleteElement (int pi);
 
@@ -202,7 +204,7 @@ class ADTree3M
 {
   ADTreeNode3M * root;
   float cmin[3], cmax[3];
-  ARRAY<ADTreeNode3M*> ela;
+  Array<ADTreeNode3M*> ela;
 
 public:
   ADTree3M (const float * acmin, 
@@ -211,7 +213,7 @@ public:
 
   void Insert (const float * p, int pi);
   void GetIntersecting (const float * bmin, const float * bmax,
-			ARRAY<int> & pis) const;
+			Array<int> & pis) const;
   
   void DeleteElement (int pi);
 
@@ -251,7 +253,7 @@ class ADTree3F
 {
   ADTreeNode3F * root;
   float cmin[3], cmax[3];
-  ARRAY<ADTreeNode3F*> ela;
+  Array<ADTreeNode3F*> ela;
 
 public:
   ADTree3F (const float * acmin, 
@@ -260,7 +262,7 @@ public:
 
   void Insert (const float * p, int pi);
   void GetIntersecting (const float * bmin, const float * bmax,
-			ARRAY<int> & pis) const;
+			Array<int> & pis) const;
   
   void DeleteElement (int pi);
 
@@ -298,7 +300,7 @@ class ADTree3FM
 {
   ADTreeNode3FM * root;
   float cmin[3], cmax[3];
-  ARRAY<ADTreeNode3FM*> ela;
+  Array<ADTreeNode3FM*> ela;
 
 public:
   ADTree3FM (const float * acmin, 
@@ -307,7 +309,7 @@ public:
 
   void Insert (const float * p, int pi);
   void GetIntersecting (const float * bmin, const float * bmax,
-			ARRAY<int> & pis) const;
+			Array<int> & pis) const;
   
   void DeleteElement (int pi);
 
@@ -349,7 +351,7 @@ class ADTree6
 {
   ADTreeNode6 * root;
   float cmin[6], cmax[6];
-  ARRAY<ADTreeNode6*> ela;
+  Array<ADTreeNode6*> ela;
 
 public:
   ADTree6 (const float * acmin, 
@@ -358,7 +360,7 @@ public:
 
   void Insert (const float * p, int pi);
   void GetIntersecting (const float * bmin, const float * bmax,
-			ARRAY<int> & pis) const;
+			Array<int> & pis) const;
   
   void DeleteElement (int pi);
 
@@ -407,7 +409,7 @@ class ADTree6F
 {
   ADTreeNode6F * root;
   float cmin[6], cmax[6];
-  ARRAY<ADTreeNode6F*> ela;
+  Array<ADTreeNode6F*> ela;
 
 public:
   ADTree6F (const float * acmin, 
@@ -416,7 +418,7 @@ public:
 
   void Insert (const float * p, int pi);
   void GetIntersecting (const float * bmin, const float * bmax,
-			ARRAY<int> & pis) const;
+			Array<int> & pis) const;
   
   void DeleteElement (int pi);
 
@@ -447,13 +449,13 @@ class Point3dTree
   ADTree3 * tree;
 
 public:
-  Point3dTree (const Point3d & pmin, const Point3d & pmax);
-  ~Point3dTree ();
-  void Insert (const Point3d & p, int pi);
+  DLL_HEADER Point3dTree (const Point<3> & pmin, const Point<3> & pmax);
+  DLL_HEADER ~Point3dTree ();
+  DLL_HEADER void Insert (const Point<3> & p, int pi);
   void DeleteElement (int pi) 
     { tree->DeleteElement(pi); }
-  void GetIntersecting (const Point3d & pmin, const Point3d & pmax, 
-			ARRAY<int> & pis) const;
+  DLL_HEADER void GetIntersecting (const Point<3> & pmin, const Point<3> & pmax, 
+			Array<int> & pis) const;
   const ADTree3 & Tree() const { return *tree; };
 };
 
@@ -462,20 +464,23 @@ public:
 class Box3dTree
 {
   ADTree6 * tree;
-  Point3d boxpmin, boxpmax;
+  Point<3> boxpmin, boxpmax;
 public:
-  Box3dTree (const Point3d & apmin, const Point3d & apmax);
+  Box3dTree (const Point<3> & apmin, const Point<3> & apmax);
   ~Box3dTree ();
-  void Insert (const Point3d & bmin, const Point3d & bmax, int pi);
+  void Insert (const Point<3> & bmin, const Point<3> & bmax, int pi);
   void Insert (const Box<3> & box, int pi)
   {
     Insert (box.PMin(), box.PMax(), pi);
   }
   void DeleteElement (int pi) 
     { tree->DeleteElement(pi); }
-  void GetIntersecting (const Point3d & pmin, const Point3d & pmax, 
-			ARRAY<int> & pis) const;
+  void GetIntersecting (const Point<3> & pmin, const Point<3> & pmax, 
+			Array<int> & pis) const;
 
   const ADTree6 & Tree() const { return *tree; };
 };
+
+}
+
 #endif

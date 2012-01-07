@@ -5,7 +5,7 @@
 
 namespace netgen
 {
-  void GetPureBadness(Mesh & mesh, ARRAY<double> & pure_badness,
+  void GetPureBadness(Mesh & mesh, Array<double> & pure_badness,
 		      const BitArray & isnewpoint)
   {
     //const int ne = mesh.GetNE();
@@ -14,7 +14,7 @@ namespace netgen
     pure_badness.SetSize(np+PointIndex::BASE+1);
     pure_badness = -1;
 
-    ARRAY< Point<3>* > backup(np);
+    Array< Point<3>* > backup(np);
 
     for(int i=0; i<np; i++)
       {
@@ -47,10 +47,10 @@ namespace netgen
   }
 
 
-  double Validate(const Mesh & mesh, ARRAY<ElementIndex> & bad_elements,
-		  const ARRAY<double> & pure_badness,
+  double Validate(const Mesh & mesh, Array<ElementIndex> & bad_elements,
+		  const Array<double> & pure_badness,
 		  double max_worsening, const bool uselocalworsening,
-		  ARRAY<double> * quality_loss)
+		  Array<double> * quality_loss)
   {
     PrintMessage(3,"!!!! Validating !!!!");
     //if(max_worsening > 0)
@@ -105,7 +105,7 @@ namespace netgen
 
 
   void GetWorkingArea(BitArray & working_elements, BitArray & working_points,
-		      const Mesh & mesh, const ARRAY<ElementIndex> & bad_elements,
+		      const Mesh & mesh, const Array<ElementIndex> & bad_elements,
 		      const int width)
   {
     working_elements.Clear();
@@ -151,11 +151,11 @@ namespace netgen
 
 
 
-  void RepairBisection(Mesh & mesh, ARRAY<ElementIndex> & bad_elements, 
-		       const BitArray & isnewpoint, Refinement & refinement,
-		       const ARRAY<double> & pure_badness, 
+  void RepairBisection(Mesh & mesh, Array<ElementIndex> & bad_elements, 
+		       const BitArray & isnewpoint, const Refinement & refinement,
+		       const Array<double> & pure_badness, 
 		       double max_worsening, const bool uselocalworsening,
-		       const ARRAY< ARRAY<int,PointIndex::BASE>* > & idmaps)
+		       const Array< Array<int,PointIndex::BASE>* > & idmaps)
   {
     ostringstream ostrstr;
 
@@ -175,9 +175,9 @@ namespace netgen
 
     PushStatus("Repair Bisection");
 
-    ARRAY<Point<3>* > should(np);
-    ARRAY<Point<3>* > can(np);
-    ARRAY<Vec<3>* > nv(np);
+    Array<Point<3>* > should(np);
+    Array<Point<3>* > can(np);
+    Array<Vec<3>* > nv(np);
     for(int i=0; i<np; i++)
       {
 	nv[i] = new Vec<3>;
@@ -192,11 +192,11 @@ namespace netgen
     for(int i = 1; i <= mesh.GetNSeg(); i++)
       {
 	const Segment & seg = mesh.LineSegment(i);
-	isedgepoint.Set(seg.p1);
-	isedgepoint.Set(seg.p2);
+	isedgepoint.Set(seg[0]);
+	isedgepoint.Set(seg[1]);
       }
 
-    ARRAY<int> surfaceindex(np);
+    Array<int> surfaceindex(np);
     surfaceindex = -1;
     
     for (int i = 1; i <= mesh.GetNSE(); i++)
@@ -376,7 +376,8 @@ namespace netgen
 	    // smooth faces
 	    mesh.CalcSurfacesOfNode();
 	    
-	    mesh.ImproveMeshJacobianOnSurface(isworkingboundary,nv,OPT_QUALITY,&idmaps);
+	    MeshingParameters dummymp;
+	    mesh.ImproveMeshJacobianOnSurface(dummymp,isworkingboundary,nv,OPT_QUALITY, &idmaps);
 	    
 	    for (int i = 1; i <= np; i++)
 	      *can.Elem(i) = mesh.Point(i);
@@ -447,7 +448,8 @@ namespace netgen
 	    
 	    mesh.CalcSurfacesOfNode();
 	    
-	    mesh.ImproveMeshJacobian (OPT_QUALITY,&working_points);
+	    MeshingParameters dummymp;
+	    mesh.ImproveMeshJacobian (dummymp, OPT_QUALITY,&working_points);
 	    //mesh.ImproveMeshJacobian (OPT_WORSTCASE,&working_points);
 	  
 
@@ -460,7 +462,8 @@ namespace netgen
 	   cnttrials < maxtrials &&
 	   multithread.terminate != 1)
 	  {
-	    MeshOptimize3d optmesh;
+	    MeshingParameters dummymp;
+	    MeshOptimize3d optmesh(dummymp);
 	    for(int i=0; i<numtopimprove; i++)
 	      {
 		optmesh.SwapImproveSurface(mesh,OPT_QUALITY,&working_elements,&idmaps);
@@ -507,7 +510,8 @@ namespace netgen
 
       }
 
-    MeshOptimize3d optmesh;
+    MeshingParameters dummymp;
+    MeshOptimize3d optmesh(dummymp);
     for(int i=0; i<numtopimprove && multithread.terminate != 1; i++)
       {
 	optmesh.SwapImproveSurface(mesh,OPT_QUALITY,NULL,&idmaps);

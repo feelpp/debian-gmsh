@@ -241,8 +241,17 @@ class cartesianBox {
     newElem->xyz2uvw(xyz, uvw);
     //printf("uvw =%g %g %g \n", uvw[0],uvw[1],uvw[2]);
     double val = newElem->interpolate(vals, uvw[0], uvw[1], uvw[2]);
-
+    
     delete newElem;
+    delete v1;
+    delete v2;
+    delete v3;
+    delete v4;
+    delete v5;
+    delete v6;
+    delete v7;
+    delete v8;
+
     return val;
   }
   int getCellContainingPoint(double x, double y, double z) const

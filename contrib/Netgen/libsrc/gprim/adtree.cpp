@@ -206,7 +206,7 @@ namespace netgen
   }
 
 
-  void ADTree :: GetMatch (ARRAY <int> & matches)
+  void ADTree :: GetMatch (Array <int> & matches)
   {
     int nodenr;
 
@@ -398,10 +398,10 @@ namespace netgen
 
   void ADTree3 :: GetIntersecting (const float * bmin, 
 				   const float * bmax,
-				   ARRAY<int> & pis) const
+				   Array<int> & pis) const
   {
-    static ARRAY<ADTreeNode3*> stack(1000);
-    static ARRAY<int> stackdir(1000);
+    static Array<ADTreeNode3*> stack(1000);
+    static Array<int> stackdir(1000);
     ADTreeNode3 * node;
     int dir, stacks;
 
@@ -658,10 +658,10 @@ namespace netgen
 
   void ADTree3Div :: GetIntersecting (const float * bmin, 
 				      const float * bmax,
-				      ARRAY<int> & pis) const
+				      Array<int> & pis) const
   {
-    static ARRAY<ADTreeNode3Div*> stack(1000);
-    static ARRAY<int> stackdir(1000);
+    static Array<ADTreeNode3Div*> stack(1000);
+    static Array<int> stackdir(1000);
     ADTreeNode3Div * node;
     int dir, i, stacks;
 
@@ -917,10 +917,10 @@ namespace netgen
 
   void ADTree3M :: GetIntersecting (const float * bmin, 
 				    const float * bmax,
-				    ARRAY<int> & pis) const
+				    Array<int> & pis) const
   {
-    static ARRAY<ADTreeNode3M*> stack(1000);
-    static ARRAY<int> stackdir(1000);
+    static Array<ADTreeNode3M*> stack(1000);
+    static Array<int> stackdir(1000);
     ADTreeNode3M * node;
     int dir, i, stacks;
 
@@ -1163,9 +1163,9 @@ namespace netgen
 
   void ADTree3F :: GetIntersecting (const float * bmin, 
 				    const float * bmax,
-				    ARRAY<int> & pis) const
+				    Array<int> & pis) const
   {
-    static ARRAY<ADTreeNode3F*> stack(1000);
+    static Array<ADTreeNode3F*> stack(1000);
     ADTreeNode3F * node;
     int dir, i, stacks;
 
@@ -1427,9 +1427,9 @@ namespace netgen
 
   void ADTree3FM :: GetIntersecting (const float * bmin, 
 				     const float * bmax,
-				     ARRAY<int> & pis) const
+				     Array<int> & pis) const
   {
-    static ARRAY<ADTreeNode3FM*> stack(1000);
+    static Array<ADTreeNode3FM*> stack(1000);
     ADTreeNode3FM * node;
     int dir, i, stacks;
 
@@ -1562,7 +1562,7 @@ namespace netgen
 
 
   BlockAllocator ADTreeNode6 :: ball (sizeof (ADTreeNode6));
-  void * ADTreeNode6 :: operator new(size_t)
+  void * ADTreeNode6 :: operator new(size_t s)
   {
     return ball.Alloc();
   }
@@ -1700,9 +1700,9 @@ namespace netgen
 
   void ADTree6 :: GetIntersecting (const float * bmin, 
 				   const float * bmax,
-				   ARRAY<int> & pis) const
+				   Array<int> & pis) const
   {
-    static ARRAY<inttn6> stack(10000);
+    static Array<inttn6> stack(10000);
 
     stack.SetSize (10000);
     pis.SetSize(0);
@@ -1959,9 +1959,9 @@ namespace netgen
 
   void ADTree6F :: GetIntersecting (const float * bmin, 
 				    const float * bmax,
-				    ARRAY<int> & pis) const
+				    Array<int> & pis) const
   {
-    static ARRAY<ADTreeNode6F*> stack(1000);
+    static Array<ADTreeNode6F*> stack(1000);
     ADTreeNode6F * node;
     int dir, i, stacks;
 
@@ -2065,13 +2065,13 @@ namespace netgen
 
 
 
-  Point3dTree :: Point3dTree (const Point3d & pmin, const Point3d & pmax)
+  Point3dTree :: Point3dTree (const Point<3> & pmin, const Point<3> & pmax)
   {
     float pmi[3], pma[3];
     for (int i = 0; i < 3; i++)
       {
-	pmi[i] = pmin.X(i+1);
-	pma[i] = pmax.X(i+1);
+	pmi[i] = pmin(i);
+	pma[i] = pmax(i);
       }
     tree = new ADTree3 (pmi, pma);
   }
@@ -2083,23 +2083,23 @@ namespace netgen
 
 
 
-  void Point3dTree :: Insert (const Point3d & p, int pi)
+  void Point3dTree :: Insert (const Point<3> & p, int pi)
   {
-    static float pd[3];
-    pd[0] = p.X();
-    pd[1] = p.Y();
-    pd[2] = p.Z();
+    float pd[3];
+    pd[0] = p(0);
+    pd[1] = p(1);
+    pd[2] = p(2);
     tree->Insert (pd, pi);
   }
 
-  void Point3dTree :: GetIntersecting (const Point3d & pmin, const Point3d & pmax, 
-				       ARRAY<int> & pis) const
+  void Point3dTree :: GetIntersecting (const Point<3> & pmin, const Point<3> & pmax, 
+				       Array<int> & pis) const
   {
     float pmi[3], pma[3];
     for (int i = 0; i < 3; i++)
       {
-	pmi[i] = pmin.X(i+1);
-	pma[i] = pmax.X(i+1);
+	pmi[i] = pmin(i);
+	pma[i] = pmax(i);
       }
     tree->GetIntersecting (pmi, pma, pis);
   }
@@ -2113,15 +2113,15 @@ namespace netgen
 
 
 
-  Box3dTree :: Box3dTree (const Point3d & apmin, const Point3d & apmax)
+  Box3dTree :: Box3dTree (const Point<3> & apmin, const Point<3> & apmax)
   {
     boxpmin = apmin;
     boxpmax = apmax;
     float tpmin[6], tpmax[6];
     for (int i = 0; i < 3; i++)
       {
-	tpmin[i] = tpmin[i+3] = boxpmin.X(i+1);
-	tpmax[i] = tpmax[i+3] = boxpmax.X(i+1);
+	tpmin[i] = tpmin[i+3] = boxpmin(i);
+	tpmax[i] = tpmax[i+3] = boxpmax(i);
       }
     tree = new ADTree6 (tpmin, tpmax);
   }
@@ -2131,32 +2131,32 @@ namespace netgen
     delete tree;
   }
 
-  void Box3dTree :: Insert (const Point3d & bmin, const Point3d & bmax, int pi)
+  void Box3dTree :: Insert (const Point<3> & bmin, const Point<3> & bmax, int pi)
   {
-    static float tp[6];
+    float tp[6];
 
     for (int i = 0; i < 3; i++)
       {
-	tp[i] = bmin.X(i+1);
-	tp[i+3] = bmax.X(i+1);
+	tp[i] = bmin(i);
+	tp[i+3] = bmax(i);
       }
 
     tree->Insert (tp, pi);
   }
 
-  void Box3dTree ::GetIntersecting (const Point3d & pmin, const Point3d & pmax, 
-				    ARRAY<int> & pis) const
+  void Box3dTree ::GetIntersecting (const Point<3> & pmin, const Point<3> & pmax, 
+				    Array<int> & pis) const
   {
     float tpmin[6];
     float tpmax[6];
 
     for (int i = 0; i < 3; i++)
       {
-	tpmin[i] = boxpmin.X(i+1);
-	tpmax[i] = pmax.X(i+1);
+	tpmin[i] = boxpmin(i);
+	tpmax[i] = pmax(i);
       
-	tpmin[i+3] = pmin.X(i+1);
-	tpmax[i+3] = boxpmax.X(i+1);
+	tpmin[i+3] = pmin(i);
+	tpmax[i+3] = boxpmax(i);
       }
 
     tree->GetIntersecting (tpmin, tpmax, pis);
