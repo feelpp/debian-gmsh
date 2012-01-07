@@ -1,3 +1,21 @@
+gmsh (2.5.1~beta2~svn10875~dfsg-1) unstable; urgency=low
+
+  [ Christophe Trophime ]
+  * [ba58a67] Enable tetgen on systems, where it is available. 
+              Needs package-rebuilding.
+  * [c662ef0] Reenable python-bindings.
+  * [1283634] Use packaged version of gmm instead of shipped with tarball. 
+              Patch is disabled.
+
+  [ Anton Gladky ]
+  * [5113738] Install doc-files from utils/ directory.
+  * [29c8205] Make menu-icon of 2 sizes: 16x16 and 32x32.
+  * [27243b3] Use --parallel building
+  * [0176242] Override lintian warning. License file is not a license.
+  * [f41ccad] Imported Upstream version 2.5.1~beta2~svn10875~dfsg
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Sat, 07 Jan 2012 08:04:21 +0100
+
 gmsh (2.5.1~beta2~svn10664~dfsg-3) unstable; urgency=low
 
   * [980797d] Remove slepc, because it is not in testing.
