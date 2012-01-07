@@ -7,6 +7,9 @@
 /* Date:   01. Jun. 95                                                    */
 /**************************************************************************/
 
+namespace netgen
+{
+
 /**
    Abstract data type HASHTABLE.
    Hash is done by one INDEX
@@ -15,7 +18,7 @@ class BASE_INDEX_HASHTABLE
 {
 protected:
   /// keys are stored in this table
-  TABLE<INDEX> hash;
+  TABLE<INDEX,1> hash;
   
 public:
   ///
@@ -38,9 +41,9 @@ template <class T>
 class INDEX_HASHTABLE : private BASE_INDEX_HASHTABLE
 {
   ///
-  TABLE<T> cont;
+  TABLE<T,1> cont;
   
-public:
+public: 
   ///
   inline INDEX_HASHTABLE (int size);
   ///
@@ -59,7 +62,6 @@ public:
   ///
   inline void PrintMemInfo (ostream & ost) const;
 };
-
 
 
 
@@ -481,7 +483,7 @@ public:
   ///
   int HashValue (const INDEX & ind) const
   {
-    return ind % hash.Size() + 1;
+    return (3*ind) % hash.Size() + 1;
   }
 
 
@@ -496,6 +498,22 @@ public:
 	if (i > hash.Size()) i = 1;
       }
   }
+
+  int CalcPositionCosts (const INDEX & ind) const
+  {
+    int i = HashValue(ind);
+    int costs = 1;
+    while (1)
+      {
+	if (hash.Get(i) == ind) return costs;
+	if (hash.Get(i) == invalid) return costs;
+	i++;
+	if (i > hash.Size()) i = 1;
+	costs++;
+      }
+  }
+
+
 
   // returns 1, if new postion is created
   int PositionCreate (const INDEX & ind, int & apos)
@@ -714,6 +732,27 @@ public:
   }
 };
 
+
+
+template <typename T> 
+inline ostream & operator<< (ostream & ost, const INDEX_2_CLOSED_HASHTABLE<T> & ht)
+{
+  for (int i = 0; i < ht.Size(); i++)
+    if (ht.UsedPos(i))
+      {
+	INDEX_2 hash;
+	T data;
+	ht.GetData (i, hash, data);
+	ost << "hash = " << hash << ", data = " << data << endl;
+      }
+  return ost;
+}
+
+
+
+
+
+
 class BASE_INDEX_3_CLOSED_HASHTABLE
 {
 protected:
@@ -721,7 +760,6 @@ protected:
   int invalid;
 
 protected: 
-  // public:    //SZ
   BASE_INDEX_3_CLOSED_HASHTABLE (int size)
     : hash(size)
   {
@@ -892,6 +930,20 @@ public:
 };
 
 
+
+template <typename T> 
+inline ostream & operator<< (ostream & ost, const INDEX_3_CLOSED_HASHTABLE<T> & ht)
+{
+  for (int i = 0; i < ht.Size(); i++)
+    if (ht.UsedPos(i))
+      {
+	INDEX_3 hash;
+	T data;
+	ht.GetData (i, hash, data);
+	ost << "hash = " << hash << ", data = " << data << endl;
+      }
+  return ost;
+}
 
 
 
@@ -1304,19 +1356,7 @@ PrintMemInfo (ostream & ost) const
 */
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+}
 
 
 #endif

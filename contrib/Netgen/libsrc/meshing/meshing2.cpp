@@ -7,24 +7,23 @@ namespace netgen
 
 
   // global variable for visualization
+//   static Array<Point3d> locpoints;
+//   static Array<int> legalpoints;
+//   static Array<Point2d> plainpoints;
+//   static Array<int> plainzones;
+//   static Array<INDEX_2> loclines;
+//   // static int geomtrig;
+//   //static const char * rname;
+//   static int cntelem, trials, nfaces;
+//   static int oldnl;
+//   static int qualclass;
 
-  static ARRAY<Point3d> locpoints;
-  static ARRAY<int> legalpoints;
-  static ARRAY<Point2d> plainpoints;
-  static ARRAY<int> plainzones;
-  static ARRAY<INDEX_2> loclines;
-  static int geomtrig;
-  //static const char * rname;
-  static int cntelem, trials, nfaces;
-  static int oldnl;
-  static int qualclass;
- 
 
-  Meshing2 :: Meshing2 (const Box<3> & aboundingbox)
+  Meshing2 :: Meshing2 (const MeshingParameters & mp, const Box<3> & aboundingbox)
   {
     boundingbox = aboundingbox;
-
-    LoadRules (NULL);
+    
+    LoadRules (NULL, mp.quad);
     // LoadRules ("rules/quad.rls");
     // LoadRules ("rules/triangle.rls");
 
@@ -73,8 +72,8 @@ namespace netgen
     canuse = 0;
     ruleused = 0;
 
-    cntelem = 0;
-    trials = 0;
+    // cntelem = 0;
+    // trials = 0;
   }
 
   void Meshing2 :: EndMesh ()
@@ -102,8 +101,8 @@ namespace netgen
   }
 
   // should be class variables !!(?)
-  static Vec3d ex, ey;
-  static Point3d globp1;
+  // static Vec3d ex, ey;
+  // static Point3d globp1;
 
   void Meshing2 :: DefineTransformation (const Point3d & p1, const Point3d & p2,
 					 const PointGeomInfo * geominfo1,
@@ -176,9 +175,9 @@ namespace netgen
   }
 
   void Meshing2 ::
-  GetChartBoundary (ARRAY<Point2d> & points, 
-		    ARRAY<Point3d> & points3d, 
-		    ARRAY<INDEX_2> & lines, double h) const
+  GetChartBoundary (Array<Point2d> & points, 
+		    Array<Point3d> & points3d, 
+		    Array<INDEX_2> & lines, double h) const
   {
     points.SetSize (0);
     points3d.SetSize (0);
@@ -194,18 +193,25 @@ namespace netgen
 
 
 
-  MESHING2_RESULT Meshing2 :: GenerateMesh (Mesh & mesh, double gh, int facenr)
+  MESHING2_RESULT Meshing2 :: GenerateMesh (Mesh & mesh, const MeshingParameters & mp, double gh, int facenr)
   {
-    ARRAY<int> pindex, lindex;
-    ARRAY<int> delpoints, dellines;
+    static int timer = NgProfiler::CreateTimer ("surface meshing");
 
-    ARRAY<PointGeomInfo> upgeominfo;  // unique info
-    ARRAY<MultiPointGeomInfo> mpgeominfo;  // multiple info
+    static int timer1 = NgProfiler::CreateTimer ("surface meshing1");
+    static int timer2 = NgProfiler::CreateTimer ("surface meshing2");
+    static int timer3 = NgProfiler::CreateTimer ("surface meshing3");
+    NgProfiler::RegionTimer reg (timer);
 
-    ARRAY<Element2d> locelements;
+
+    Array<int> pindex, lindex;
+    Array<int> delpoints, dellines;
+
+    Array<PointGeomInfo> upgeominfo;  // unique info
+    Array<MultiPointGeomInfo> mpgeominfo;  // multiple info
+
+    Array<Element2d> locelements;
 
     int z1, z2, oldnp(-1);
-    SurfaceElementIndex sei;
     bool found;
     int rulenr(-1);
     int globind;
@@ -220,12 +226,23 @@ namespace netgen
     double h, his, hshould;
 
 
+    Array<Point3d> locpoints;
+    Array<int> legalpoints;
+    Array<Point2d> plainpoints;
+    Array<int> plainzones;
+    Array<INDEX_2> loclines;
+    int cntelem = 0, trials = 0, nfaces = 0;
+    int oldnl = 0;
+    int qualclass;
+
+
+
     // test for 3d overlaps
     Box3dTree surfeltree (boundingbox.PMin(),
 			  boundingbox.PMax());
 
-    ARRAY<int> intersecttrias;
-    ARRAY<Point3d> critpoints;
+    Array<int> intersecttrias;
+    Array<Point3d> critpoints;
 
     // test for doubled edges
     //INDEX_2_HASHTABLE<int> doubleedge(300000);
@@ -235,14 +252,14 @@ namespace netgen
 
     StartMesh();
 
-    ARRAY<Point2d> chartboundpoints;
-    ARRAY<Point3d> chartboundpoints3d;
-    ARRAY<INDEX_2> chartboundlines;
+    Array<Point2d> chartboundpoints;
+    Array<Point3d> chartboundpoints3d;
+    Array<INDEX_2> chartboundlines;
 
     // illegal points: points with more then 50 elements per node
     int maxlegalpoint(-1), maxlegalline(-1);
-    ARRAY<int,PointIndex::BASE> trigsonnode;
-    ARRAY<int,PointIndex::BASE> illegalpoint;
+    Array<int,PointIndex::BASE> trigsonnode;
+    Array<int,PointIndex::BASE> illegalpoint;
 
     trigsonnode.SetSize (mesh.GetNP());
     illegalpoint.SetSize (mesh.GetNP());
@@ -254,7 +271,9 @@ namespace netgen
     double totalarea = Area ();
     double meshedarea = 0;
 
+
     // search tree for surface elements:
+    /*
     for (sei = 0; sei < mesh.GetNSE(); sei++)
       {
 	const Element2d & sel = mesh[sei];
@@ -269,18 +288,45 @@ namespace netgen
 	    box.Add ( mesh[sel[2]] );
 	    surfeltree.Insert (box, sei);
 	  }
-      
-	double trigarea = Cross ( mesh[sel[1]]-mesh[sel[0]],
-				  mesh[sel[2]]-mesh[sel[0]] ).Length() / 2;
-
-
-	if (sel.GetNP() == 4)
-	  trigarea += Cross (Vec3d (mesh.Point (sel.PNum(1)),
-				    mesh.Point (sel.PNum(3))),
-			     Vec3d (mesh.Point (sel.PNum(1)),
-				    mesh.Point (sel.PNum(4)))).Length() / 2;;
-	meshedarea += trigarea;
       }
+    */
+    Array<SurfaceElementIndex> seia;
+    mesh.GetSurfaceElementsOfFace (facenr, seia);
+    for (int i = 0; i < seia.Size(); i++)
+      {
+	const Element2d & sel = mesh[seia[i]];
+
+	if (sel.IsDeleted()) continue;
+
+	Box<3> box;
+	box.Set ( mesh[sel[0]] );
+	box.Add ( mesh[sel[1]] );
+	box.Add ( mesh[sel[2]] );
+	surfeltree.Insert (box, i);
+      }
+
+
+
+
+    if (totalarea > 0 || maxarea > 0)
+      for (SurfaceElementIndex sei = 0; sei < mesh.GetNSE(); sei++)
+	{
+	  const Element2d & sel = mesh[sei];
+	  if (sel.IsDeleted()) continue;
+	
+	  double trigarea = Cross ( mesh[sel[1]]-mesh[sel[0]],
+				    mesh[sel[2]]-mesh[sel[0]] ).Length() / 2;
+	  
+	  
+	  if (sel.GetNP() == 4)
+	    trigarea += Cross (Vec3d (mesh.Point (sel.PNum(1)),
+				      mesh.Point (sel.PNum(3))),
+			       Vec3d (mesh.Point (sel.PNum(1)),
+				      mesh.Point (sel.PNum(4)))).Length() / 2;;
+	  meshedarea += trigarea;
+	}
+
+
 
 
     const char * savetask = multithread.task;
@@ -293,8 +339,11 @@ namespace netgen
 
     double meshedarea_before = meshedarea;
 
+
     while (!adfront ->Empty() && !multithread.terminate)
       {
+	NgProfiler::RegionTimer reg1 (timer1);
+
 	if (multithread.terminate)
 	  throw NgException ("Meshing stopped");
 
@@ -370,12 +419,16 @@ namespace netgen
 
 	adfront ->GetLocals (baselineindex, locpoints, mpgeominfo, loclines, 
 			     pindex, lindex, 2*hinner);
+
+
+	NgProfiler::RegionTimer reg2 (timer2);
+
 	//(*testout) << "h for locals: " << 2*hinner << endl;
 	
 
 	//(*testout) << "locpoints " << locpoints << endl;
 
-	if (qualclass > mparam.giveuptol2d)
+	if (qualclass > mp.giveuptol2d)
 	  {
 	    PrintMessage (3, "give up with qualclass ", qualclass);
 	    PrintMessage (3, "number of frontlines = ", adfront->GetNFL());
@@ -399,15 +452,17 @@ namespace netgen
 
 
 	debugflag = 
-	  debugparam.haltsegment &&
-	  ( (debugparam.haltsegmentp1 == gpi1) && 
-	    (debugparam.haltsegmentp2 == gpi2) || 
-	    (debugparam.haltsegmentp1 == gpi2) && 
-	    (debugparam.haltsegmentp2 == gpi1)) ||
-	  debugparam.haltnode &&
-	  ( (debugparam.haltsegmentp1 == gpi1) ||
-	    (debugparam.haltsegmentp2 == gpi1));
-
+	  ( 
+	   debugparam.haltsegment &&
+	   ( ((debugparam.haltsegmentp1 == gpi1) && (debugparam.haltsegmentp2 == gpi2)) || 
+	     ((debugparam.haltsegmentp1 == gpi2) && (debugparam.haltsegmentp2 == gpi1))) 
+	   ) 
+	  ||
+	  (
+	   debugparam.haltnode &&
+	   ( (debugparam.haltsegmentp1 == gpi1) || (debugparam.haltsegmentp2 == gpi1))
+	   );
+	
       
 	if (debugparam.haltface && debugparam.haltfacenr == facenr)
 	  {
@@ -417,7 +472,6 @@ namespace netgen
 	
 	if (debugparam.haltlargequalclass && qualclass > 50)
 	  debugflag = 1;
-
 
 	// problem recognition !
 	if (found && 
@@ -446,7 +500,11 @@ namespace netgen
 
 	    // (*testout) << endl;
 
-	    //	    (*testout) << "3d->2d transformation" << endl;
+	    if (debugflag)
+	      {
+		*testout << "3d->2d transformation" << endl;
+		*testout << "3d points: " << endl << locpoints << endl;
+	      }
 
 	    for (int i = 1; i <= locpoints.Size(); i++)
 	      {
@@ -459,6 +517,10 @@ namespace netgen
 		//(*testout) << "transform " << locpoints.Get(i) << " to " << plainpoints.Get(i).X() << " " << plainpoints.Get(i).Y() << endl;
 	      }
 	    //	    (*testout) << endl << endl << endl;
+
+
+	    if (debugflag)
+	      *testout << "2d points: " << endl << plainpoints << endl;
 
 
 	    p12d = plainpoints.Get(1);
@@ -566,7 +628,7 @@ namespace netgen
 		      }			
 		  }
 	      
-		else if (z1 > 0 && z2 > 0 && (z1 != z2) || (z1 < 0) && (z2 < 0) )
+		else if ( (z1 > 0 && z2 > 0 && (z1 != z2)) || ((z1 < 0) && (z2 < 0)) )
 		  {
 		    loclines.DeleteElement(i);
 		    lindex.DeleteElement(i);
@@ -658,7 +720,7 @@ namespace netgen
 
 
 
-	    if (mparam.checkchartboundary)
+	    if (mp.checkchartboundary)
 	      {
 		for (int i = 1; i <= chartboundpoints.Size(); i++)
 		  {
@@ -695,7 +757,8 @@ namespace netgen
 	  {
 	    rulenr = ApplyRules (plainpoints, legalpoints, maxlegalpoint,
 				 loclines, maxlegalline, locelements,
-				 dellines, qualclass);
+				 dellines, qualclass, mp);
+
 	    //	    (*testout) << "Rule Nr = " << rulenr << endl;
 	    if (!rulenr)
 	      {
@@ -705,6 +768,9 @@ namespace netgen
 	      }
 	  }
       
+	NgProfiler::RegionTimer reg3 (timer3);
+
+
 	for (int i = 1; i <= locelements.Size() && found; i++)
 	  {
 	    const Element2d & el = locelements.Get(i);
@@ -912,7 +978,7 @@ namespace netgen
 	  }
 
 
-	if (found && mparam.checkoverlap)
+	if (found && mp.checkoverlap)
 	  {
 	    // cout << "checkoverlap" << endl;
 	    // test for overlaps
@@ -1449,13 +1515,14 @@ namespace netgen
 
     PrintMessage (3, "Surface meshing done");
 
+
     adfront->PrintOpenSegments (*testout);
 
     multithread.task = savetask;
 
 
-    //  cout << "surfeltree.depth = " << surfeltree.Tree().Depth() << endl;
     EndMesh ();
+
 
     if (!adfront->Empty())
       return MESHING2_GIVEUP;
@@ -1478,8 +1545,8 @@ namespace netgen
 
 
 
-
-#ifdef OPENGL
+// #define OPENGL
+#ifdef OPENGLxx
 
 /* *********************** Draw Surface Meshing **************** */
 

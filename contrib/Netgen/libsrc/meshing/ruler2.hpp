@@ -23,31 +23,33 @@ private:
   ///
   char * name;
   ///
-  ARRAY<Point2d> points;
+  Array<Point2d> points;
   ///
-  ARRAY<INDEX_2> lines;
+  Array<INDEX_2> lines;
   ///
-  ARRAY<Point2d> freezone, freezonelimit;
+  Array<Point2d> freezone, freezonelimit;
   ///
-  ARRAY<Point2d> transfreezone;
+  Array<Array<Point2d>*> freezone_i;
+  ///
+  Array<Point2d> transfreezone;
 
   ///
-  ARRAY<int> dellines;
+  Array<int> dellines;
   ///
-  ARRAY<Element2d> elements;
+  Array<Element2d> elements;
   ///
-  ARRAY<threefloat> tolerances, linetolerances;
+  Array<threefloat> tolerances, linetolerances;
   ///
-  ARRAY<threeint> orientations;
+  Array<threeint> orientations;
   ///
   DenseMatrix oldutonewu, oldutofreearea, oldutofreearealimit;
   ///
-  ARRAY<DenseMatrix*> oldutofreearea_i;
+  Array<DenseMatrix*> oldutofreearea_i;
   ///
   MatrixFixWidth<3> freesetinequ;
 
   ///
-  ARRAY<Vec2d> linevecs;
+  Array<Vec2d> linevecs;
 
   ///
   int noldp, noldl;
@@ -55,7 +57,7 @@ private:
   float fzminx, fzmaxx, fzminy, fzmaxy;
 
   /// topological distance of line to base element
-  ARRAY<int> lnearness;
+  Array<int> lnearness;
 
 public:
 
@@ -94,9 +96,9 @@ public:
   ///
   int GetDelLine (int i) const { return dellines.Get(i); }
   ///
-  const ARRAY<int> & GetDelLines() const { return dellines; }
+  const Array<int> & GetDelLines() const { return dellines; }
   ///
-  void GetFreeZone (ARRAY<Point2d> & afreearea);
+  void GetFreeZone (Array<Point2d> & afreearea);
   ///
 
   double CalcPointDist (int pi, const Point2d & p) const
@@ -131,10 +133,10 @@ public:
   ///
   int IsLineInFreeZone (const Point2d & p1, const Point2d & p2) const
   {
-    if (p1.X() > fzmaxx && p2.X() > fzmaxx ||
-	p1.X() < fzminx && p2.X() < fzminx ||
-	p1.Y() > fzmaxy && p2.Y() > fzmaxy ||
-	p1.Y() < fzminy && p2.Y() < fzminy) return 0;
+    if ( (p1.X() > fzmaxx && p2.X() > fzmaxx) ||
+         (p1.X() < fzminx && p2.X() < fzminx) ||
+         (p1.Y() > fzmaxy && p2.Y() > fzmaxy) ||
+         (p1.Y() < fzminy && p2.Y() < fzminy) ) return 0;
     return IsLineInFreeZone2 (p1, p2);
   }
   ///
@@ -142,7 +144,7 @@ public:
   ///
   int ConvexFreeZone () const;
   ///
-  const ARRAY<Point2d> & GetTransFreeZone () { return transfreezone; }
+  const Array<Point2d> & GetTransFreeZone () { return transfreezone; }
 
   ///
   int GetPointNr (int ln, int endp) const { return lines.Get(ln).I(endp); }

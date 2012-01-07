@@ -4,6 +4,13 @@
 
 namespace netgen
 {
+
+  void Refinement :: Refine (Mesh & mesh) const
+  {
+    const_cast<Refinement&> (*this).Refine(mesh);
+  }
+
+
   void Refinement :: Refine (Mesh & mesh)
   {
     // reduce 2nd order
@@ -17,14 +24,14 @@ namespace netgen
 
     // refine edges
 
-    ARRAY<EdgePointGeomInfo,PointIndex::BASE> epgi;
+    Array<EdgePointGeomInfo,PointIndex::BASE> epgi;
 
     oldns = mesh.GetNSeg();
     for (SegmentIndex si = 0; si < oldns; si++)
       {
 	const Segment & el = mesh.LineSegment(si);
 
-	INDEX_2 i2 = INDEX_2::Sort(el.p1, el.p2);
+	INDEX_2 i2 = INDEX_2::Sort(el[0], el[1]);
 	PointIndex pinew;
 	EdgePointGeomInfo ngi;
 
@@ -36,9 +43,8 @@ namespace netgen
 	else
 	  {
 	    Point<3> pnew;
-
-	    PointBetween (mesh.Point (el.p1),
-			  mesh.Point (el.p2), 0.5,
+	    PointBetween (mesh.Point (el[0]),
+			  mesh.Point (el[1]), 0.5,
 			  el.surfnr1, el.surfnr2,
 			  el.epgeominfo[0], el.epgeominfo[1],
 			  pnew, ngi);
@@ -54,9 +60,9 @@ namespace netgen
 
 	Segment ns1 = el;
 	Segment ns2 = el;
-	ns1.p2 = pinew;
+	ns1[1] = pinew;
 	ns1.epgeominfo[1] = ngi;
-	ns2.p1 = pinew;
+	ns2[0] = pinew;
 	ns2.epgeominfo[0] = ngi;
 
 	mesh.LineSegment(si) = ns1;
@@ -64,7 +70,7 @@ namespace netgen
       }
 
     // refine surface elements
-    ARRAY<PointGeomInfo,PointIndex::BASE> surfgi (8*mesh.GetNP());
+    Array<PointGeomInfo,PointIndex::BASE> surfgi (8*mesh.GetNP());
     for (int i = PointIndex::BASE;
 	 i < surfgi.Size()+PointIndex::BASE; i++)
       surfgi[i].trignum = -1;
@@ -345,6 +351,7 @@ namespace netgen
 	       { 2, 8, 21 },
 	       };
 
+             /*
 	     static int fbetw[12][3] =
 	     { { 1, 3, 22 },
 	       { 2, 4, 22 },
@@ -359,7 +366,23 @@ namespace netgen
 	       { 1, 8, 27 },
 	       { 4, 5, 27 },
 	       };
-
+             */
+             
+             // udpated by anonymous supporter, donations please to Karo W.
+             static int fbetw[12][3] =
+               { { 11, 12, 22 },
+                 { 9, 10, 22 },
+                 { 13, 14, 23 },
+                 { 15, 16, 23 },
+                 { 9, 13, 24 },
+                 { 17, 18, 24 },
+                 { 12, 16, 25 },
+                 { 18, 19, 25 },
+                 { 19, 20, 26 },
+                 { 10, 14, 26 },
+                 { 11, 15, 27 },
+                 { 17, 20, 27 },
+               };
 
 	     pnums = -1;
 
@@ -564,7 +587,7 @@ namespace netgen
     // update identification tables
     for (int i = 1; i <= mesh.GetIdentifications().GetMaxNr(); i++)
       {
-	ARRAY<int,PointIndex::BASE> identmap;
+	Array<int,PointIndex::BASE> identmap;
 	mesh.GetIdentifications().GetMap (i, identmap);
 
 	for (int j = 1; j <= between.GetNBags(); j++)
@@ -586,6 +609,7 @@ namespace netgen
       }
 
     mesh.ComputeNVertices();
+    mesh.RebuildSurfaceElementLists();
     return;
 
     int cnttrials = 10;
@@ -604,8 +628,8 @@ namespace netgen
 	cout << "WARNING: " << wrongels << " with wrong orientation found" << endl;
 
 	int np = mesh.GetNP();
-	ARRAY<Point<3> > should(np);
-	ARRAY<Point<3> > can(np);
+	Array<Point<3> > should(np);
+	Array<Point<3> > can(np);
 	for (int i = 1; i <= np; i++)
 	  {
 	    should.Elem(i) = can.Elem(i) = mesh.Point(i);
@@ -695,7 +719,8 @@ namespace netgen
 		mesh.CalcSurfacesOfNode();
 		free.Invert();
 		mesh.FixPoints (free);
-		mesh.ImproveMesh (OPT_REST);
+		MeshingParameters dummymp;
+		mesh.ImproveMesh (dummymp, OPT_REST);
 
 
 		wrongels = 0;

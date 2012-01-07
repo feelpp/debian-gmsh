@@ -3,12 +3,16 @@
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
-#include <string.h>
+#include "GmshConfig.h"
+#if !defined(HAVE_NO_STDINT_H)
 #include <stdint.h>
+#elif defined(HAVE_NO_INTPTR_T)
+typedef unsigned long intptr_t;
+#endif
+#include <string.h>
 #include <FL/Fl_Tabs.H>
 #include <FL/Fl_Scroll.H>
 #include <FL/Fl_Color_Chooser.H>
-#include "GmshConfig.h"
 #include "GmshDefines.h"
 #include "GmshMessage.h"
 #include "FlGui.h"
@@ -27,7 +31,10 @@
 #include "Context.h"
 #include "graphicWindow.h"
 #include "openglWindow.h"
+
+#if defined(HAVE_ONELAB)
 #include "onelab.h"
+#endif
 
 extern StringXColor GeneralOptions_Color[] ;
 extern StringXColor GeometryOptions_Color[] ;
@@ -511,6 +518,7 @@ static void solver_options_ok_cb(Fl_Widget *w, void *data)
   optionWindow *o = FlGui::instance()->options;
   o->activate((const char*)data);
 
+#if defined(HAVE_ONELAB)
   int old_listen = (int)opt_solver_listen(0, GMSH_GET, o->solver.butt[0]->value());
   opt_solver_listen(0, GMSH_SET, o->solver.butt[0]->value());
   if(!old_listen && o->solver.butt[0]->value()){
@@ -522,6 +530,7 @@ static void solver_options_ok_cb(Fl_Widget *w, void *data)
     else
       it->second->run("");
   }
+#endif
 
   opt_solver_socket_name(0, GMSH_SET, o->solver.input[0]->value());
   opt_solver_timeout(0, GMSH_SET, o->solver.value[0]->value());
@@ -2632,6 +2641,7 @@ optionWindow::optionWindow(int deltaFontSize)
         {"3D", 0, 0, 0},
         {"2D space", 0, 0, 0},
         {"2D time", 0, 0, 0},
+        {"2D", 0, 0, 0},
         {0}
       };
       view.choice[13] = new Fl_Choice

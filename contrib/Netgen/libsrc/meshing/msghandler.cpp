@@ -3,7 +3,6 @@
 
 namespace netgen
 {
-
 int printmessage_importance = 5;
 int printwarnings = 1;
 int printerrors = 1;
@@ -112,8 +111,8 @@ void PrintTime(const MyStr& s1, const MyStr& s2, const MyStr& s3, const MyStr& s
 }
 
 
-static ARRAY<MyStr*> msgstatus_stack(0);
-static ARRAY<double> threadpercent_stack(0);
+static Array<MyStr*> msgstatus_stack(0);
+static Array<double> threadpercent_stack(0);
 static MyStr msgstatus = "";
 
 
@@ -206,7 +205,7 @@ void GetStatus(MyStr & s, double & percentage)
     s = "idle";     
 }
 
-
+/*
 #ifdef SMALLLIB
 #define SMALLLIBORNOTCL
 #endif
@@ -222,5 +221,7 @@ void MyError(const char * ch)
   cerr << ch << endl;
 }
 #endif
+*/
+
 
 }

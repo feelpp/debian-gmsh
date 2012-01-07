@@ -13,23 +13,13 @@ netrule :: netrule ()
 
 netrule ::  ~netrule()
 {
-  // if(name != NULL) 
   delete [] name;
-  for(int i=0; i<oldutofreearea_i.Size(); i++)
+  for(int i = 0; i < oldutofreearea_i.Size(); i++)
     delete oldutofreearea_i[i];
+  for(int i = 0; i < freezone_i.Size(); i++)
+    delete freezone_i[i];
 }
 
-
-/*
-void netrule :: GetFreeArea (ARRAY<Point2d> & afreearea)
-  {
-  int i;
-
-  afreearea.SetSize (freearea.Size());
-  for (i = 1; i <= freearea.Size(); i++)
-    afreearea[i] = freearea[i];
-  }
-*/
 
 
 void netrule :: SetFreeZoneTransformation (const Vector & devp, int tolclass)
@@ -41,37 +31,46 @@ void netrule :: SetFreeZoneTransformation (const Vector & devp, int tolclass)
 
   int vs = oldutofreearea.Height();
   FlatVector devfree(vs, mem1);
-  FlatVector devfree1(vs, mem2);
-  FlatVector devfree2(vs, mem3);
+
+  int fzs = freezone.Size();
+  transfreezone.SetSize (fzs);
 
   if (tolclass <= oldutofreearea_i.Size())
     {
       oldutofreearea_i[tolclass-1] -> Mult (devp, devfree);
+
+      Array<Point2d> & fzi = *freezone_i[tolclass-1];
+      for (int i = 0; i < fzs; i++)
+	{
+	  transfreezone[i].X() = fzi[i].X() + devfree[2*i];
+	  transfreezone[i].Y() = fzi[i].Y() + devfree[2*i+1];
+	}
     }
   else
     {
+      FlatVector devfree1(vs, mem2);
+      FlatVector devfree2(vs, mem3);
+
       oldutofreearea.Mult (devp, devfree1);
       oldutofreearealimit.Mult (devp, devfree2);
       devfree.Set2 (lam1, devfree1, lam2, devfree2);
+
+      for (int i = 0; i < fzs; i++)
+	{
+	  transfreezone[i].X() = lam1 * freezone[i].X() + lam2 * freezonelimit[i].X() + devfree[2*i];
+	  transfreezone[i].Y() = lam1 * freezone[i].Y() + lam2 * freezonelimit[i].Y() + devfree[2*i+1];
+	}
     }
 
-  
-  int fzs = freezone.Size();
-  transfreezone.SetSize (fzs);
 
   if (fzs > 0)
     {
-      transfreezone[0].X() = lam1 * freezone[0].X() + lam2 * freezonelimit[0].X() + devfree[0];
-      transfreezone[0].Y() = lam1 * freezone[0].Y() + lam2 * freezonelimit[0].Y() + devfree[1];
       fzmaxx = fzminx = transfreezone[0].X();
       fzmaxy = fzminy = transfreezone[0].Y();
     }
 
   for (int i = 1; i < fzs; i++)
     {
-      transfreezone[i].X() = lam1 * freezone[i].X() + lam2 * freezonelimit[i].X() + devfree[2*i];
-      transfreezone[i].Y() = lam1 * freezone[i].Y() + lam2 * freezonelimit[i].Y() + devfree[2*i+1];
-
       if (transfreezone[i].X() > fzmaxx) fzmaxx = transfreezone[i].X();
       if (transfreezone[i].X() < fzminx) fzminx = transfreezone[i].X();
       if (transfreezone[i].Y() > fzmaxy) fzmaxy = transfreezone[i].Y();
@@ -95,18 +94,12 @@ void netrule :: SetFreeZoneTransformation (const Vector & devp, int tolclass)
 	}
       else
 	{
-	  vn /= sqrt (len2);    // should not be necessary
+	  vn /= sqrt (len2);    // scaling necessary ?
 
 	  freesetinequ(i,0) = vn.X(); 
 	  freesetinequ(i,1) = vn.Y(); 
 	  freesetinequ(i,2) = -(p1.X() * vn.X() + p1.Y() * vn.Y());
 	}
-
-      /*
-      freesetinequ(i,0) = vn.X(); 
-      freesetinequ(i,1) = vn.Y(); 
-      freesetinequ(i,2) = -(p1.X() * vn.X() + p1.Y() * vn.Y());
-      */
     }
 }
 
@@ -128,10 +121,10 @@ int netrule :: IsLineInFreeZone2 (const Point2d & p1, const Point2d & p2) const
 {
   int left, right, allleft, allright;
 
-  if (p1.X() > fzmaxx && p2.X() > fzmaxx ||
-      p1.X() < fzminx && p2.X() < fzminx ||
-      p1.Y() > fzmaxy && p2.Y() > fzmaxy ||
-      p1.Y() < fzminy && p2.Y() < fzminy) return 0;
+  if ( (p1.X() > fzmaxx && p2.X() > fzmaxx) ||
+       (p1.X() < fzminx && p2.X() < fzminx) ||
+       (p1.Y() > fzmaxy && p2.Y() > fzmaxy) ||
+       (p1.Y() < fzminy && p2.Y() < fzminy) ) return 0;
 
   for (int i = 1; i <= transfreezone.Size(); i++)
     {

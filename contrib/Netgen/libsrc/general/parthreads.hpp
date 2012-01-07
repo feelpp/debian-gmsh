@@ -11,6 +11,9 @@
   Parallel thread, Mutex,
 */
 
+namespace netgen
+{
+
 #ifdef NO_PARALLEL_THREADS
 
 class NgMutex { };
@@ -27,6 +30,62 @@ public:
 #else
 
 #ifdef _MSC_VER
+
+#ifdef MSVC_EXPRESS
+// #include <pthread.h>
+
+
+class NgMutex
+{
+  pthread_mutex_t mut;
+public:
+  NgMutex ()
+  {
+    pthread_mutex_init (&mut, NULL);
+   }
+  friend class NgLock;
+};
+
+class NgLock
+{
+  pthread_mutex_t & mut;
+  bool locked;
+public:
+  NgLock (NgMutex & ngmut, bool lock = false)
+    : mut (ngmut.mut)
+  {
+    if (lock)
+      pthread_mutex_lock (&mut);
+
+    locked = lock;
+  };
+
+  ~NgLock()
+  {
+    if (locked)
+      pthread_mutex_unlock (&mut);
+  }
+
+  void Lock ()
+  {
+    pthread_mutex_lock (&mut);
+    locked = true;
+  }
+  void UnLock ()
+  {
+    pthread_mutex_unlock (&mut);
+    locked = false;
+  }
+  /*
+  int TryLock ()
+  {
+    return pthread_mutex_trylock (&mut);
+  }
+  */
+};
+
+#else // Using MS VC++ Standard / Enterprise / Professional edition...
+
 
 class NgMutex
 {
@@ -67,6 +126,8 @@ public:
     locked = 0;
   }
 };
+
+#endif // MSVC_EXPRESS
 
 #else
 
@@ -125,5 +186,7 @@ public:
 #endif
 
 #endif
+
+}
 
 #endif

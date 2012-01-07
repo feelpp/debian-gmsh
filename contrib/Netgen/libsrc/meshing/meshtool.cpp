@@ -1,8 +1,8 @@
 #include <mystdlib.h>
 
 #include "meshing.hpp"
-//#include <csg.hpp> // MODIFIED FOR GMSH
-//#include <geometry2d.hpp>// MODIFIED FOR GMSH
+#include <csg.hpp>
+#include <geometry2d.hpp>
 
 namespace netgen
 {
@@ -129,7 +129,7 @@ namespace netgen
   void MeshQuality2d (const Mesh & mesh)
   {
     int ncl = 20, cl;
-    ARRAY<INDEX> incl(ncl);
+    Array<INDEX> incl(ncl);
     INDEX i;
     SurfaceElementIndex sei;
     double qual;
@@ -153,7 +153,8 @@ namespace netgen
 
     (*testout) << endl;
     (*testout) << "Elements in qualityclasses:" << endl;
-    (*testout).precision(2);
+    // (*testout).precision(2);
+    (*testout) << setprecision(2);
     for (i = 1; i <= ncl; i++)
       {
 	(*testout) << setw(4) << double (i-1)/ncl << " - "
@@ -188,11 +189,11 @@ namespace netgen
 
 
 
-
-  double teterrpow = 2;
+  // static double teterrpow = 2;
 
   double CalcTetBadness (const Point3d & p1, const Point3d & p2,
-			 const Point3d & p3, const Point3d & p4, double h)
+			 const Point3d & p3, const Point3d & p4, double h,
+			 const MeshingParameters & mp)
   {
     double vol, l, ll, lll, ll1, ll2, ll3, ll4, ll5, ll6;
     double err;
@@ -201,7 +202,7 @@ namespace netgen
     Vec3d v2 (p1, p3);
     Vec3d v3 (p1, p4);
 
-    vol = -Determinant (v1, v2, v3) / 6;
+    vol = Determinant (v1, v2, v3)  * (-0.166666666666666);
 
     ll1 = v1.Length2();
     ll2 = v2.Length2();
@@ -224,15 +225,19 @@ namespace netgen
 	h * h * ( 1 / ll1 + 1 / ll2 + 1 / ll3 + 
 		  1 / ll4 + 1 / ll5 + 1 / ll6 ) - 12;
     
-    if (teterrpow == 2)
-      return err*err;
+    double teterrpow = mp.opterrpow;
+    if(teterrpow < 1) teterrpow = 1;
+    
+    if (teterrpow == 1) return err;
+    if (teterrpow == 2) return err*err;
     return pow (err, teterrpow);
   }
 
 
   double CalcTetBadnessGrad (const Point3d & p1, const Point3d & p2,
 			     const Point3d & p3, const Point3d & p4, double h,
-			     int pi, Vec<3> & grad)
+			     int pi, Vec<3> & grad,
+			     const MeshingParameters & mp)
   {
     double vol, l, ll, lll;
     double err;
@@ -275,7 +280,7 @@ namespace netgen
     Vec3d v5 (*pp2, *pp4);
     Vec3d v6 (*pp3, *pp4);
 
-    vol = -Determinant (v1, v2, v3) / 6;  
+    vol = Determinant (v1, v2, v3) * (-0.166666666666666);
 
     Vec3d gradvol;
     Cross (v5, v4, gradvol);
@@ -343,17 +348,26 @@ namespace netgen
 	graderr += (1/(h*h) - h*h/(ll1*ll1)) * gradll1;
 	graderr += (1/(h*h) - h*h/(ll2*ll2)) * gradll2;
 	graderr += (1/(h*h) - h*h/(ll3*ll3)) * gradll3;
-	cout << "?";
       }
 
-
     double errpow;
+
+    double teterrpow = mp.opterrpow;
+    if(teterrpow < 1) teterrpow = 1;
+
+    if (teterrpow == 1)
+    {
+       errpow = err;
+       grad = graderr;
+    }
+
     if (teterrpow == 2)
       {
         errpow = err*err;   
         grad = (2 * err) * graderr;
       }
-    else
+
+    if(teterrpow > 2)
       {
         errpow = pow (err, teterrpow);
         grad = (teterrpow * errpow / err) * graderr;
@@ -528,7 +542,7 @@ namespace netgen
 
   
   /*
-    double CalcVolume (const ARRAY<Point3d> & points,
+    double CalcVolume (const Array<Point3d> & points,
     const Element & el)
     {
     Vec3d v1 = points.Get(el.PNum(2)) - 
@@ -542,8 +556,8 @@ namespace netgen
     }  
   */
 
-  double CalcVolume (const ARRAY<Point3d> & points, 
-		     const ARRAY<Element> & elements)
+  double CalcVolume (const Array<Point3d> & points, 
+		     const Array<Element> & elements)
   {
     double vol;
     Vec3d v1, v2, v3;
@@ -562,11 +576,11 @@ namespace netgen
   
   
 
-  void MeshQuality3d (const Mesh & mesh, ARRAY<int> * inclass)
+  void MeshQuality3d (const Mesh & mesh, Array<int> * inclass)
   { 
     int ncl = 20;
     signed int cl;
-    ARRAY<INDEX> incl(ncl);
+    Array<INDEX> incl(ncl);
     INDEX i;
     double qual;
     double sum = 0;
@@ -607,7 +621,7 @@ namespace netgen
     (*testout) << endl;
 
     (*testout) << "Volume elements in qualityclasses:" << endl;
-    (*testout).precision(2);
+    (*testout) << setprecision(2);
     for (i = 1; i <= ncl; i++)
       {
 	(*testout) << setw(4) << double (i-1)/ncl << " - "
@@ -639,7 +653,7 @@ namespace netgen
       {
 	seg = &mesh.LineSegment(i);
 
-	of << seg->p2 << " " << seg->p1 << " " << seg->si << "\n";
+	of << (*seg)[1] << " " << (*seg)[0] << " " << seg->si << "\n";
       }
    
   }
@@ -685,7 +699,7 @@ namespace netgen
 #ifdef OLD
   void Save2DMesh (
 		   const Mesh & mesh2d,
-		   const ARRAY<SplineSegment *> * splines,
+		   const Array<SplineSegment *> * splines,
 		   ostream & outfile)
 
   {
@@ -699,8 +713,8 @@ namespace netgen
     outfile << mesh2d.GetNSeg() << endl;
     for (i = 1; i <= mesh2d.GetNSeg(); i++)
       outfile << mesh2d.LineSegment(i).si << "        "
-	      << mesh2d.LineSegment(i).p1 << " "
-	      << mesh2d.LineSegment(i).p2 << "  " << endl;
+	      << mesh2d.LineSegment(i)[0] << " "
+	      << mesh2d.LineSegment(i)[1] << "  " << endl;
   
 
     outfile << mesh2d.GetNSE() << endl;
@@ -728,6 +742,8 @@ namespace netgen
       outfile << "0" << endl;
   }
 #endif
+
+
 
 
 
@@ -773,6 +789,7 @@ namespace netgen
       geometry.GetSurface(i) -> Print (outfile);
 #endif
   }
+
 
 
 
@@ -994,6 +1011,5 @@ namespace netgen
     mesh.Compress();
     PrintMessage (3, "Elements after Remove: ", mesh.GetNE());
   }
-
 
 }

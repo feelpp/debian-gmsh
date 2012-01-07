@@ -7,6 +7,8 @@
 /* Date:   16. Jan. 2002                                                  */
 /**************************************************************************/
 
+namespace netgen
+{
 
 /// Base class for all ng exceptions
 class NgException 
@@ -15,16 +17,17 @@ class NgException
   string what;
 public:
   ///
-  NgException (const string & s);
+  DLL_HEADER NgException (const string & s);
   ///
-  virtual ~NgException ();
+  DLL_HEADER virtual ~NgException ();
 
   /// append string to description
-  void Append (const string & s);
+  DLL_HEADER void Append (const string & s);
   //  void Append (const char * s);
   
   /// verbal description of exception
   const string & What() const { return what; }
 };
+}
 
 #endif

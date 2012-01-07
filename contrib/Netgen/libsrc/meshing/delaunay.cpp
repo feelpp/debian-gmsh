@@ -112,12 +112,12 @@ namespace netgen
     INDEX_3_CLOSED_HASHTABLE<int> faces;
 
     // 
-    ARRAY<DelaunayTet> & tets;
+    Array<DelaunayTet> & tets;
 
   public:
 
     // estimated number of points
-    MeshNB (ARRAY<DelaunayTet> & atets, int np)
+    MeshNB (Array<DelaunayTet> & atets, int np)
       : faces(200), tets(atets)
     { ; }
 
@@ -187,7 +187,7 @@ namespace netgen
   */
   class SphereList 
   {
-    ARRAY<int> links;
+    Array<int> links;
   public:
     SphereList () 
     { ; }
@@ -210,11 +210,11 @@ namespace netgen
       links.Elem (toi) = eli;
     }
       
-    void GetList (int eli, ARRAY<int> & linked) const;
+    void GetList (int eli, Array<int> & linked) const;
   };
 
 
-  void SphereList :: GetList (int eli, ARRAY<int> & linked) const
+  void SphereList :: GetList (int eli, Array<int> & linked) const
   {
     linked.SetSize (0);
     int pi = eli;
@@ -244,13 +244,13 @@ namespace netgen
 
 
   void AddDelaunayPoint (PointIndex newpi, const Point3d & newp, 
-			 ARRAY<DelaunayTet> & tempels, 
+			 Array<DelaunayTet> & tempels, 
 			 Mesh & mesh,
 			 Box3dTree & tettree, 
 			 MeshNB & meshnb,
-			 ARRAY<Point<3> > & centers, ARRAY<double> & radi2,
-			 ARRAY<int> & connected, ARRAY<int> & treesearch, 
-			 ARRAY<int> & freelist, SphereList & list,
+			 Array<Point<3> > & centers, Array<double> & radi2,
+			 Array<int> & connected, Array<int> & treesearch, 
+			 Array<int> & freelist, SphereList & list,
 			 IndexSet & insphere, IndexSet & closesphere)
   {
     /*
@@ -348,13 +348,13 @@ namespace netgen
       {
 	changed = 0;
 	starti = nstarti;
-	nstarti = insphere.Array().Size()+1;
+	nstarti = insphere.GetArray().Size()+1;
 
 
 	// if point in sphere, then it is also closesphere
 	for (int j = starti; j < nstarti; j++)
 	  {
-	    int helind = insphere.Array().Get(j);
+	    int helind = insphere.GetArray().Get(j);
 	    if (!closesphere.IsIn (helind))
 	      closesphere.Add (helind);
 	  }
@@ -362,7 +362,7 @@ namespace netgen
 	// add connected spheres to insphere - list
 	for (int j = starti; j < nstarti; j++)
 	  {
-	    list.GetList (insphere.Array().Get(j), connected);
+	    list.GetList (insphere.GetArray().Get(j), connected);
 	    for (int k = 0; k < connected.Size(); k++)
 	      {
 		int celind = connected[k];
@@ -380,7 +380,7 @@ namespace netgen
 	for (int j = starti; j < nstarti; j++)
 	  for (int k = 1; k <= 4; k++)
 	    {
-	      int helind = insphere.Array().Get(j);
+	      int helind = insphere.GetArray().Get(j);
 	      int nbind = meshnb.GetNB (helind, k);
 
 	      if (nbind && !insphere.IsIn (nbind) )
@@ -446,15 +446,15 @@ namespace netgen
       } // while (changed)
 
     //      (*testout) << "newels: " << endl;
-    ARRAY<Element> newels;
+    Array<Element> newels;
 
     Element2d face(TRIG);
 
-    for (int j = 1; j <= insphere.Array().Size(); j++)
+    for (int j = 1; j <= insphere.GetArray().Size(); j++)
       for (int k = 1; k <= 4; k++)
 	{
-	  //	    int elind = insphere.Array().Get(j);
-	  int celind = insphere.Array().Get(j);
+	  //	    int elind = insphere.GetArray().Get(j);
+	  int celind = insphere.GetArray().Get(j);
 	  int nbind = meshnb.GetNB (celind, k);
 
 	  if (!nbind || !insphere.IsIn (nbind))
@@ -474,7 +474,7 @@ namespace netgen
 
 	      n.Normalize();
 	      if (n * Vec3d(mesh.Point (face[0]), 
-			    mesh.Point (tempels.Get(insphere.Array().Get(j))[k-1]))
+			    mesh.Point (tempels.Get(insphere.GetArray().Get(j))[k-1]))
 		  > 0)
 		n *= -1;
 
@@ -493,12 +493,12 @@ namespace netgen
 	    }
 	}
 
-    meshnb.ResetFaceHT (10*insphere.Array().Size()+1);
+    meshnb.ResetFaceHT (10*insphere.GetArray().Size()+1);
 
-    for (int j = 1; j <= insphere.Array().Size(); j++)
+    for (int j = 1; j <= insphere.GetArray().Size(); j++)
       {
 	//	  int elind = 
-	int celind = insphere.Array().Get(j);
+	int celind = insphere.GetArray().Get(j);
 
 	meshnb.Delete (celind); 
 	list.DeleteElement (celind);
@@ -512,9 +512,9 @@ namespace netgen
 
 
     int hasclose = 0;
-    for (int j = 1; j <= closesphere.Array().Size(); j++)
+    for (int j = 1; j <= closesphere.GetArray().Size(); j++)
       {
-	int ind = closesphere.Array().Get(j);
+	int ind = closesphere.GetArray().Get(j);
 	if (!insphere.IsIn(ind) &&
 	    fabs (Dist2 (centers.Get (ind), newp) - radi2.Get(ind)) < 1e-8 )
 	  hasclose = 1;
@@ -558,9 +558,9 @@ namespace netgen
 
 	r2 = Dist2 (*pp[0], pc);
 	if (hasclose)
-	  for (int k = 1; k <= closesphere.Array().Size(); k++)
+	  for (int k = 1; k <= closesphere.GetArray().Size(); k++)
 	    {
-	      int csameind = closesphere.Array().Get(k); 
+	      int csameind = closesphere.GetArray().Get(k); 
 	      if (!insphere.IsIn(csameind) &&
 		  fabs (r2 - radi2.Get(csameind)) < 1e-10 && 
 		  Dist (pc, centers.Get(csameind)) < 1e-10)
@@ -602,14 +602,14 @@ namespace netgen
 
 
   void Delaunay1 (Mesh & mesh, const MeshingParameters & mp, AdFront3 * adfront,
-		  ARRAY<DelaunayTet> & tempels,
+		  Array<DelaunayTet> & tempels,
 		  int oldnp, DelaunayTet & startel, Point3d & pmin, Point3d & pmax)
   {
     int i, j, k;
     const Point<3> * pp[4];
 
-    ARRAY<Point<3> > centers;
-    ARRAY<double> radi2;
+    Array<Point<3> > centers;
+    Array<double> radi2;
   
     Point3d tpmin, tpmax;
 
@@ -676,7 +676,7 @@ namespace netgen
       usep.Set (mesh.LockedPoints()[i]);
   
 
-    ARRAY<int> freelist;
+    Array<int> freelist;
 
 
     int cntp = 0;
@@ -693,7 +693,7 @@ namespace netgen
     tempels.Append (startel);
     meshnb.Add (1);
     list.AddElement (1);
-    ARRAY<int> connected, treesearch;
+    Array<int> connected, treesearch;
 
 
     tpmin = tpmax = mesh.Point(startel[0]);
@@ -726,7 +726,7 @@ namespace netgen
 
     // "random" reordering of points  (speeds a factor 3 - 5 !!!)
 
-    ARRAY<int> mixed(np);
+    Array<int> mixed(np);
     int prims[] = { 11, 13, 17, 19, 23, 29, 31, 37 };
     int prim;
   
@@ -799,7 +799,7 @@ namespace netgen
     PushStatus ("Delaunay meshing");
 
 
-    ARRAY<DelaunayTet> tempels;
+    Array<DelaunayTet> tempels;
     Point3d pmin, pmax;
 
     DelaunayTet startel;
@@ -890,7 +890,7 @@ namespace netgen
 
 	  tempmesh.FreeOpenElementsEnvironment (1);
 
-	  MeshOptimize3d meshopt;
+	  MeshOptimize3d meshopt(mp);
 	  // tempmesh.CalcSurfacesOfNode();
 	  meshopt.SwapImprove(tempmesh, OPT_CONFORM);
 	}
@@ -959,7 +959,7 @@ namespace netgen
     // find surface triangles which are no face of any tet
 
     INDEX_3_HASHTABLE<int> openeltab(mesh.GetNOpenElements()+3);
-    ARRAY<int> openels;
+    Array<int> openels;
     for (int i = 1; i <= mesh.GetNOpenElements(); i++)
       {
 	const Element2d & tri = mesh.OpenElement(i);
@@ -1147,7 +1147,7 @@ namespace netgen
 	      }
 	  }
       
-	ARRAY<int> neartrias;
+	Array<int> neartrias;
 	for (int i = 1; i <= tempels.Size(); i++)
 	  {
 	    const Point<3> *pp[4];
@@ -1407,7 +1407,7 @@ namespace netgen
     BitArray inner(ne), outer(ne);
     inner.Clear();
     outer.Clear();
-    ARRAY<int> elstack;
+    Array<int> elstack;
 
     /*
       int starti = 0;

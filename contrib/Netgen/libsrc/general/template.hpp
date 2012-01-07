@@ -7,6 +7,9 @@
 /* Date:   01. Jun. 95                                                    */
 /**************************************************************************/
 
+namespace netgen 
+{
+
 /*
    templates, global types, defines and variables
 */
@@ -20,7 +23,7 @@
 // #include <iostream>
 /** output stream for testing.
   testout is opened by main */
-extern ostream * testout;
+DLL_HEADER extern ostream * testout;
 
 /** use instead of cout */
 extern ostream * mycout;
@@ -30,7 +33,7 @@ extern ostream * myerr;
 
 /** Error messages display.
   Error messages are displayed by this function */
-extern void MyError (const char * ch);
+DLL_HEADER extern void MyError (const char * ch);
 
 
 /** Rings the bell.
@@ -367,6 +370,15 @@ public:
 };
 
 
+inline bool operator< (const INDEX_4 & a, const INDEX_4 & b)
+{
+  for (int j = 0; j < 4; j++)
+    {
+      if (a[j] < b[j]) return true;
+      if (a[j] > b[j]) return false;
+    }
+  return false;
+}
 
 
 
@@ -443,6 +455,6 @@ void MergeSort (int size, T * data, T * help);
 
 
 
-
+}
 
 #endif

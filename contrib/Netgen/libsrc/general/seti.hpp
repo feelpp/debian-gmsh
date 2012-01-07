@@ -8,12 +8,15 @@
 /* Date:   20. Mar. 98                                                    */
 /**************************************************************************/
 
+namespace netgen
+{
+
 /**
   Set of Integers
   */
 class IndexSet
 {
-  ARRAY<int> set;
+  Array<int> set;
   BitArray flags;
 public:
   IndexSet (int maxind);
@@ -38,8 +41,10 @@ public:
   void Del (int ind);
   void Clear ();
   
-  const ARRAY<int> & Array() { return set; }
+  const Array<int> & GetArray() { return set; }
 };
+
+}
 
 #endif
 

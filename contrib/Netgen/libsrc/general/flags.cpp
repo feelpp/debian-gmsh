@@ -56,9 +56,9 @@ namespace netgen
   }
 
 
-  void Flags :: SetFlag (const char * name, const ARRAY<char*> & val)
+  void Flags :: SetFlag (const char * name, const Array<char*> & val)
   {
-    ARRAY<char*> * strarray = new ARRAY<char*>;
+    Array<char*> * strarray = new Array<char*>;
     for (int i = 1; i <= val.Size(); i++)
       {
 	strarray->Append (new char[strlen(val.Get(i))+1]);
@@ -67,9 +67,9 @@ namespace netgen
     strlistflags.Set (name, strarray);
   }
 
-  void Flags :: SetFlag (const char * name, const ARRAY<double> & val)
+  void Flags :: SetFlag (const char * name, const Array<double> & val)
   {
-    ARRAY<double> * numarray = new ARRAY<double>;
+    Array<double> * numarray = new Array<double>;
     for (int i = 1; i <= val.Size(); i++)
       numarray->Append (val.Get(i));
     numlistflags.Set (name, numarray);
@@ -118,27 +118,27 @@ namespace netgen
   }
 
 
-  const ARRAY<char*> & 
+  const Array<char*> & 
   Flags :: GetStringListFlag (const char * name) const
   {
     if (strlistflags.Used (name))
       return *strlistflags.Get(name);
     else
       {
-	static ARRAY<char*> hstra(0);
-	return hstra;
+	static Array<char*> dummy_array(0);
+	return dummy_array;
       }
   }
 
-  const ARRAY<double> & 
+  const Array<double> & 
   Flags ::GetNumListFlag (const char * name) const
   {
     if (numlistflags.Used (name))
       return *numlistflags.Get(name);
     else
       {
-	static ARRAY<double> hnuma(0);
-	return hnuma;
+	static Array<double> dummy_array(0);
+	return dummy_array;
       }
   }
 

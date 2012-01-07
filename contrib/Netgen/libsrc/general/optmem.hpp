@@ -7,6 +7,9 @@
 /* Date:   04. Apr. 97                                                    */
 /**************************************************************************/
 
+namespace netgen
+{
+
 /** 
     Optimized Memory allocation classes
 */
@@ -19,7 +22,7 @@ private:
   ///
   void * freelist;
   ///
-  ARRAY<char*> bablocks;
+  Array<char*> bablocks;
 public:
   ///
   BlockAllocator (unsigned asize, unsigned ablocks = 100);
@@ -54,6 +57,6 @@ private:
   //  void Alloc2 ();
 };
 
-
+}
 
 #endif

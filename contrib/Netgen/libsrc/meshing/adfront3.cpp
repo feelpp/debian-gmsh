@@ -84,7 +84,7 @@ AdFront3 :: ~AdFront3 ()
   delete connectedpairs;
 }
 
-void AdFront3 :: GetPoints (ARRAY<Point<3> > & apoints) const
+void AdFront3 :: GetPoints (Array<Point<3> > & apoints) const
 {
   for (PointIndex pi = PointIndex::BASE; 
        pi < points.Size()+PointIndex::BASE; pi++)
@@ -266,7 +266,7 @@ void AdFront3 :: CreateTrees ()
 
 
 void AdFront3 :: GetIntersectingFaces (const Point<3> & pmin, const Point<3> & pmax, 
-				       ARRAY<int> & ifaces) const
+				       Array<int> & ifaces) const
 {
   facetree -> GetIntersecting (pmin, pmax, ifaces);
 }
@@ -357,7 +357,7 @@ void AdFront3 :: RebuildInternalTables ()
     if (usecl.Test(i))
       cntcl++;
 
-  ARRAY<double, PointIndex::BASE> clvol (np);
+  Array<double, PointIndex::BASE> clvol (np);
   clvol = 0.0;
 
   for (int i = 1; i <= faces.Size(); i++)
@@ -486,10 +486,10 @@ int AdFront3 :: SelectBaseElement ()
 
 
 int AdFront3 :: GetLocals (int fstind,
-			   ARRAY<Point3d > & locpoints,
-			   ARRAY<MiniElement2d> & locfaces,   // local index
-			   ARRAY<PointIndex> & pindex,
-			   ARRAY<INDEX> & findex,
+			   Array<Point3d > & locpoints,
+			   Array<MiniElement2d> & locfaces,   // local index
+			   Array<PointIndex> & pindex,
+			   Array<INDEX> & findex,
 			   INDEX_2_HASHTABLE<int> & getconnectedpairs,
 			   float xh,
 			   float relh,
@@ -511,11 +511,11 @@ int AdFront3 :: GetLocals (int fstind,
   INDEX pi;
   Point3d midp, p0;
 
-  static ARRAY<int, PointIndex::BASE> invpindex;
+  //  static Array<int, PointIndex::BASE> invpindex;
   
-  static ARRAY<MiniElement2d> locfaces2;           //all local faces in radius xh
-  static ARRAY<int> locfaces3;           // all faces in outer radius relh
-  static ARRAY<INDEX> findex2;
+  Array<MiniElement2d> locfaces2;           //all local faces in radius xh
+  Array<int> locfaces3;           // all faces in outer radius relh
+  Array<INDEX> findex2;
 
   locfaces2.SetSize(0);
   locfaces3.SetSize(0);
@@ -658,12 +658,12 @@ int AdFront3 :: GetLocals (int fstind,
 
 // returns all points connected with fi
 void AdFront3 :: GetGroup (int fi,
-			   ARRAY<MeshPoint> & grouppoints,
-			   ARRAY<MiniElement2d> & groupelements,
-			   ARRAY<PointIndex> & pindex,
-			   ARRAY<INDEX> & findex) const
+			   Array<MeshPoint> & grouppoints,
+			   Array<MiniElement2d> & groupelements,
+			   Array<PointIndex> & pindex,
+			   Array<INDEX> & findex) 
 {
-  static ARRAY<char> pingroup;
+  // static Array<char> pingroup;
   int i, j, changed;
 
   pingroup.SetSize(points.Size());
@@ -699,7 +699,7 @@ void AdFront3 :: GetGroup (int fi,
   while (changed);
 
 
-  static ARRAY<int> invpindex;
+  //  static Array<int> invpindex;
   invpindex.SetSize (points.Size());
   
 
@@ -772,7 +772,7 @@ void AdFront3 :: SetStartFront (int /* baseelnp */)
 
 bool AdFront3 :: Inside (const Point<3> & p) const
 {
-  int i, cnt;
+  int cnt;
   Vec3d n, v1, v2;
   DenseMatrix a(3), ainv(3);
   Vector b(3), u(3);
@@ -783,7 +783,7 @@ bool AdFront3 :: Inside (const Point<3> & p) const
   n.Z() = -0.43989;
 
   cnt = 0;
-  for (i = 1; i <= faces.Size(); i++)
+  for (int i = 1; i <= faces.Size(); i++)
     if (faces.Get(i).Valid())
       {
 	const Point<3> & p1 = points[faces.Get(i).Face().PNum(1)].P();
@@ -793,25 +793,25 @@ bool AdFront3 :: Inside (const Point<3> & p) const
 	v1 = p2 - p1;
 	v2 = p3 - p1;
 
-	a.Elem(1, 1) = v1.X();
-	a.Elem(2, 1) = v1.Y();
-	a.Elem(3, 1) = v1.Z();
-	a.Elem(1, 2) = v2.X();
-	a.Elem(2, 2) = v2.Y();
-	a.Elem(3, 2) = v2.Z();
-	a.Elem(1, 3) = -n.X();
-	a.Elem(2, 3) = -n.Y();
-	a.Elem(3, 3) = -n.Z();
+	a(0, 0) = v1.X();
+	a(1, 0) = v1.Y();
+	a(2, 0) = v1.Z();
+	a(0, 1) = v2.X();
+	a(1, 1) = v2.Y();
+	a(2, 1) = v2.Z();
+	a(0, 2) = -n.X();
+	a(1, 2) = -n.Y();
+	a(2, 2) = -n.Z();
 
-	b.Elem(1) = p(0) - p1(0);
-	b.Elem(2) = p(1) - p1(1);
-	b.Elem(3) = p(2) - p1(2);
+	b(0) = p(0) - p1(0);
+	b(1) = p(1) - p1(1);
+	b(2) = p(2) - p1(2);
 
 	CalcInverse (a, ainv);
 	ainv.Mult (b, u);
 
-	if (u.Elem(1) >= 0 && u.Elem(2) >= 0 && u.Elem(1)+u.Elem(2) <= 1 &&
-	    u.Elem(3) > 0)
+	if (u(0) >= 0 && u(1) >= 0 && u(0)+u(1) <= 1 &&
+	    u(2) > 0)
 	  {
 	    cnt++;
 	  }
@@ -825,38 +825,31 @@ bool AdFront3 :: Inside (const Point<3> & p) const
 
 
 int AdFront3 :: SameSide (const Point<3> & lp1, const Point<3> & lp2,
-			  const ARRAY<int> * testfaces) const
+			  const Array<int> * testfaces) const
 {
-  int i, ii, cnt;
-
   const Point<3> *line[2];
   line[0] = &lp1;
   line[1] = &lp2;
 
 
-  cnt = 0;
-
   Point3d pmin(lp1);
   Point3d pmax(lp1);
   pmin.SetToMin (lp2);
   pmax.SetToMax (lp2);
-
-  static ARRAY<int> aprif;
+  
+  ArrayMem<int, 100> aprif;
   aprif.SetSize(0);
   
   if (!testfaces)
     facetree->GetIntersecting (pmin, pmax, aprif);
   else
-    {
-      for (i = 1; i <= testfaces->Size(); i++)
-	aprif.Append (testfaces->Get(i));
-    }
+    for (int i = 1; i <= testfaces->Size(); i++)
+      aprif.Append (testfaces->Get(i));
 
-  //  (*testout) << "test ss, p1,p2 = " << lp1 << lp2 << ", inters = " << aprif.Size() << endl;
-  //  for (i = 1; i <= faces.Size(); i++)
-  for (ii = 1; ii <= aprif.Size(); ii++)
+  int cnt = 0;
+  for (int ii = 1; ii <= aprif.Size(); ii++)
     {
-      i = aprif.Get(ii);
+      int i = aprif.Get(ii);
       
       if (faces.Get(i).Valid())
 	{
@@ -867,7 +860,6 @@ int AdFront3 :: SameSide (const Point<3> & lp1, const Point<3> & lp2,
 	  	  
 	  if (IntersectTriangleLine (&tri[0], &line[0]))
 	    cnt++;
-	  
 	}
     }
 

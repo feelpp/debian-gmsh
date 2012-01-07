@@ -8,8 +8,8 @@
 
 namespace netgen
 {
-  AdFront2::FrontPoint2 :: FrontPoint2 (const Point<3> & ap, PointIndex agi,
-					MultiPointGeomInfo * amgi, bool aonsurface)
+  FrontPoint2 :: FrontPoint2 (const Point<3> & ap, PointIndex agi,
+			      MultiPointGeomInfo * amgi, bool aonsurface)
   {
     p = ap;
     globalindex = agi;
@@ -62,7 +62,7 @@ namespace netgen
   }
 
   /*
-  void AdFront2 :: GetPoints (ARRAY<Point<3> > & apoints) const
+  void AdFront2 :: GetPoints (Array<Point<3> > & apoints) const
   {
     apoints.Append (points);
     // for (int i = 0; i < points.Size(); i++)
@@ -94,8 +94,9 @@ namespace netgen
     if (mgi)
       cpointsearchtree.Insert (p, pi);
 
-    pointsearchtree.Insert (p, pi);
-
+    if (pointonsurface)
+      pointsearchtree.Insert (p, pi);
+    
     return pi;
   }
 
@@ -280,14 +281,16 @@ namespace netgen
 
 
   int AdFront2 :: GetLocals (int baselineindex,
-			     ARRAY<Point3d> & locpoints,
-			     ARRAY<MultiPointGeomInfo> & pgeominfo,
-			     ARRAY<INDEX_2> & loclines,   // local index
-			     ARRAY<INDEX> & pindex,
-			     ARRAY<INDEX> & lindex,
+			     Array<Point3d> & locpoints,
+			     Array<MultiPointGeomInfo> & pgeominfo,
+			     Array<INDEX_2> & loclines,   // local index
+			     Array<INDEX> & pindex,
+			     Array<INDEX> & lindex,
 			     double xh)
   {
-    // baselineindex += 1-lines.Begin();
+    static int timer = NgProfiler::CreateTimer ("adfront2::GetLocals");
+    NgProfiler::RegionTimer reg (timer);
+
 
     int pstind;
     Point<3>  midp, p0;
@@ -296,13 +299,12 @@ namespace netgen
     p0 = points[pstind].P();
 
     loclines.Append(lines[baselineindex].L());
-    lindex.Append(baselineindex);  //  +1-lines.Begin());
+    lindex.Append(baselineindex);  
 
-    static ARRAY<int> nearlines;
-    nearlines.SetSize(0);
-    static ARRAY<int> nearpoints;
-    nearpoints.SetSize(0);
+    ArrayMem<int, 1000> nearlines(0);
+    ArrayMem<int, 1000> nearpoints(0);
 
+    // dominating costs !!
     linesearchtree.GetIntersecting (p0 - Vec3d(xh, xh, xh),
 				    p0 + Vec3d(xh, xh, xh),
 				    nearlines);
@@ -310,19 +312,18 @@ namespace netgen
     pointsearchtree.GetIntersecting (p0 - Vec3d(xh, xh, xh),
                                      p0 + Vec3d(xh, xh, xh),
                                      nearpoints);
-
-
-    for (int ii = 1; ii <= nearlines.Size(); ii++)
+    
+    for (int ii = 0; ii < nearlines.Size(); ii++)
       {
-	int i = nearlines.Get(ii);
-	if (lines[i].Valid() && i != baselineindex) //  + 1-lines.Begin())
+	int i = nearlines[ii];
+	if (lines[i].Valid() && i != baselineindex) 
 	  {
             loclines.Append(lines[i].L());
             lindex.Append(i);
 	  }
       }
 
-    static ARRAY<int> invpindex;
+    // static Array<int> invpindex;
     invpindex.SetSize (points.Size()); 
     // invpindex = -1;
     for (int i = 0; i < nearpoints.Size(); i++)
@@ -462,5 +463,46 @@ namespace netgen
 	ost << lines[i].L().I1() << " - " << lines[i].L().I2() << endl;
 
     ost << flush;
+  }
+
+
+  bool AdFront2 :: Inside (const Point<2> & p) const
+  {
+    int cnt;
+    Vec<2> n;
+    Vec<3> v1;
+    DenseMatrix a(2), ainv(2);
+    Vector b(2), u(2);
+    
+    // random numbers:
+    n(0) = 0.123871;
+    n(1) = 0.15432;
+    
+    cnt = 0;
+    for (int i = 0; i < lines.Size(); i++)
+      if (lines[i].Valid())
+	{
+	  const Point<3> & p1 = points[lines[i].L().I1()].P();
+	  const Point<3> & p2 = points[lines[i].L().I2()].P();
+	  
+	  v1 = p2 - p1;
+	  
+	  a(0, 0) = v1(0);
+	  a(1, 0) = v1(1);
+	  
+	  a(0, 1) = -n(0);
+	  a(1, 1) = -n(1);
+
+	  b(0) = p(0) - p1(0);
+	  b(1) = p(1) - p1(1);
+	  
+	  CalcInverse (a, ainv);
+	  ainv.Mult (b, u);
+	  
+	  if (u(0) >= 0 && u(0) <= 1 && u(1) > 0)
+	    cnt++;
+	}
+    
+    return ((cnt % 2) != 0);
   }
 }

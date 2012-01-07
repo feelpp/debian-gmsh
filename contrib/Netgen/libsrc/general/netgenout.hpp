@@ -5,11 +5,14 @@
 // #include <mystdlib.h>
 // #include <meshing.hpp>
 
+namespace netgen
+{
+
 #ifdef PARALLEL
 extern int id;
 extern int ntasks;
 #endif
-extern int printmessage_importance;
+DLL_HEADER extern int printmessage_importance;
 
 
 
@@ -178,7 +181,7 @@ NetgenOutStream operator<< ( ostream & ost, Procs & procs );
 // }
 
 
-
+}
 
 
 #endif

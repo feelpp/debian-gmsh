@@ -2,8 +2,8 @@
 
 
 
-inline void Minimize (const ARRAY<Vec3d> & a,
-		      const ARRAY<double> & c,
+inline void Minimize (const Array<Vec3d> & a,
+		      const Array<double> & c,
 		      int * act, 
 		      Vec<3> & x, double & f,
 		      int * sol)
@@ -67,18 +67,18 @@ inline void Minimize (const ARRAY<Vec3d> & a,
 
 
 
-template <typename POINTARRAY, typename FACEARRAY>
-inline int FindInnerPoint (POINTARRAY & points,
-			   FACEARRAY & faces,
+template <typename POINTArray, typename FACEArray>
+inline int FindInnerPoint (POINTArray & points,
+			   FACEArray & faces,
 			   Point3d & p)
 {
   static int timer = NgProfiler::CreateTimer ("FindInnerPoint");
   NgProfiler::RegionTimer reg (timer);
 
-  ARRAY<Vec3d> a;
-  ARRAY<double> c;
+  Array<Vec3d> a;
+  Array<double> c;
   Mat<3> m, inv;
-  Vec<3> rs, x, center;
+  Vec<3> rs, x = 0.0, center;
   double f;
 
   int nf = faces.Size();

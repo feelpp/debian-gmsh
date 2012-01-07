@@ -3,15 +3,19 @@
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
+#include "GmshConfig.h"
+#if !defined(HAVE_NO_STDINT_H)
+#include <stdint.h>
+#elif defined(HAVE_NO_INTPTR_T)
+typedef unsigned long intptr_t;
+#endif
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <stdint.h>
 #include <time.h>
 #include <FL/Fl_Box.H>
 #include <FL/fl_ask.H>
 #include <FL/filename.H>
-#include "GmshConfig.h"
 #include "GmshMessage.h"
 #include "GmshSocket.h"
 #include "FlGui.h"
@@ -50,11 +54,15 @@
 #include "Generator.h"
 #include "HighOrder.h"
 #include "Field.h"
+#if defined(HAVE_ONELAB)
+#include "onelab.h"
+#endif
 
 static void file_new_cb(Fl_Widget *w, void *data)
 {
  test:
-  if(fileChooser(FILE_CHOOSER_CREATE, "New", "")) {
+  if(fileChooser(FILE_CHOOSER_CREATE, "New", "",
+                 GModel::current()->getFileName().c_str())) {
     std::string name = fileChooserGetName(1);
     if(!StatFile(name)){
       if(fl_choice("File '%s' already exists.\n\nDo you want to erase it?",
@@ -87,45 +95,49 @@ static void file_new_cb(Fl_Widget *w, void *data)
 
 static const char *input_formats =
   "All Files" TT "*.*" NN
-  "Gmsh Geometry" TT "*.geo" NN
-  "Gmsh Mesh" TT "*.msh" NN
-  "Gmsh Post-processing View" TT "*.pos" NN
+  "Geometry - Gmsh GEO" TT "*.geo" NN
 #if defined(HAVE_ACIS)
-  "ACIS Model" TT "*.sat" NN
+  "Geometry - ACIS" TT "*.sat" NN
 #endif
 #if defined(HAVE_OCC)
-  "BRep Model" TT "*.brep" NN
-  "IGES Model" TT "*.{igs,iges}" NN
-  "STEP Model" TT "*.{stp,step}" NN
+  "Geometry - OpenCASCADE BRep" TT "*.brep" NN
+  "Geometry - OpenCASCADE IGES" TT "*.{igs,iges}" NN
+  "Geometry - OpenCASCADE STEP" TT "*.{stp,step}" NN
 #endif
-  "Diffpack 3D Mesh" TT "*.diff" NN
-  "I-deas Universal Mesh" TT "*.unv" NN
+  "Mesh - Gmsh MSH" TT "*.msh" NN
+  "Mesh - Diffpack 3D" TT "*.diff" NN
+  "Mesh - I-deas Universal" TT "*.unv" NN
 #if defined(HAVE_MED)
-  "MED File" TT "*.{med,mmed,rmed}" NN
+  "Mesh - MED" TT "*.{med,mmed}" NN
 #endif
-  "Medit INRIA Mesh" TT "*.mesh" NN
-  "Nastran Bulk Data File" TT "*.{bdf,nas}" NN
-  "Plot3D Structured Mesh" TT "*.p3d" NN
-  "STL Surface Mesh" TT "*.stl" NN
-  "VTK Mesh" TT "*.vtk" NN
-  "VRML Surface Mesh" TT "*.{wrl,vrml}" NN
-  "PLY2 Surface Mesh" TT "*.ply2" NN
-  "BMP" TT "*.bmp" NN
+  "Mesh - INRIA Medit" TT "*.mesh" NN
+  "Mesh - Nastran Bulk Data File" TT "*.{bdf,nas}" NN
+  "Mesh - Plot3D Structured Mesh" TT "*.p3d" NN
+  "Mesh - STL Surface" TT "*.stl" NN
+  "Mesh - VTK" TT "*.vtk" NN
+  "Mesh - VRML Surface" TT "*.{wrl,vrml}" NN
+  "Mesh - PLY2 Surface" TT "*.ply2" NN
+  "Post-processing - Gmsh POS" TT "*.pos" NN
+#if defined(HAVE_MED)
+  "Post-processing - MED" TT "*.{rmed}" NN
+#endif
+  "Image - BMP" TT "*.bmp" NN
 #if defined(HAVE_LIBJPEG)
-  "JPEG" TT "*.{jpg,jpeg}" NN
+  "Image - JPEG" TT "*.{jpg,jpeg}" NN
 #endif
-  "PBM" TT "*.pbm" NN
-  "PGM" TT "*.pgm" NN
+  "Image - PBM" TT "*.pbm" NN
+  "Image - PGM" TT "*.pgm" NN
 #if defined(HAVE_LIBPNG)
-  "PNG" TT "*.png" NN
+  "Image - PNG" TT "*.png" NN
 #endif
-  "PNM" TT "*.pnm" NN
-  "PPM" TT "*.ppm" NN;
+  "Image - PNM" TT "*.pnm" NN
+  "Image - PPM" TT "*.ppm" NN;
 
 static void file_open_cb(Fl_Widget *w, void *data)
 {
   int n = PView::list.size();
-  if(fileChooser(FILE_CHOOSER_SINGLE, "Open", input_formats)) {
+  if(fileChooser(FILE_CHOOSER_SINGLE, "Open", input_formats,
+                 GModel::current()->getFileName().c_str())) {
     OpenProject(fileChooserGetName(1));
     drawContext::global()->draw();
   }
@@ -136,7 +148,8 @@ static void file_open_cb(Fl_Widget *w, void *data)
 static void file_merge_cb(Fl_Widget *w, void *data)
 {
   int n = PView::list.size();
-  int f = fileChooser(FILE_CHOOSER_MULTI, "Merge", input_formats);
+  int f = fileChooser(FILE_CHOOSER_MULTI, "Merge", input_formats,
+                      GModel::current()->getFileName().c_str());
   if(f) {
     for(int i = 1; i <= f; i++)
       MergeFile(fileChooserGetName(i));
@@ -165,6 +178,7 @@ static void file_clear_cb(Fl_Widget *w, void *data)
 
 static void file_remote_cb(Fl_Widget *w, void *data)
 {
+#if defined(HAVE_ONELAB)
   onelab::localNetworkClient *c;
   onelab::server::citer it = onelab::server::instance()->findClient("GmshRemote");
   if(it == onelab::server::instance()->lastClient()){
@@ -208,6 +222,7 @@ static void file_remote_cb(Fl_Widget *w, void *data)
       server->SendString(GmshSocket::GMSH_SPEED_TEST, "Speed test");
     }
   }
+#endif
 }
 
 static void file_window_cb(Fl_Widget *w, void *data)
@@ -364,7 +379,7 @@ static void file_save_as_cb(Fl_Widget *w, void *data)
     {"Mesh - STL Surface" TT "*.stl", _save_stl},
     {"Mesh - VRML Surface" TT "*.wrl", _save_vrml},
     {"Mesh - VTK" TT "*.vtk", _save_vtk},
-    {"Mesh - PLY2" TT "*.ply2", _save_ply2},
+    {"Mesh - PLY2 Surface" TT "*.ply2", _save_ply2},
     {"Post-processing - Gmsh POS" TT "*.pos", _save_view_pos},
 #if defined(HAVE_MED)
     {"Post-processing - MED" TT "*.rmed", _save_view_med},
@@ -401,7 +416,8 @@ static void file_save_as_cb(Fl_Widget *w, void *data)
   }
 
  test:
-  if(fileChooser(FILE_CHOOSER_CREATE, "Save As", pat)) {
+  if(fileChooser(FILE_CHOOSER_CREATE, "Save As", pat,
+                 GModel::current()->getFileName().c_str())) {
     std::string name = fileChooserGetName(1);
     if(CTX::instance()->confirmOverwrite) {
       if(!StatFile(name))
@@ -2323,12 +2339,14 @@ static Fl_Menu_Item bar_table[] = {
     {"M&erge...",   FL_CTRL+FL_SHIFT+'o', (Fl_Callback *)file_merge_cb, 0},
     {"Watch Pattern...",    0, (Fl_Callback *)file_watch_cb, 0},
     {"&Clear",      0, (Fl_Callback *)file_clear_cb, 0, FL_MENU_DIVIDER},
+#if defined(HAVE_ONELAB)
     {"Remote", 0, 0, 0, FL_MENU_DIVIDER | FL_SUBMENU},
       {"Start...",  0, (Fl_Callback *)file_remote_cb, (void*)"start"},
       {"Merge...",  0, (Fl_Callback *)file_remote_cb, (void*)"merge"},
       {"Clear",     0, (Fl_Callback *)file_remote_cb, (void*)"clear"},
       {"Stop",      0, (Fl_Callback *)file_remote_cb, (void*)"stop"},
       {0},
+#endif
     {"New Window", 0, (Fl_Callback *)file_window_cb, (void*)"new"},
     {"Split Window", 0, 0, 0, FL_MENU_DIVIDER | FL_SUBMENU},
       {"Horizontally", 0, (Fl_Callback *)file_window_cb, (void*)"split_h"},
@@ -2349,7 +2367,10 @@ static Fl_Menu_Item bar_table[] = {
     {"Pl&ugins",         FL_CTRL+FL_SHIFT+'u', (Fl_Callback *)plugin_cb, (void*)(-1)},
     {"&Visibility",      FL_CTRL+FL_SHIFT+'v', (Fl_Callback *)visibility_cb, 0},
     {"&Clipping",        FL_CTRL+FL_SHIFT+'c', (Fl_Callback *)clip_cb, 0},
-    {"&Manipulator",     FL_CTRL+FL_SHIFT+'m', (Fl_Callback *)manip_cb, 0, FL_MENU_DIVIDER},
+    {"&Manipulator",     FL_CTRL+FL_SHIFT+'m', (Fl_Callback *)manip_cb, 0},
+#if defined(HAVE_ONELAB)
+    {"&OneLab",          0, (Fl_Callback *)solver_cb, (void*)(-1), FL_MENU_DIVIDER},
+#endif
     {"S&tatistics",      FL_CTRL+'i', (Fl_Callback *)statistics_cb, 0},
     {"M&essage Console", FL_CTRL+'l', (Fl_Callback *)message_cb, 0},
     {0},
@@ -2411,7 +2432,10 @@ static Fl_Menu_Item sysbar_table[] = {
     {"Plugins",         FL_META+FL_SHIFT+'u', (Fl_Callback *)plugin_cb, (void*)(-1)},
     {"Visibility",      FL_META+FL_SHIFT+'v', (Fl_Callback *)visibility_cb, 0},
     {"Clipping",        FL_META+FL_SHIFT+'c', (Fl_Callback *)clip_cb, 0},
-    {"Manipulator",     FL_META+FL_SHIFT+'m', (Fl_Callback *)manip_cb, 0, FL_MENU_DIVIDER},
+    {"Manipulator",     FL_META+FL_SHIFT+'m', (Fl_Callback *)manip_cb, 0},
+#if defined(HAVE_ONELAB)
+    {"OneLab",          0, (Fl_Callback *)solver_cb, (void*)(-1), FL_MENU_DIVIDER},
+#endif
     {"Statistics",      FL_META+'i', (Fl_Callback *)statistics_cb, 0},
     {"Message Console", FL_META+'l', (Fl_Callback *)message_cb, 0},
     {0},

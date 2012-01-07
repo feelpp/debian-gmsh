@@ -7,13 +7,15 @@
 /* Date:   07. Jan. 00                                                    */
 /**************************************************************************/
 
+namespace netgen
+{
 
 // order(i) is sorted index of element i
-extern void Sort (const ARRAY<double> & values,
-		  ARRAY<int> & order);
+extern void Sort (const Array<double> & values,
+		  Array<int> & order);
 
-extern void QickSort (const ARRAY<double> & values,
-		      ARRAY<int> & order);
+extern void QuickSort (const Array<double> & values,
+		      Array<int> & order);
 
 
 
@@ -33,10 +35,12 @@ inline void BubbleSort (int size, T * data)
 }
 
 template <class T>
-inline void BubbleSort (ARRAY<T> & data)
+inline void BubbleSort (Array<T> & data)
 {
   if(data.Size() > 0)
 	  BubbleSort (data.Size(), &data[data.Begin()]);
+}
+
 }
 
 #endif

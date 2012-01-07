@@ -297,6 +297,7 @@ class GModel
 
   // access a mesh element by coordinates (using an octree search)
   MElement *getMeshElementByCoord(SPoint3 &p, int dim = -1);
+  std::vector<MElement*> getMeshElementsByCoord(SPoint3 &p, int dim = -1);
 
   // access a mesh element by tag, using the element cache
   MElement *getMeshElementByTag(int n);
@@ -373,7 +374,7 @@ class GModel
   //           parameters[0] = thickness of the interface (mandatory)
   //    2) Assume that the function is a physical quantity -> adapt using the Hessain (technique = 2)
   //           parameters[0] = N, the final number of elements
-  //    3) A variant of 1) by P. Frey
+  //    3) A variant of 1) by P. Frey (= Coupez + takes curvature function into account)
   //           parameters[0] = thickness of the interface (mandatory)
   // The algorithm first generate a mesh if no one is available 
 
@@ -381,7 +382,7 @@ class GModel
   // we assume that boundaries are already adapted.
   // This should be fixed.
   
-  int adaptMesh (int technique, simpleFunction<double> *f, std::vector<double> parameters);
+  int adaptMesh (int technique, simpleFunction<double> *f, std::vector<double> parameters, bool meshAll=false);
 
   // make the mesh a high order mesh at order N
   // linear is 1 if the high order points are not placed on the geometry of the model 

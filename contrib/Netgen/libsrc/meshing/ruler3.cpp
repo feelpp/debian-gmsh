@@ -8,7 +8,7 @@ extern double minother;
 extern double minwithoutother;
 
 
-static double CalcElementBadness (const ARRAY<Point3d> & points,
+static double CalcElementBadness (const Array<Point3d> & points,
 				  const Element & elem)
 {
   double vol, l, l4, l5, l6;
@@ -49,13 +49,13 @@ static double CalcElementBadness (const ARRAY<Point3d> & points,
 
 int Meshing3 :: ApplyRules 
 (
- ARRAY<Point3d> & lpoints,     // in: local points, out: old+new local points
- ARRAY<int> & allowpoint,      // in: 2 .. it is allowed to use pointi, 1..will be allowed later, 0..no means
- ARRAY<MiniElement2d> & lfaces,    // in: local faces, out: old+new local faces
+ Array<Point3d> & lpoints,     // in: local points, out: old+new local points
+ Array<int> & allowpoint,      // in: 2 .. it is allowed to use pointi, 1..will be allowed later, 0..no means
+ Array<MiniElement2d> & lfaces,    // in: local faces, out: old+new local faces
  INDEX lfacesplit,	       // for local faces in outer radius
  INDEX_2_HASHTABLE<int> & connectedpairs,  // connected pairs for prism-meshing
- ARRAY<Element> & elements,    // out: new elements
- ARRAY<INDEX> & delfaces,      // out: face indices of faces to delete
+ Array<Element> & elements,    // out: new elements
+ Array<INDEX> & delfaces,      // out: face indices of faces to delete
  int tolerance,                // quality class: 1 best 
  double sloppy,                // quality strength
  int rotind1,                  // how to rotate base element
@@ -77,26 +77,25 @@ int Meshing3 :: ApplyRules
   int loktestmode;
 
 
-  static ARRAY<int> pused;        // point is already mapped
-  static ARRAY<char> fused;       // face is already mapped
-  static ARRAY<int> pmap;         // map of reference point to local point
-  static ARRAY<char> pfixed;      // point mapped by face-map
-  static ARRAY<int> fmapi;        // face in reference is mapped to face nr ...
-  static ARRAY<int> fmapr;        // face in reference is rotated to map 
-  static ARRAY<Point3d> transfreezone;  // transformed free-zone
-  static int cnt = 0;
-  static INDEX_2_CLOSED_HASHTABLE<int> ledges(100); // edges in local environment
+  Array<int> pused;        // point is already mapped
+  Array<char> fused;       // face is already mapped
+  Array<int> pmap;         // map of reference point to local point
+  Array<char> pfixed;      // point mapped by face-map
+  Array<int> fmapi;        // face in reference is mapped to face nr ...
+  Array<int> fmapr;        // face in reference is rotated to map 
+  Array<Point3d> transfreezone;  // transformed free-zone
+  INDEX_2_CLOSED_HASHTABLE<int> ledges(100); // edges in local environment
   
-  static ARRAY<Point3d> tempnewpoints;
-  static ARRAY<MiniElement2d> tempnewfaces;
-  static ARRAY<int> tempdelfaces;
-  static ARRAY<Element> tempelements;
-  static ARRAY<Box3d> triboxes;         // bounding boxes of local faces
+  Array<Point3d> tempnewpoints;
+  Array<MiniElement2d> tempnewfaces;
+  Array<int> tempdelfaces;
+  Array<Element> tempelements;
+  Array<Box3d> triboxes;         // bounding boxes of local faces
 
+  Array<int, PointIndex::BASE> pnearness;
+  Array<int> fnearness;
 
-  static ARRAY<int, PointIndex::BASE> pnearness;
-  static ARRAY<int> fnearness;
-
+  static int cnt = 0;
   cnt++;
   
   delfaces.SetSize (0);
@@ -603,13 +602,13 @@ int Meshing3 :: ApplyRules
 			{
 			  const Point3d & lp = lpoints.Get(pmap.Get(i));
 			  const Point3d & rp = rule->GetPoint(i);
-			  oldu.Set (3*i-2, lp.X()-rp.X());
-			  oldu.Set (3*i-1, lp.Y()-rp.Y());
-			  oldu.Set (3*i  , lp.Z()-rp.Z());
+			  oldu (3*i-3) = lp.X()-rp.X();
+                          oldu (3*i-2) = lp.Y()-rp.Y();
+			  oldu (3*i-1) = lp.Z()-rp.Z();
 			  
-			  allp.Set (3*i-2, lp.X());
-			  allp.Set (3*i-1, lp.Y());
-			  allp.Set (3*i  , lp.Z());
+			  allp (3*i-3) = lp.X();
+                          allp (3*i-2) = lp.Y();
+                          allp (3*i-1) = lp.Z();
 			}
 
 		      if (rule->GetNP() > rule->GetNOldP())
@@ -623,9 +622,9 @@ int Meshing3 :: ApplyRules
 		      for (i = rule->GetNOldP()+1; i <= rule->GetNP(); i++)
 			{
 			  const Point3d & rp = rule->GetPoint(i);
-			  allp.Set (3*i-2, rp.X() + newu.Get(3*i-2 - idiff));
-			  allp.Set (3*i-1, rp.Y() + newu.Get(3*i-1 - idiff));
-			  allp.Set (3*i  , rp.Z() + newu.Get(3*i   - idiff));
+			  allp (3*i-3) = rp.X() + newu(3*i-3 - idiff);
+                          allp (3*i-2) = rp.Y() + newu(3*i-2 - idiff);
+                          allp (3*i-1) = rp.Z() + newu(3*i-1 - idiff);
 			}
 		      
 		      rule->SetFreeZoneTransformation (allp, 
@@ -642,7 +641,7 @@ int Meshing3 :: ApplyRules
 
 		      if (loktestmode)
 			{
-			  const ARRAY<Point3d> & fz = rule->GetTransFreeZone();
+			  const Array<Point3d> & fz = rule->GetTransFreeZone();
 			  (*testout) << "Freezone: " << endl;
 			  for (i = 1; i <= fz.Size(); i++)
 			    (*testout) << fz.Get(i) << endl;
@@ -677,7 +676,7 @@ int Meshing3 :: ApplyRules
 
 		      for (i = 1; i <= lfaces.Size() && ok; i++)
 			{
-			  static ARRAY<int> lpi(4);
+			  static Array<int> lpi(4);
 
 			  if (!fused.Get(i))
 			    { 
@@ -865,9 +864,9 @@ int Meshing3 :: ApplyRules
 			  for (i = oldnp + 1; i <= rule->GetNP(); i++)
 			    {
 			      np = rule->GetPoint(i);
-			      np.X() += newu.Elem (3 * (i-oldnp) - 2);
-			      np.Y() += newu.Elem (3 * (i-oldnp) - 1);
-			      np.Z() += newu.Elem (3 * (i-oldnp));
+			      np.X() += newu (3 * (i-oldnp) - 3);
+			      np.Y() += newu (3 * (i-oldnp) - 2);
+			      np.Z() += newu (3 * (i-oldnp) - 1);
 			      
 			      pmap.Elem(i) = lpoints.Append (np);
 			    }

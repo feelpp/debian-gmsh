@@ -81,7 +81,7 @@ static void gmsh2MMG(GRegion *gr, MMG_pMesh mmg, MMG_pSol sol,
   mmg->point = (MMG_pPoint)calloc(mmg->npmax+1,sizeof(MMG_Point));
   mmg->tetra = (MMG_pTetra)calloc(mmg->nemax+1,sizeof(MMG_Tetra));
   mmg->tria  = (MMG_pTria) calloc(mmg->ntmax+1,sizeof(MMG_Tria));
-  mmg->disp  = (MMG_pDispl)calloc(mmg->npmax+1,sizeof(MMG_Displ));
+  //mmg->disp  = (MMG_pDispl)calloc(mmg->npmax+1,sizeof(MMG_Displ));
   mmg->adja = (int*)calloc(4*mmg->nemax+5,sizeof(int));
 
   sol->offset = 6;
@@ -181,7 +181,7 @@ static void gmsh2MMG(GRegion *gr, MMG_pMesh mmg, MMG_pSol sol,
       k++;
     }
   } 
-  mmg->disp = 0;
+  //mmg->disp = 0;
   
 }
 
@@ -242,16 +242,15 @@ static void updateSizes(GRegion *gr, MMG_pMesh mmg, MMG_pSol sol)
 static void freeMMG(MMG_pMesh mmgMesh, MMG_pSol mmgSol)
 {
   free(mmgMesh->point);
-  //  free(mmgMesh->disp->alpha);
-  //  free(mmgMesh->disp->mv);
-  free(mmgMesh->disp);
+  //free(mmgMesh->disp);
+  free(mmgMesh->adja);
   free(mmgMesh->tria);
   free(mmgMesh->tetra);
   free(mmgMesh);
-  if ( mmgSol->npfixe ){  
+  //if ( mmgSol->npfixe ){  
     free(mmgSol->met);
     free(mmgSol->metold);
-  }
+  //}
   free(mmgSol);
 }
 
@@ -262,23 +261,32 @@ void refineMeshMMG(GRegion *gr)
   std::map<int,MVertex*> mmg2gmsh;
   gmsh2MMG (gr, mmg, sol,mmg2gmsh);
   
-  for (int ITER=0;ITER<2;ITER++){
+  int iterMax = 11;
+  for (int ITER=0;ITER<iterMax;ITER++){
+    int nT =  mmg->ne; 
+
     int verb_mmg = (Msg::GetVerbosity() > 9) ? -1 : 0;
     int opt[9] = {1,0,64,0,0,0, verb_mmg , 0,0};
     Msg::Debug("-------- GMSH LAUNCHES MMG3D ---------------");
     mmg3d::MMG_mmg3dlib(opt,mmg,sol); 
     Msg::Debug("-------- MG3D TERMINATED -------------------");
+    Msg::Info("MMG3D succeeded %d vertices %d tetrahedra",
+	      mmg->np, mmg->ne);
     // Here we should interact with BGM
     updateSizes(gr,mmg, sol);
+
+    int nTnow  = mmg->ne; 
+    if (fabs((double)(nTnow - nT)) < 0.05 * nT) break;
   }  
+
   //char test[] = "test.mesh";  
   //MMG_saveMesh(mmg, test);
 
   gr->deleteVertexArrays();
   for (int i=0;i<gr->tetrahedra.size();++i)delete gr->tetrahedra[i];
   gr->tetrahedra.clear();
-  // for (int i=0;i<gr->mesh_vertices.size();++i)delete gr->mesh_vertices[i];
-  // gr->mesh_vertices.clear();
+  for (int i=0;i<gr->mesh_vertices.size();++i)delete gr->mesh_vertices[i];
+  gr->mesh_vertices.clear();
   
   MMG2gmsh(gr, mmg, mmg2gmsh);
   freeMMG(mmg, sol);

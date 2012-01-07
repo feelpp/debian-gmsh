@@ -4,6 +4,7 @@
 #include "GEntity.h"
 #include "GModel.h"
 #include "gmshLevelset.h"
+#include "MElementOctree.h"
 
 static void increaseStencil(MVertex *v, v2t_cont &adj, std::vector<MElement*> &lt){
   std::set<MElement*> stencil;
@@ -21,17 +22,73 @@ static void increaseStencil(MVertex *v, v2t_cont &adj, std::vector<MElement*> &l
   lt.clear();
   lt.insert(lt.begin(),stencil.begin(),stencil.end());
 }
+meshMetric::meshMetric(std::vector<MElement*> elements, int technique, simpleFunction<double> *fct, std::vector<double> parameters): _fct(fct){
 
-meshMetric::meshMetric ( std::vector<MElement*> &elements, simpleFunction<double> *fct,  meshMetric::MetricComputationTechnique technique, 
-			 double lcmin, double lcmax,
-			 double E, double eps)
-  : _technique(technique), _epsilon(eps), _E(E), _fct(fct), hmax(lcmax),hmin(lcmin) 
-{
-  _dim = elements[0]->getDim();
-  computeMetric(elements);
-  printMetric("toto.pos");
+  _dim  = elements[0]->getDim();
+  std::map<MElement*, MElement*> newP;
+  std::map<MElement*, MElement*> newD;
+
+  for (int i=0;i<elements.size();i++){
+      MElement *e = elements[i];
+      MElement *copy = e->copy(_vertexMap, newP, newD);
+      _elements.push_back(copy);
+    }
+
+  _octree = new MElementOctree(_elements); 
+  hmin = parameters.size() >=3 ? parameters[1] : CTX::instance()->mesh.lcMin;
+  hmax = parameters.size() >=3 ? parameters[2] : CTX::instance()->mesh.lcMax;
+  
+  _E = parameters[0];
+  _epsilon = parameters[0];
+  _technique =  (MetricComputationTechnique)technique;
+ 
+  computeMetric();
 }
 
+meshMetric::meshMetric(GModel *gm, int technique, simpleFunction<double> *fct, std::vector<double> parameters): _fct(fct){
+
+  _dim  = gm->getDim();
+  std::map<MElement*, MElement*> newP;
+  std::map<MElement*, MElement*> newD;
+
+  if (_dim == 2){
+    for (GModel::fiter fit = gm->firstFace(); fit != gm->lastFace(); ++fit){
+      for (int i=0;i<(*fit)->getNumMeshElements();i++){
+  	MElement *e = (*fit)->getMeshElement(i);
+  	MElement *copy = e->copy(_vertexMap, newP, newD);
+  	_elements.push_back(copy);
+      }
+    }
+  }
+  else if (_dim == 3){
+    for (GModel::riter rit = gm->firstRegion(); rit != gm->lastRegion(); ++rit){
+      for (int i=0;i<(*rit)->getNumMeshElements();i++){
+  	MElement *e = (*rit)->getMeshElement(i);
+  	MElement *copy = e->copy(_vertexMap, newP, newD);
+  	_elements.push_back(copy);
+      }
+    }
+  }
+
+  _octree = new MElementOctree(_elements); 
+  hmin = parameters.size() >=3 ? parameters[1] : CTX::instance()->mesh.lcMin;
+  hmax = parameters.size() >=3 ? parameters[2] : CTX::instance()->mesh.lcMax;
+  
+  _E = parameters[0];
+  _epsilon = parameters[0];
+  _technique =  (MetricComputationTechnique)technique;
+ 
+  computeMetric();
+
+  //printMetric("toto.pos");
+  //exit(1);
+
+}
+meshMetric::~meshMetric(){
+  if (_octree) delete _octree;
+  for (int i=0; i< _elements.size(); i++)
+   delete _elements[i];
+}
 
 void meshMetric::computeValues( v2t_cont adj){
 
@@ -53,12 +110,12 @@ void meshMetric::computeHessian( v2t_cont adj){
     while (it != adj.end()) {
       std::vector<MElement*> lt = it->second;      
       MVertex *ver = it->first;
-      while (lt.size() < 7) increaseStencil(ver,adj,lt);
-      if ( ver->onWhat()->dim() < _dim ){
-	while (lt.size() < 12){
-	  increaseStencil(ver,adj,lt);
-	}
-      }
+      while (lt.size() < 9) increaseStencil(ver,adj,lt); //<7
+      // if ( ver->onWhat()->dim() < _dim ){
+      // 	while (lt.size() < 12){
+      // 	  increaseStencil(ver,adj,lt);
+      // 	}
+      // }
       
       fullMatrix<double> A  (lt.size(),DIM);
       fullMatrix<double> AT (DIM,lt.size());
@@ -95,22 +152,28 @@ void meshMetric::computeHessian( v2t_cont adj){
       AT.mult(A,ATA);
       AT.mult(b,ATb);
       ATA.luSolve(ATb,result);
-      if (ITER == 0)
-	grads[ver] = SVector3(result(1),result(2),_dim==2 ? 0.0:result(3));
+      if (ITER == 0){
+	double gr1 = result(1);
+	double gr2 = result(2);
+	double gr3 = (_dim==2) ? 0.0:result(3); 
+	double norm = sqrt(gr1*gr1+gr2*gr2+gr3*gr3);
+	if (norm == 0.0 || _technique == meshMetric::HESSIAN) norm = 1.0;
+	grads[ver] = SVector3(gr1/norm,gr2/norm,gr3/norm);
+      }
       else
 	dgrads[ITER-1][ver] = SVector3(result(1),result(2),_dim==2? 0.0:result(3));
       ++it;
     }
-    if (_technique != meshMetric::HESSIAN)break;
+    if (_technique == meshMetric::LEVELSET) break;
   }
    
 }
-void meshMetric::computeMetric(std::vector<MElement*> &e){
+void meshMetric::computeMetric(){
   
   v2t_cont adj;
-  buildVertexToElement (e,adj);
+  buildVertexToElement (_elements,adj);
 
-  printf("%d elements are considered in the metric \n",e.size());
+  //printf("%d elements are considered in the meshMetric \n",(int)_elements.size());
 
   computeValues(adj);
   computeHessian(adj);
@@ -118,74 +181,112 @@ void meshMetric::computeMetric(std::vector<MElement*> &e){
   v2t_cont :: iterator it = adj.begin();
   while (it != adj.end()) {
      MVertex *ver = it->first;
+     double dist = fabs(vals[ver]);
   
      SMetric3 H;
      SVector3 gradudx = dgrads[0][ver];
      SVector3 gradudy = dgrads[1][ver];
      SVector3 gradudz = dgrads[2][ver];
-     fullMatrix<double> hessian(3,3);
+     SMetric3 hessian;
      hessian(0,0) = gradudx(0);
      hessian(1,1) = gradudy(1);
      hessian(2,2) = gradudz(2);
      hessian(1,0) = hessian(0,1) = 0.5 * (gradudx(1) +gradudy(0));
      hessian(2,0) = hessian(0,2) = 0.5 * (gradudx(2) +gradudz(0));
      hessian(2,1) = hessian(1,2) = 0.5 * (gradudy(2) +gradudz(1));
-
      if (_technique == meshMetric::HESSIAN){
-      H.setMat(hessian);
+      H = hessian;
     }
-    else if (_technique == meshMetric::FREY){
+     else if (_technique == meshMetric::LEVELSET ){
       SVector3 gr = grads[ver];
-      fullMatrix<double> hfrey(hessian);
-      hfrey(0,0) +=  gr(0)*gr(0)/(hmin*hmin);
-      hfrey(1,1) +=  gr(1)*gr(1)/(hmin*hmin);
-      hfrey(2,2) +=  gr(2)*gr(2)/(hmin*hmin);
-      hfrey(1,0) +=  gr(1)*gr(0)/(hmin*hmin);
-      hfrey(2,0) +=  gr(2)*gr(0)/(hmin*hmin);
-      hfrey(2,1) +=  gr(2)*gr(1)/(hmin*hmin);
-      hfrey(0,1) = hfrey(1,0) ;
-      hfrey(0,2) = hfrey(2,0);
-      hfrey(1,2) = hfrey(2,1); 
-      H.setMat(hfrey);
-    }
-    else if (_technique == meshMetric::LEVELSET){
-      double dist = fabs(vals[ver]);
-      SVector3 gr = grads[ver];
-      fullMatrix<double> hcoupez(3,3);
-      hcoupez(0,0) = 1./(hmax*hmax);
-      hcoupez(1,1) = 1./(hmax*hmax);
-      hcoupez(2,2) = 1./(hmax*hmax);
-      double norm = sqrt(gr(0)*gr(0)+gr(1)*gr(1)+gr(2)*gr(2));
+      SMetric3 hlevelset(1./(hmax*hmax));
+      double norm = gr(0)*gr(0)+gr(1)*gr(1)+gr(2)*gr(2);
       if (dist < _E && norm != 0.0){
-	double C = 1./(hmin*hmin) -1./(hmax*hmax);
-	hcoupez(0,0) += C*gr(0)*gr(0)/norm ;
-	hcoupez(1,1) += C*gr(1)*gr(1)/norm ;
-	hcoupez(2,2) += C*gr(2)*gr(2)/norm ;
-	hcoupez(1,0) = hcoupez(0,1) = C*gr(1)*gr(0)/norm;
-	hcoupez(2,0) = hcoupez(0,2) = C*gr(2)*gr(0)/norm;
-	hcoupez(2,1) = hcoupez(1,2) = C*gr(2)*gr(1)/norm;
+	double h = hmin*(hmax/hmin-1)*dist/_E + hmin;
+	double C = 1./(h*h) -1./(hmax*hmax);
+	hlevelset(0,0) += C*gr(0)*gr(0)/norm ; 
+	hlevelset(1,1) += C*gr(1)*gr(1)/norm ; 
+	hlevelset(2,2) += C*gr(2)*gr(2)/norm ; 
+	hlevelset(1,0) = hlevelset(0,1) = C*gr(1)*gr(0)/norm ; 
+	hlevelset(2,0) = hlevelset(0,2) = C*gr(2)*gr(0)/norm ; 
+	hlevelset(2,1) = hlevelset(1,2) = C*gr(2)*gr(1)/norm ; 
       }
-      else if (dist > _E && dist < 2.*_E  && norm != 0.0){
-	double hmid = (hmax-hmin)/(1.*_E)*dist+(2.*hmin-1.*hmax);
-	double C = 1./(hmid*hmid) -1./(hmax*hmax);
-	hcoupez(0,0) += C*gr(0)*gr(0)/norm ;
-	hcoupez(1,1) += C*gr(1)*gr(1)/norm ;
-	hcoupez(2,2) += C*gr(2)*gr(2)/norm ;
-	hcoupez(1,0) = hcoupez(0,1) = C*gr(1)*gr(0)/norm;
-	hcoupez(2,0) = hcoupez(0,2) = C*gr(2)*gr(0)/norm;
-	hcoupez(2,1) = hcoupez(1,2) = C*gr(2)*gr(1)/norm;
-      }
-      H.setMat(hcoupez);
+      // else if (dist > _E && dist < 2.*_E  && norm != 0.0){
+      // 	double hmid = (hmax-hmin)/(1.*_E)*dist+(2.*hmin-1.*hmax);
+      // 	double C = 1./(hmid*hmid) -1./(hmax*hmax);
+      // 	hlevelset(0,0) += C*gr(0)*gr(0)/norm ; 
+      // 	hlevelset(1,1) += C*gr(1)*gr(1)/norm ; 
+      // 	hlevelset(2,2) += C*gr(2)*gr(2)/norm ; 
+      // 	hlevelset(1,0) = hlevelset(0,1) = C*gr(1)*gr(0)/norm ; 
+      // 	hlevelset(2,0) = hlevelset(0,2) = C*gr(2)*gr(0)/norm ; 
+      // 	hlevelset(2,1) = hlevelset(1,2) = C*gr(2)*gr(1)/norm ; 
+      // }
+      H = hlevelset;
     }
+     //See paper Ducrot and Frey: 
+     //Anisotropic levelset adaptation for accurate interface capturing,
+     //ijnmf, 2010
+     else if (_technique == meshMetric::FREY ){
+       SVector3 gr = grads[ver];
+       SMetric3 hfrey(1./(hmax*hmax));
+       double norm = gr(0)*gr(0)+gr(1)*gr(1)+gr(2)*gr(2);
+       if (dist < _E && norm != 0.0){
+	 double h = hmin*(hmax/hmin-1.0)*dist/_E + hmin;
+	 double C = 1./(h*h) -1./(hmax*hmax);
+	 double kappa = hessian(0,0)+hessian(1,1)+hessian(2,2);
+	 double Np = 15.0;
+	 double epsGeom = 4.0*3.14*3.14/(kappa*Np);
+	 hfrey(0,0) += C*gr(0)*gr(0)/(norm) + hessian(0,0)/epsGeom;
+	 hfrey(1,1) += C*gr(1)*gr(1)/(norm) + hessian(1,1)/epsGeom;
+	 hfrey(2,2) += C*gr(2)*gr(2)/(norm) + hessian(2,2)/epsGeom;
+	 hfrey(1,0) = hfrey(0,1) = C*gr(1)*gr(0)/(norm) + hessian(1,0)/epsGeom;
+	 hfrey(2,0) = hfrey(0,2) = C*gr(2)*gr(0)/(norm) + hessian(2,0)/epsGeom;
+	 hfrey(2,1) = hfrey(1,2) = C*gr(2)*gr(1)/(norm) + hessian(2,1)/epsGeom;
+	 // hfrey(0,0) += C*gr(0)*gr(0)/norm;
+	 // hfrey(1,1) += C*gr(1)*gr(1)/norm; 
+	 // hfrey(2,2) += C*gr(2)*gr(2)/norm; 
+	 // hfrey(1,0) = hfrey(0,1) = gr(1)*gr(0)/(norm) ;
+	 // hfrey(2,0) = hfrey(0,2) = gr(2)*gr(0)/(norm) ;
+	 // hfrey(2,1) = hfrey(1,2) = gr(2)*gr(1)/(norm) ;
+       }
+       // SMetric3 sss=hessian;
+       // sss *= divEps;
+       // sss(0,0) += 1/(hmax*hmax);
+       // sss(1,1) += 1/(hmax*hmax);
+       // sss(2,2) += 1/(hmax*hmax);
+       // H = intersection(sss,hfrey);
+       // if (dist < _E) H = intersection(sss,hfrey);
+       // else H = hfrey;
+       H = hfrey;
+     }
+     //See paper Hachem and Coupez: 
+     //Finite element solution to handle complex heat and fluid flows in 
+     //industrial furnaces using the immersed volume technique, ijnmf, 2010
 
     fullMatrix<double> V(3,3);
     fullVector<double> S(3);
     H.eig(V,S);
-  
-    double lambda1 = S(0);
-    double lambda2 = S(1); 
-    double lambda3 = (_dim == 3)? S(2) : 1.; 
-    if (_technique != meshMetric::LEVELSET){
+
+    double lambda1, lambda2, lambda3;
+    // if (dist < _E && _technique == meshMetric::FREY){
+    //   fullMatrix<double> Vhess(3,3);
+    //   fullVector<double> Shess(3);
+    //   hessian.eig(Vhess,Shess);
+    //   double h = hmin*(hmax/hmin-1)*dist/_E + hmin;
+    //   double lam1 = Shess(0);
+    //   double lam2 = Shess(1); 
+    //   double lam3 = (_dim == 3)? Shess(2) : 1.;
+    //   lambda1 = lam1;
+    //   lambda2 = lam2/lambda1;
+    //   lambda3 = (_dim == 3)? lam3/lambda1: 1.0;
+    // }
+    // else{
+      lambda1 = S(0);
+      lambda2 = S(1); 
+      lambda3 = (_dim == 3)? S(2) : 1.; 
+   //}
+
+    if (_technique == meshMetric::HESSIAN || (dist < _E && _technique == meshMetric::FREY)){
       lambda1 = std::min(std::max(fabs(S(0))/_epsilon,1./(hmax*hmax)),1./(hmin*hmin));
       lambda2 = std::min(std::max(fabs(S(1))/_epsilon,1./(hmax*hmax)),1./(hmin*hmin));
       lambda3 = (_dim == 3) ? std::min(std::max(fabs(S(2))/_epsilon,1./(hmax*hmax)),1./(hmin*hmin)) : 1.;
@@ -196,6 +297,7 @@ void meshMetric::computeMetric(std::vector<MElement*> &e){
     SVector3 t3 (V(0,2),V(1,2),V(2,2));
   
     SMetric3 metric(lambda1,lambda2,lambda3,t1,t2,t3);
+
     _hessian[ver] = hessian;
     _nodalMetrics[ver] = metric;
     _nodalSizes[ver] = std::min(std::min(1/sqrt(lambda1),1/sqrt(lambda2)),1/sqrt(lambda3));
@@ -230,19 +332,14 @@ void meshMetric::computeMetric(std::vector<MElement*> &e){
   //smoothMetric (sol);
   //curvatureContributionToMetric();
 
-  putOnNewView();
-
+ 
 }
 
-
-
-double meshMetric::operator() (double x, double y, double z, GEntity *ge){
-  GModel *gm = _nodalMetrics.begin()->first->onWhat()->model();
-  SPoint3 xyz(x,y,z),uvw;
-
+double meshMetric::operator() (double x, double y, double z, GEntity *ge) {
+  SPoint3 xyz(x,y,z), uvw;
   double initialTol = MElement::getTolerance();
   MElement::setTolerance(1.e-4); 
-  MElement *e = gm->getMeshElementByCoord(xyz,_dim);    
+  MElement *e = _octree->find(x, y, z, _dim);  
   MElement::setTolerance(initialTol);
   if (e){
     e->xyz2uvw(xyz,uvw);
@@ -257,15 +354,13 @@ double meshMetric::operator() (double x, double y, double z, GEntity *ge){
   return 1.e22;
 }
 
-void meshMetric::operator() (double x, double y, double z, SMetric3 &metr, GEntity *ge){
+void meshMetric::operator() (double x, double y, double z, SMetric3 &metr, GEntity *ge) {
   metr = SMetric3(1.e-22);
-  GModel *gm = _nodalMetrics.begin()->first->onWhat()->model();
-  SPoint3 xyz(x,y,z),uvw;
+  SPoint3 xyz(x,y,z), uvw;
   double initialTol = MElement::getTolerance();
   MElement::setTolerance(1.e-4); 
-  MElement *e = gm->getMeshElementByCoord(xyz,_dim);    
+  MElement *e = _octree->find(x, y, z, _dim);   
   MElement::setTolerance(initialTol);
-
 
   if (e){
     e->xyz2uvw(xyz,uvw);
@@ -284,43 +379,39 @@ void meshMetric::operator() (double x, double y, double z, SMetric3 &metr, GEnti
   }
 }
 
-// FIXME !!!!!!!!! 2 be fixed !!!
-void meshMetric::setAsBackgroundMesh (GModel *gm){
-  FieldManager *fields = gm->getFields();
-  int id = fields->newId();
-  (*fields)[id] = new meshMetric(*this);
-  fields->background_field = id;
-}
-
 void meshMetric::printMetric(const char* n) const{
 
   FILE *f = fopen (n,"w");
   fprintf(f,"View \"\"{\n");
-  std::map<MVertex*,SMetric3>::const_iterator it= _nodalMetrics.begin();
-  //std::map<MVertex*,fullMatrix<double> >::const_iterator it = _hessian.begin(); 
-  for (; it != _nodalMetrics.end(); ++it){
-    //for (; it != _hessian.end(); ++it){
-    fprintf(f,"TP(%g,%g,%g){%g,%g,%g,%g,%g,%g,%g,%g,%g};\n",
-	    it->first->x(),it->first->y(),it->first->z(),
-	    it->second(0,0),it->second(0,1),it->second(0,2),
-	    it->second(1,0),it->second(1,1),it->second(1,2),
-	    it->second(2,0),it->second(2,1),it->second(2,2)
-	    );
+
+  std::map<MVertex*,SMetric3 >::const_iterator it = _hessian.begin(); 
+  //std::map<MVertex*,SMetric3>::const_iterator it= _nodalMetrics.begin();
+  //for (; it != _nodalMetrics.end(); ++it){
+    for (; it != _hessian.end(); ++it){
+      MVertex *v =  it->first;
+      SMetric3 h = it->second;
+      double lapl = h(0,0)+h(1,1)+h(2,2); 
+       fprintf(f, "SP(%g,%g,%g){%g};\n",  it->first->x(),it->first->y(),it->first->z(),lapl);
+      // fprintf(f,"TP(%g,%g,%g){%g,%g,%g,%g,%g,%g,%g,%g,%g};\n",
+      // 	    it->first->x(),it->first->y(),it->first->z(),
+      // 	    it->second(0,0),it->second(0,1),it->second(0,2),
+      // 	    it->second(1,0),it->second(1,1),it->second(1,2),
+      // 	    it->second(2,0),it->second(2,1),it->second(2,2)
+      // 	    );
+
   } 
   fprintf(f,"};\n");
   fclose (f);    
 }
 
-double meshMetric::getLaplacian (MVertex *v){
-
-  std::map<MVertex*, fullMatrix<double> >::iterator it = _hessian.find(v);
-  fullMatrix<double> h = it->second;
-  double laplace = h(0,0)+h(1,1)+h(2,2);
-  return laplace; 
+double meshMetric::getLaplacian (MVertex *v) {
+  MVertex *vNew = _vertexMap[v->getNum()];
+  std::map<MVertex*, SMetric3 >::const_iterator it = _hessian.find(vNew);
+  SMetric3 h = it->second;
+  return h(0,0)+h(1,1)+h(2,2); 
 }
 
-
-/*void dgMeshMetric::curvatureContributionToMetric (){
+/*void meshMetric::curvatureContributionToMetric (){
   std::map<MVertex*,SMetric3>::iterator it = _nodalMetrics.begin();
   std::map<MVertex*,double>::iterator its = _nodalSizes.begin();
   for (; it != _nodalMetrics.end(); ++it,++its){
@@ -342,7 +433,7 @@ double meshMetric::getLaplacian (MVertex *v){
   }*/
 
 /*
-  void dgMeshMetric::smoothMetric (dgDofContainer *sol){
+  void meshMetric::smoothMetric (dgDofContainer *sol){
   return;
   dgGroupCollection *groups = sol->getGroups();
   std::set<MEdge,Less_Edge> edges;

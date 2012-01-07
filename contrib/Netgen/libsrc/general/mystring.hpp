@@ -19,6 +19,9 @@
 #ifndef MYSTRING__H
 #define MYSTRING__H
 
+namespace netgen
+{
+
 class Point3d;
 class Vec3d;
 
@@ -42,17 +45,17 @@ istream& operator >> (istream &, MyStr &);
 class MyStr
 {
 public:
-  MyStr();
-  MyStr(const char *);
-  MyStr(char);
-  MyStr(const MyStr &);
-  MyStr(int);
-  MyStr(void *);
-  MyStr(long);
-  MyStr(double);
-  MyStr(const Point3d& p);
-  MyStr(const Vec3d& p);
-  MyStr(const string & st);
+  DLL_HEADER MyStr();
+  DLL_HEADER MyStr(const char *);
+  DLL_HEADER MyStr(char);
+  DLL_HEADER MyStr(const MyStr &);
+  DLL_HEADER MyStr(int);
+  DLL_HEADER MyStr(void *);
+  DLL_HEADER MyStr(long);
+  DLL_HEADER MyStr(double);
+  DLL_HEADER MyStr(const Point3d& p);
+  DLL_HEADER MyStr(const Vec3d& p);
+  DLL_HEADER MyStr(const string & st);
 
   ~MyStr();
   MyStr Left(unsigned);
@@ -211,6 +214,7 @@ inline void MyStr::SetToErrHandler(void (*Handler)())
   ErrHandler = Handler;
 };
 
+}
 #endif
 
    

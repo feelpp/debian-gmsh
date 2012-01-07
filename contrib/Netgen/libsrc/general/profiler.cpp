@@ -32,7 +32,9 @@ namespace netgen
 
   NgProfiler :: ~NgProfiler()
   {
+#ifndef PARALLEL
     StopTimer (total_timer);
+#endif
 
     //ofstream prof;
     //prof.open("ng.prof");
@@ -41,17 +43,20 @@ namespace netgen
     // which leads to an "order of destruction"-problem,
     // thus we use the C-variant:
 
-    char filename[100];
+    if (getenv ("NGPROFILE"))
+      {
+	char filename[100];
 #ifdef PARALLEL
-    sprintf (filename, "netgen.prof.%d", id);
+	sprintf (filename, "netgen.prof.%d", id);
 #else
-    sprintf (filename, "netgen.prof");
+	sprintf (filename, "netgen.prof");
 #endif
-
-    // MODIFIED FOR GMSH
-    //FILE *prof = fopen(filename,"w");
-    //Print (prof);
-    //fclose(prof);
+	
+	if (id == 0) printf ("write profile to file netgen.prof\n"); 
+	FILE *prof = fopen(filename,"w");
+	Print (prof);
+	fclose(prof);
+      }
   }
 
 
@@ -83,7 +88,7 @@ namespace netgen
       if (counts[i] != 0 || usedcounter[i] != 0)
 	{
 	  //fprintf(prof,"job %3i calls %8i, time %6.2f sec",i,counts[i],double(tottimes[i]) / CLOCKS_PER_SEC);
-	  fprintf(prof,"calls %8i, time %6.2f sec",counts[i],double(tottimes[i]) / CLOCKS_PER_SEC);
+	  fprintf(prof,"calls %8li, time %6.2f sec",counts[i],double(tottimes[i]) / CLOCKS_PER_SEC);
 	  if(usedcounter[i])
 	    fprintf(prof," %s",names[i].c_str());
 	  else

@@ -3,7 +3,6 @@
 
 #include <csg.hpp>
 
-
 namespace netgen
 {
 
@@ -12,16 +11,14 @@ namespace netgen
 			    INDEX_2_HASHTABLE<int> & singedges,
 			    ZRefinementOptions & opt)
   {
-    int i, j;
-
     // edges selected in csg input file
-    for (i = 1; i <= geom.singedges.Size(); i++)
+    for (int i = 1; i <= geom.singedges.Size(); i++)
       {
 	//if(geom.singedges.Get(i)->maxhinit > 0)
 	//  continue; //!!!!
 
 	const SingularEdge & se = *geom.singedges.Get(i);
-	for (j = 1; j <= se.segms.Size(); j++)
+	for (int j = 1; j <= se.segms.Size(); j++)
 	  {
 	    INDEX_2 i2 = se.segms.Get(j);
 	    singedges.Set (i2, 1);
@@ -29,12 +26,12 @@ namespace netgen
       }
 
     // edges interactively selected
-    for (i = 1; i <= mesh.GetNSeg(); i++)
+    for (int i = 1; i <= mesh.GetNSeg(); i++)
       {
 	const Segment & seg = mesh.LineSegment(i);
 	if (seg.singedge_left || seg.singedge_right)
 	  {
-	    INDEX_2 i2(seg.p1, seg.p2);
+	    INDEX_2 i2(seg[0], seg[1]);
 	    i2.Sort();
 	    singedges.Set (i2, 1);
 	  }
@@ -47,16 +44,14 @@ namespace netgen
   */
   void MakePrismsSingEdge (Mesh & mesh, INDEX_2_HASHTABLE<int> & singedges)
   {
-    int i, j, k;
-
     // volume elements
-    for (i = 1; i <= mesh.GetNE(); i++)
+    for (int i = 1; i <= mesh.GetNE(); i++)
       {
 	Element & el = mesh.VolumeElement(i);
 	if (el.GetType() != TET) continue;
 
-	for (j = 1; j <= 3; j++)
-	  for (k = j+1; k <= 4; k++)
+	for (int j = 1; j <= 3; j++)
+	  for (int k = j+1; k <= 4; k++)
 	    {
 	      INDEX_2 edge(el.PNum(j), el.PNum(k));
 	      edge.Sort();
@@ -81,14 +76,14 @@ namespace netgen
       }
 
     // surface elements
-    for (i = 1; i <= mesh.GetNSE(); i++)
+    for (int i = 1; i <= mesh.GetNSE(); i++)
       {
 	Element2d & el = mesh.SurfaceElement(i);
 	if (el.GetType() != TRIG) continue;
 
-	for (j = 1; j <= 3; j++)
+	for (int j = 1; j <= 3; j++)
 	  {
-	    k = (j % 3) + 1;
+	    int k = (j % 3) + 1;
 	    INDEX_2 edge(el.PNum(j), el.PNum(k));
 	    edge.Sort();
 
@@ -216,7 +211,7 @@ namespace netgen
   {
     int i, j;
     int nseg = mesh.GetNSeg();
-    ARRAY<int> edgesonpoint(mesh.GetNP());
+    Array<int> edgesonpoint(mesh.GetNP());
     for (i = 1; i <= mesh.GetNP(); i++)
       edgesonpoint.Elem(i) = 0;
 
@@ -225,8 +220,8 @@ namespace netgen
 	for (j = 1; j <= 2; j++)
 	  {
 	    int pi = (j == 1) ? 
-	      mesh.LineSegment(i).p1 :
-	      mesh.LineSegment(i).p2;
+	      mesh.LineSegment(i)[0] :
+	      mesh.LineSegment(i)[1];
 	    edgesonpoint.Elem(pi)++;
 	  }
       }
@@ -256,9 +251,9 @@ namespace netgen
 
     // markers for z-refinement:  p1, p2, levels  
     // p1-p2 is an edge to be refined
-    ARRAY<INDEX_3> ref_uniform;
-    ARRAY<INDEX_3> ref_singular;
-    ARRAY<INDEX_4 > ref_slices;
+    Array<INDEX_3> ref_uniform;
+    Array<INDEX_3> ref_singular;
+    Array<INDEX_4 > ref_slices;
 
     BitArray first_id(geom->identifications.Size());
     first_id.Set();
@@ -292,7 +287,7 @@ namespace netgen
 		    }
 		  else
 		    {   
-		      //const ARRAY<double> & slices = csid->GetSlices();
+		      //const Array<double> & slices = csid->GetSlices();
 		      INDEX_4 i4;
 		      i4[0] = pair.I1();
 		      i4[1] = pair.I2();
@@ -306,7 +301,7 @@ namespace netgen
 
   
   
-    ARRAY<EdgePointGeomInfo> epgi;
+    Array<EdgePointGeomInfo> epgi;
 
     while (1)
       {
@@ -394,7 +389,7 @@ namespace netgen
 		edge.Sort();
 		if (!refedges.Used(edge))
 		  {
-		    const ARRAY<double> & slices = csid->GetSlices();
+		    const Array<double> & slices = csid->GetSlices();
 		    //(*testout) << "idnr " << idnr << " i " << i << endl;
 		    //(*testout) << "slices " << slices << endl;
 		    double slicefac = slices.Get(slicenr);
@@ -527,7 +522,7 @@ namespace netgen
 	  {
 	    const Segment & el = mesh.LineSegment(i);
 
-	    INDEX_2 i2(el.p1, el.p2);
+	    INDEX_2 i2(el[0], el[1]);
 	    i2.Sort();
 	  
 	    int pnew;
@@ -545,13 +540,13 @@ namespace netgen
 		// 	      Point3d pb;
 
 		// 	      /*
-		// 	      geom->PointBetween (mesh.Point (el.p1),
-		// 				  mesh.Point (el.p2),
+		// 	      geom->PointBetween (mesh.Point (el[0]),
+		// 				  mesh.Point (el[1]),
 		// 				  el.surfnr1, el.surfnr2,
 		// 				  el.epgeominfo[0], el.epgeominfo[1],
 		// 				  pb, ngi);
 		// 	      */
-		// 	      pb = Center (mesh.Point (el.p1), mesh.Point (el.p2));
+		// 	      pb = Center (mesh.Point (el[0]), mesh.Point (el[1]));
 
 		// 	      pnew = mesh.AddPoint (pb);
 	      
@@ -564,9 +559,9 @@ namespace netgen
 	  
 	    Segment ns1 = el;
 	    Segment ns2 = el;
-	    ns1.p2 = pnew;
+	    ns1[1] = pnew;
 	    ns1.epgeominfo[1] = ngi;
-	    ns2.p1 = pnew;
+	    ns2[0] = pnew;
 	    ns2.epgeominfo[0] = ngi;
 
 	    mesh.LineSegment(i) = ns1;
@@ -720,9 +715,12 @@ namespace netgen
 
 
 
-  void ZRefinement (Mesh & mesh, const CSGeometry * geom,
+  void ZRefinement (Mesh & mesh, const NetgenGeometry * hgeom,
 		    ZRefinementOptions & opt)
   {
+    const CSGeometry * geom = dynamic_cast<const CSGeometry*> (hgeom);
+    if (!geom) return;
+
     INDEX_2_HASHTABLE<int> singedges(mesh.GetNSeg());
 
     SelectSingularEdges (mesh, *geom, singedges, opt);

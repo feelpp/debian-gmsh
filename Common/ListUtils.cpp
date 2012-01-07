@@ -7,12 +7,17 @@
 //   Marc Ume
 //
 
+#include "GmshConfig.h"
+#if !defined(HAVE_NO_STDINT_H)
+#include <stdint.h>
+#elif defined(HAVE_NO_INTPTR_T)
+typedef unsigned long intptr_t;
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
 #include <sys/types.h>
-#include <stdint.h>
 #include "MallocUtils.h"
 #include "ListUtils.h"
 #include "TreeUtils.h"

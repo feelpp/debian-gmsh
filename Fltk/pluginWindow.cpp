@@ -3,9 +3,14 @@
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
+#include "GmshConfig.h"
+#if !defined(HAVE_NO_STDINT_H)
+#include <stdint.h>
+#elif defined(HAVE_NO_INTPTR_T)
+typedef unsigned long intptr_t;
+#endif
 #include <vector>
 #include <string.h>
-#include <stdint.h>
 #include <FL/Fl_Return_Button.H>
 #include <FL/Fl_Group.H>
 #include <FL/Fl_Value_Input.H>
