@@ -3,7 +3,7 @@ gmsh (2.5.1~beta2~svn10875~dfsg-1) unstable; urgency=low
   [ Christophe Trophime ]
   * [ba58a67] Enable tetgen on systems, where it is available. 
               Needs package-rebuilding.
-  * [c662ef0] Reenable python-bindings.
+  * [c662ef0] Re-enable python-bindings.
   * [1283634] Use packaged version of gmm instead of shipped with tarball. 
               Patch is disabled.
 
