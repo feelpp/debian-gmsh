@@ -1,3 +1,12 @@
+gmsh (2.5.1~beta2~svn10875~dfsg-2) unstable; urgency=low
+
+  [ Christophe Trophime ]
+  * [52d38ce] Apply mmg3d.patch.
+  * [ae08657] Apply use_gmm.patch.
+  * [cfd8f72] Apply use_libann.patch.
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Tue, 17 Jan 2012 22:05:27 +0100
+
 gmsh (2.5.1~beta2~svn10875~dfsg-1) unstable; urgency=low
 
   [ Christophe Trophime ]
