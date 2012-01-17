@@ -7,7 +7,7 @@ Last-Update: 2012-01-16
 
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -482,7 +482,12 @@
+@@ -482,7 +482,13 @@
  endif(ENABLE_DINTEGRATION)
  
  if(ENABLE_GMM)

@@ -6,7 +6,7 @@ Last-Update: 2012-01-05
 
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -567,6 +567,18 @@
+@@ -568,6 +568,18 @@
      message("WARNING: By including Tetgen you have to comply with Tetgen's "
              "special licensing requirements stated in contrib/Tetgen/LICENSE.")
    endif(ENABLE_TETGEN_NEW AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/contrib/TetgenNew/tetgen.h)
