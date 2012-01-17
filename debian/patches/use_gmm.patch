@@ -16,6 +16,7 @@ Last-Update: 2012-01-16
 +  if(GMM_INC)
 +    list(APPEND EXTERNAL_INCLUDES ${GMM_INC})
 +  else(GMM_INC)
++    message(STATUS "GMM " ${GMM_INC} " not Found - using contrib/gmm instead")
 +    include_directories(contrib/gmm)
 +  endif(GMM_INC)
    set_config_option(HAVE_GMM "Gmm")
