@@ -1,10 +1,3 @@
-gmsh (2.5.1~beta2~svn10875~dfsg-3) UNRELEASED; urgency=low
-
-  * [a1a0dcd] Update the dependency on cgns (version 3.1.3.2 minimal)
-  * [d448ce9] Transition to hdf5 1.8.8
-
- -- Sylvestre Ledru <sylvestre@debian.org>  Wed, 18 Jan 2012 20:34:15 +0100
-
 gmsh (2.5.1~beta2~svn10875~dfsg-2) unstable; urgency=low
 
   [ Christophe Trophime ]
@@ -18,6 +11,10 @@ gmsh (2.5.1~beta2~svn10875~dfsg-2) unstable; urgency=low
   [ Anton Gladky ]
   * [f604741] Refersh patches.
   * [0b0eec7] Add Christophe Trophime to uploaders.
+  
+  [ Sylvestre Ledru ]
+  * [a1a0dcd] Update the dependency on cgns (version 3.1.3.2 minimal)
+  * [d448ce9] Transition to hdf5 1.8.8
 
  -- Anton Gladky <gladky.anton@gmail.com>  Wed, 18 Jan 2012 20:23:41 +0100
 
