@@ -10,7 +10,7 @@ Build-Depends: debhelper (>= 8), cmake, gfortran, libgl1-mesa-dev,
  libpng12-dev, libjpeg-dev, zlib1g-dev, texlive, texinfo,
  mpi-default-dev,
  libopencascade-modeling-dev,
- libcgns-dev (>= 2.5.3),
+ libcgns-dev (>= 3.1.3.2),
  libmed-dev (>= 2.3.6), libmedc-dev (>= 2.3.6), 
  libhdf5-mpi-dev [alpha amd64 i386 ia64 kfreebsd-amd64 kfreebsd-i386 powerpc sparc],
  libscotchmetis-dev,
@@ -27,7 +27,7 @@ Homepage: http://www.geuz.org/gmsh/
 
 Package: gmsh
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, libcgns2 (>= 2.5.3), mpi-default-bin,
+Depends: ${shlibs:Depends}, ${misc:Depends}, mpi-default-bin,
  python (>= 2.7), python (<<2.8)
 Description: Three-dimensional finite element mesh generator
  Gmsh is an automatic 3D finite element mesh generator (primarily
