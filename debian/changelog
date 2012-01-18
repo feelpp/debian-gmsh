@@ -1,11 +1,18 @@
-gmsh (2.5.1~beta2~svn10875~dfsg-2) unstable; urgency=low
+gmsh (2.5.1~beta2~svn10875~dfsg-1ubuntu1) unstable; urgency=low
 
   [ Christophe Trophime ]
-  * [52d38ce] Apply mmg3d.patch.
-  * [ae08657] Apply use_gmm.patch.
-  * [cfd8f72] Apply use_libann.patch.
+  * [52d38ce] Apply use_mmg3d.patch. Use packaged version of mmg3d 
+      instead of shipped with tarball.
+  * [ae08657] Apply use_gmm.patch.  Use packaged version of gmm 
+      instead of shipped with tarball. See details in use_gmm.patch
+  * [cfd8f72] Apply use_libann.patch. Use packaged version of libann 
+      instead of shipped with tarball.
 
- -- Anton Gladky <gladky.anton@gmail.com>  Tue, 17 Jan 2012 22:05:27 +0100
+  [ Anton Gladky ]
+  * [f604741] Refersh patches.
+  * [0b0eec7] Add Christophe Trophime to uploaders.
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Wed, 18 Jan 2012 20:23:41 +0100
 
 gmsh (2.5.1~beta2~svn10875~dfsg-1) unstable; urgency=low
 
