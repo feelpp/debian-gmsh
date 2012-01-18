@@ -2,7 +2,9 @@ Source: gmsh
 Section: math
 Priority: optional
 Maintainer: Debian Science Maintainers <debian-science-maintainers@lists.alioth.debian.org>
-Uploaders: Christophe Prud'homme <prudhomm@debian.org>, Anton Gladky <gladky.anton@gmail.com>
+Uploaders: Christophe Prud'homme <prudhomm@debian.org>, 
+ Anton Gladky <gladky.anton@gmail.com>,
+ Christophe Trophime <christophe.trophime@lncmi.cnrs.fr>
 Build-Depends: debhelper (>= 8), cmake, gfortran, libgl1-mesa-dev,
  libglu1-mesa-dev, libfltk1.3-dev (>=1.1.7),
  libpng12-dev, libjpeg-dev, zlib1g-dev, texlive, texinfo,
