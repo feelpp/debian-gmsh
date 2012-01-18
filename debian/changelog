@@ -1,4 +1,4 @@
-gmsh (2.5.1~beta2~svn10875~dfsg-1ubuntu1) unstable; urgency=low
+gmsh (2.5.1~beta2~svn10875~dfsg-2) unstable; urgency=low
 
   [ Christophe Trophime ]
   * [52d38ce] Apply use_mmg3d.patch. Use packaged version of mmg3d 
