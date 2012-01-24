@@ -2,3 +2,5 @@ When Bug #555653 will be resolved, the platform restriction
 for libmedc-dev and libhdf5-mpi-dev should be deleted.
 
 In this case gmsh should compile normally on all platforms.
+
+Return libpetsc to BD

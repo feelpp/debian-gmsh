@@ -14,7 +14,6 @@ Build-Depends: debhelper (>= 8), cmake, gfortran, libgl1-mesa-dev,
  libmed-dev (>= 2.3.6), libmedc-dev (>= 2.3.6), 
  libhdf5-mpi-dev (>= 1.8.8) [alpha amd64 i386 ia64 kfreebsd-amd64 kfreebsd-i386 powerpc sparc],
  libblas-dev, liblapack-dev, libgl2ps-dev, freeglut3-dev,
- libpetsc3.1-dev [!kfreebsd-amd64 !kfreebsd-i386 !armel !mips !mipsel !s390 !sparc], 
  python-dev (>= 2.6.6-3~), swig2.0,
  chrpath, libann-dev,
 Standards-Version: 3.9.2
