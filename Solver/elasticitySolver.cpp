@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -63,6 +63,36 @@ void elasticitySolver::setMesh(const std::string &meshFileName)
 
   if (LagrangeMultiplierSpace) delete LagrangeMultiplierSpace;
   LagrangeMultiplierSpace = new ScalarLagrangeFunctionSpace(_tag+1);
+}
+
+
+void elasticitySolver::exportKb()
+{
+
+  FILE *f = fopen ( "K.txt", "w" );
+  double valeur;
+  std::string sysname = "A";
+  for ( int i = 0 ; i < pAssembler->sizeOfR() ; i ++ )
+  {
+    for ( int j = 0 ; j < pAssembler->sizeOfR() ; j ++ )
+    {
+      pAssembler->getLinearSystem ( sysname )->getFromMatrix ( i,j, valeur );
+      fprintf ( f,"%+e ",valeur ) ;
+    }
+    fprintf ( f,"\n" );
+  }
+
+  fclose ( f );
+
+  f = fopen ( "b.txt", "w" );
+  for ( int i = 0 ; i < pAssembler->sizeOfR() ; i ++ )
+  {
+    pAssembler->getLinearSystem ( sysname )->getFromRightHandSide ( i,valeur );
+    fprintf ( f,"%+e\n",valeur ) ;
+  }
+
+  fclose ( f );
+
 }
 
 void elasticitySolver::solve()

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -28,7 +28,7 @@ class Msg {
   // current cpu number and total number of cpus
   static int _commRank, _commSize;
   // verbosity level (0: silent except fatal errors, 1: +errors, 2:
-  // +warnings, 3: +info except status bar, 4: normal, 99: debug)
+  // +warnings, 3: +direct, 4: +info except status bar, 5: normal, 99: debug)
   static int _verbosity;
   // step (in %) of the progress meter and current progress %
   static int _progressMeterStep, _progressMeterCurrent;
@@ -80,13 +80,13 @@ class Msg {
   static void PrintErrorCounter(const char *title);
   static double GetValue(const char *text, double defaultval);
   static std::string GetString(const char *text, std::string defaultval);
-  static int GetAnswer(const char *question, int defaultval, const char *zero, 
+  static int GetAnswer(const char *question, int defaultval, const char *zero,
                        const char *one, const char *two=0);
   static void InitializeOnelab(const std::string &name, const std::string &sockname="");
   static GmshClient *GetGmshClient(){ return _client; }
   static void FinalizeOnelab();
   static bool UseOnelab(){ return _onelabClient ? true : false; }
-  static void ExchangeOnelabParameter(const std::string &key, 
+  static void ExchangeOnelabParameter(const std::string &key,
                                       std::vector<double> &val,
                                       std::map<std::string, std::vector<double> > &fopt,
                                       std::map<std::string, std::vector<std::string> > &copt);

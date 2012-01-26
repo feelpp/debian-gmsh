@@ -1,4 +1,4 @@
-# Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+# Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 #
 # See the LICENSE.txt file for license information. Please report all
 # bugs and problems to <gmsh@geuz.org>.
@@ -727,7 +727,11 @@ endif(ENABLE_PETSC)
 
 if(ENABLE_OCC)
   if(WIN32 OR CYGWIN)
-    set(OCC_SYS_NAME win32)
+    if(HAVE_64BIT_SIZE_T)
+      set(OCC_SYS_NAME win64)
+    else(HAVE_64BIT_SIZE_T)
+      set(OCC_SYS_NAME win32)
+    endif(HAVE_64BIT_SIZE_T)
   else(WIN32 OR CYGWIN)
     set(OCC_SYS_NAME ${CMAKE_SYSTEM_NAME})
   endif(WIN32 OR CYGWIN)

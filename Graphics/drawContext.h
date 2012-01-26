@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -97,6 +97,7 @@ class drawContextGlobal {
   virtual int getStringHeight(){ return 12; }
   virtual int getStringDescent(){ return 3; }
   virtual void drawString(const char *str){}
+  virtual void resetFontTextures(){}
 };
 
 class drawContext {

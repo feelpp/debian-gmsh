@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -18,6 +18,7 @@
 #include "OS.h"
 #include "StringUtils.h"
 #include "GeomMeshMatcher.h"
+#include "Field.h"
 
 #if defined(HAVE_PARSER)
 #include "Parser.h"
@@ -362,7 +363,7 @@ int MergeFile(std::string fileName, bool warnIfMissing)
         GModel* tmp2 = GModel::current();
         GModel* tmp = new GModel();
         tmp->readMSH(fileName);
-        GeomMeshMatcher::instance()->match(tmp2, tmp);
+        status = GeomMeshMatcher::instance()->match(tmp2, tmp);
         delete tmp;
       } else
 	status = GModel::current()->readMSH(fileName);
@@ -414,7 +415,7 @@ int MergeFile(std::string fileName, bool warnIfMissing)
   if(!status) Msg::Error("Error loading '%s'", fileName.c_str());
   Msg::StatusBar(2, true, "Done reading '%s'", fileName.c_str());
 
-  // merge the associated option file if there is one
+   // merge the associated option file if there is one
   if(!StatFile(fileName + ".opt"))
     MergeFile(fileName + ".opt");
 
@@ -499,6 +500,7 @@ void OpenProject(std::string fileName)
     FlGui::instance()->updateViews();
     FlGui::instance()->updateFields();
     GModel::current()->setSelection(0);
+    GModel::current()->setCompoundVisibility();
   }
 #endif
 }

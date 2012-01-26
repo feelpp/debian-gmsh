@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -21,10 +21,10 @@ discreteFace::discreteFace(GModel *model, int num) : GFace(model, num)
   meshStatistics.status = GFace::DONE;
 }
 
-void discreteFace::setBoundEdges(std::vector<int> tagEdges)
+void discreteFace::setBoundEdges(GModel *gm, std::vector<int> tagEdges)
 {
   for (std::vector<int>::iterator it = tagEdges.begin(); it != tagEdges.end(); it++){
-    GEdge *ge = GModel::current()->getEdgeByTag(*it);
+    GEdge *ge = gm->getEdgeByTag(*it);
     l_edges.push_back(ge);
     l_dirs.push_back(1);
     ge->addFace(this);

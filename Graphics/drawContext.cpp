@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -496,8 +496,9 @@ void drawContext::initProjection(int xpick, int ypick, int wpick, int hpick)
 		    (GLdouble)wpick, (GLdouble)hpick, (GLint *)viewport);
 
     // draw background if not in selection mode
-    if(render_mode != GMSH_SELECT && (CTX::instance()->bgGradient || 
-				      CTX::instance()->bgImageFileName.size())){
+    if(render_mode != GMSH_SELECT && 
+       (CTX::instance()->bgGradient || CTX::instance()->bgImageFileName.size()) &&
+       (!CTX::instance()->printing || CTX::instance()->print.background)){
       glDisable(GL_DEPTH_TEST);
       glPushMatrix();
       glLoadIdentity();

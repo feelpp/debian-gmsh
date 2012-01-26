@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -96,6 +96,8 @@ class PixelBuffer{
   void fill(int offscreen)
   {
     if(!offscreen){
+      // workaround double buffering issues by redrawing twice
+      drawContext::global()->drawCurrentOpenglWindow(true);
       drawContext::global()->drawCurrentOpenglWindow(true);
       glFinish();
       glPixelStorei(GL_PACK_ALIGNMENT, 1);

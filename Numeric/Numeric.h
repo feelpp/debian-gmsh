@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -25,6 +25,11 @@ inline double crossProd(double a[3], double b[3], int i)
   int i2 = (i+2) % 3;
   return a[i1]*b[i2] - a[i2]*b[i1];
 }
+inline double scalProd(double a[3], double b[3])
+{
+  return a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+}
+
 inline void prodve(double a[3], double b[3], double c[3])
 {
   c[2] = a[0] * b[1] - a[1] * b[0];

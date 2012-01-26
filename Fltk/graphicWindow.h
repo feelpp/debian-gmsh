@@ -1,5 +1,5 @@
 
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -20,6 +20,7 @@ class graphicWindow{
  private:
   std::string _title;
   int _savedMessageHeight;
+  bool _autoScrollMessages;
  public:
   Fl_Window *win;
   Fl_Tile *tile;
@@ -33,6 +34,9 @@ class graphicWindow{
   graphicWindow(bool main=true, int numTiles=1);
   ~graphicWindow();
   void setTitle(std::string str);
+  void setAutoScroll(bool val){ _autoScrollMessages = val; }
+  bool getAutoScroll(){ return _autoScrollMessages; }
+  int getMessageHeight();
   void split(openglWindow *g, char how);
   void setAnimButtons(int mode);
   void checkAnimButtons();
@@ -47,7 +51,7 @@ class graphicWindow{
 
 void status_xyz1p_cb(Fl_Widget *w, void *data);
 void status_options_cb(Fl_Widget *w, void *data);
-void status_play_manual(int time, int incr);
+void status_play_manual(int time, int incr, bool redraw=true);
 void message_cb(Fl_Widget *w, void *data);
 
 #endif

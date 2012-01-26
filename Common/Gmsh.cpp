@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -254,7 +254,7 @@ int GmshFLTK(int argc, char **argv)
 #if defined(HAVE_ONELAB)
   if(CTX::instance()->solver.listen){
     onelab::localNetworkClient *c = new onelab::localNetworkClient("Listen", "");
-    c->run("");
+    c->run();
   }
 #endif
 

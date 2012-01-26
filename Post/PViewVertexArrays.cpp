@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -1383,12 +1383,12 @@ class initPView {
     p->va_vectors->finalize();
     p->va_ellipses->finalize();
 
-    Msg::Info("%d vertices in vertex arrays (%g Mb)", p->va_points->getNumVertices() +
-              p->va_lines->getNumVertices() + p->va_triangles->getNumVertices() +
-              p->va_vectors->getNumVertices() + p->va_ellipses->getNumVertices(),
-              p->va_points->getMemoryInMb() +
-              p->va_lines->getMemoryInMb() + p->va_triangles->getMemoryInMb() +
-              p->va_vectors->getMemoryInMb() + p->va_ellipses->getMemoryInMb());
+    Msg::Debug("%d vertices in vertex arrays (%g Mb)", p->va_points->getNumVertices() +
+               p->va_lines->getNumVertices() + p->va_triangles->getNumVertices() +
+               p->va_vectors->getNumVertices() + p->va_ellipses->getNumVertices(),
+               p->va_points->getMemoryInMb() +
+               p->va_lines->getMemoryInMb() + p->va_triangles->getMemoryInMb() +
+               p->va_vectors->getMemoryInMb() + p->va_ellipses->getMemoryInMb());
 
     p->setChanged(false);
   }

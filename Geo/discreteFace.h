@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -25,7 +25,7 @@ class discreteFace : public GFace {
   virtual Pair<SVector3, SVector3> firstDer(const SPoint2 &param) const;
   virtual void secondDer(const SPoint2 &param, 
                          SVector3 *dudu, SVector3 *dvdv, SVector3 *dudv) const;
-  void setBoundEdges(std::vector<int> tagEdges);
+  void setBoundEdges(GModel *gm, std::vector<int> tagEdges);
   void findEdges(std::map<MEdge, std::vector<int>, Less_Edge > &map_edges);
   void writeGEO(FILE *fp);
 };

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -54,8 +54,8 @@ class backgroundMesh : public simpleFunction<double>
   void propagate1dMesh(GFace *);
   void propagatecrossField(GFace *);
   void updateSizes(GFace *);
-  double operator () (double x, double y, double z) const; // returns mesh size
-  double getAngle(double x, double y, double z) const ; 
+  double operator () (double u, double v, double w) const; // returns mesh size
+  double getAngle(double u, double v, double w) const ; 
   void print(const std::string &filename, GFace *gf, 
               const std::map<MVertex*, double>&) const;
   void print(const std::string &filename, GFace *gf, int choice = 0) const

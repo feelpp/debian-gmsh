@@ -1,18 +1,17 @@
-/********************************************************************* 
+/*********************************************************************
  *
  *  Gmsh tutorial 14
  *
  *  Homology computation
  *
  *********************************************************************/
- 
+
 // Homology computation in Gmsh finds representative chains of
 // (relative) homology spaces using a mesh of a model. Those
 // representatives generate the (relative) homology spaces of the
-// model. Alternatively, Gmsh can only look for the ranks of the
-// (relative) homology spaces, the Betti numbers of the model.
+// model.
 
-// The generators chains are stored in a given .msh-file as physical
+// The generator chains are stored in a given .msh-file as physical
 // groups, whose mesh elements are oriented such that their
 // coefficients are 1 in the generator chain.
 
@@ -61,24 +60,19 @@ Physical Surface(80) = bnd[];
 bnd[] -= {36, 44, 52, 60};
 Physical Surface(75) = bnd[];
 
-// Create a mesh of the model
-Mesh 3;
-
 // Find generators of relative homology spaces of the domain modulo
-// the four terminals.  Save the generator chains to t14_hom.msh.
-HomGen("t14_hom.msh") = {{1}, {70, 71, 72, 73}};
+// the four terminals.
+Homology {{1}, {70, 71, 72, 73}};
+
+// Find the corresponding thick cuts
+Cohomology {{1}, {70, 71, 72, 73}};
 
 // Find the corresponding thin cuts, generators of relative homology
-// spaces modulo the non-terminal domain surface.  Save the cut chains
-// to t14_hom.msh.
-HomGen("t14_hom.msh") = {{1}, {75}};
-
-// Find the corresponding thick cuts.  Save the cut chains to
-// t14_hom.msh.
-HomCut("t14_hom.msh") = {{1}, {70, 71, 72, 73}};
+// spaces modulo the non-terminal domain surface.
+Homology {{1}, {75}};
 
 // More examples:
-//  HomGen("t14_hom.msh") = {{1}, {}}; 
-//  HomGen("t14_hom.msh") = {{}, {}};
-//  HomGen("t14_hom.msh") = {{1}, {80}}; 
-//  HomGen("t14_hom.msh") = {{}, {80}}; 
+//  Homology {1};
+//  Homology;
+//  Homology {{1}, {80}};
+//  Homology {{}, {80}};

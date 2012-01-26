@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -66,9 +66,9 @@ void PrintUsage(const char *name)
   Msg::Direct("  -renumber             Renumber the mesh elements after batch mesh generation");
   Msg::Direct("  -saveall              Save all elements (discard physical group definitions)");
   Msg::Direct("  -o file               Specify output file name");
-  Msg::Direct("  -bin                  Use binary format when available");  
-  Msg::Direct("  -parametric           Save vertices with their parametric coordinates");  
-  Msg::Direct("  -numsubedges          Set the number of subdivisions when displaying high order elements");  
+  Msg::Direct("  -bin                  Use binary format when available");
+  Msg::Direct("  -parametric           Save vertices with their parametric coordinates");
+  Msg::Direct("  -numsubedges          Set the number of subdivisions when displaying high order elements");
   Msg::Direct("  -algo string          Select mesh algorithm (meshadapt, del2d, front2d, delquad, ");
   Msg::Direct("                          del3d, front3d, mmg3d)");
   Msg::Direct("  -smooth int           Set number of mesh smoothing steps");
@@ -95,15 +95,14 @@ void PrintUsage(const char *name)
   Msg::Direct("Post-processing options:");
   Msg::Direct("  -link int             Select link mode between views (0, 1, 2, 3, 4)");
   Msg::Direct("  -combine              Combine views having identical names into multi-time-step views");
-  Msg::Direct("Display options:");    
+  Msg::Direct("Display options:");
   Msg::Direct("  -n                    Hide all meshes and post-processing views on startup");
   Msg::Direct("  -nodb                 Disable double buffering");
   Msg::Direct("  -fontsize int         Specify the font size for the GUI");
   Msg::Direct("  -theme string         Specify FLTK GUI theme");
   Msg::Direct("  -display string       Specify display");
-  Msg::Direct("  -showCompounds        Shows the underlying surfaces/edges/mesh of compounds");
 #endif
-  Msg::Direct("Other options:");      
+  Msg::Direct("Other options:");
   Msg::Direct("  -                     Parse input files, then exit");
 #if defined(HAVE_FLTK)
   Msg::Direct("  -a, -g, -m, -s, -p    Start in automatic, geometry, mesh, solver or post-processing mode");
@@ -144,14 +143,16 @@ void GetOptions(int argc, char *argv[])
         i++;
       }
       else if(!strcmp(argv[i] + 1, "onelab")) {
-        i++;        
-        if(argv[i])
-          Msg::InitializeOnelab("GmshOnelab", argv[i++]);
+        i++;
+        if(argv[i] && argv[i + 1]){
+          Msg::InitializeOnelab(argv[i], argv[i + 1]);
+          i += 2;
+        }
         else
-          Msg::Fatal("Missing string");
+          Msg::Fatal("Missing client name and/or address of OneLab server");
       }
       else if(!strcmp(argv[i] + 1, "socket")) {
-        i++;        
+        i++;
         if(argv[i])
           Msg::InitializeOnelab("GmshRemote", argv[i++]);
         else
@@ -203,7 +204,7 @@ void GetOptions(int argc, char *argv[])
       else if (!strcmp(argv[i] + 1,"partWeight")) {
         i++;
         bool check = true;
-        opt_mesh_partition_partitioner(0,GMSH_SET,2);     // set Metis partitioner 
+        opt_mesh_partition_partitioner(0,GMSH_SET,2);     // set Metis partitioner
         opt_mesh_partition_metis_algorithm(0,GMSH_SET,3); // set partGraphKWay w/ weights
         while (check) {
           if (argv[i]) {
@@ -652,7 +653,7 @@ void GetOptions(int argc, char *argv[])
       }
       else if(!strcmp(argv[i] + 1, "help") || !strcmp(argv[i] + 1, "-help")) {
         fprintf(stderr, "Gmsh, a 3D mesh generator with pre- and post-processing facilities\n");
-        fprintf(stderr, "Copyright (C) 1997-2011 Christophe Geuzaine and Jean-Francois Remacle\n");
+        fprintf(stderr, "Copyright (C) 1997-2012 Christophe Geuzaine and Jean-Francois Remacle\n");
         PrintUsage(argv[0]);
         Msg::Exit(0);
       }
@@ -747,7 +748,7 @@ void GetOptions(int argc, char *argv[])
           Msg::Fatal("Missing argument");
       }
       else if(!strcmp(argv[i] + 1, "showCompounds")) {
-        CTX::instance()->showCompounds = 1;
+        CTX::instance()->geom.hideCompounds = 0;
         i++;
       }
 #endif

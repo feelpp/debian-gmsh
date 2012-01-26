@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -22,7 +22,7 @@
 #define OPT_ARGS_STR   int num, int action, std::string val
 #define OPT_ARGS_NUM   int num, int action, double val
 #define OPT_ARGS_COL   int num, int action, unsigned int val
- 
+
 // STRINGS
 
 std::string opt_general_axes_label0(OPT_ARGS_STR);
@@ -63,6 +63,12 @@ std::string opt_solver_executable1(OPT_ARGS_STR);
 std::string opt_solver_executable2(OPT_ARGS_STR);
 std::string opt_solver_executable3(OPT_ARGS_STR);
 std::string opt_solver_executable4(OPT_ARGS_STR);
+std::string opt_solver_hostname(OPT_ARGS_STR);
+std::string opt_solver_hostname0(OPT_ARGS_STR);
+std::string opt_solver_hostname1(OPT_ARGS_STR);
+std::string opt_solver_hostname2(OPT_ARGS_STR);
+std::string opt_solver_hostname3(OPT_ARGS_STR);
+std::string opt_solver_hostname4(OPT_ARGS_STR);
 std::string opt_view_name(OPT_ARGS_STR);
 std::string opt_view_format(OPT_ARGS_STR);
 std::string opt_view_filename(OPT_ARGS_STR);
@@ -278,6 +284,7 @@ double opt_geometry_offset0(OPT_ARGS_NUM);
 double opt_geometry_offset1(OPT_ARGS_NUM);
 double opt_geometry_offset2(OPT_ARGS_NUM);
 double opt_geometry_auto_coherence(OPT_ARGS_NUM);
+double opt_geometry_hide_compounds(OPT_ARGS_NUM);
 double opt_geometry_highlight_orphans(OPT_ARGS_NUM);
 double opt_geometry_tolerance(OPT_ARGS_NUM);
 double opt_geometry_normals(OPT_ARGS_NUM);
@@ -577,7 +584,6 @@ double opt_print_eps_ps3shading(OPT_ARGS_NUM);
 double opt_print_eps_quality(OPT_ARGS_NUM);
 double opt_print_eps_occlusion_culling(OPT_ARGS_NUM);
 double opt_print_eps_best_root(OPT_ARGS_NUM);
-double opt_print_eps_background(OPT_ARGS_NUM);
 double opt_print_eps_line_width_factor(OPT_ARGS_NUM);
 double opt_print_eps_point_size_factor(OPT_ARGS_NUM);
 double opt_print_jpeg_quality(OPT_ARGS_NUM);
@@ -593,6 +599,7 @@ double opt_print_gif_dither(OPT_ARGS_NUM);
 double opt_print_gif_sort(OPT_ARGS_NUM);
 double opt_print_gif_interlace(OPT_ARGS_NUM);
 double opt_print_gif_transparent(OPT_ARGS_NUM);
+double opt_print_background(OPT_ARGS_NUM);
 double opt_print_text(OPT_ARGS_NUM);
 double opt_print_tex_as_equation(OPT_ARGS_NUM);
 double opt_print_composite_windows(OPT_ARGS_NUM);
@@ -609,7 +616,7 @@ unsigned int opt_general_color_small_axes(OPT_ARGS_COL);
 unsigned int opt_general_color_ambient_light(OPT_ARGS_COL);
 unsigned int opt_general_color_diffuse_light(OPT_ARGS_COL);
 unsigned int opt_general_color_specular_light(OPT_ARGS_COL);
-unsigned int opt_geometry_color_points(OPT_ARGS_COL); 
+unsigned int opt_geometry_color_points(OPT_ARGS_COL);
 unsigned int opt_geometry_color_lines(OPT_ARGS_COL);
 unsigned int opt_geometry_color_surfaces(OPT_ARGS_COL);
 unsigned int opt_geometry_color_volumes(OPT_ARGS_COL);
@@ -620,9 +627,9 @@ unsigned int opt_geometry_color_highlight2(OPT_ARGS_COL);
 unsigned int opt_geometry_color_tangents(OPT_ARGS_COL);
 unsigned int opt_geometry_color_normals(OPT_ARGS_COL);
 unsigned int opt_geometry_color_projection(OPT_ARGS_COL);
-unsigned int opt_mesh_color_points(OPT_ARGS_COL); 
-unsigned int opt_mesh_color_points_sup(OPT_ARGS_COL); 
-unsigned int opt_mesh_color_lines(OPT_ARGS_COL); 
+unsigned int opt_mesh_color_points(OPT_ARGS_COL);
+unsigned int opt_mesh_color_points_sup(OPT_ARGS_COL);
+unsigned int opt_mesh_color_lines(OPT_ARGS_COL);
 unsigned int opt_mesh_color_triangles(OPT_ARGS_COL);
 unsigned int opt_mesh_color_quadrangles(OPT_ARGS_COL);
 unsigned int opt_mesh_color_tetrahedra(OPT_ARGS_COL);
@@ -668,7 +675,7 @@ unsigned int opt_view_color_axes(OPT_ARGS_COL);
 // Data structures and global functions
 
 typedef struct {
-  const char *str ; 
+  const char *str ;
   int int1, int2, int3, int4 ;
 } StringX4Int;
 
@@ -705,11 +712,11 @@ void ReInitOptions(int num);
 void PrintOptions(int num, int level, int diff, int help, const char *filename);
 void PrintOptionsDoc();
 
-bool StringOption(int action, const char *category, int num, 
+bool StringOption(int action, const char *category, int num,
                   const char *name, std::string &val);
-bool NumberOption(int action, const char *category, int num, 
+bool NumberOption(int action, const char *category, int num,
                   const char *name, double &val);
-bool ColorOption(int action, const char *category, int num, 
+bool ColorOption(int action, const char *category, int num,
                  const char *name, unsigned int &val);
 
 GmshColorTable *GetColorTable(int num);

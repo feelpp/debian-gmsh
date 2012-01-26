@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -23,6 +23,7 @@
 #include "Numeric.h"
 #include "mathEvaluator.h"
 #include "BackgroundMesh.h"
+#include "CenterlineField.h"
 
 #if defined(HAVE_POST)
 #include "OctreePost.h"
@@ -34,105 +35,14 @@
 #include "ANN/ANN.h"
 #endif
 
-class FieldOptionDouble : public FieldOption
-{
- public:
-  double &val;
-  FieldOptionType getType(){ return FIELD_OPTION_DOUBLE; }
-  FieldOptionDouble(double &_val, std::string _help, bool *_status=0)
-    : FieldOption(_help, _status), val(_val){}
-  double numericalValue() const { return val; }
-  void numericalValue(double v){ modified(); val = v; }
-  void getTextRepresentation(std::string &v_str)
-  {
-    std::ostringstream sstream;
-    sstream.precision(16);
-    sstream << val;
-    v_str = sstream.str();
+Field::~Field() {
+  for(std::map<std::string, FieldOption*>::iterator it = options.begin(); it != options.end(); ++it) {
+    delete it->second;
   }
-};
-
-class FieldOptionInt : public FieldOption
-{
- public:
-  int &val;
-  FieldOptionType getType(){ return FIELD_OPTION_INT; }
-  FieldOptionInt(int &_val, std::string _help, bool *_status=0) 
-    : FieldOption(_help, _status), val(_val){}
-  double numericalValue() const { return val; }
-  void numericalValue(double v){ modified(); val = (int)v; }
-  void getTextRepresentation(std::string & v_str)
-  {
-    std::ostringstream sstream;
-    sstream << val;
-    v_str = sstream.str();
+  for(std::map<std::string, FieldCallback*>::iterator it = callbacks.begin(); it != callbacks.end(); ++it) {
+    delete it->second;
   }
-};
-
-class FieldOptionList : public FieldOption
-{
- public:
-  std::list<int> &val;
-  FieldOptionType getType(){ return FIELD_OPTION_LIST; }
-  FieldOptionList(std::list<int> &_val, std::string _help, bool *_status=0) 
-    : FieldOption(_help, _status), val(_val) {}
-  std::list<int> &list(){ modified(); return val; }
-  const std::list<int>& list() const { return val; }
-  void getTextRepresentation(std::string & v_str)
-  {
-    std::ostringstream sstream;
-    sstream << "{";
-    for(std::list<int>::iterator it = val.begin(); it != val.end(); it++) {
-      if(it != val.begin())
-        sstream << ", ";
-      sstream << *it;
-    }
-    sstream << "}";
-    v_str = sstream.str();
-  }
-};
-
-class FieldOptionString : public FieldOption
-{
- public:
-  std::string & val;
-  virtual FieldOptionType getType(){ return FIELD_OPTION_STRING; }
-  FieldOptionString(std::string &_val, std::string _help, bool *_status=0)
-    : FieldOption(_help, _status), val(_val) {}
-  std::string &string() { modified(); return val; }
-  const std::string &string() const { return val; }
-  void getTextRepresentation(std::string &v_str)
-  {
-    std::ostringstream sstream;
-    sstream << "\"" << val << "\"";
-    v_str = sstream.str();
-  }
-};
-
-class FieldOptionPath : public FieldOptionString
-{
- public:
-  virtual FieldOptionType getType(){ return FIELD_OPTION_PATH; }
-  FieldOptionPath(std::string &_val, std::string _help, bool *_status=0)
-    : FieldOptionString(_val, _help, _status) {}
-};
-
-class FieldOptionBool : public FieldOption
-{
- public:
-  bool & val;
-  FieldOptionType getType(){ return FIELD_OPTION_BOOL; }
-  FieldOptionBool(bool & _val, std::string _help, bool *_status=0)
-    : FieldOption(_help, _status), val(_val) {}
-  double numericalValue() const { return val; }
-  void numericalValue(double v){ modified(); val = v; }
-  void getTextRepresentation(std::string & v_str)
-  {
-    std::ostringstream sstream;
-    sstream << val;
-    v_str = sstream.str();
-  }
-};
+}
 
 void FieldManager::reset()
 {
@@ -924,11 +834,13 @@ class MathEvalExpressionAniso
   mathEvaluator *_f[6];
   std::set<int> _fields[6];
  public:
-  MathEvalExpressionAniso() {
-    for (int i=0;i<6;i++)_f[i]=0; 
+  MathEvalExpressionAniso()
+  {
+    for(int i = 0; i < 6; i++) _f[i] = 0; 
   }
-  ~MathEvalExpressionAniso(){ 
-    for (int i=0;i<6;i++)if(_f[i]) delete _f[i]; 
+  ~MathEvalExpressionAniso()
+  { 
+    for(int i = 0; i < 6; i++) if(_f[i]) delete _f[i];
   }
   bool set_function(int iFunction, const std::string &f)
   {
@@ -971,8 +883,9 @@ class MathEvalExpressionAniso
   void evaluate (double x, double y, double z, SMetric3 &metr)
   {
     const int index[6][2] = {{0,0},{1,1},{2,2},{0,1},{0,2},{1,2}};
-    for (int iFunction = 0;iFunction<6;iFunction++){
-      if(!_f[iFunction]) metr(index[iFunction][0],index[iFunction][1]) =  MAX_LC;
+    for (int iFunction = 0; iFunction < 6; iFunction++){
+      if(!_f[iFunction])
+        metr(index[iFunction][0], index[iFunction][1]) = MAX_LC;
       else{
 	std::vector<double> values(3 + _fields[iFunction].size()), res(1);
 	values[0] = x;
@@ -997,12 +910,26 @@ class MathEvalField : public Field
 {
   MathEvalExpression expr;
   std::string f;
+  class testAction : public FieldCallback{
+  private:
+    MathEvalField *myField;
+  public:
+    testAction(MathEvalField *field, std::string help):FieldCallback(help) {
+      myField = field;
+    }
+    void run(){
+      myField->myAction();
+      printf("calling action matheval \n");
+    }
+  };
  public:
   MathEvalField()
   {
     options["F"] = new FieldOptionString
       (f, "Mathematical function to evaluate.", &update_needed);
     f = "F2 + Sin(z)";
+    callbacks["test"] = new testAction(this, "description blabla \n"); 
+    //callbacks["test"] = new FieldCallbackGeneric<MathEvalField>(this, MathEvalField::myFunc, "description")
   }
   double operator() (double x, double y, double z, GEntity *ge=0)
   {
@@ -1013,6 +940,9 @@ class MathEvalField : public Field
       update_needed = false;
     }
     return expr.evaluate(x, y, z);
+  }
+  void myAction(){
+    printf("doing sthg \n");
   }
   const char *getName()
   {
@@ -1031,7 +961,7 @@ class MathEvalFieldAniso : public Field
   MathEvalExpressionAniso expr;
   std::string f[6];
  public:
-  virtual bool isotropic () const {return false;}
+  virtual bool isotropic () const { return false; }
   MathEvalFieldAniso()
   {
     options["m11"] = new FieldOptionString
@@ -1063,21 +993,21 @@ class MathEvalFieldAniso : public Field
       }
       update_needed = false;
     }
-    expr.evaluate(x, y, z,metr);
+    expr.evaluate(x, y, z, metr);
   }
   double operator() (double x, double y, double z, GEntity *ge=0)
   {
     if(update_needed) {
-      for (int i=0;i<6;i++){
-	if(!expr.set_function(i,f[i]))
+      for (int i = 0; i < 6; i++){
+	if(!expr.set_function(i, f[i]))
 	  Msg::Error("Field %i: Invalid matheval expression \"%s\"",
 		     this->id, f[i].c_str());
       }
       update_needed = false;
     }
     SMetric3 metr; 
-    expr.evaluate(x, y, z,metr);
-    return metr(0,0);
+    expr.evaluate(x, y, z, metr);
+    return metr(0, 0);
   }
   const char *getName()
   {
@@ -1139,45 +1069,13 @@ class ParametricField : public Field
 };
 
 #if defined(HAVE_POST)
+
 class PostViewField : public Field
 {
   OctreePost *octree;
- public:
   int view_index;
   bool crop_negative_values;
-  double operator() (double x, double y, double z, GEntity *ge=0)
-  {
-    // we should maybe test the unique view num instead, but that
-    // would be slower
-    if(view_index < 0 || view_index >= (int)PView::list.size())
-      return MAX_LC;
-    PView *v = PView::list[view_index];
-    if(v->getData()->hasModel(GModel::current())){
-      Msg::Error("Cannot use view based on current model for background mesh");
-      Msg::Error("Use a list-based view (.pos file) instead?");
-      return MAX_LC;
-    }
-    if(update_needed){
-      if(octree) delete octree;
-      octree = new OctreePost(v);
-      update_needed = false;
-    }
-    double l = 0.;
-    // use large tolerance (in element reference coordinates) to
-    // maximize chance of finding an element
-    if(!octree->searchScalarWithTol(x, y, z, &l, 0, 0, 1.))
-      Msg::Info("No element found containing point (%g,%g,%g)", x, y, z);
-    if(l <= 0 && crop_negative_values) return MAX_LC;
-    return l;
-  }
-  const char *getName()
-  {
-    return "PostView";
-  }
-  std::string getDescription()
-  {
-    return "Evaluate the post processing view IView.";
-  }
+ public:
   PostViewField()
   {
     octree = 0;
@@ -1193,7 +1091,75 @@ class PostViewField : public Field
   {
     if(octree) delete octree;
   }
+  PView *getView() const
+  {
+    // we should maybe test the unique view num instead, but that
+    // would be slower
+    if(view_index < 0 || view_index >= (int)PView::list.size()){
+      Msg::Error("View[%d] does not exist", view_index);
+      return 0;
+    }
+    PView *v = PView::list[view_index];
+    if(v->getData()->hasModel(GModel::current())){
+      Msg::Error("Cannot use view based on current mesh for background mesh: you might"
+                 " want to use a list-based view (.pos file) instead");
+      return 0;
+    }
+  }
+  virtual bool isotropic () const 
+  {
+    PView *v = getView();
+    if(v && v->getData()->getNumTensors()) return false;
+    return true;
+  }
+  double operator() (double x, double y, double z, GEntity *ge=0)
+  {
+    PView *v = getView();
+    if(!v) return MAX_LC;
+    if(update_needed){
+      if(octree) delete octree;
+      octree = new OctreePost(v);
+      update_needed = false;
+    }
+    double l = 0.;
+    // use large tolerance (in element reference coordinates) to
+    // maximize chance of finding an element
+    if(!octree->searchScalarWithTol(x, y, z, &l, 0, 0, 1.))
+      Msg::Info("No scalar element found containing point (%g,%g,%g)", x, y, z);
+    if(l <= 0 && crop_negative_values) return MAX_LC;
+    return l;
+  }
+  void operator() (double x, double y, double z, SMetric3 &metr, GEntity *ge=0)
+  {
+    PView *v = getView();
+    if(!v) return;
+    if(update_needed){
+      if(octree) delete octree;
+      octree = new OctreePost(v);
+      update_needed = false;
+    }
+    double l[9];
+    if(!octree->searchTensor(x, y, z, l, 0)){
+      Msg::Info("No tensor element found containing point (%g,%g,%g)", x, y, z);
+      return;
+    }
+    metr(0, 0) = l[0];
+    metr(1, 0) = l[3];
+    metr(1, 1) = l[4];
+    metr(2, 0) = l[6];
+    metr(2, 1) = l[7];
+    metr(2, 2) = l[8];
+  }
+  const char *getName()
+  {
+    return "PostView";
+  }
+  std::string getDescription()
+  {
+    return "Evaluate the post processing view IView.";
+  }
 };
+
 #endif
 
 class MinAnisoField : public Field
@@ -1931,6 +1897,7 @@ FieldManager::FieldManager()
   map_type_name["Threshold"] = new FieldFactoryT<ThresholdField>();
 #if defined(HAVE_ANN)
   map_type_name["BoundaryLayer"] = new FieldFactoryT<BoundaryLayerField>();
+  map_type_name["Centerline"] = new FieldFactoryT<Centerline>();
 #endif
   map_type_name["Box"] = new FieldFactoryT<BoxField>();
   map_type_name["Cylinder"] = new FieldFactoryT<CylinderField>();
