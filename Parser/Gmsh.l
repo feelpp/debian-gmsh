@@ -1,5 +1,5 @@
 %{
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -97,6 +97,7 @@ BoundingBox             return tBoundingBox;
 Ceil                    return tCeil;
 Circle                  return tCircle;
 Coherence               return tCoherence;
+Cohomology              return tCohomology;
 Combine                 return tCombine;
 Cosh                    return tCosh;
 Cos                     return tCos;
@@ -143,10 +144,7 @@ GMSH_PATCH_VERSION      return tGMSH_PATCH_VERSION;
 
 Hide                    return tHide;
 Hole                    return tHole;
-HomRank                 return tHomRank;
-HomGen                  return tHomGen;
-HomCut                  return tHomCut;
-HomSeq                  return tHomSeq;
+Homology                return tHomology;
 Hypot                   return tHypot;
 
 In                      return tIn;
@@ -158,6 +156,7 @@ Knots			return tNurbsKnots;
 
 Length                  return tLength;
 Line                    return tLine;
+List                    return tList;
 Log                     return tLog;
 Log10                   return tLog10;
 Layers                  return tLayers;
@@ -258,7 +257,7 @@ void parsestring(char endchar)
 {
   int c;
   char tmp[1024];
-  
+
   // Note that we keep special characters (end-of-line \n, tabs \t,
   // etc.) "as is" in the output string: see yyinput() above
   int i = 0;

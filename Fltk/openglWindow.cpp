@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -192,11 +192,14 @@ void openglWindow::draw()
   }
   else{
     // draw the whole scene
-    glClearColor
-      ((GLclampf)(CTX::instance()->unpackRed(CTX::instance()->color.bg) / 255.),
-       (GLclampf)(CTX::instance()->unpackGreen(CTX::instance()->color.bg) / 255.),
-       (GLclampf)(CTX::instance()->unpackBlue(CTX::instance()->color.bg) / 255.), 
-       0.0F);
+    if(CTX::instance()->printing && !CTX::instance()->print.background)
+      glClearColor(1.0F, 1.0F, 1.0F, 0.0F);
+    else
+      glClearColor
+        ((GLclampf)(CTX::instance()->unpackRed(CTX::instance()->color.bg) / 255.),
+         (GLclampf)(CTX::instance()->unpackGreen(CTX::instance()->color.bg) / 255.),
+         (GLclampf)(CTX::instance()->unpackBlue(CTX::instance()->color.bg) / 255.), 
+         0.0F);
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
    
     if(CTX::instance()->camera && !CTX::instance()->stereo){

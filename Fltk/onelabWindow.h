@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -25,8 +25,8 @@ class onelabWindow{
   Fl_Menu_Button *_gear;
   int _gearFrozenMenuSize;
   std::vector<Fl_Widget*> _treeWidgets;
+  std::vector<char*> _treeStrings;
   std::string _title;
-  std::string _modelExtension;
   int _deltaFontSize;
   bool _stop;
  public:
@@ -36,13 +36,12 @@ class onelabWindow{
   void rebuildSolverList();
   void rebuildTree();
   void redrawTree(){ _tree->redraw(); }
-  void setButtonMode(const std::string &mode);
+  void setButtonMode(const std::string &butt0, const std::string &butt1);
   void show(){ _win->show(); }
   int shown(){ return _win->shown(); }
-  std::string getModelExtension(){ return _modelExtension; }
-  void setModelExtension(const std::string &ext){ _modelExtension = ext; }
   int meshAuto(){ return _gear->menu()[2].value(); }
-  int hideNewViews(){ return _gear->menu()[3].value(); }
+  int mergeAuto(){ return _gear->menu()[3].value(); }
+  int hideNewViews(){ return _gear->menu()[4].value(); }
   std::string getPath(Fl_Tree_Item *item)
   {
     char path[1024];

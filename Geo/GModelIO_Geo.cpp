@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -40,7 +40,9 @@ void GModel::_deleteGEOInternals()
 int GModel::readGEO(const std::string &name)
 {
   ParseFile(name, true);
-  return GModel::current()->importGEOInternals();
+  int imported = GModel::current()->importGEOInternals();
+
+  return imported;
 }
 
 int GModel::exportDiscreteGEOInternals()
@@ -74,7 +76,7 @@ int GModel::exportDiscreteGEOInternals()
         if (v->Num == gve->tag()) {
           List_Add(c->Control_Points, &v);
           c->end = v;
-        }       
+        }
       }
       End_Curve(c);
       Tree_Add(GModel::current()->getGEOInternals()->Curves, &c);
@@ -106,7 +108,7 @@ int GModel::exportDiscreteGEOInternals()
   Msg::Debug("Geo internal model has:");
   List_T *points = Tree2List(_geo_internals->Points);
   List_T *curves = Tree2List(_geo_internals->Curves);
-  List_T *surfaces = Tree2List(_geo_internals->Surfaces);  
+  List_T *surfaces = Tree2List(_geo_internals->Surfaces);
   Msg::Debug("%d Vertices", List_Nbr(points));
   Msg::Debug("%d Edges", List_Nbr(curves));
   Msg::Debug("%d Faces", List_Nbr(surfaces));
@@ -145,9 +147,6 @@ int GModel::importGEOInternals()
           }
           e = new GEdgeCompound(this, c->Num, comp);
           add(e);
-          if (!CTX::instance()->showCompounds)
-            for (std::vector<GEdge*>::iterator it = comp.begin(); it != comp.end(); ++it)
-              (*it)->setVisibility(0,true);
         }
         else if(!e && c->beg && c->end){
           e = new gmshEdge(this, c,
@@ -202,9 +201,6 @@ int GModel::importGEOInternals()
         f->meshAttributes.Method = s->Method;
         f->meshAttributes.extrude = s->Extrude;
         add(f);
-        if (!CTX::instance()->showCompounds)
-          for (std::list<GFace*>::iterator it = comp.begin(); it != comp.end(); ++it)
-            (*it)->setVisibility(0,true);
         if(s->EmbeddedCurves){
           for(int i = 0; i < List_Nbr(s->EmbeddedCurves); i++){
             Curve *c;
@@ -238,7 +234,7 @@ int GModel::importGEOInternals()
       if(s->Color.type) f->setColor(s->Color.mesh);
     }
     List_Delete(surfaces);
-  } 
+  }
   if(Tree_Nbr(_geo_internals->Volumes)) {
     List_T *volumes = Tree2List(_geo_internals->Volumes);
     for(int i = 0; i < List_Nbr(volumes); i++){
@@ -259,7 +255,7 @@ int GModel::importGEOInternals()
         add(r);
       }
       else
-        r->resetMeshAttributes();       
+        r->resetMeshAttributes();
       if(!v->Visible) r->setVisibility(0);
       if(v->Color.type) r->setColor(v->Color.mesh);
     }
@@ -274,12 +270,12 @@ int GModel::importGEOInternals()
       GEntity *ge = 0;
       switch(p->Typ){
       case MSH_PHYSICAL_POINT:   ge = getVertexByTag(abs(num)); break;
-      case MSH_PHYSICAL_LINE:    ge = getEdgeByTag(abs(num)); break; 
+      case MSH_PHYSICAL_LINE:    ge = getEdgeByTag(abs(num)); break;
       case MSH_PHYSICAL_SURFACE: ge = getFaceByTag(abs(num)); break;
       case MSH_PHYSICAL_VOLUME:  ge = getRegionByTag(abs(num)); break;
       }
       int pnum = sign(num) * p->Num;
-      if(ge && std::find(ge->physicals.begin(), ge->physicals.end(), pnum) == 
+      if(ge && std::find(ge->physicals.begin(), ge->physicals.end(), pnum) ==
          ge->physicals.end())
         ge->physicals.push_back(pnum);
     }
@@ -333,8 +329,8 @@ class writePhysicalGroupGEO {
                         std::map<int, std::string> &o,
                         std::map<std::pair<int, int>, std::string> &n)
     : dim(i), printLabels(labels), oldLabels(o), newLabels(n)
-  { 
-    geo = fp ? fp : stdout; 
+  {
+    geo = fp ? fp : stdout;
   }
   void operator () (std::pair<const int, std::vector<GEntity *> > &g)
   {
@@ -399,18 +395,18 @@ int GModel::writeGEO(const std::string &name, bool printLabels)
   std::map<int, std::string> labels;
 #if defined(HAVE_PARSER)
   // get "old-style" labels from parser
-  for(std::map<std::string, std::vector<double> >::iterator it = gmsh_yysymbols.begin();
+  for(std::map<std::string, gmsh_yysymbol>::iterator it = gmsh_yysymbols.begin();
       it != gmsh_yysymbols.end(); ++it)
-    for(unsigned int i = 0; i < it->second.size(); i++)
-      labels[(int)it->second[i]] = it->first;
+    for(unsigned int i = 0; i < it->second.value.size(); i++)
+      labels[(int)it->second.value[i]] = it->first;
 #endif
-  
+
   std::map<int, std::vector<GEntity*> > groups[4];
   getPhysicalGroups(groups);
   for(int i = 0; i < 4; i++)
-    std::for_each(groups[i].begin(), groups[i].end(), 
+    std::for_each(groups[i].begin(), groups[i].end(),
                   writePhysicalGroupGEO(fp, i, printLabels, labels, physicalNames));
-  
+
   std::for_each(getFields()->begin(), getFields()->end(), writeFieldGEO(fp));
   if(getFields()->background_field > 0)
     fprintf(fp, "Background Field = %i;\n", getFields()->background_field);

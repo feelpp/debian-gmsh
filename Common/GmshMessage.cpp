@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -40,7 +40,7 @@
 
 int Msg::_commRank = 0;
 int Msg::_commSize = 1;
-int Msg::_verbosity = 4;
+int Msg::_verbosity = 5;
 int Msg::_progressMeterStep = 10;
 int Msg::_progressMeterCurrent = 0;
 std::map<std::string, double> Msg::_timers;
@@ -258,7 +258,7 @@ void Msg::Warning(const char *fmt, ...)
 
 void Msg::Info(const char *fmt, ...)
 {
-  if(_commRank || _verbosity < 3) return;
+  if(_commRank || _verbosity < 4) return;
 
   char str[1024];
   va_list args;
@@ -333,7 +333,7 @@ void Msg::Direct(int level, const char *fmt, ...)
 
 void Msg::StatusBar(int num, bool log, const char *fmt, ...)
 {
-  if(_commRank || _verbosity < 3) return;
+  if(_commRank || _verbosity < 4) return;
   if(num < 1 || num > 3) return;
 
   char str[1024];
@@ -348,7 +348,7 @@ void Msg::StatusBar(int num, bool log, const char *fmt, ...)
 #if defined(HAVE_FLTK)
   if(FlGui::available()){
     if(log) FlGui::instance()->check();
-    if(!log || num != 2 || _verbosity > 3)
+    if(!log || num != 2 || _verbosity > 4)
       FlGui::instance()->setStatus(str, num - 1);
     if(log){
       std::string tmp = std::string("Info    : ") + str;
@@ -394,7 +394,7 @@ void Msg::Debug(const char *fmt, ...)
 
 void Msg::ProgressMeter(int n, int N, const char *fmt, ...)
 {
-  if(_commRank || _verbosity < 3) return;
+  if(_commRank || _verbosity < 4) return;
 
   double percent = 100. * (double)n/(double)N;
 
@@ -415,7 +415,7 @@ void Msg::ProgressMeter(int n, int N, const char *fmt, ...)
 
 #if defined(HAVE_FLTK)
     if(FlGui::available()){
-      if(_verbosity > 3) FlGui::instance()->setStatus(str, 1);
+      if(_verbosity > 4) FlGui::instance()->setStatus(str, 1);
       FlGui::instance()->check();
     }
 #endif
@@ -434,7 +434,7 @@ void Msg::ProgressMeter(int n, int N, const char *fmt, ...)
 
 #if defined(HAVE_FLTK)
     if(FlGui::available()){
-      if(_verbosity > 3) FlGui::instance()->setStatus("", 1);
+      if(_verbosity > 4) FlGui::instance()->setStatus("", 1);
     }
 #endif
 
@@ -586,12 +586,29 @@ void Msg::InitializeOnelab(const std::string &name, const std::string &sockname)
 {
 #if defined(HAVE_ONELAB)
   if(_onelabClient) delete _onelabClient;
-  if (sockname.empty())
+  if(sockname.empty())
     _onelabClient = new onelab::localClient(name);
   else{
     onelab::remoteNetworkClient *c = new onelab::remoteNetworkClient(name, sockname);
     _onelabClient = c;
     _client = c->getGmshClient();
+
+    onelab::string o(name + "/FileExtension", ".geo");
+    //o.setVisible(false);
+    _onelabClient->set(o);
+    onelab::string o3(name + "/9CheckCommand", "-");
+    //o3.setVisible(false);
+    _onelabClient->set(o3);
+    onelab::string o4(name + "/9ComputeCommand", "-3");
+    //o4.setVisible(false);
+    _onelabClient->set(o4);
+    std::vector<onelab::string> ps;
+    _onelabClient->get(ps, name + "/Action");
+    if(ps.size()){
+      Info("Performing OneLab '%s'", ps[0].getValue().c_str());
+      if(ps[0].getValue() == "initialize") Exit(0);
+    }
+
   }
 #endif
 }

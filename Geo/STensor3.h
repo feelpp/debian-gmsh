@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -92,7 +92,7 @@ class SMetric3 {
   {
     return _val[getIndex(i, j)];
   }
-  SMetric3 invert () const
+  SMetric3 invert() const
   {
     fullMatrix<double> m(3, 3);
     getMat(m);
@@ -101,7 +101,7 @@ class SMetric3 {
     ithis.setMat(m);
     return ithis;
   }
-  double determinant () const
+  double determinant() const
   {
     fullMatrix<double> m(3,3);
     getMat(m);
@@ -185,7 +185,6 @@ SMetric3 interpolation (const SMetric3 &m1,
                         const double w);
 
 // concrete class for general 3x3 matrix
-
 class STensor3 {
  protected:
   // 00 01 02 10 11 12 20 21 22
@@ -237,13 +236,21 @@ class STensor3 {
   {
     return _val[i];
   }
-  STensor3 invert () const
+  STensor3 invert() const
   {
     fullMatrix<double> m(3, 3);
     getMat(m);
     m.invertInPlace();
     STensor3 ithis;
     ithis.setMat(m);
+    return ithis;
+  }
+  STensor3 transpose () const
+  {
+    STensor3 ithis;
+    for (int i = 0; i < 3; i++)
+      for (int j = 0; j < 3; j++)
+        ithis(i,j) = (*this)(j,i);
     return ithis;
   }
 
@@ -285,7 +292,7 @@ class STensor3 {
   }
   double trace() const
   {
-    return ((_val[0]+_val[4]+_val[8])/3.);
+    return ((_val[0]+_val[4]+_val[8]));
   }
 
   double dotprod() const

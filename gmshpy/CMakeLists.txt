@@ -1,4 +1,4 @@
-# Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+# Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 #
 # See the LICENSE.txt file for license information. Please report all
 # bugs and problems to <gmsh@geuz.org>.
@@ -70,7 +70,7 @@ if(ENABLE_PYTHON_LIB_API)
 endif(ENABLE_PYTHON_LIB_API)
 
 include(${SWIG_USE_FILE})
-include_directories(${PYTHON_INCLUDE_DIR})
+include_directories(${PYTHON_INCLUDE_PATH})
 
 foreach(module ${SWIG_MODULES})
   set_source_files_properties(${module}.i PROPERTIES CPLUSPLUS ON)

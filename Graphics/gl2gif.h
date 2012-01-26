@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -58,7 +58,7 @@ typedef colorhist_list* colorhash_table;
 
 void create_gif(FILE *outfile, PixelBuffer *buffer, 
                 int dither, int sort, int interlace, 
-                int transparency, int r, int g, int b);
+                int transparency);
 
 
 #endif

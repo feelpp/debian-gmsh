@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -35,7 +35,10 @@ class GModelFactory;
 // A geometric model. The model is a "not yet" non-manifold B-Rep.
 class GModel
 {
+ private:
   friend class OCCFactory;
+  std::multimap<std::pair<std::vector<int>, std::vector<int> >, std::string> _homologyRequests;
+
  protected:
   // the name of the model
   std::string _name;
@@ -99,6 +102,12 @@ class GModel
   void _storeVerticesInEntities(std::map<int, MVertex*> &vertices);
   void _storeVerticesInEntities(std::vector<MVertex*> &vertices);
 
+  // remove all mesh vertex associations to geometrical entities and
+  // remove vertices from geometrical entities, then
+  // _associateEntityWithMeshVertices and _storeVerticesInEntities
+  // are called to rebuild the associations
+  void _pruneMeshVertexAssociations();
+
   // store the physical tags in the geometrical entities
   void _storePhysicalTagsInEntities(int dim,
                                     std::map<int, std::map<int, std::string> > &map);
@@ -117,7 +126,7 @@ class GModel
   std::set<GFace*, GEntityLessThan> faces;
   std::set<GEdge*, GEntityLessThan> edges;
   std::set<GVertex*, GEntityLessThan> vertices;
-  
+
   // map between the pair <dimension, elementary or physical number>
   // and an optional associated name
   std::map<std::pair<int, int>, std::string> physicalNames, elementaryNames;
@@ -158,7 +167,7 @@ class GModel
   OCC_Internals *getOCCInternals(){ return _occ_internals; }
   FM_Internals *getFMInternals() { return _fm_internals; }
   ACIS_Internals *getACISInternals(){ return _acis_internals; }
-  
+
   // access characteristic length (mesh size) fields
   FieldManager *getFields(){ return _fields; }
 
@@ -173,6 +182,9 @@ class GModel
   // get/set the visibility flag
   char getVisibility(){ return _visible; }
   void setVisibility(char val){ _visible = val; }
+
+  // set the visibility of compound entities
+  void setCompoundVisibility();
 
   // get the number of entities in this model
   int getNumRegions() const { return regions.size(); }
@@ -212,7 +224,7 @@ class GModel
   std::vector<GFace*> bindingsGetFaces();
   std::vector<GEdge*> bindingsGetEdges();
   std::vector<GVertex*> bindingsGetVertices();
-  
+
   // add/remove an entity in the model
   void add(GRegion *r) { regions.insert(r); }
   void add(GFace *f) { faces.insert(f); }
@@ -308,7 +320,7 @@ class GModel
 
   // return the total number of vertices in the mesh
   int getNumMeshVertices();
-	
+
   // access a mesh vertex by tag, using the vertex cache
   MVertex *getMeshVertexByTag(int n);
 
@@ -364,11 +376,11 @@ class GModel
   // mesh the model
   int mesh(int dimension);
 
-  // adapt the mesh anisotropically using a metric that is computed from a function f(x,y,z). 
-  // One can either 
+  // adapt the mesh anisotropically using a metric that is computed from a scalar function f(x,y,z).
+  // One can either
   //   For all algorithms
-  //           parameters[1] = lcmin (default : in global gmsh options CTX::instance()->mesh.lcMin) 
-  //           parameters[2] = lcmax (default : in global gmsh options CTX::instance()->mesh.lcMax) 
+  //           parameters[1] = lcmin (default : in global gmsh options CTX::instance()->mesh.lcMin)
+  //           parameters[2] = lcmax (default : in global gmsh options CTX::instance()->mesh.lcMax)
   //           parameters[3] = nb iterations
   //    1) Assume that the function is a levelset -> adapt using Coupez technique (technique = 1)
   //           parameters[0] = thickness of the interface (mandatory)
@@ -376,16 +388,14 @@ class GModel
   //           parameters[0] = N, the final number of elements
   //    3) A variant of 1) by P. Frey (= Coupez + takes curvature function into account)
   //           parameters[0] = thickness of the interface (mandatory)
-  // The algorithm first generate a mesh if no one is available 
-
+  // The algorithm first generate a mesh if no one is available
   // In this first attempt, only the highest dimensional mesh is adapted, which is ok if
   // we assume that boundaries are already adapted.
   // This should be fixed.
-  
   int adaptMesh (int technique, simpleFunction<double> *f, std::vector<double> parameters, bool meshAll=false);
 
   // make the mesh a high order mesh at order N
-  // linear is 1 if the high order points are not placed on the geometry of the model 
+  // linear is 1 if the high order points are not placed on the geometry of the model
   // incomplete is 1 if incomplete basis are used
   int setOrderN(int order, int linear, int incomplete);
 
@@ -462,23 +472,15 @@ class GModel
                               std::vector<int> &elementary,
                               std::vector<int> &partition);
 
-  // Store mesh elements of a chain in a new elementary and physical entity
-  void storeChain(int dim, std::map<int, std::vector<MElement*> > &entityMap,
-                  std::map<int, std::map<int, std::string> > &physicalMap)
-  {
-    _storeElementsInEntities(entityMap);
-    _storePhysicalTagsInEntities(dim, physicalMap);
-    _associateEntityWithMeshVertices();
-  }
-  void storeChain(std::vector<MVertex*> &vertices, int dim, 
+  // store mesh elements of a chain in a new elementary and physical entity
+  void storeChain(int dim,
                   std::map<int, std::vector<MElement*> > &entityMap,
-                  std::map<int, std::map<int, std::string> > &physicalMap)
-  {
-    _storeVerticesInEntities(vertices);
-    _storeElementsInEntities(entityMap);
-    _storePhysicalTagsInEntities(dim, physicalMap);
-    _associateEntityWithMeshVertices();
-  }
+                  std::map<int, std::map<int, std::string> > &physicalMap);
+
+  // request homology computation
+  void addHomologyRequest(const std::string &type, std::vector<int> &domain,
+                          std::vector<int> &subdomain);
+  void computeHomology();
 
   // "automatic" IO based on Gmsh global functions
   void load(std::string fileName);
@@ -585,12 +587,12 @@ class GModel
                bool saveAll=false, double scalingFactor=1.0);
 
   // Abaqus
-  int writeINP(const std::string &name, bool saveAll=false, 
+  int writeINP(const std::string &name, bool saveAll=false,
                double scalingFactor=1.0);
 
   // Geomview mesh
   int readGEOM(const std::string &name);
-  
+
   // CEA triangulation
   int writeMAIL(const std::string &name, bool saveAll, double scalingFactor);
 };

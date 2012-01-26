@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -44,36 +44,39 @@ class onelabGmshServer : public GmshServer{
  private:
   onelab::localNetworkClient *_client;
  public:
-  onelabGmshServer(onelab::localNetworkClient *client) : GmshServer(), _client(client) {}
-  ~onelabGmshServer() {}
-  int SystemCall(const char *str)
-  { 
-    return ::SystemCall(str); 
-  }
+  onelabGmshServer(onelab::localNetworkClient *client)
+    : GmshServer(), _client(client) {}
+  ~onelabGmshServer(){}
+  int SystemCall(const char *str){ return ::SystemCall(str); }
   int NonBlockingWait(int socket, double waitint, double timeout)
-  { 
+  {
     double start = GetTimeInSeconds();
     while(1){
       if(timeout > 0 && GetTimeInSeconds() - start > timeout)
         return 2; // timout
-
-      if(_client->getPid() < 0 ||
-         (_client->getCommandLine().empty() &&  !CTX::instance()->solver.listen))
+      if(_client->getPid() < 0 || (_client->getCommandLine().empty() &&
+                                   !CTX::instance()->solver.listen))
         return 1; // process has been killed or we stopped listening
-
       // check if there is data (call select with a zero timeout to
       // return immediately, i.e., do polling)
       int ret = Select(0, 0, socket);
-
-      if(ret == 0){ 
-        // nothing available: wait at most waitint seconds, and in the
-        // meantime respond to FLTK events
+      if(ret == 0){ // nothing available
+        // if asked, refresh the onelab GUI
+        std::vector<onelab::string> ps;
+        onelab::server::instance()->get(ps, "Gmsh/Action");
+        if(ps.size() && ps[0].getValue() == "refresh"){
+          ps[0].setVisible(false);
+          ps[0].setValue("");
+          onelab::server::instance()->set(ps[0]);
+          onelab_cb(0, (void*)"refresh");
+        }
+        // wait at most waitint seconds and respond to FLTK events
         FlGui::instance()->wait(waitint);
       }
-      else if(ret > 0){ 
+      else if(ret > 0){
         return 0; // data is there!
       }
-      else{ 
+      else{
         // an error happened
         _client->setPid(-1);
         _client->setGmshServer(0);
@@ -83,7 +86,7 @@ class onelabGmshServer : public GmshServer{
   }
 };
 
-bool onelab::localNetworkClient::run(const std::string &what)
+bool onelab::localNetworkClient::run()
 {
  new_connection:
   _pid = 0;
@@ -100,7 +103,7 @@ bool onelab::localNetworkClient::run(const std::string &what)
   }
   else{
     // TCP/IP socket
-    if(CTX::instance()->solver.socketName.size() && 
+    if(CTX::instance()->solver.socketName.size() &&
        CTX::instance()->solver.socketName[0] == ':')
       tmp << GetHostName(); // prepend hostname if only the port number is given
     tmp << CTX::instance()->solver.socketName << getId();
@@ -109,7 +112,26 @@ bool onelab::localNetworkClient::run(const std::string &what)
 
   std::string command = FixWindowsPath(_commandLine);
   if(command.size()){
-    command += " " + what + " " + _socketSwitch + " ";
+    // complete the command line if "UseCommandLine" is set in the database
+    std::vector<onelab::number> n;
+    get(n, getName() + "/UseCommandLine");
+    if(n.size() && n[0].getValue()){
+      std::vector<onelab::string> ps;
+      get(ps, getName() + "/Action");
+      std::string action = (ps.empty() ? "" : ps[0].getValue());
+      get(ps, getName() + "/1ModelName");
+      std::string modelName = (ps.empty() ? "" : ps[0].getValue());
+      get(ps, getName() + "/9CheckCommand");
+      std::string checkCommand = (ps.empty() ? "" : ps[0].getValue());
+      get(ps, getName() + "/9ComputeCommand");
+      std::string computeCommand = (ps.empty() ? "" : ps[0].getValue());
+      if(action == "check")
+        command += " " + modelName + " " + checkCommand;
+      else if(action == "compute")
+        command += " " + modelName + " " + computeCommand;
+    }
+    // append "-onelab" command line argument
+    command += " " + _socketSwitch + " \"" + getName() + "\"";
   }
   else{
     Msg::Info("Listening on socket '%s'", sockname.c_str());
@@ -124,7 +146,7 @@ bool onelab::localNetworkClient::run(const std::string &what)
     Msg::Error("%s (on socket '%s')", err, sockname.c_str());
     sock = -1;
   }
-  
+
   if(sock < 0){
     server->Shutdown();
     delete server;
@@ -137,14 +159,14 @@ bool onelab::localNetworkClient::run(const std::string &what)
 
     if(_pid < 0 || (command.empty() && !CTX::instance()->solver.listen))
       break;
-    
-    int stop = server->NonBlockingWait(sock, 0.1, 0.);
+
+    int stop = server->NonBlockingWait(sock, 0.001, 0.);
 
     if(stop || _pid < 0 || (command.empty() && !CTX::instance()->solver.listen))
       break;
 
     double timer = GetTimeInSeconds();
-    
+
     int type, length, swap;
     if(!server->ReceiveHeader(&type, &length, &swap)){
       Msg::Error("Did not receive message header: stopping server");
@@ -199,7 +221,7 @@ bool onelab::localNetworkClient::run(const std::string &what)
           if(par.size() == 1) reply = par[0].toChar();
         }
         else
-          Msg::Error("FIXME query not done for this parameter type");
+          Msg::Error("FIXME not done for this parameter type: %s", type.c_str());
         if(reply.size()){
           server->SendMessage(GmshSocket::GMSH_PARAMETER, reply.size(), &reply[0]);
         }
@@ -216,7 +238,7 @@ bool onelab::localNetworkClient::run(const std::string &what)
 	if(type == "number"){
 	  std::vector<onelab::number> numbers;
 	  get(numbers);
-	  for(std::vector<onelab::number>::iterator it = numbers.begin(); 
+	  for(std::vector<onelab::number>::iterator it = numbers.begin();
               it != numbers.end(); it++){
 	    reply = (*it).toChar();
 	    server->SendMessage(GmshSocket::GMSH_PARAM_QUERY_ALL, reply.size(), &reply[0]);
@@ -253,16 +275,21 @@ bool onelab::localNetworkClient::run(const std::string &what)
       break;
     case GmshSocket::GMSH_MERGE_FILE:
       {
+        if(!FlGui::instance()->onelab->mergeAuto()) break;
         int n = PView::list.size();
-        for(int i = 0; i < n; i++)
-          PView::list[i]->getOptions()->visible = 0;
-        MergeFile(message);
-        if(FlGui::instance()->onelab->hideNewViews()){
-          for(int i = n; i < PView::list.size(); i++) 
+        for(int i = 0; i < n; i++){
+          if(PView::list[i]->getData()->getFileName().substr(0, 6) != "OneLab")
             PView::list[i]->getOptions()->visible = 0;
         }
+        MergeFile(message);
+        if(FlGui::instance()->onelab->hideNewViews()){
+          for(int i = n; i < PView::list.size(); i++){
+            if(PView::list[i]->getData()->getFileName().substr(0, 6) != "OneLab")
+              PView::list[i]->getOptions()->visible = 0;
+          }
+        }
         drawContext::global()->draw();
-        if(n != (int)PView::list.size()) 
+        if(n != (int)PView::list.size())
           FlGui::instance()->menu->setContext(menu_post, 0);
       }
       break;
@@ -285,9 +312,7 @@ bool onelab::localNetworkClient::run(const std::string &what)
     default:
       Msg::Warning("Received unknown message type (%d)", type);
       break;
-    } 
-
-    FlGui::instance()->check();
+    }
   }
 
   _gmshServer = 0;
@@ -310,7 +335,7 @@ bool onelab::localNetworkClient::kill()
     if(KillProcess(_pid)){
       Msg::Info("Killed '%s' (pid %d)", _name.c_str(), _pid);
       _pid = -1;
-      return true; 
+      return true;
     }
   }
   _pid = -1;
@@ -339,25 +364,23 @@ static std::string getMshFileName(onelab::client *c)
   }
 }
 
-static std::string getModelName(onelab::client *c)
+static void guessModelName(onelab::client *c)
 {
   std::vector<onelab::string> ps;
   c->get(ps, c->getName() + "/1ModelName");
-  if(ps.size()){
-    return ps[0].getValue();
-  }
-  else{
+  if(ps.empty()){
     std::vector<std::string> split = SplitFileName(GModel::current()->getFileName());
-    std::string ext = FlGui::instance()->onelab->getModelExtension();
+    std::string ext = "";
+    onelab::server::instance()->get(ps, c->getName() + "/FileExtension");
+    if(ps.size()) ext = ps[0].getValue();
     std::string name(split[0] + split[1] + ext);
     onelab::string o(c->getName() + "/1ModelName", name, "Model name");
     o.setKind("file");
     c->set(o);
-    return name;
   }
 }
 
-static void initializeLoop(std::string level)
+static void initializeLoop(const std::string &level)
 {
   bool changed = false;
   std::vector<onelab::number> numbers;
@@ -384,7 +407,7 @@ static void initializeLoop(std::string level)
     onelab::server::instance()->setChanged(true, "Gmsh");
 }
 
-static bool incrementLoop(std::string level)
+static bool incrementLoop(const std::string &level)
 {
   bool recompute = false, loop = false;
   std::vector<onelab::number> numbers;
@@ -401,7 +424,7 @@ static bool incrementLoop(std::string level)
           if(numbers[i].getValue() == choices[j]){
             numbers[i].setValue(choices[j + 1]);
             onelab::server::instance()->set(numbers[i]);
-            Msg::Info("Recomputing with new choice %s=%g", 
+            Msg::Info("Recomputing with new choice %s=%g",
                       numbers[i].getName().c_str(), numbers[i].getValue());
             recompute = true;
             break;
@@ -409,7 +432,7 @@ static bool incrementLoop(std::string level)
         }
       }
       else if(numbers[i].getMax() != onelab::parameter::maxNumber() &&
-              numbers[i].getValue() < numbers[i].getMax() && 
+              numbers[i].getValue() < numbers[i].getMax() &&
               numbers[i].getStep()){
         numbers[i].setValue(numbers[i].getValue() + numbers[i].getStep());
         onelab::server::instance()->set(numbers[i]);
@@ -445,7 +468,7 @@ static bool incrementLoop()
 
   if(onelab::server::instance()->getChanged())
     FlGui::instance()->onelab->rebuildTree();
-  
+
   return ret;
 }
 
@@ -463,31 +486,19 @@ static std::vector<double> getRange(onelab::number &p)
   return v;
 }
 
-static std::string getShortName(const std::string &name, const std::string &ok="") 
-{
-  if(ok.size()) return ok;
-  std::string s = name;
-  // remove path
-  std::string::size_type last = name.find_last_of('/');
-  if(last != std::string::npos)
-    s = name.substr(last + 1);
-  // remove starting numbers
-  while(s.size() && s[0] >= '0' && s[0] <= '9')
-    s = s.substr(1);
-  return s;
-}
-
-static bool updateOnelabGraph(int num)
+static bool updateOnelabGraph(const std::string &snum)
 {
   bool changed = false;
+
   for(unsigned int i = 0; i < PView::list.size(); i++){
-    if(PView::list[i]->getData()->getFileName() == "OneLab" + num){
+    if(PView::list[i]->getData()->getFileName() == "OneLab" + snum){
       delete PView::list[i];
       changed = true;
       break;
     }
   }
-  
+
+  int num = atoi(snum.c_str());
   std::vector<double> x, y;
   std::string xName, yName;
   std::vector<onelab::number> numbers;
@@ -497,11 +508,11 @@ static bool updateOnelabGraph(int num)
     v.resize(8, '0');
     if(v[2 * num] == '1'){
       x = getRange(numbers[i]);
-      xName = getShortName(numbers[i].getName(), numbers[i].getShortHelp());
+      xName = numbers[i].getShortName();
     }
     if(v[2 * num + 1] == '1'){
       y = getRange(numbers[i]);
-      yName = getShortName(numbers[i].getName(), numbers[i].getShortHelp());
+      yName = numbers[i].getShortName();
     }
   }
   if(x.empty()){
@@ -510,24 +521,30 @@ static bool updateOnelabGraph(int num)
   }
   if(x.size() && y.size()){
     PView *v = new PView(xName, yName, x, y);
-    v->getData()->setFileName("OneLab" + num);
+    v->getData()->setFileName("OneLab" + snum);
     v->getOptions()->intervalsType = PViewOptions::Discrete;
     changed = true;
   }
-  
-  if(changed)
-    FlGui::instance()->updateViews();
+
+  if(changed) FlGui::instance()->updateViews();
   return changed;
 }
 
 static void updateOnelabGraphs()
 {
-  bool redraw0 = updateOnelabGraph(0);
-  bool redraw1 = updateOnelabGraph(1);
-  bool redraw2 = updateOnelabGraph(2);
-  bool redraw3 = updateOnelabGraph(3);
+  bool redraw0 = updateOnelabGraph("0");
+  bool redraw1 = updateOnelabGraph("1");
+  bool redraw2 = updateOnelabGraph("2");
+  bool redraw3 = updateOnelabGraph("3");
   if(redraw0 || redraw1 || redraw2 || redraw3)
     drawContext::global()->draw();
+}
+
+static void importPhysicalGroups(onelab::client *c, GModel *m)
+{
+  std::map<int, std::vector<GEntity*> > groups[4];
+  m->getPhysicalGroups(groups);
+  // create "read-only" onelab groups
 }
 
 static void runGmshClient(const std::string &action)
@@ -537,6 +554,8 @@ static void runGmshClient(const std::string &action)
 
   onelab::client *c = it->second;
   std::string mshFileName = getMshFileName(c);
+  if(action == "initialize") return;
+
   static std::string modelName = "";
   if(modelName.empty()){
     // first pass is special to prevent model reload, as well as
@@ -553,6 +572,7 @@ static void runGmshClient(const std::string &action)
       // the model name has changed
       modelName = GModel::current()->getName();
       geometry_reload_cb(0, 0);
+      importPhysicalGroups(c, GModel::current());
     }
   }
   else if(action == "compute"){
@@ -563,6 +583,7 @@ static void runGmshClient(const std::string &action)
       // changed
       modelName = GModel::current()->getName();
       geometry_reload_cb(0, 0);
+      importPhysicalGroups(c, GModel::current());
       if(FlGui::instance()->onelab->meshAuto()){
         mesh_3d_cb(0, 0);
         CreateOutputFile(mshFileName, CTX::instance()->mesh.fileFormat);
@@ -584,9 +605,21 @@ void onelab_cb(Fl_Widget *w, void *data)
   if(!data) return;
   std::string action((const char*)data);
 
+  if(action == "refresh"){
+    updateOnelabGraphs();
+    FlGui::instance()->onelab->rebuildTree();
+    return;
+  }
+
   if(action == "stop"){
     FlGui::instance()->onelab->stop(true);
-    FlGui::instance()->onelab->setButtonMode("kill");
+    FlGui::instance()->onelab->setButtonMode("", "kill");
+    for(onelab::server::citer it = onelab::server::instance()->firstClient();
+        it != onelab::server::instance()->lastClient(); it++){
+      onelab::string o(it->second->getName() + "/Action", "stop");
+      o.setVisible(false);
+      onelab::server::instance()->set(o);
+    }
     return;
   }
 
@@ -613,29 +646,35 @@ void onelab_cb(Fl_Widget *w, void *data)
   }
 
   if(action == "reset"){
-    // clear everything except model names
+    // clear everything except model names and command line setup
     std::vector<onelab::string> modelNames;
+    std::vector<onelab::number> useCommandLines;
     for(onelab::server::citer it = onelab::server::instance()->firstClient();
       it != onelab::server::instance()->lastClient(); it++){
       onelab::client *c = it->second;
       std::vector<onelab::string> ps;
       c->get(ps, c->getName() + "/1ModelName");
       if(ps.size()) modelNames.push_back(ps[0]);
+      std::vector<onelab::number> ps2;
+      c->get(ps2, c->getName() + "/UseCommandLine");
+      if(ps2.size()) useCommandLines.push_back(ps2[0]);
     }
     onelab::server::instance()->clear();
-    if(onelab::server::instance()->findClient("Gmsh") != 
+    if(onelab::server::instance()->findClient("Gmsh") !=
        onelab::server::instance()->lastClient())
       geometry_reload_cb(0, 0);
     for(unsigned int i = 0; i < modelNames.size(); i++)
       onelab::server::instance()->set(modelNames[i]);
+    for(unsigned int i = 0; i < useCommandLines.size(); i++)
+      onelab::server::instance()->set(useCommandLines[i]);
     action = "check";
   }
 
-  FlGui::instance()->onelab->setButtonMode("stop");
+  FlGui::instance()->onelab->setButtonMode("", "stop");
 
   if(action == "compute") initializeLoop();
 
-  do{ // enter computation loop
+  do{ // enter loop
 
     // the Gmsh client is special: it always gets executed first. (The
     // meta-model will allow more flexibility: but in the simple GUI
@@ -645,8 +684,8 @@ void onelab_cb(Fl_Widget *w, void *data)
     if(action == "compute")
       FlGui::instance()->onelab->checkForErrors("Gmsh");
     if(FlGui::instance()->onelab->stop()) break;
-    
-    // iterate over all other clients
+
+    // iterate over all other clients (there should narmally only be one)
     for(onelab::server::citer it = onelab::server::instance()->firstClient();
         it != onelab::server::instance()->lastClient(); it++){
       onelab::client *c = it->second;
@@ -654,43 +693,27 @@ void onelab_cb(Fl_Widget *w, void *data)
          c->getName() == "Listen" || // unknown client connecting through "-listen"
          c->getName() == "GmshRemote") // distant post-processing Gmsh client
         continue;
-      std::string what = getModelName(c);
-
-      // FIXME this should be uniformized (probably just be setting a onelab
-      // variable to "check" or "compute", and letting the client decide what to
-      // do)
-      if(action == "check"){
-	if(c->getName() == "GetDP")
-	  c->run(what);
-	else
-	  c->run(what + " -a "); // '-a' for 'analyse only'
-      }
-      else if(action == "compute"){
-	if(c->getName() == "GetDP"){
-	  // get command line from the server
-	  std::vector<onelab::string> ps;
-	  onelab::server::instance()->get(ps, c->getName() + "/9Compute");
-	  if(ps.size()) what += " " + ps[0].getValue();
-	  c->run(what);
-	}
-	else
-	  c->run(what);
-      }
-      
+      if(action != "initialize") guessModelName(c);
+      onelab::string o(c->getName() + "/Action", action);
+      o.setVisible(false);
+      onelab::server::instance()->set(o);
+      c->run();
       if(action == "compute")
         FlGui::instance()->onelab->checkForErrors(c->getName());
       if(FlGui::instance()->onelab->stop()) break;
     }
 
-    updateOnelabGraphs();
-    FlGui::instance()->onelab->rebuildTree();
+    if(action != "initialize"){
+      updateOnelabGraphs();
+      FlGui::instance()->onelab->rebuildTree();
+    }
 
-  } while(action == "compute" && !FlGui::instance()->onelab->stop() && 
+  } while(action == "compute" && !FlGui::instance()->onelab->stop() &&
           incrementLoop());
 
   FlGui::instance()->onelab->stop(false);
-  FlGui::instance()->onelab->setButtonMode("compute");
-  FlGui::instance()->onelab->show();
+  FlGui::instance()->onelab->setButtonMode("check", "compute");
+  if(action != "initialize") FlGui::instance()->onelab->show();
 }
 
 static void onelab_check_button_cb(Fl_Widget *w, void *data)
@@ -714,11 +737,14 @@ static void onelab_input_range_cb(Fl_Widget *w, void *data)
   onelab::server::instance()->get(numbers, name);
   if(numbers.size()){
     inputRange *o = (inputRange*)w;
-    numbers[0].setValue(o->value());
-    numbers[0].setMin(o->minimum());
-    numbers[0].setMax(o->maximum());
-    numbers[0].setStep(o->step());
-    numbers[0].setChoices(o->choices());
+    if(o->doCallbackOnValues()){
+      numbers[0].setValue(o->value());
+      numbers[0].setMin(o->minimum());
+      numbers[0].setMax(o->maximum());
+      numbers[0].setStep(o->step());
+      numbers[0].setChoices(o->choices());
+    }
+    o->doCallbackOnValues(true);
     numbers[0].setAttribute("Loop", o->loop());
     numbers[0].setAttribute("Graph", o->graph());
     onelab::server::instance()->set(numbers[0]);
@@ -800,7 +826,7 @@ onelabWindow::onelabWindow(int deltaFontSize)
 
   int width = 29 * FL_NORMAL_SIZE;
   int height = 15 * BH + 3 * WB;
-  
+
   _win = new paletteWindow
     (width, height, CTX::instance()->nonModalWindows ? true : false, "OneLab");
   _win->box(GMSH_WINDOW_BOX);
@@ -809,23 +835,25 @@ onelabWindow::onelabWindow(int deltaFontSize)
   _tree->connectorstyle(FL_TREE_CONNECTOR_SOLID);
   _tree->showroot(0);
 
-  _butt[0] = new Fl_Button(width - WB - BB, height - WB - BH, BB, BH, "Compute");
-  _butt[0]->callback(onelab_cb, (void*)"compute");
-  _butt[1] = new Fl_Button(width - 2*WB - 2*BB, height - WB - BH, BB, BH, "Check");
-  _butt[1]->callback(onelab_cb, (void*)"check");
+  _butt[0] = new Fl_Button(width - 2*WB - 2*BB, height - WB - BH, BB, BH, "Check");
+  _butt[0]->callback(onelab_cb, (void*)"check");
+  _butt[1] = new Fl_Button(width - WB - BB, height - WB - BH, BB, BH, "Compute");
+  _butt[1]->callback(onelab_cb, (void*)"compute");
 
   _gear = new Fl_Menu_Button
-    (_butt[1]->x() - WB - BB/2, _butt[1]->y(), BB/2, BH, "@-1gmsh_gear");
+    (_butt[0]->x() - WB - BB/2, _butt[0]->y(), BB/2, BH, "@-1gmsh_gear");
   _gear->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
   _gear->add("Reset database", 0, onelab_cb, (void*)"reset");
   _gear->add("_Print database", 0, onelab_cb, (void*)"dump");
   _gear->add("Remesh automatically", 0, 0, 0, FL_MENU_TOGGLE);
+  _gear->add("Merge results automatically", 0, 0, 0, FL_MENU_TOGGLE);
   _gear->add("_Hide new views", 0, 0, 0, FL_MENU_TOGGLE);
   ((Fl_Menu_Item*)_gear->menu())[2].set();
-  ((Fl_Menu_Item*)_gear->menu())[3].clear();
+  ((Fl_Menu_Item*)_gear->menu())[3].set();
+  ((Fl_Menu_Item*)_gear->menu())[4].clear();
   _gearFrozenMenuSize = _gear->menu()->size();
 
-  Fl_Box *resbox = new Fl_Box(WB, WB, 
+  Fl_Box *resbox = new Fl_Box(WB, WB,
                               width - 2 * BB - BB / 2 - 4 * WB,
                               height - 3 * WB - BH);
   _win->resizable(resbox);
@@ -851,13 +879,17 @@ void onelabWindow::rebuildTree()
   for(unsigned int i = 0; i < _treeWidgets.size(); i++)
     Fl::delete_widget(_treeWidgets[i]);
   _treeWidgets.clear();
+  for(unsigned int i = 0; i < _treeStrings.size(); i++)
+    free(_treeStrings[i]);
+  _treeStrings.clear();
 
   std::vector<onelab::number> numbers;
   onelab::server::instance()->get(numbers);
   for(unsigned int i = 0; i < numbers.size(); i++){
+    if(!numbers[i].getVisible()) continue;
     Fl_Tree_Item *n = _tree->add(numbers[i].getName().c_str());
     n->labelsize(FL_NORMAL_SIZE + 5);
-    std::string label = getShortName(numbers[i].getName(), numbers[i].getShortHelp());
+    std::string label = numbers[i].getShortName();
     _tree->begin();
     if(numbers[i].getChoices().size() == 2 &&
        numbers[i].getChoices()[0] == 0 && numbers[i].getChoices()[1] == 1){
@@ -891,18 +923,22 @@ void onelabWindow::rebuildTree()
   std::vector<onelab::string> strings;
   onelab::server::instance()->get(strings);
   for(unsigned int i = 0; i < strings.size(); i++){
+    if(!strings[i].getVisible()) continue;
     Fl_Tree_Item *n = _tree->add(strings[i].getName().c_str());
     n->labelsize(FL_NORMAL_SIZE + 5);
-    std::string label = getShortName(strings[i].getName(), strings[i].getShortHelp());
+    std::string label = strings[i].getShortName();
     _tree->begin();
     Fl_Input_Choice *but = new Fl_Input_Choice(1, 1, width, 1);
     _treeWidgets.push_back(but);
     but->copy_label(label.c_str());
     std::vector<Fl_Menu_Item> menu;
     for(unsigned int j = 0; j < strings[i].getChoices().size(); j++){
-      Fl_Menu_Item it = {strings[i].getChoices()[j].c_str(), 0, 0, 0, 
-                         (strings[i].getKind() == "file" && 
-                          j == strings[i].getChoices().size() - 1) ? FL_MENU_DIVIDER : 0};
+      // need to manually manage the label strings
+      char *str = strdup(strings[i].getChoices()[j].c_str());
+      _treeStrings.push_back(str);
+      bool divider = (strings[i].getKind() == "file" &&
+                      j == strings[i].getChoices().size() - 1);
+      Fl_Menu_Item it = {str, 0, 0, 0, divider ? FL_MENU_DIVIDER : 0};
       menu.push_back(it);
     }
     if(strings[i].getKind() == "file"){
@@ -928,12 +964,13 @@ void onelabWindow::rebuildTree()
       Fl_Box *but = new Fl_Box(1, 1, width, 1);
       but->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
       _treeWidgets.push_back(but);
-      but->copy_label(getShortName(n->label()).c_str());
+      onelab::string o(n->label());
+      but->copy_label(o.getShortName().c_str());
       n->widget(but);
       _tree->end();
     }
   }
-  
+
   _tree->redraw();
 
   FL_NORMAL_SIZE += _deltaFontSize;
@@ -952,22 +989,42 @@ void onelabWindow::checkForErrors(const std::string &client)
   }
 }
 
-void onelabWindow::setButtonMode(const std::string &mode)
+void onelabWindow::setButtonMode(const std::string &butt0, const std::string &butt1)
 {
-  if(mode == "compute"){
-    _butt[0]->label("Compute");
-    _butt[0]->callback(onelab_cb, (void*)"compute");
-    _butt[1]->activate(); 
-  }
-  else if(mode == "stop"){
-    _butt[0]->label("Stop");
-    _butt[0]->callback(onelab_cb, (void*)"stop");
-    _butt[1]->deactivate();
+  if(butt0 == "check"){
+    _butt[0]->activate();
+    _butt[0]->label("Check");
+    _butt[0]->callback(onelab_cb, (void*)"check");
   }
   else{
-    _butt[0]->label("Kill");
-    _butt[0]->callback(onelab_cb, (void*)"kill");
+    _butt[0]->deactivate();
+  }
+
+  if(butt1 == "compute"){
+    _butt[1]->activate();
+    _butt[1]->label("Compute");
+    _butt[1]->callback(onelab_cb, (void*)"compute");
+    for(int i = 0; i < _gear->menu()->size(); i++)
+      ((Fl_Menu_Item*)_gear->menu())[i].activate();
+  }
+  else if(butt1 == "stop"){
+    _butt[1]->activate();
+    _butt[1]->label("Stop");
+    _butt[1]->callback(onelab_cb, (void*)"stop");
+    for(int i = 0; i < _gear->menu()->size(); i++)
+      if(i < 1 || i > 4) ((Fl_Menu_Item*)_gear->menu())[i].deactivate();
+  }
+  else if(butt1 == "kill"){
+    _butt[1]->activate();
+    _butt[1]->label("Kill");
+    _butt[1]->callback(onelab_cb, (void*)"kill");
+    for(int i = 0; i < _gear->menu()->size(); i++)
+      if(i < 1 || i > 4) ((Fl_Menu_Item*)_gear->menu())[i].deactivate();
+  }
+  else{
     _butt[1]->deactivate();
+    for(int i = 0; i < _gear->menu()->size(); i++)
+      if(i < 1 || i > 4) ((Fl_Menu_Item*)_gear->menu())[i].deactivate();
   }
 }
 
@@ -1020,17 +1077,31 @@ void onelabWindow::rebuildSolverList()
 void onelabWindow::addSolver(const std::string &name, const std::string &commandLine,
                              int index)
 {
-  onelab::server::citer it = onelab::server::instance()->findClient(name);
-  if(it == onelab::server::instance()->lastClient()){
-    onelab::localNetworkClient *c = new onelab::localNetworkClient(name, commandLine);
-    c->setIndex(index);
-    opt_solver_name(index, GMSH_SET, name);
-    if(commandLine.empty())
-      onelab_choose_executable_cb(0, (void *)c);
-    if(name == "GetDP")
-      setModelExtension(".pro");
+  if(onelab::server::instance()->findClient(name) !=
+     onelab::server::instance()->lastClient()) return; // solver already exists
+
+  // unregister the other non-local clients so we keep only the new one
+  std::vector<onelab::client*> networkClients;
+  for(onelab::server::citer it = onelab::server::instance()->firstClient();
+      it != onelab::server::instance()->lastClient(); it++)
+    if(it->second->isNetworkClient())
+      networkClients.push_back(it->second);
+  for(unsigned int i = 0; i < networkClients.size(); i++){
+    onelab::server::instance()->unregisterClient(networkClients[i]);
+    delete networkClients[i];
   }
+
+  // create and register the new client
+  onelab::localNetworkClient *c = new onelab::localNetworkClient(name, commandLine);
+  c->setIndex(index);
+  opt_solver_name(index, GMSH_SET, name);
+  if(commandLine.empty())
+    onelab_choose_executable_cb(0, (void *)c);
+
   FlGui::instance()->onelab->rebuildSolverList();
+
+  // initialize the client
+  onelab_cb(0, (void*)"initialize");
 }
 
 void onelabWindow::removeSolver(const std::string &name)
@@ -1068,7 +1139,8 @@ void solver_cb(Fl_Widget *w, void *data)
 #else
 
 #if defined(HAVE_ONELAB)
-bool onelab::localNetworkClient::run(const std::string &what)
+
+bool onelab::localNetworkClient::run()
 {
   Msg::Error("The solver interface requires OneLab and FLTK 1.3");
   return false;
@@ -1079,6 +1151,7 @@ bool onelab::localNetworkClient::kill()
   Msg::Error("The solver interface requires OneLab and FLTK 1.3");
   return false;
 }
+
 #endif
 
 void solver_cb(Fl_Widget *w, void *data)

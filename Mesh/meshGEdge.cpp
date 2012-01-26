@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -396,7 +396,7 @@ void meshGEdge::operator() (GEdge *ge)
     
     // FIXME JF : MAYBE WE SHOULD NOT ALWAYS SMOOTH THE 1D MESH SIZE FIELD ??
     //printFandPrimitive(ge->tag(), Points);
-    a =  smoothPrimitive (ge,CTX::instance()->mesh.smoothRatio*CTX::instance()->mesh.smoothRatio,Points);
+    // a =  smoothPrimitive (ge,CTX::instance()->mesh.smoothRatio*CTX::instance()->mesh.smoothRatio,Points);
     //printFandPrimitive(ge->tag()+10000, Points);
     
     N = std::max(ge->minimumMeshSegments() + 1, (int)(a + 1.));

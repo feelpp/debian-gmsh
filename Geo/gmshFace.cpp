@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2011 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
@@ -217,6 +217,7 @@ GPoint gmshFace::point(double par1, double par2) const
   }
 }
 
+#if not defined(QUASINEWTON)
 GPoint gmshFace::closestPoint(const SPoint3 & qp, const double initialGuess[2]) const
 {
   if (s->Typ == MSH_SURF_PLAN && !s->geometry){
@@ -257,6 +258,7 @@ GPoint gmshFace::closestPoint(const SPoint3 & qp, const double initialGuess[2]) 
     return GPoint(-1.e22, -1.e22, -1.e22, 0, u);
   return GPoint(v.Pos.X, v.Pos.Y, v.Pos.Z, this, u);
 }
+#endif
 
 SPoint2 gmshFace::parFromPoint(const SPoint3 &qp, bool onSurface) const
 {
