@@ -148,6 +148,8 @@ void AddToTemporaryBoundingBox(double x, double y, double z)
   for(int i = 0; i < 3; i++) CTX::instance()->cg[i] = temp_bb.center()[i];
 }
 
+static std::vector<FILE*> openedFiles;
+
 int ParseFile(std::string fileName, bool close, bool warnIfMissing)
 {
 #if !defined(HAVE_PARSER)
@@ -192,6 +194,9 @@ int ParseFile(std::string fileName, bool close, bool warnIfMissing)
   if(close){
     gmsh_yyflush();
     fclose(gmsh_yyin);
+  }
+  else{
+    openedFiles.push_back(gmsh_yyin);
   }
 
   gmsh_yyname = old_yyname;
@@ -258,7 +263,7 @@ int MergeFile(std::string fileName, bool warnIfMissing)
     sstream << "File '"<< fileName << "' is in gzip format.\n\n"
             << "Do you want to uncompress it?";
     if(Msg::GetAnswer(sstream.str().c_str(), 0, "Cancel", "Uncompress")){
-      if(SystemCall(std::string("gunzip -c ") + fileName + " > " + noExt))
+      if(SystemCall(std::string("gunzip -c ") + fileName + " > " + noExt, true))
         Msg::Error("Failed to uncompress `%s': check directory permissions",
                    fileName.c_str());
       GModel::current()->setFileName(noExt);
@@ -353,6 +358,11 @@ int MergeFile(std::string fileName, bool warnIfMissing)
   else if(ext == ".geom" || ext == ".GEOM"){
     status = GModel::current()->readGEOM(fileName);
   }
+#if defined(HAVE_LIBCGNS)
+  else if(ext == ".cgns" || ext == ".CGNS"){
+    status = GModel::current()->readCGNS(fileName);
+  }
+#endif
   else {
     CTX::instance()->geom.draw = 1;
     if(!strncmp(header, "$PTS", 4) || !strncmp(header, "$NO", 3) ||
@@ -365,7 +375,8 @@ int MergeFile(std::string fileName, bool warnIfMissing)
         tmp->readMSH(fileName);
         status = GeomMeshMatcher::instance()->match(tmp2, tmp);
         delete tmp;
-      } else
+      }
+      else
 	status = GModel::current()->readMSH(fileName);
 #if defined(HAVE_POST)
       if(status > 1) status = PView::readMSH(fileName);
@@ -395,20 +406,11 @@ int MergeFile(std::string fileName, bool warnIfMissing)
 
 #if defined(HAVE_FLTK) && defined(HAVE_POST)
   if(FlGui::available()){
-    bool newViews = numViewsBefore != (int)PView::list.size();
-    if(newViews){
-      // go directly to the first non-empty step
-      for(unsigned int i = 0; i < PView::list.size(); i++){
-        for(int j = 0; j < (int)opt_view_nb_timestep(i, GMSH_GET, 0); j++){
-          int step = (int)opt_view_timestep(i, GMSH_GET, 0);
-          if(PView::list[i]->getData()->hasTimeStep(step))
-            break;
-          else
-            opt_view_timestep(i, GMSH_SET | GMSH_GUI, step + 1);
-        }
-      }
-    }
-    FlGui::instance()->updateViews(newViews);
+    // go directly to the first non-empty step
+    for(unsigned int i = numViewsBefore; i < PView::list.size(); i++)
+      opt_view_timestep(i, GMSH_SET | GMSH_GUI,
+                        PView::list[i]->getData()->getFirstNonEmptyTimeStep());
+    FlGui::instance()->updateViews(numViewsBefore != (int)PView::list.size());
   }
 #endif
 
@@ -433,6 +435,14 @@ void ClearProject()
 #endif
   for(int i = GModel::list.size() - 1; i >= 0; i--)
     delete GModel::list[i];
+
+  // close the files that might have been left open by ParseFile
+  if(openedFiles.size()){
+    for(unsigned int i = 0; i < openedFiles.size(); i++)
+      fclose(openedFiles[i]);
+    openedFiles.clear();
+  }
+
   new GModel();
   GModel::current()->setFileName(CTX::instance()->defaultFileName);
   GModel::current()->setName("");
@@ -467,7 +477,6 @@ void OpenProject(std::string fileName)
   else{
     // if the current model is not empty make it invisible, clear the
     // parser variables and add a new model
-    GModel::current()->setVisibility(0);
 #if defined(HAVE_PARSER)
     gmsh_yysymbols.clear();
 #endif
@@ -491,6 +500,14 @@ void OpenProject(std::string fileName)
       FlGui::instance()->menu->fillRecentHistoryMenu();
 #endif
   }
+
+  // close the files that might have been left open by ParseFile
+  if(openedFiles.size()){
+    for(unsigned int i = 0; i < openedFiles.size(); i++)
+      fclose(openedFiles[i]);
+    openedFiles.clear();
+  }
+
   CTX::instance()->lock = 0;
 
 #if defined(HAVE_FLTK)

@@ -83,7 +83,7 @@ StringXString GeneralOptions_String[] = {
 #elif defined(__APPLE__)
     "open -t %s" ,
 #else
-    "sensible-editor '%s' &" ,
+    "sensible-editor '%s'" ,
 #endif
     "System command to launch a text editor" },
   { F|S, "TmpFileName" , opt_general_tmp_filename , ".gmsh-tmp" ,
@@ -95,7 +95,7 @@ StringXString GeneralOptions_String[] = {
 #elif defined(__APPLE__)
     "open %s" ,
 #else
-    "sensible-browser %s &" ,
+    "sensible-browser %s" ,
 #endif
     "System command to launch a web browser" },
 
@@ -786,6 +786,9 @@ StringXNumber MeshOptions_Number[] = {
   { F|O, "Binary" , opt_mesh_binary , 0. ,
     "Write mesh files in binary format (if possible)" },
 
+  { F|O, "CgnsImportOrder" , opt_mesh_cgns_import_order , 1. ,
+   "Enable the creation of high-order mesh from CGNS structured meshes."
+   "(1, 2, 4, 8, ...)" },
   { F|O, "ChacoArchitecture" , opt_mesh_partition_chaco_architecture, 1. ,
     "(Adv. Chaco): Parallel architecture topology (0=hypercube, 1-3=mesh "
     "dimensions)" },

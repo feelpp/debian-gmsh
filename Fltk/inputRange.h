@@ -38,7 +38,7 @@ class inputRange : public Fl_Group {
     // workaround annoying behaviour of Fl_Value_Input: if step is a nonzero
     // integer, one can only enter integer values in the widget; se we force
     // nonzero steps to be noninteger
-    if(step && step - floor(step) <= 0) step *= (1. - 1e-16);
+    if(step && step - floor(step) <= 0) step *= (1. - 1e-7);
     return step;
   }
   void _values2string()
@@ -312,4 +312,6 @@ class inputRange : public Fl_Group {
   std::string loop(){ return _loop_val; }
   void graph(const std::string &val){ _set_graph_value(val); }
   std::string graph(){ return _graph_val; }
+  void color(int col){ _input->color(col); }
+  int color(){ return _input->color(); }
 };

@@ -80,29 +80,21 @@ PView::PView(PView *ref, bool copyOptions)
                             _options->targetError);
 }
 
-PView::PView(std::string xname, std::string yname,
+PView::PView(const std::string &xname, const std::string &yname,
              std::vector<double> &x, std::vector<double> &y)
 {
   _init();
-  PViewDataList *data = new PViewDataList();
-  for(unsigned int i = 0; i < std::min(x.size(), y.size()); i++){
-    data->SP.push_back(x[i]);
-    data->SP.push_back(0.);
-    data->SP.push_back(0.);
-    data->SP.push_back(y[i]);
-    data->NbSP++;
-  }
-  data->setName(yname);
-  data->setFileName(yname + ".pos");
-  data->finalize();
-  _data = data;
+  _data = new PViewDataList();
+  _data->setXY(x, y);
+  _data->setName(yname);
+  _data->setFileName(yname + ".pos");
   _options = new PViewOptions(PViewOptions::reference);
   _options->type = PViewOptions::Plot2D;
   _options->axes = 2;
   _options->axesLabel[0] = xname;
 }
 
-PView::PView(std::string name, std::string type, 
+PView::PView(std::string name, std::string type,
              GModel *model, std::map<int, std::vector<double> > &data,
              double time, int numComp)
 {
@@ -129,7 +121,7 @@ PView::PView(std::string name, std::string type,
                             _options->targetError);
 }
 
-void PView::addStep(GModel *model, std::map<int, std::vector<double> > &data, 
+void PView::addStep(GModel *model, std::map<int, std::vector<double> > &data,
                     double time, int numComp)
 {
   PViewDataGModel *d = dynamic_cast<PViewDataGModel*>(_data);
@@ -153,14 +145,14 @@ PView::~PView()
   for(unsigned int i = 0; i < list.size(); i++)
     if(list[i]->getAliasOf() == _num)
       return;
-  
+
   // do not delete if this view is an alias and 1) if the original
   // still exists, or 2) if there are other aliases to the same view
   if(_aliasOf)
     for(unsigned int i = 0; i < list.size(); i++)
       if(list[i]->getNum() == _aliasOf || list[i]->getAliasOf() == _aliasOf)
         return;
-  
+
   Msg::Debug("Deleting data in View[%d] (unique num = %d)", _index, _num);
   delete _data;
 }
@@ -183,7 +175,7 @@ void PView::setOptions(PViewOptions *val)
 }
 
 PViewData *PView::getData(bool useAdaptiveIfAvailable)
-{ 
+{
   if(useAdaptiveIfAvailable && _data->getAdaptiveData() && !_data->isRemote())
     return _data->getAdaptiveData()->getData();
   else
@@ -191,11 +183,11 @@ PViewData *PView::getData(bool useAdaptiveIfAvailable)
 }
 
 void PView::setChanged(bool val)
-{ 
-  _changed = val; 
+{
+  _changed = val;
   // reset the eye position everytime we change the view so that the
   // arrays get resorted for transparency
-  if(_changed) _eye = SPoint3(0., 0., 0.); 
+  if(_changed) _eye = SPoint3(0., 0., 0.);
 }
 
 void PView::combine(bool time, int how, bool remove)
@@ -284,7 +276,8 @@ void PView::combine(bool time, int how, bool remove)
 
 PView *PView::getViewByName(std::string name, int timeStep, int partition)
 {
-  for(unsigned int i = 0; i < list.size(); i++){
+  // search views from most recently to least recently added
+  for(int i = list.size() - 1; i >= 0; i--){
     if(list[i]->getData()->getName() == name &&
        ((timeStep < 0 || !list[i]->getData()->hasTimeStep(timeStep)) ||
         (partition < 0 || !list[i]->getData()->hasPartition(timeStep, partition))))

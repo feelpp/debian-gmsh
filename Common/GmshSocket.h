@@ -247,9 +247,6 @@ class GmshClient : public GmshSocket {
   ~GmshClient(){}
   int Connect(const char *sockname)
   {
-    // slight delay to make sure that the socket is bound by the
-    // server before we attempt to connect to it
-    _Sleep(100);
     if(strstr(sockname, "/") || strstr(sockname, "\\") || !strstr(sockname, ":")){
 #if !defined(WIN32) || defined(__CYGWIN__)
       // UNIX socket (testing ":" is not enough with Windows paths)
@@ -321,7 +318,7 @@ class GmshServer : public GmshSocket{
  public:
   GmshServer() : GmshSocket(), _portno(-1) {}
   virtual ~GmshServer(){}
-  virtual int SystemCall(const char *str) = 0;
+  virtual int NonBlockingSystemCall(const char *str) = 0;
   virtual int NonBlockingWait(int socket, double waitint, double timeout) = 0;
   int Start(const char *command, const char *sockname, double timeout)
   {
@@ -392,10 +389,7 @@ class GmshServer : public GmshSocket{
       // we assume that the command line always ends with the socket name
       std::string cmd(command);
       cmd += " " + _sockname;
-#if !defined(WIN32)
-      cmd += " &";
-#endif
-      SystemCall(cmd.c_str()); // start the solver
+      NonBlockingSystemCall(cmd.c_str()); // start the solver
     }
     else{
       timeout = 0.; // no command launched: don't set a timeout
@@ -409,7 +403,7 @@ class GmshServer : public GmshSocket{
     }
 
     // wait until we get data
-    int ret = NonBlockingWait(tmpsock, 0.5, timeout);
+    int ret = NonBlockingWait(tmpsock, 0.001, timeout);
     if(ret){
       CloseSocket(tmpsock);
       if(ret == 2){

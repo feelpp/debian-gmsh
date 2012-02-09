@@ -5,6 +5,7 @@
 
 #include <stdlib.h>
 #include <sstream>
+#include <stack>
 #include "GmshConfig.h"
 #include "GmshMessage.h"
 #include "GModel.h"
@@ -64,7 +65,13 @@ GModel::GModel(std::string name)
 {
   partitionSize[0] = 0; partitionSize[1] = 0;
 
+  // hide all other models
+  for(unsigned int i = 0; i < list.size(); i++)
+    list[i]->setVisibility(0);
+
+  // push new one into the list
   list.push_back(this);
+
   // at the moment we always create (at least an empty) GEO model
   _createGEOInternals();
 
@@ -523,15 +530,13 @@ int GModel::mesh(int dimension)
 #endif
 }
 
-int GModel::adaptMesh(int technique, simpleFunction<double> *f,
-                      std::vector<double> parameters, bool meshAll)
+int GModel::adaptMesh(std::vector<int> technique, std::vector<simpleFunction<double>* > f, std::vector<std::vector<double> > parameters, int niter, bool meshAll)
 {
 #if defined(HAVE_MESH)
 
   if (getNumMeshElements() == 0) mesh(getDim());
   int nbElemsOld = getNumMeshElements();
   int nbElems;
-  int niter = parameters.size() >=4 ? (int) parameters[3] : 3;
 
   FieldManager *fields = getFields();
   fields->reset();
@@ -543,18 +548,23 @@ int GModel::adaptMesh(int technique, simpleFunction<double> *f,
       Msg::Info("-- adaptMesh (allDim) ITER =%d ", ITER);
 
       fields->reset();
-      int id = fields->newId();
-      (*fields)[id] = new meshMetric(this, technique, f, parameters);;
-      fields->background_field = id;
+      meshMetric *metric = new meshMetric(this);
+      for (int imetric=0;imetric<technique.size();imetric++){
+        metric->addMetric(technique[imetric], f[imetric], parameters[imetric]);
+      }
+      fields->setBackgroundField(metric);
+      // int id = fields->newId();
+      // (*fields)[id] = new meshMetric(this, technique, f, parameters);
+      // fields->background_field = id;
 
       opt_mesh_lc_integration_precision(0, GMSH_SET, 1.e-4);
       opt_mesh_algo2d(0, GMSH_SET, 7.0); //bamg
       opt_mesh_algo3d(0, GMSH_SET, 7.0); //mmg3d
       opt_mesh_lc_from_points(0, GMSH_SET, 0.0); //do not mesh lines with lc
 
-      std::for_each(firstEdge(), lastEdge(), deMeshGEdge());
-      std::for_each(firstFace(), lastFace(), deMeshGFace());
       std::for_each(firstRegion(), lastRegion(), deMeshGRegion());
+      std::for_each(firstFace(), lastFace(), deMeshGFace());
+      std::for_each(firstEdge(), lastEdge(), deMeshGEdge());
 
       GenerateMesh(this, getDim());
       nbElems = getNumMeshElements();
@@ -562,6 +572,7 @@ int GModel::adaptMesh(int technique, simpleFunction<double> *f,
       char name[256];
       sprintf(name, "meshAdapt-%d.msh", ITER);
       writeMSH(name);
+      //metric->exportInfo(name);
 
       if (ITER++ >= niter)  break;
       if (ITER > 3 && fabs((double)(nbElems - nbElemsOld)) < 0.01 * nbElemsOld) break;
@@ -576,45 +587,50 @@ int GModel::adaptMesh(int technique, simpleFunction<double> *f,
       std::vector<MElement*> elements;
 
       if (getDim() == 2){
-	for (fiter fit = firstFace(); fit != lastFace(); ++fit){
-	  if ((*fit)->quadrangles.size())return -1;
-	  for (unsigned i=0;i<(*fit)->triangles.size();i++){
-	    elements.push_back((*fit)->triangles[i]);
-	  }
-	}
+        for (fiter fit = firstFace(); fit != lastFace(); ++fit){
+          if ((*fit)->quadrangles.size())return -1;
+          for (unsigned i=0;i<(*fit)->triangles.size();i++){
+            elements.push_back((*fit)->triangles[i]);
+          }
+        }
       }
       else if (getDim() == 3){
-	for (riter rit = firstRegion(); rit != lastRegion(); ++rit){
-	  if ((*rit)->hexahedra.size())return -1;
-	  for (unsigned i=0;i<(*rit)->tetrahedra.size();i++){
-	    elements.push_back((*rit)->tetrahedra[i]);
-	  }
-	}
+        for (riter rit = firstRegion(); rit != lastRegion(); ++rit){
+          if ((*rit)->hexahedra.size())return -1;
+          for (unsigned i=0;i<(*rit)->tetrahedra.size();i++){
+            elements.push_back((*rit)->tetrahedra[i]);
+          }
+        }
       }
 
       if (elements.size() == 0)return -1;
 
       fields->reset();
-      int id = fields->newId();
-      (*fields)[id] = new meshMetric(this, technique, f, parameters);
-      fields->background_field = id;
+      meshMetric *metric = new meshMetric(this);
+      for (int imetric=0;imetric<technique.size();imetric++){
+        metric->addMetric(technique[imetric], f[imetric], parameters[imetric]);
+      }
+      fields->setBackgroundField(metric);
+      // int id = fields->newId();
+      // (*fields)[id] = new meshMetric(this, technique, f, parameters);
+      // fields->background_field = id;
 
       if (getDim() == 2){
-	for (fiter fit = firstFace(); fit != lastFace(); ++fit){
-	  if((*fit)->geomType() != GEntity::DiscreteSurface){
-	    meshGFaceBamg(*fit);
-	    laplaceSmoothing(*fit,CTX::instance()->mesh.nbSmoothing);
-	  }
-	  if(_octree) delete _octree;
-	  _octree = 0;
-	}
+        for (fiter fit = firstFace(); fit != lastFace(); ++fit){
+          if((*fit)->geomType() != GEntity::DiscreteSurface){
+            meshGFaceBamg(*fit);
+            laplaceSmoothing(*fit,CTX::instance()->mesh.nbSmoothing);
+          }
+          if(_octree) delete _octree;
+          _octree = 0;
+        }
       }
       else if (getDim() == 3){
-	for (riter rit = firstRegion(); rit != lastRegion(); ++rit){
-	  refineMeshMMG(*rit);
-	  if(_octree) delete _octree;
-	  _octree = 0;
-	}
+        for (riter rit = firstRegion(); rit != lastRegion(); ++rit){
+          refineMeshMMG(*rit);
+          if(_octree) delete _octree;
+          _octree = 0;
+        }
       }
 
       nbElems = getNumMeshElements();
@@ -979,7 +995,7 @@ static void _addElements(std::vector<T*> &dst, const std::vector<MElement*> &src
   for(unsigned int i = 0; i < src.size(); i++) dst.push_back((T*)src[i]);
 }
 
-void GModel::_storeElementsInEntities(std::map<int, std::vector<MElement*> > &map)
+void GModel::_storeElementsInEntities(std::map< int, std::vector<MElement* > >& map)
 {
   std::map<int, std::vector<MElement*> >::const_iterator it = map.begin();
   for(; it != map.end(); ++it){
@@ -1263,10 +1279,39 @@ int GModel::removeDuplicateMeshVertices(double tolerance)
   return num;
 }
 
+
 static void recurConnectMElementsByMFace(const MFace &f,
                                          std::multimap<MFace, MElement*, Less_Face> &e2f,
                                          std::set<MElement*> &group,
-                                         std::set<MFace, Less_Face> &touched)
+                                         std::set<MFace, Less_Face> &touched,
+					 int recur_level)
+{
+  // this is very slow...
+  std::stack<MFace> _stack;
+  _stack.push(f);
+
+  while(!_stack.empty()){
+    MFace ff = _stack.top();
+    _stack.pop();
+    if (touched.find(ff) == touched.end()){
+      touched.insert(ff);
+      for (std::multimap<MFace, MElement*, Less_Face>::iterator it = e2f.lower_bound(ff);
+	   it != e2f.upper_bound(ff); ++it){
+	group.insert(it->second);
+	for (int i = 0; i < it->second->getNumFaces(); ++i){
+	  _stack.push(it->second->getFace(i));
+	}
+      }
+    }
+  }
+  printf("group pf %d elements found\n",group.size());
+}
+
+static void recurConnectMElementsByMFaceOld(const MFace &f,
+                                         std::multimap<MFace, MElement*, Less_Face> &e2f,
+                                         std::set<MElement*> &group,
+                                         std::set<MFace, Less_Face> &touched,
+					 int recur_level)
 {
   if (touched.find(f) != touched.end()) return;
   touched.insert(f);
@@ -1274,7 +1319,7 @@ static void recurConnectMElementsByMFace(const MFace &f,
        it != e2f.upper_bound(f); ++it){
     group.insert(it->second);
     for (int i = 0; i < it->second->getNumFaces(); ++i){
-      recurConnectMElementsByMFace(it->second->getFace(i), e2f, group, touched);
+      recurConnectMElementsByMFace(it->second->getFace(i), e2f, group, touched, recur_level+1);
     }
   }
 }
@@ -1291,7 +1336,7 @@ static int connectedVolumes(std::vector<MElement*> &elements,
   while(!e2f.empty()){
     std::set<MElement*> group;
     std::set<MFace, Less_Face> touched;
-    recurConnectMElementsByMFace(e2f.begin()->first, e2f, group, touched);
+    recurConnectMElementsByMFace(e2f.begin()->first, e2f, group, touched, 0);
     std::vector<MElement*> temp;
     temp.insert(temp.begin(), group.begin(), group.end());
     regs.push_back(temp);
@@ -1694,7 +1739,7 @@ void GModel::createTopologyFromFaces(std::vector<discreteFace*> &discFaces, int 
   for (std::vector<discreteFace*>::iterator it = discFaces.begin();
        it != discFaces.end(); it++)
     (*it)->findEdges(map_edges);
-
+  
   // return if no boundary edges (torus, sphere, ...)
   if (map_edges.empty()) return;
 
@@ -2732,10 +2777,10 @@ void GModel::classifyFaces(std::set<GFace*> &_faces)
 #endif
 }
 
-void GModel::createPartitionBoundaries(int createGhostCells)
+void GModel::createPartitionBoundaries(int createGhostCells, int createAllDims)
 {
 #if (defined(HAVE_CHACO) || defined(HAVE_METIS)) && defined(HAVE_MESH)
-  CreatePartitionBoundaries(this, createGhostCells);
+  CreatePartitionBoundaries(this, createGhostCells, createAllDims);
 #endif
 }
 
@@ -2749,6 +2794,8 @@ void GModel::addHomologyRequest(const std::string &type, std::vector<int> &domai
 
 void GModel::computeHomology()
 {
+  if(_homologyRequests.empty()) return;
+
 #if defined(HAVE_KBIPACK)
   // find unique domain/subdomain requests
   typedef std::pair<std::vector<int>, std::vector<int> > dpair;
@@ -2762,7 +2809,8 @@ void GModel::computeHomology()
     std::pair<std::multimap<dpair, std::string>::iterator,
               std::multimap<dpair, std::string>::iterator> itp =
       _homologyRequests.equal_range(*it);
-    bool prepareToRestore = (itp.first != itp.second);
+    bool prepareToRestore = (itp.first != --itp.second);
+    itp.second++;
     Homology* homology = new Homology(this, itp.first->first.first,
                                       itp.first->first.second, false, prepareToRestore);
     CellComplex *cellcomplex = homology->createCellComplex();
@@ -2772,10 +2820,10 @@ void GModel::computeHomology()
         // restore cell complex to non-reduced state if we are reusing it
         if(itt != itp.first) cellcomplex->restoreComplex();
         std::string type = itt->second;
-        if(type == "Generators")
-          homology->findGenerators(cellcomplex);
-        else if(type == "DualGenerators" || type == "Cuts")
-          homology->findDualGenerators(cellcomplex);
+        if(type == "Homology")
+          homology->findHomologyBasis(cellcomplex);
+        else if(type == "Cohomology")
+          homology->findCohomologyBasis(cellcomplex);
         else
           Msg::Error("Unknown type of homology computation: %s", type.c_str());
       }

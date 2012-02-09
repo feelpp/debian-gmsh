@@ -40,19 +40,20 @@ namespace onelab{
   // The base parameter class.
   class parameter{
   private:
-    // the name of the parameter, including its '/'-separated path in
-    // the parameter hierarchy. Parameters or subpaths can start with
-    // numbers to force their relative ordering (such numbers are
-    // automatically hidden in the interface).
+    // the name of the parameter, including its '/'-separated path in the
+    // parameter hierarchy. Parameters or subpaths can start with numbers to
+    // force their relative ordering (such numbers are automatically hidden in
+    // the interface).
     std::string _name;
-    // help strings (if provided, the short help serves as a better
-    // way to display the parameter in the interface). Richer encoding
-    // (UTF? HTML?) might be used in the future.
-    std::string _shortHelp, _help;
+    // the parameter label: if provided it serves as a better way to display the
+    // parameter in the interface (richer encoding (UTF? HTML?) might be used in
+    // the future)
+    std::string _label;
+    // a help string (richer encoding (UTF? HTML?) might be used in the future)
+    std::string _help;
     // clients that use this parameter
     std::set<std::string> _clients;
-    // flag to check if the parameter has been changed since the last
-    // run()
+    // flag to check if the parameter has been changed since the last run()
     bool _changed;
     // should the parameter be visible in the interface?
     bool _visible;
@@ -60,12 +61,13 @@ namespace onelab{
     // optional additional attributes
     std::map<std::string, std::string> _attributes;
   public:
-    parameter(const std::string &name="", const std::string &shortHelp="",
+    parameter(const std::string &name="", const std::string &label="",
               const std::string &help="")
-      : _name(name), _shortHelp(shortHelp), _help(help), _changed(true),
+      : _name(name), _label(label), _help(help), _changed(true),
         _visible(true) {}
     void setName(const std::string &name){ _name = name; }
-    void setShortHelp(const std::string &shortHelp){ _shortHelp = shortHelp; }
+    void setLabel(const std::string &label){ _label = label; }
+    void setShortHelp(const std::string &label){ _label = label; } // deprecated
     void setHelp(const std::string &help){ _help = help; }
     void setChanged(bool changed){ _changed = changed; }
     void setVisible(bool visible){ _visible = visible; }
@@ -89,11 +91,12 @@ namespace onelab{
     }
     virtual std::string getType() const = 0;
     const std::string &getName() const { return _name; }
-    const std::string &getShortHelp() const { return _shortHelp; }
+    const std::string &getLabel() const { return _label; }
+    const std::string &getShortHelp() const { return _label; } // deprecated
     const std::string &getHelp() const { return _help; }
     std::string getShortName() const
     {
-      if(_shortHelp.size()) return _shortHelp;
+      if(_label.size()) return _label;
       std::string s = _name;
       // remove path
       std::string::size_type last = _name.find_last_of('/');
@@ -121,13 +124,23 @@ namespace onelab{
     static double maxNumber() { return 1e200; }
     static std::string version() { return "1.0"; }
     static std::string getNextToken(const std::string &msg,
-                                    std::string::size_type &first)
+                                    std::string::size_type &first,
+                                    char separator=charSep())
     {
       if(first == std::string::npos) return "";
-      std::string::size_type last = msg.find_first_of(charSep(), first);
+      std::string::size_type last = msg.find_first_of(separator, first);
       std::string next = msg.substr(first, last - first);
       first = (last == std::string::npos) ? last : last + 1;
       return next;
+    }
+    static std::vector<std::string> split(const std::string &msg,
+                                          char separator=charSep())
+    {
+      std::vector<std::string> out;
+      std::string::size_type first = 0;
+      while(first != std::string::npos)
+        out.push_back(getNextToken(msg, first, separator));
+      return out;
     }
     std::string sanitize(const std::string &in) const
     {
@@ -141,7 +154,7 @@ namespace onelab{
       std::ostringstream sstream;
       sstream << version() << charSep() << getType() << charSep()
               << sanitize(getName()) << charSep()
-              << sanitize(getShortHelp()) << charSep()
+              << sanitize(getLabel()) << charSep()
               << sanitize(getHelp()) << charSep()
               << (getVisible() ? 1 : 0) << charSep()
               << _attributes.size() << charSep();
@@ -161,7 +174,7 @@ namespace onelab{
       if(getNextToken(msg, pos) != version()) return 0;
       if(getNextToken(msg, pos) != getType()) return 0;
       setName(getNextToken(msg, pos));
-      setShortHelp(getNextToken(msg, pos));
+      setLabel(getNextToken(msg, pos));
       setHelp(getNextToken(msg, pos));
       setVisible(atoi(getNextToken(msg, pos).c_str()));
       int numAttributes = atoi(getNextToken(msg, pos).c_str());
@@ -194,19 +207,17 @@ namespace onelab{
     }
   };
 
-  // The number class. Numbers are stored internally as double
-  // precision real numbers. Currently all more complicated types
-  // (complex numbers, vectors, etc.) are supposed to be encapsulated
-  // in functions. We might add more base types in the future to make
-  // the interface more expressive.
+  // The number class. Numbers are stored internally as double precision real
+  // numbers. All more complicated types (complex numbers, vectors, etc.) are
+  // supposed to be either exchanged as strings or encapsulated in functions.
   class number : public parameter{
   private:
     double _value, _min, _max, _step;
     std::vector<double> _choices;
   public:
     number(const std::string &name="", double value=0.,
-           const std::string &shortHelp="", const std::string &help="")
-      : parameter(name, shortHelp, help), _value(value),
+           const std::string &label="", const std::string &help="")
+      : parameter(name, label, help), _value(value),
         _min(-maxNumber()), _max(maxNumber()), _step(0.) {}
     void setValue(double value){ _value = value; }
     void setMin(double min){ _min = min; }
@@ -222,8 +233,9 @@ namespace onelab{
     void update(const number &p)
     {
       addClients(p.getClients()); // complete the list
-      setShortHelp(p.getShortHelp());
+      setLabel(p.getLabel());
       setHelp(p.getHelp());
+      setVisible(p.getVisible());
       setAttributes(p.getAttributes());
       if(p.getValue() != getValue()){
         setValue(p.getValue());
@@ -260,20 +272,19 @@ namespace onelab{
   };
 
   // The string class. A string has a mutable "kind": we do not derive
-  // specialized classes, because the kind should be changeable at
-  // runtime (e.g. from a client-dependent mathematical expression to
-  // a table of values). Possible kinds: generic, filename, hostname,
-  // client-dependent mathematical expression, comma-separated list of
-  // values, matlab matrix, onelab mathematical expression (through
-  // mathex?), ...
+  // specialized classes, because the kind should be changeable at runtime
+  // (e.g. from a client-dependent mathematical expression to a table of
+  // values). Kinds currently recognized by Gmsh are: "file". Possible kinds
+  // could be "complex", "matrix m n", "hostname", client-dependent mathematical
+  // expression, onelab mathematical expression (through mathex?), ...
   class string : public parameter{
   private:
     std::string _value, _kind;
     std::vector<std::string> _choices;
   public:
     string(const std::string &name="", const std::string &value="",
-           const std::string &shortHelp="", const std::string &help="")
-      : parameter(name, shortHelp, help), _value(value), _kind("generic") {}
+           const std::string &label="", const std::string &help="")
+      : parameter(name, label, help), _value(value), _kind("generic") {}
     void setValue(const std::string &value){ _value = value; }
     void setKind(const std::string &kind){ _kind = kind; }
     void setChoices(const std::vector<std::string> &choices){ _choices = choices; }
@@ -284,8 +295,9 @@ namespace onelab{
     void update(const string &p)
     {
       addClients(p.getClients());
-      setShortHelp(p.getShortHelp());
+      setLabel(p.getLabel());
       setHelp(p.getHelp());
+      setVisible(p.getVisible());
       setAttributes(p.getAttributes());
       if(p.getValue() != getValue()){
         setValue(p.getValue());
@@ -321,8 +333,8 @@ namespace onelab{
   };
 
   // The region class. A region can be any kind of geometrical entity,
-  // represented as identifiers of physical regions. Operations on
-  // regions will include union, intersection, etc.
+  // represented as identifiers of physical regions. Operations on regions will
+  // include union, intersection, etc.
   class region : public parameter{
   private:
     std::set<std::string> _value;
@@ -332,15 +344,15 @@ namespace onelab{
   public:
     region(const std::string &name="",
            const std::set<std::string> &value = std::set<std::string>(),
-           const std::string &shortHelp="", const std::string &help="")
-      : parameter(name, shortHelp, help), _value(value) {}
+           const std::string &label="", const std::string &help="")
+      : parameter(name, label, help), _value(value) {}
     void setValue(const std::set<std::string> &value){ _value = value; }
     std::string getType() const { return "region"; }
     const std::set<std::string> &getValue() const { return _value; }
     void update(const region &p)
     {
       addClients(p.getClients());
-      setShortHelp(p.getShortHelp());
+      setLabel(p.getLabel());
       setHelp(p.getHelp());
       setAttributes(p.getAttributes());
       if(p.getValue() != getValue()){
@@ -362,10 +374,9 @@ namespace onelab{
     }
   };
 
-  // The (possibly piece-wise defined on regions) function
-  // class. Functions are entirely client-dependent: they are just
-  // represented internally as onelab strings, defined on onelab
-  // regions.
+  // The (possibly piece-wise defined on regions) function class. Functions are
+  // entirely client-dependent: they are just represented internally as onelab
+  // strings, defined on onelab regions.
   class function : public parameter{
   private:
     std::string _value;
@@ -373,8 +384,8 @@ namespace onelab{
     std::vector<std::string> _choices;
   public:
     function(const std::string &name="", const std::string &value="",
-             const std::string &shortHelp="", const std::string &help="")
-      : parameter(name, shortHelp, help), _value(value) {}
+             const std::string &label="", const std::string &help="")
+      : parameter(name, label, help), _value(value) {}
     void setValue(const std::string &value, const std::string &region="")
     {
       if(region.empty())
@@ -400,7 +411,7 @@ namespace onelab{
     void update(const function &p)
     {
       addClients(p.getClients());
-      setShortHelp(p.getShortHelp());
+      setLabel(p.getLabel());
       setHelp(p.getHelp());
       setAttributes(p.getAttributes());
       if(p.getValue() != getValue()){
@@ -424,18 +435,17 @@ namespace onelab{
     }
   };
 
-  // The parameter space, i.e., the set of parameters stored and
-  // handled by the onelab server.
+  // The parameter space, i.e., the set of parameters stored and handled by the
+  // onelab server.
   class parameterSpace{
   private:
     std::set<number*, parameterLessThan> _numbers;
     std::set<string*, parameterLessThan> _strings;
     std::set<region*, parameterLessThan> _regions;
     std::set<function*, parameterLessThan> _functions;
-    // set a parameter in the parameter space; if it already exists,
-    // update it (adding new clients if necessary). This needs to be
-    // locked to avoid race conditions when several clients try to set
-    // a parameter at the same time.
+    // set a parameter in the parameter space; if it already exists, update it
+    // (adding new clients if necessary). This needs to be locked to avoid race
+    // conditions when several clients try to set a parameter at the same time.
     template <class T> bool _set(const T &p, const std::string &client,
                                  std::set<T*, parameterLessThan> &ps)
     {
@@ -451,11 +461,10 @@ namespace onelab{
       }
       return true;
     }
-    // get the parameter matching the given name, or all the
-    // parameters in the category if no name is given. If we find a
-    // given parameter by name, we add the client requesting the
-    // parameter to the list of clients for this parameter. This also
-    // needs to be locked.
+    // get the parameter matching the given name, or all the parameters in the
+    // category if no name is given. If we find a given parameter by name, we
+    // add the client requesting the parameter to the list of clients for this
+    // parameter. This also needs to be locked.
     template <class T> bool _get(std::vector<T> &p, const std::string &name,
                                  const std::string &client,
                                  std::set<T*, parameterLessThan> &ps)
@@ -526,8 +535,8 @@ namespace onelab{
         if((*it)->hasClient(client)) return true;
       return false;
     }
-    // check if some parameters have changed (optionnally only check
-    // the parameters that depend on a given client)
+    // check if some parameters have changed (optionnally only check the
+    // parameters that depend on a given client)
     bool getChanged(const std::string &client="") const
     {
       std::set<parameter*> ps;
@@ -548,8 +557,8 @@ namespace onelab{
         if(client.empty() || (*it)->hasClient(client))
           (*it)->setChanged(changed);
     }
-    // serialize the parameter space (optinally only serialize those
-    // parameters that depend on the given client)
+    // serialize the parameter space (optinally only serialize those parameters
+    // that depend on the given client)
     std::string toChar(const std::string &client="") const
     {
       std::string s;
@@ -561,9 +570,9 @@ namespace onelab{
     }
   };
 
-  // The onelab client: a class that communicates with the onelab
-  // server. Each client should be derived from this one. A client can
-  // be understood as "one simulation step in a complex computation".
+  // The onelab client: a class that communicates with the onelab server. Each
+  // client should be derived from this one. A client can be understood as "one
+  // simulation step in a complex computation".
   class client{
   protected:
     // the name of the client
@@ -600,8 +609,8 @@ namespace onelab{
     virtual bool get(std::vector<function> &ps, const std::string &name="") = 0;
   };
 
-  // The onelab server: a singleton that stores the parameter space
-  // and interacts with onelab clients.
+  // The onelab server: a singleton that stores the parameter space and
+  // interacts with onelab clients.
   class server{
   private:
     // the unique server (singleton behaviour due to the "static" specifier)
