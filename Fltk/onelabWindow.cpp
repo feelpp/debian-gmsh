@@ -47,7 +47,7 @@ class onelabGmshServer : public GmshServer{
   onelabGmshServer(onelab::localNetworkClient *client)
     : GmshServer(), _client(client) {}
   ~onelabGmshServer(){}
-  int SystemCall(const char *str){ return ::SystemCall(str); }
+  int NonBlockingSystemCall(const char *str){ return SystemCall(str); }
   int NonBlockingWait(int socket, double waitint, double timeout)
   {
     double start = GetTimeInSeconds();
@@ -85,6 +85,84 @@ class onelabGmshServer : public GmshServer{
     }
   }
 };
+
+static void mergePostProcessingFile(const std::string &fileName)
+{
+  if(!FlGui::instance()->onelab->mergeAuto()) return;
+
+  int n = PView::list.size();
+  // store old step values
+  std::vector<int> steps(n, 0);
+  if(FlGui::instance()->onelab->showLastStep()){
+    for(int i = 0; i < PView::list.size(); i++)
+      steps[i] = (int)opt_view_nb_timestep(i, GMSH_GET, 0);
+  }
+
+  // check if there is a mesh in the file
+  FILE *fp = fopen(fileName.c_str(), "rb");
+  if(!fp){
+    Msg::Warning("Unable to open file '%s'", fileName.c_str());
+    return;
+  }
+  char header[256];
+  if(!fgets(header, sizeof(header), fp)) return;
+  bool haveMesh = false;
+  if(!strncmp(header, "$MeshFormat", 11)){
+    while(!feof(fp) && fgets(header, sizeof(header), fp)){
+      if(!strncmp(header, "$Nodes", 6)){
+        haveMesh = true;
+        break;
+      }
+      else if(!strncmp(header, "$NodeData", 9) ||
+              !strncmp(header, "$ElementData", 12) ||
+              !strncmp(header, "$ElementNodeData", 16)){
+        break;
+      }
+    }
+  }
+  fclose(fp);
+
+  // if there is a mesh, create a new model to store it (don't merge elements in
+  // the current mesh!)
+  GModel *old = GModel::current();
+  if(haveMesh){
+    GModel *m = new GModel();
+    GModel::setCurrent(m);
+  }
+  MergeFile(fileName);
+  GModel::setCurrent(old);
+  old->setVisibility(1);
+
+  // hide everything except the onelab X-Y graphs
+  if(FlGui::instance()->onelab->hideNewViews()){
+    for(int i = 0; i < PView::list.size(); i++){
+      if(PView::list[i]->getData()->getFileName().substr(0, 6) != "OneLab")
+        PView::list[i]->getOptions()->visible = 0;
+    }
+  }
+  else if(n != PView::list.size()){
+    // if we created new views, assume we only want to see those (and the
+    // onelab X-Y graphs)
+    for(int i = 0; i < n; i++){
+      if(PView::list[i]->getData()->getFileName().substr(0, 6) != "OneLab")
+        PView::list[i]->getOptions()->visible = 0;
+    }
+  }
+
+  // if we added steps, go to the last one
+  if(FlGui::instance()->onelab->showLastStep()){
+    steps.resize(PView::list.size(), 0);
+    for(int i = 0; i < PView::list.size(); i++){
+      int step = (int)opt_view_nb_timestep(i, GMSH_GET, 0);
+      if(step > steps[i])
+        opt_view_timestep(i, GMSH_SET|GMSH_GUI, step - 1);
+    }
+  }
+
+  drawContext::global()->draw();
+  if(n != (int)PView::list.size())
+    FlGui::instance()->menu->setContext(menu_post, 0);
+}
 
 bool onelab::localNetworkClient::run()
 {
@@ -274,24 +352,7 @@ bool onelab::localNetworkClient::run()
       Msg::Direct(1, "%-8.8s: %s", _name.c_str(), message.c_str());
       break;
     case GmshSocket::GMSH_MERGE_FILE:
-      {
-        if(!FlGui::instance()->onelab->mergeAuto()) break;
-        int n = PView::list.size();
-        for(int i = 0; i < n; i++){
-          if(PView::list[i]->getData()->getFileName().substr(0, 6) != "OneLab")
-            PView::list[i]->getOptions()->visible = 0;
-        }
-        MergeFile(message);
-        if(FlGui::instance()->onelab->hideNewViews()){
-          for(int i = n; i < PView::list.size(); i++){
-            if(PView::list[i]->getData()->getFileName().substr(0, 6) != "OneLab")
-              PView::list[i]->getOptions()->visible = 0;
-          }
-        }
-        drawContext::global()->draw();
-        if(n != (int)PView::list.size())
-          FlGui::instance()->menu->setContext(menu_post, 0);
-      }
+      mergePostProcessingFile(message);
       break;
     case GmshSocket::GMSH_PARSE_STRING:
       ParseString(message);
@@ -490,10 +551,11 @@ static bool updateOnelabGraph(const std::string &snum)
 {
   bool changed = false;
 
+  PView *view = 0;
+
   for(unsigned int i = 0; i < PView::list.size(); i++){
     if(PView::list[i]->getData()->getFileName() == "OneLab" + snum){
-      delete PView::list[i];
-      changed = true;
+      view = PView::list[i];
       break;
     }
   }
@@ -520,9 +582,21 @@ static bool updateOnelabGraph(const std::string &snum)
     for(unsigned int i = 0; i < y.size(); i++) x.push_back(i);
   }
   if(x.size() && y.size()){
-    PView *v = new PView(xName, yName, x, y);
-    v->getData()->setFileName("OneLab" + snum);
-    v->getOptions()->intervalsType = PViewOptions::Discrete;
+    if(view){
+      view->getData()->setXY(x, y);
+      view->getData()->setName(yName);
+      view->getOptions()->axesLabel[0] = xName;
+      view->setChanged(true);
+    }
+    else{
+      view = new PView(xName, yName, x, y);
+      view->getData()->setFileName("OneLab" + snum);
+      view->getOptions()->intervalsType = PViewOptions::Discrete;
+    }
+    changed = true;
+  }
+  else if(view){
+    delete view;
     changed = true;
   }
 
@@ -782,6 +856,14 @@ static void onelab_input_choice_file_edit_cb(Fl_Widget *w, void *data)
   SystemCall(ReplaceSubString("%s", file, prog));
 }
 
+static void onelab_input_choice_file_merge_cb(Fl_Widget *w, void *data)
+{
+  Fl_Input_Choice *but = (Fl_Input_Choice*)w->parent();
+  std::string file = FixWindowsPath(but->value());
+  MergeFile(file);
+  drawContext::global()->draw();
+}
+
 static void onelab_choose_executable_cb(Fl_Widget *w, void *data)
 {
   onelab::localNetworkClient *c = (onelab::localNetworkClient*)data;
@@ -847,10 +929,12 @@ onelabWindow::onelabWindow(int deltaFontSize)
   _gear->add("_Print database", 0, onelab_cb, (void*)"dump");
   _gear->add("Remesh automatically", 0, 0, 0, FL_MENU_TOGGLE);
   _gear->add("Merge results automatically", 0, 0, 0, FL_MENU_TOGGLE);
-  _gear->add("_Hide new views", 0, 0, 0, FL_MENU_TOGGLE);
+  _gear->add("Hide new views", 0, 0, 0, FL_MENU_TOGGLE);
+  _gear->add("_Always show last step", 0, 0, 0, FL_MENU_TOGGLE);
   ((Fl_Menu_Item*)_gear->menu())[2].set();
   ((Fl_Menu_Item*)_gear->menu())[3].set();
   ((Fl_Menu_Item*)_gear->menu())[4].clear();
+  ((Fl_Menu_Item*)_gear->menu())[5].set();
   _gearFrozenMenuSize = _gear->menu()->size();
 
   Fl_Box *resbox = new Fl_Box(WB, WB,
@@ -872,6 +956,10 @@ void onelabWindow::rebuildTree()
 
   int width = (int)(0.5 * _tree->w());
 
+  std::vector<std::string> closed;
+  for (Fl_Tree_Item *n = _tree->first(); n; n = n->next())
+    if(n->is_close()) closed.push_back(getPath(n));
+
   _tree->clear();
   _tree->sortorder(FL_TREE_SORT_ASCENDING);
   _tree->selectmode(FL_TREE_SELECT_NONE);
@@ -892,13 +980,16 @@ void onelabWindow::rebuildTree()
     std::string label = numbers[i].getShortName();
     _tree->begin();
     if(numbers[i].getChoices().size() == 2 &&
-       numbers[i].getChoices()[0] == 0 && numbers[i].getChoices()[1] == 1){
+       numbers[i].getChoices()[0] == 0 &&
+       numbers[i].getChoices()[1] == 1){
       Fl_Check_Button *but = new Fl_Check_Button(1, 1, width, 1);
       _treeWidgets.push_back(but);
       but->copy_label(label.c_str());
       but->value(numbers[i].getValue());
       but->callback(onelab_check_button_cb, (void*)n);
       n->widget(but);
+      if(numbers[i].getAttribute("Highlight").size())
+        n->labelbgcolor(FL_YELLOW);
     }
     else{
       inputRange *but = new inputRange
@@ -912,6 +1003,8 @@ void onelabWindow::rebuildTree()
       but->choices(numbers[i].getChoices());
       but->loop(numbers[i].getAttribute("Loop"));
       but->graph(numbers[i].getAttribute("Graph"));
+      if(numbers[i].getAttribute("Highlight").size())
+        but->color(FL_YELLOW);
       but->align(FL_ALIGN_RIGHT);
       but->callback(onelab_input_range_cb, (void*)n);
       but->when(FL_WHEN_RELEASE | FL_WHEN_ENTER_KEY);
@@ -946,11 +1039,17 @@ void onelabWindow::rebuildTree()
       menu.push_back(it);
       Fl_Menu_Item it2 = {"Edit...", 0, onelab_input_choice_file_edit_cb, (void*)n};
       menu.push_back(it2);
+      if(GuessFileFormatFromFileName(strings[i].getValue()) >= 0){
+        Fl_Menu_Item it3 = {"Merge...", 0, onelab_input_choice_file_merge_cb, (void*)n};
+        menu.push_back(it3);
+      }
     }
     Fl_Menu_Item it = {0};
     menu.push_back(it);
     but->menubutton()->copy(&menu[0]);
     but->value(strings[i].getValue().c_str());
+    if(strings[i].getAttribute("Highlight").size())
+      but->input()->color(FL_YELLOW);
     but->align(FL_ALIGN_RIGHT);
     but->callback(onelab_input_choice_cb, (void*)n);
     but->when(FL_WHEN_RELEASE | FL_WHEN_ENTER_KEY);
@@ -971,7 +1070,12 @@ void onelabWindow::rebuildTree()
     }
   }
 
+  for(unsigned int i = 0; i < closed.size(); i++)
+    _tree->close(closed[i].c_str());
+
   _tree->redraw();
+
+  FlGui::check(); // necessary e.g. on windows to avoid "ghosting"
 
   FL_NORMAL_SIZE += _deltaFontSize;
 }
@@ -1012,19 +1116,19 @@ void onelabWindow::setButtonMode(const std::string &butt0, const std::string &bu
     _butt[1]->label("Stop");
     _butt[1]->callback(onelab_cb, (void*)"stop");
     for(int i = 0; i < _gear->menu()->size(); i++)
-      if(i < 1 || i > 4) ((Fl_Menu_Item*)_gear->menu())[i].deactivate();
+      if(i < 1 || i > 5) ((Fl_Menu_Item*)_gear->menu())[i].deactivate();
   }
   else if(butt1 == "kill"){
     _butt[1]->activate();
     _butt[1]->label("Kill");
     _butt[1]->callback(onelab_cb, (void*)"kill");
     for(int i = 0; i < _gear->menu()->size(); i++)
-      if(i < 1 || i > 4) ((Fl_Menu_Item*)_gear->menu())[i].deactivate();
+      if(i < 1 || i > 5) ((Fl_Menu_Item*)_gear->menu())[i].deactivate();
   }
   else{
     _butt[1]->deactivate();
     for(int i = 0; i < _gear->menu()->size(); i++)
-      if(i < 1 || i > 4) ((Fl_Menu_Item*)_gear->menu())[i].deactivate();
+      if(i < 1 || i > 5) ((Fl_Menu_Item*)_gear->menu())[i].deactivate();
   }
 }
 

@@ -174,7 +174,7 @@ static SMetric3 metric_based_on_surface_curvature(const GFace *gf, double u, dou
 
 static SMetric3 metric_based_on_surface_curvature(const GEdge *ge, double u)
 {
-  SMetric3 mesh_size(1.e-05);
+  SMetric3 mesh_size(1.e-12);
   std::list<GFace *> faces = ge->faces();
   std::list<GFace *>::iterator it = faces.begin();
   int count = 0;
@@ -192,6 +192,7 @@ static SMetric3 metric_based_on_surface_curvature(const GEdge *ge, double u)
   double Crv = ge->curvature(u);
   double lambda =  ((2 * M_PI) /( fabs(Crv) *  CTX::instance()->mesh.minCircPoints ) );
   SMetric3 curvMetric (1./(lambda*lambda));
+  
   return intersection(mesh_size,curvMetric);
 }
 
@@ -319,8 +320,8 @@ double BGM_MeshSize(GEntity *ge, double U, double V,
   // lc from fields
   double l4 = MAX_LC;
   FieldManager *fields = ge->model()->getFields();
-  if(fields->background_field > 0){
-    Field *f = fields->get(fields->background_field);
+  if(fields->getBackgroundField() > 0){
+    Field *f = fields->get(fields->getBackgroundField());
     if(f) l4 = (*f)(X, Y, Z, ge);
   }
   
@@ -365,8 +366,8 @@ SMetric3 BGM_MeshMetric(GEntity *ge,
   // lc from fields
   SMetric3 l4(1./(MAX_LC*MAX_LC));
   FieldManager *fields = ge->model()->getFields();
-  if(fields->background_field > 0){
-    Field *f = fields->get(fields->background_field);
+  if(fields->getBackgroundField() > 0){
+    Field *f = fields->get(fields->getBackgroundField());
     if(f){
       if (!f->isotropic()){
         (*f)(X, Y, Z, l4,ge);
@@ -735,6 +736,17 @@ double backgroundMesh::operator() (double u, double v, double w) const
 
 double backgroundMesh::getAngle(double u, double v, double w) const
 {
+
+  // HACK FOR LEWIS 
+  // h = 1+30(y-x^2)^2  + (1-x)^2
+  //  double x = u;
+  //  double y = v;
+  //  double dhdx = 30 * 2 * (y-x*x) * (-2*x) - 2 * (1-x); 
+  //  double dhdy = 30 * 2 * (y-x*x); 
+  //  double angles = atan2(y,x*x);
+  //  crossField2d::normalizeAngle (angles);
+  //  return angles;
+
   double uv[3] = {u, v, w};
   double uv2[3];
   MElement *e = _octree->find(u, v, w, 2, true);
@@ -776,6 +788,15 @@ void backgroundMesh::print(const std::string &filename, GFace *gf,
               v1->x(),v1->y(),v1->z(),
               v2->x(),v2->y(),v2->z(),
               v3->x(),v3->y(),v3->z(),itv1->second,itv2->second,itv3->second);
+      /*
+      fprintf(f,"ST(%g,%g,%g,%g,%g,%g,%g,%g,%g) {%g,%g,%g};\n",
+              v1->x(),v1->y(),v1->z(),
+              v2->x(),v2->y(),v2->z(),
+              v3->x(),v3->y(),v3->z(),
+	      getAngle(v1->x(),v1->y(),v1->z()),
+	      getAngle(v2->x(),v2->y(),v2->z()),
+	      getAngle(v3->x(),v3->y(),v3->z()));
+      */
     }
     else {
       /*

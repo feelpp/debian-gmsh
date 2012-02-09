@@ -15,6 +15,7 @@
 #include <string>
 #include "Field.h"
 #include "MEdge.h"
+#include "meshGFaceDelaunayInsertion.h"
 class GModel;
 class GFace;
 class MLine;
@@ -23,6 +24,7 @@ class GEntity;
 class MTriangle;   
 class discreteEdge;
 class discreteFace;
+class MElement;
 
 #if defined(HAVE_ANN)
 #include <ANN/ANN.h>
@@ -49,19 +51,6 @@ struct Branch{
 
 class Centerline : public Field{
 
-  class cutAction : public FieldCallback{
-  private:
-    Centerline *myField;
-  public:
-    cutAction(Centerline *field, std::string help):FieldCallback(help) {
-      myField = field;
-    }
-    void run(){
-      printf("calling action cutMesh \n");
-      myField->cutMesh();
-    }
-  };
-
  protected: 
   GModel *current; //current GModel
   GModel *mod; //centerline GModel
@@ -71,7 +60,10 @@ class Centerline : public Field{
   ANNidxArray index;
   ANNdistArray dist;
   std::string fileName;
+  int nbPoints;
   double recombine;
+  int NF, NV, NE;
+  bool is_cut;
 
   //all (unique) lines of centerlines
   std::vector<MLine*> lines;
@@ -87,6 +79,7 @@ class Centerline : public Field{
 
   //the tubular surface mesh
   std::vector<MTriangle*> triangles;
+  
   //the lines cut of the tubular mesh by planes
   std::set<MEdge,Less_Edge> theCut;
   std::set<MVertex*> theCutV;
@@ -113,6 +106,8 @@ class Centerline : public Field{
 " using the following script:\n\n"
 "vmtk vmtkcenterlines -seedselector openprofiles -ifile mysurface.stl -ofile centerlines.vtp --pipe vmtksurfacewriter -ifile centerlines.vtp -ofile centerlines.vtk\n";
   }
+  
+  void cleanMesh();
 
   //isotropic operator for mesh size field function of distance to centerline
   double operator() (double x, double y, double z, GEntity *ge=0);
@@ -147,7 +142,7 @@ class Centerline : public Field{
 
   //create discrete faces
   void createFaces();
-  void remeshSplitMesh();
+  void createSplitCompounds();
 
   //Print for debugging
   void printSplit() const;
