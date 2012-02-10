@@ -4,6 +4,7 @@ gmsh (2.5.1~beta2~svn11301~dfsg-1) unstable; urgency=low
   * [a09b4fe] Add libgmm++-dev on platforms, where it is available.
   * [d673978] Fix typo in mmg3d-patch.
   * [fe2db58] Switch from opencascade to oce.
+  * [1fd7f23] Minor fix in py-modules (upstream has changed the build-place).
 
  -- Anton Gladky <gladky.anton@gmail.com>  Fri, 10 Feb 2012 20:26:12 +0100
 
