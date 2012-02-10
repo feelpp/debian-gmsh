@@ -6,3 +6,4 @@ use_tetgen.patch
 use_mmg3d.patch
 use_gmm.patch
 use_libann.patch
+switch_from_opencascade_to_oce.patch
