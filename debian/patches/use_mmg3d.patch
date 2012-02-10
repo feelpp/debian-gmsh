@@ -2,7 +2,7 @@ Desctiption: use packaged version of mmg3d instead of shipped with tarball,
  when it appears in Debian. See #651438
 Author: Christophe Trophime <christophe.trophime@lncmi.cnrs.fr>
 Reviewed-by: Anton Gladky <gladky.anton@gmail.com>
-Last-Update: 2012-01-16
+Last-Update: 2012-02-10
 
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
@@ -23,7 +23,7 @@ Last-Update: 2012-01-16
 +       message(STATUS "MMG3D " ${MMG3D_INC} " not Found - using contrib/mmg3d instead")
 +       add_subdirectory(contrib/mmg3d)
 +       include_directories(contrib/mmg3d/build/sources)
-+    endif(NOT MMG3D_INC)
++    endif(MMG3D_INC)
      set_config_option(HAVE_MMG3D "Mmg3d")
    endif(ENABLE_MMG3D)
  
