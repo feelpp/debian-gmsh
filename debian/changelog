@@ -1,9 +1,11 @@
-gmsh (2.5.1~beta2~svn11301~dfsg-1) UNRELEASED; urgency=low
+gmsh (2.5.1~beta2~svn11301~dfsg-1) unstable; urgency=low
 
+  * [4800d1e] Imported Upstream version 2.5.1~beta2~svn11301~dfsg
   * [a09b4fe] Add libgmm++-dev on platforms, where it is available.
-  * [0c9d9ba] Imported Upstream version 2.5.1~beta2~svn11301~dfsg
+  * [d673978] Fix typo in mmg3d-patch.
+  * [fe2db58] Switch from opencascade to oce.
 
- -- Anton Gladky <gladky.anton@gmail.com>  Thu, 09 Feb 2012 22:31:45 +0100
+ -- Anton Gladky <gladky.anton@gmail.com>  Fri, 10 Feb 2012 20:26:12 +0100
 
 gmsh (2.5.1~beta2~svn10875~dfsg-2) unstable; urgency=low
 
