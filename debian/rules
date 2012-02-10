@@ -40,4 +40,4 @@ override_dh_auto_build:
 	dh_auto_build -- shared
 	# To avoid the texi2dvi pb add LC_ALL=C
 	dh_auto_build -- pdf html info LC_ALL=C
-	chrpath -d $(BUILDDIR)/gmshpy/*.so
+	chrpath -d $(BUILDDIR)/wrappers/gmshpy/*.so

@@ -1,2 +1,2 @@
-debian/build/gmshpy/*.so gmshpy
-debian/build/gmshpy/*.py gmshpy
+debian/build/wrappers/gmshpy/*.so gmshpy
+debian/build/wrappers/gmshpy/*.py gmshpy
