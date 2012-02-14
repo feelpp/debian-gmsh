@@ -1,3 +1,10 @@
+gmsh (2.5.1~beta2~svn11301~dfsg-2) unstable; urgency=low
+
+  * [3039722] Refresh patches.
+  * [4ae519f] Add again PETSC to BD.
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Tue, 14 Feb 2012 21:19:45 +0100
+
 gmsh (2.5.1~beta2~svn11301~dfsg-1) unstable; urgency=low
 
   * [4800d1e] Imported Upstream version 2.5.1~beta2~svn11301~dfsg
