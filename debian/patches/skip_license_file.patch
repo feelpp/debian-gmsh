@@ -4,7 +4,7 @@ Last-Update: 2011-12-09
 
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -990,7 +990,7 @@
+@@ -1010,7 +1010,7 @@
  endif(UNIX)
  
  set(WELCOME_FILE ${CMAKE_CURRENT_SOURCE_DIR}/doc/WELCOME.txt)
@@ -13,7 +13,7 @@ Last-Update: 2011-12-09
  set(CREDITS_FILE ${CMAKE_CURRENT_SOURCE_DIR}/doc/CREDITS.txt)
  file(GLOB TUTORIAL_FILES ${CMAKE_CURRENT_SOURCE_DIR}/tutorial/?*.*)
  file(GLOB DEMO_FILES ${CMAKE_CURRENT_SOURCE_DIR}/demos/?*.*)
-@@ -1085,7 +1085,7 @@
+@@ -1105,7 +1105,7 @@
  if(MAKEINFO AND TEXI2PDF)
    add_custom_target(doc COMMAND ${CMAKE_COMMAND} -E tar zcf 
                      ${CMAKE_CURRENT_BINARY_DIR}/gmsh-${GMSH_VERSION}-doc.tgz
