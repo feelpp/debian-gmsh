@@ -14,7 +14,7 @@ Last-Update: 2011-12-09
    gl2png.cpp
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -953,7 +953,7 @@
+@@ -1017,7 +1017,7 @@
    message("WARNING: By enabling ENABLE_MSVC_STATIC_RUNTIME, shared library wont link. "
            "Change in msvc /MT flag to /MD in the shared project properties")
  endif(MSVC AND ENABLE_MSVC_STATIC_RUNTIME)		  
@@ -23,7 +23,7 @@ Last-Update: 2011-12-09
  
  # binary targets
  if(HAVE_FLTK)
-@@ -968,7 +968,7 @@
+@@ -1032,7 +1032,7 @@
    add_executable(gmsh_dynamic EXCLUDE_FROM_ALL Common/Main.cpp)
    target_link_libraries(gmsh_dynamic shared)
  endif(HAVE_FLTK)
