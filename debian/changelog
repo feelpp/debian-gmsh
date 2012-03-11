@@ -1,3 +1,19 @@
+gmsh (2.5.1~beta2~svn11604~dfsg-1) UNRELEASED; urgency=low
+
+  * Imported Upstream version 2.5.1~beta2~svn11604~dfsg
+  * Update copyright file due to released DEP-5.
+  * Add copyright info about voro++.
+  * Remove use_tetgen.patch. Was applied by upstream.
+  * Remove use_mmg3d.patch. Was applied by upstream.
+  * Remove use_gmm.patch. Was applied by upstream.
+  * Update patches.
+  * Remove use_libann.patch. Was applied by upstream.
+  * Update oce-patch.
+  * Install some files for compiling api_demos. Thanks to Christophe Trophime.
+  * Fix compilation of api_demos.
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Sun, 11 Mar 2012 22:32:24 +0100
+
 gmsh (2.5.1~beta2~svn11301~dfsg-2) unstable; urgency=low
 
   * [3039722] Refresh patches.
