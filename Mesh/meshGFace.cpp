@@ -299,14 +299,14 @@ static bool algoDelaunay2D(GFace *gf)
   if(!noSeam(gf))
     return false;
 
-  if(CTX::instance()->mesh.algo2d == ALGO_2D_DELAUNAY ||
-     CTX::instance()->mesh.algo2d == ALGO_2D_BAMG ||
-     CTX::instance()->mesh.algo2d == ALGO_2D_FRONTAL ||
-     CTX::instance()->mesh.algo2d == ALGO_2D_FRONTAL_QUAD ||
-     CTX::instance()->mesh.algo2d == ALGO_2D_BAMG)
+  if(gf->getMeshingAlgo() == ALGO_2D_DELAUNAY ||
+     gf->getMeshingAlgo() == ALGO_2D_BAMG ||
+     gf->getMeshingAlgo() == ALGO_2D_FRONTAL ||
+     gf->getMeshingAlgo() == ALGO_2D_FRONTAL_QUAD ||
+     gf->getMeshingAlgo() == ALGO_2D_BAMG)
     return true;
 
-  if(CTX::instance()->mesh.algo2d == ALGO_2D_AUTO && gf->geomType() == GEntity::Plane)
+  if(gf->getMeshingAlgo() == ALGO_2D_AUTO && gf->geomType() == GEntity::Plane)
     return true;
 
   return false;
@@ -478,7 +478,7 @@ void filterOverlappingElements(int dim, std::vector<MElement*> &e,
 
 void modifyInitialMeshForTakingIntoAccountBoundaryLayers(GFace *gf)
 {
-  BoundaryLayerColumns *_columns = buidAdditionalPoints2D (gf, M_PI/6.);
+  BoundaryLayerColumns *_columns = buidAdditionalPoints2D (gf);
 
   if (!_columns)return;
 
@@ -521,7 +521,7 @@ void modifyInitialMeshForTakingIntoAccountBoundaryLayers(GFace *gf)
 
 	  //avoid convergent errors
 	  if (dv2.length() < 0.5 * dv.length())break;
-	  blQuads.push_back(new MQuadrangle(v11,v12,v22,v21));
+	  blQuads.push_back(new MQuadrangle(v11,v21,v22,v12));
 	  fprintf(ff2,"SQ (%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g){1,1,1,1};\n",
 		  v11->x(),v11->y(),v11->z(),
 		  v12->x(),v12->y(),v12->z(),
@@ -1102,19 +1102,22 @@ bool meshGenerator(GFace *gf, int RECUR_ITER,
   BDS2GMSH(m, gf, recoverMap);
 
   // BOUNDARY LAYER
-  if (!onlyInitialMesh) modifyInitialMeshForTakingIntoAccountBoundaryLayers(gf);
+  if (!onlyInitialMesh) {
+    if (gf->getMeshingAlgo() == ALGO_2D_FRONTAL_QUAD) buildBackGroundMesh (gf);
+    modifyInitialMeshForTakingIntoAccountBoundaryLayers(gf);
+  }
 
   // the delaunay algo is based directly on internal gmsh structures
   // BDS mesh is passed in order not to recompute local coordinates of
   // vertices
   if(algoDelaunay2D(gf) && !onlyInitialMesh){
-    if(CTX::instance()->mesh.algo2d == ALGO_2D_FRONTAL)
+    if(gf->getMeshingAlgo() == ALGO_2D_FRONTAL)
       bowyerWatsonFrontal(gf);
-    else if(CTX::instance()->mesh.algo2d == ALGO_2D_FRONTAL_QUAD){
+    else if(gf->getMeshingAlgo() == ALGO_2D_FRONTAL_QUAD){
       bowyerWatsonFrontalLayers(gf,true);
     }
-    else if(CTX::instance()->mesh.algo2d == ALGO_2D_DELAUNAY ||
-            CTX::instance()->mesh.algo2d == ALGO_2D_AUTO)
+    else if(gf->getMeshingAlgo() == ALGO_2D_DELAUNAY ||
+            gf->getMeshingAlgo() == ALGO_2D_AUTO)
       bowyerWatson(gf);
     else {
       bowyerWatson(gf);
@@ -1138,7 +1141,7 @@ bool meshGenerator(GFace *gf, int RECUR_ITER,
 
   if((CTX::instance()->mesh.recombineAll || gf->meshAttributes.recombine) &&
      !CTX::instance()->mesh.optimizeLloyd && !onlyInitialMesh)
-    recombineIntoQuadsIterative(gf);
+    recombineIntoQuads(gf);
 
   computeElementShapes(gf, gf->meshStatistics.worst_element_shape,
                        gf->meshStatistics.average_element_shape,
@@ -1710,12 +1713,12 @@ static bool meshGeneratorPeriodic(GFace *gf, bool debug = true)
   }
 
   if(algoDelaunay2D(gf)){
-    if(CTX::instance()->mesh.algo2d == ALGO_2D_FRONTAL)
+    if(gf->getMeshingAlgo() == ALGO_2D_FRONTAL)
       bowyerWatsonFrontal(gf);
-    else if(CTX::instance()->mesh.algo2d == ALGO_2D_FRONTAL_QUAD)
+    else if(gf->getMeshingAlgo() == ALGO_2D_FRONTAL_QUAD)
       bowyerWatsonFrontalLayers(gf,true);
-    else if(CTX::instance()->mesh.algo2d == ALGO_2D_DELAUNAY ||
-            CTX::instance()->mesh.algo2d == ALGO_2D_AUTO)
+    else if(gf->getMeshingAlgo() == ALGO_2D_DELAUNAY ||
+            gf->getMeshingAlgo() == ALGO_2D_AUTO)
       bowyerWatson(gf);
     else
       meshGFaceBamg(gf);
@@ -1750,6 +1753,7 @@ int debugSurface = -1; //-1;
 
 void meshGFace::operator() (GFace *gf)
 {
+
   gf->model()->setCurrentMeshEntity(gf);
 
   if(debugSurface >= 0 && gf->tag() != debugSurface){
@@ -1787,7 +1791,7 @@ void meshGFace::operator() (GFace *gf)
 
   const char *algo = "Unknown";
 
-  switch(CTX::instance()->mesh.algo2d){
+  switch(gf->getMeshingAlgo()){
   case ALGO_2D_MESHADAPT : algo = "MeshAdapt"; break;
   case ALGO_2D_FRONTAL : algo = "Frontal"; break;
   case ALGO_2D_FRONTAL_QUAD : algo = "Frontal Quad"; break;
@@ -1948,7 +1952,7 @@ void partitionAndRemesh(GFaceCompound *gf)
               num_gfc, pf->tag());
 
     GFaceCompound *gfc = new GFaceCompound(gf->model(), num_gfc, f_compound, U0,
-                                            gf->getTypeOfMapping());
+					   gf->getTypeOfCompound());
 
     gfc->meshAttributes.recombine = gf->meshAttributes.recombine;
     gf->model()->add(gfc);

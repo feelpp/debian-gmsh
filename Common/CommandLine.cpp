@@ -279,6 +279,13 @@ void GetOptions(int argc, char *argv[])
         CTX::instance()->mesh.optimize = 1;
         i++;
       }
+      else if(!strcmp(argv[i] + 1, "bunin")) {
+        i++;
+        if(argv[i])
+          CTX::instance()->mesh.bunin = atoi(argv[i++]);
+        else
+          Msg::Fatal("Missing cavity size in bunin optimization");
+      }
       else if(!strcmp(argv[i] + 1, "optimize_netgen")) {
         CTX::instance()->mesh.optimizeNetgen = 1;
         i++;
@@ -657,7 +664,7 @@ void GetOptions(int argc, char *argv[])
         PrintUsage(argv[0]);
         Msg::Exit(0);
       }
-      else if(!strcmp(argv[i] + 1, "v")) {
+      else if(!strcmp(argv[i] + 1, "v") || !strcmp(argv[i] + 1, "verbose")) {
         i++;
         if(argv[i])
           Msg::SetVerbosity(atoi(argv[i++]));

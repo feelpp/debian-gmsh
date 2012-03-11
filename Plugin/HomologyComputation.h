@@ -22,7 +22,7 @@ class GMSH_HomologyComputationPlugin : public GMSH_PostPlugin
 {
  public:
   GMSH_HomologyComputationPlugin(){}
-  std::string getName() const { return "Homology"; }
+  std::string getName() const { return "HomologyComputation"; }
   std::string getShortHelp() const
   {
     return "Compute relative (co)homology spaces";
@@ -34,6 +34,7 @@ class GMSH_HomologyComputationPlugin : public GMSH_PostPlugin
   int getNbOptionsStr() const;
   StringXString *getOptionStr(int iopt);
   PView *execute(PView *);
+  bool parseStringOpt(int stringOpt, std::vector<int>& intList);
 };
 
 #endif

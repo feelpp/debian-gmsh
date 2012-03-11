@@ -128,6 +128,10 @@ void projectInMeanPlane(double *xn, double *yn);
     default: u =  0.; v =  0.; break;
     }
   }
+  virtual SPoint3 barycenterUVW()
+  {
+    return SPoint3(0., 0., 0.);
+  }
   virtual void revert()
   {
     MVertex *tmp = _v[1]; _v[1] = _v[3]; _v[3] = tmp;
@@ -148,8 +152,7 @@ void projectInMeanPlane(double *xn, double *yn);
   // criterion.
   virtual double getInnerRadius();
   virtual double getOuterRadius();
- private:
-  int edges_quad(const int edge, const int vert) const
+  static int edges_quad(const int edge, const int vert)
   {
     static const int e[4][2] = {
       {0, 1},
@@ -241,6 +244,10 @@ class MQuadrangle8 : public MQuadrangle {
   {
     num < 4 ? MQuadrangle::getNode(num, u, v, w) : MElement::getNode(num, u, v, w);
   }
+  virtual SPoint3 barycenterUVW()
+  {
+    return SPoint3(0., 0., 0.);
+  }
 };
 
 /*
@@ -316,6 +323,10 @@ class MQuadrangle9 : public MQuadrangle {
   virtual void getNode(int num, double &u, double &v, double &w)
   {
     num < 4 ? MQuadrangle::getNode(num, u, v, w) : MElement::getNode(num, u, v, w);
+  }
+  virtual SPoint3 barycenterUVW()
+  {
+    return SPoint3(0., 0., 0.);
   }
 };
 
@@ -412,6 +423,10 @@ class MQuadrangleN : public MQuadrangle {
   virtual void getNode(int num, double &u, double &v, double &w)
   {
     num < 4 ? MQuadrangle::getNode(num, u, v, w) : MElement::getNode(num, u, v, w);
+  }
+  virtual SPoint3 barycenterUVW()
+  {
+    return SPoint3(0., 0., 0.);
   }
 };
 

@@ -125,17 +125,6 @@ StringXString SolverOptions_String[] = {
   { F|S, "Executable4" , opt_solver_executable4 , "" ,
     "System command to launch solver 4" },
 
-  { F|S, "Hostname0" , opt_solver_hostname0 , "",
-    "Hostname where to launch solver 0" },
-  { F|S, "Hostname1" , opt_solver_hostname1 , "" ,
-    "Hostname where to launch solver 1" },
-  { F|S, "Hostname2" , opt_solver_hostname2 , "" ,
-    "Hostname where to launch solver 2" },
-  { F|S, "Hostname3" , opt_solver_hostname3 , "" ,
-    "Hostname where to launch solver 3" },
-  { F|S, "Hostname4" , opt_solver_hostname4 , "" ,
-    "Hostname where to launch solver 4" },
-
   { F|S, "Name0" , opt_solver_name0 , "GetDP" ,
     "Name of solver 0" },
   { F|S, "Name1" , opt_solver_name1 , "" ,
@@ -146,6 +135,17 @@ StringXString SolverOptions_String[] = {
     "Name of solver 3" },
   { F|S, "Name4" , opt_solver_name4 , "" ,
     "Name of solver 4" },
+
+  { F|S, "RemoteLogin0" , opt_solver_remote_login0 , "",
+    "Command to login to a remote host to launch solver 0" },
+  { F|S, "RemoteLogin1" , opt_solver_remote_login1 , "" ,
+    "Command to login to a remote host to launch solver 1" },
+  { F|S, "RemoteLogin2" , opt_solver_remote_login2 , "" ,
+    "Command to login to a remote host to launch solver 2" },
+  { F|S, "RemoteLogin3" , opt_solver_remote_login3 , "" ,
+    "Command to login to a remote host to launch solver 3" },
+  { F|S, "RemoteLogin4" , opt_solver_remote_login4 , "" ,
+    "Command to login to a remote host to launch solver 4" },
 
   { F|O, "SocketName" , opt_solver_socket_name ,
 #if defined(WIN32) && !defined(__CYGWIN__)
@@ -785,6 +785,8 @@ StringXNumber MeshOptions_Number[] = {
     "Field format for Nastran BDF files (0=free, 1=small, 2=large)" },
   { F|O, "Binary" , opt_mesh_binary , 0. ,
     "Write mesh files in binary format (if possible)" },
+  { F|O, "Bunin" , opt_mesh_bunin , 0. ,
+    "Apply Bunin optimization on quad meshes (the parameter is the maximal size of a cavity that may be remeshed)" },
 
   { F|O, "CgnsImportOrder" , opt_mesh_cgns_import_order , 1. ,
    "Enable the creation of high-order mesh from CGNS structured meshes."
@@ -908,7 +910,7 @@ StringXNumber MeshOptions_Number[] = {
   { F|O, "MshFileVersion" , opt_mesh_msh_file_version , 2.2 ,
     "Version of the MSH file format to use" },
   { F|O, "MshFilePartitioned" , opt_mesh_msh_file_partitioned , 0. ,
-    "Split MSH file by mesh partition" },
+    "Split MSH file by mesh partition (0: no, 1: yes, 2: create physicals by partition)" },
   { F|O, "MultiplePassesMeshes" , opt_mesh_multiple_passes , 0. ,
     "Do a first simple mesh and use it for complex background meshes (curvatures...)" },
 
@@ -996,7 +998,7 @@ StringXNumber MeshOptions_Number[] = {
   { F|O, "RemeshAlgorithm" , opt_mesh_remesh_algo , 0 ,
     "Remeshing algorithm (0=no split, 1=automatic, 2=automatic only with metis)" },
   { F|O, "RemeshParametrization" , opt_mesh_remesh_param , 0 ,
-    "Remsh Parametrization (0=harmonic, 1=conformal, 2=rbf harmonic)" },
+    "Remeshing using discrete parametrization (0=harmonic_circle, 1=conformal, 2=rbf, 3=harmonic_plane, 4=convex_circle, 5=convex_plane, 6=harmonic square" },
 
   { F|O, "RefineSteps" , opt_mesh_refine_steps , 10 ,
     "Number of refinement steps in the MeshAdapt-based 2D algorithms" },
@@ -1125,7 +1127,8 @@ StringXNumber ViewOptions_Number[] = {
   { F|O, "ArrowSizeMin" , opt_view_arrow_size_min , 0. ,
     "Minimum display size of arrows (in pixels)" },
   { F|O, "AutoPosition" , opt_view_auto_position , 1. ,
-    "Position the scale or 2D plot automatically" },
+    "Position the scale or 2D plot automatically (0: manual, 1: automatic, 2: top left, "
+    "3: top right, 4: bottom left, 5: bottom right, 6: top, 7: bottom, 8: left, 9: right)" },
   { F|O, "Axes" , opt_view_axes , 0 ,
     "Axes (0=none, 1=simple axes, 2=box, 3=full grid, 4=open grid, 5=ruler)" },
   { F|O, "AxesMikado" , opt_view_axes_mikado , 0. ,
@@ -1659,6 +1662,9 @@ StringXColor ViewOptions_Color[] = {
   { F|O, "Text2D" , opt_view_color_text2d , ELECOL, "2D text color" },
   { F|O, "Text3D" , opt_view_color_text3d , ELECOL, "3D text color" },
   { F|O, "Axes" , opt_view_color_axes , ELECOL, "Axes color" },
+  { F|O, "Background2D" , opt_view_color_background2d ,
+    {255, 255, 255, 200}, {255, 255, 255, 200}, {255, 255, 255, 200},
+    "Bacground color for 2D plots" },
   { 0, 0 , 0 , {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0} , 0 }
 } ;
 

@@ -140,6 +140,10 @@ class MTetrahedron : public MElement {
     default: u = 0.; v = 0.; w = 0.; break;
     }
   }
+  virtual SPoint3 barycenterUVW()
+  {
+    return SPoint3(.25, .25, .25);
+  }
   virtual bool isInside(double u, double v, double w)
   {
     double tol = _isInsideTolerance;
@@ -149,8 +153,7 @@ class MTetrahedron : public MElement {
   }
   virtual void getIntegrationPoints(int pOrder, int *npts, IntPt **pts);
   virtual SPoint3 circumcenter();
- private:
-  int edges_tetra(const int edge, const int vert) const
+  static int edges_tetra(const int edge, const int vert)
   {
     static const int e[6][2] = {
       {0, 1},
@@ -162,7 +165,7 @@ class MTetrahedron : public MElement {
     };
     return e[edge][vert];
   }
-  int faces_tetra(const int face, const int vert) const
+  static int faces_tetra(const int face, const int vert)
   {
     static const int f[4][3] = {
       {0, 2, 1},
@@ -210,6 +213,7 @@ class MTetrahedron10 : public MTetrahedron {
     for(int i = 0; i < 6; i++) _vs[i]->setPolynomialOrder(2);
   }
   ~MTetrahedron10(){}
+  virtual double distoShapeMeasure();
   virtual int getPolynomialOrder() const { return 2; }
   virtual int getNumVertices() const { return 10; }
   virtual MVertex *getVertex(int num){ return num < 4 ? _v[num] : _vs[num - 4]; }

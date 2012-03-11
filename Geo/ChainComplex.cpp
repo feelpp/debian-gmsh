@@ -34,15 +34,14 @@ ChainComplex::ChainComplex(CellComplex* cellComplex, int domain)
     for(CellComplex::citer cit = cellComplex->firstCell(dim);
 	cit != cellComplex->lastCell(dim); cit++){
       Cell* cell = *cit;
-      cell->setIndex(0);
       cols--;
       if((domain == 0 && !cell->inSubdomain()) || domain == 1
 	 || (domain == 2 && cell->inSubdomain()) ){
         cols++;
-	cell->setIndex(index);
-	index++;
-	_cellIndices[dim][cell] = cell->getIndex();
+_cellIndices[dim][cell] = index;
+        index++;
       }
+      else _cellIndices[dim][cell] = 0;
     }
     if(dim > 0) rows = lastCols;
     lastCols = cols;
@@ -73,23 +72,24 @@ ChainComplex::ChainComplex(CellComplex* cellComplex, int domain)
             if((domain == 0 && !bdCell->inSubdomain()) || domain == 1
 	       || (domain == 2 && cell->inSubdomain()) ){
               int old_elem = 0;
-
-              if(bdCell->getIndex() > (int)gmp_matrix_rows( _HMatrix[dim])
-		 || bdCell->getIndex() < 1
-                 || cell->getIndex() > (int)gmp_matrix_cols( _HMatrix[dim])
-		 || cell->getIndex() < 1){
+              int bdCellIndex = getCellIndex(bdCell);
+              int cellIndex = getCellIndex(cell);
+              if(bdCellIndex > (int)gmp_matrix_rows( _HMatrix[dim])
+		 || bdCellIndex < 1
+                 || cellIndex > (int)gmp_matrix_cols( _HMatrix[dim])
+		 || cellIndex < 1){
                 Msg::Debug("Index out of bound! HMatrix: %d", dim);
               }
               else{
-                gmp_matrix_get_elem(elem, bdCell->getIndex(),
-				    cell->getIndex(), _HMatrix[dim]);
+                gmp_matrix_get_elem(elem, bdCellIndex,
+				    cellIndex, _HMatrix[dim]);
                 old_elem = mpz_get_si(elem);
                 mpz_set_si(elem, old_elem + it->second.get());
                 if( abs((old_elem + it->second.get())) > 1){
 		  //printf("Incidence index: %d, in HMatrix: %d. \n", (old_elem + (*it).second), dim);
                 }
-                gmp_matrix_set_elem(elem, bdCell->getIndex(),
-				    cell->getIndex(), _HMatrix[dim]);
+                gmp_matrix_set_elem(elem, bdCellIndex,
+                                    cellIndex, _HMatrix[dim]);
               }
             }
           }
@@ -441,12 +441,8 @@ gmp_matrix* ChainComplex::getBasis(int dim, int basis)
 void ChainComplex::getBasisChain(std::map<Cell*, int, Less_Cell>& chain,
 				 int num, int dim, int basis, bool deform)
 {
-  gmp_matrix* basisMatrix;
-  if(basis == 0) basisMatrix = getBasis(dim, 0);
-  else if(basis == 1) basisMatrix = getBasis(dim, 1);
-  else if(basis == 2) basisMatrix = getBasis(dim, 2);
-  else if(basis == 3) basisMatrix = getBasis(dim, 3);
-  else return;
+  if(basis < 0 || basis > 3) return;
+  gmp_matrix* basisMatrix = getBasis(dim, basis);
 
   chain.clear();
   if(dim < 0 || dim > 4) return;
@@ -473,9 +469,10 @@ void ChainComplex::getBasisChain(std::map<Cell*, int, Less_Cell>& chain,
       std::map<Cell*, int, Less_Cell > subCells;
       cell->getCells(subCells);
       for(Cell::citer it = subCells.begin(); it != subCells.end(); it++){
-	Cell* subCell = (*it).first;
-	int coeff = (*it).second;
-	chain[subCell] = coeff*elemi*torsion;
+	Cell* subCell = it->first;
+	int coeff = it->second*elemi*torsion;
+        if(coeff == 0) continue;
+	chain[subCell] = coeff;
       }
     }
   }
@@ -746,7 +743,7 @@ void HomologySequence::findIcMaps()
 	  cit != _complex->lastCell(i); cit++){
 	Cell* cell = cit->first;
 	int row = cit->second;
-	int col = _subcomplex->cellIndex(cell);
+	int col = _subcomplex->getCellIndex(cell);
 	//printf("row %d, col %d. \n", row, col);
 	if(col != 0) gmp_matrix_set_elem(one, row, col, _Ic_sub[i]);
       }
@@ -761,7 +758,7 @@ void HomologySequence::findIcMaps()
 	  cit != _complex->lastCell(i); cit++){
 	Cell* cell = cit->first;
 	int row = cit->second;
-	int col = _relcomplex->cellIndex(cell);
+	int col = _relcomplex->getCellIndex(cell);
 	//printf("row %d, col %d. \n", row, col);
 	if(col != 0) gmp_matrix_set_elem(one, row, col, _Ic_rel[i]);
       }

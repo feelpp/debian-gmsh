@@ -58,6 +58,7 @@ class MTriangle : public MElement {
   virtual double angleShapeMeasure();
   virtual int getNumVertices() const { return 3; }
   virtual MVertex *getVertex(int num){ return _v[num]; }
+  virtual void setVertex(int num,  MVertex *v){_v[num]=v;}
   virtual void xyz2uvw(double xyz[3], double uvw[3]);
   virtual MVertex *getOtherVertex(MVertex *v1, MVertex *v2)
   {
@@ -135,6 +136,10 @@ class MTriangle : public MElement {
     default: u = 0.; v = 0.; break;
     }
   }
+  virtual SPoint3 barycenterUVW()
+  {
+    return SPoint3(1/3., 1/3., 0.);
+  }
   virtual bool isInside(double u, double v, double w)
   {
     double tol = _isInsideTolerance;
@@ -144,8 +149,7 @@ class MTriangle : public MElement {
   }
   virtual void getIntegrationPoints(int pOrder, int *npts, IntPt **pts);
   virtual SPoint3 circumcenter();
- private:
-  int edges_tri(const int edge, const int vert) const
+  static int edges_tri(const int edge, const int vert)
   {
     static const int e[3][2] = {
       {0, 1},
