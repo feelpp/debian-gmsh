@@ -4,6 +4,7 @@
 # bugs and problems to <gmsh@geuz.org>.
 
 set(SRC
+  intersectCurveSurface.cpp
   GEntity.cpp STensor3.cpp
     GVertex.cpp GEdge.cpp GFace.cpp GRegion.cpp
     GEdgeLoop.cpp GEdgeCompound.cpp GFaceCompound.cpp
@@ -40,7 +41,7 @@ set(SRC
     MLine.cpp MTriangle.cpp MQuadrangle.cpp MTetrahedron.cpp
     MHexahedron.cpp MPrism.cpp MPyramid.cpp MElementCut.cpp
   MZone.cpp MZoneBoundary.cpp
-  Cell.cpp CellComplex.cpp ChainComplex.cpp Homology.cpp
+  Cell.cpp CellComplex.cpp ChainComplex.cpp Homology.cpp Chain.cpp
   Curvature.cpp
   MVertexBoundaryLayerData.cpp
 )

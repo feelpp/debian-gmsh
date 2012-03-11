@@ -29,6 +29,9 @@ class onelabWindow{
   std::string _title;
   int _deltaFontSize;
   bool _stop;
+  int _itemWidth;
+  void _addParameter(onelab::number &p);
+  void _addParameter(onelab::string &p);
  public:
   onelabWindow(int deltaFontSize=0);
   int x(){ return _win->x(); }
@@ -36,6 +39,7 @@ class onelabWindow{
   void rebuildSolverList();
   void rebuildTree();
   void setButtonMode(const std::string &butt0, const std::string &butt1);
+  bool isBusy();
   void show(){ _win->show(); }
   int shown(){ return _win->shown(); }
   int meshAuto(){ return _gear->menu()[2].value(); }
@@ -48,8 +52,8 @@ class onelabWindow{
     _tree->item_pathname(path, 1024, item);
     return std::string(path);
   }
-  void addSolver(const std::string &name, const std::string &commandLine,
-                 int index);
+  void addSolver(const std::string &name, const std::string &exe,
+                 const std::string &hostName, int index);
   void removeSolver(const std::string &name);
   void checkForErrors(const std::string &client);
   bool stop(){ return _stop; }

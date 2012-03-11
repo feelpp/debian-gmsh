@@ -118,6 +118,7 @@ int GModel::exportDiscreteGEOInternals()
 
 int GModel::importGEOInternals()
 {
+
   if(Tree_Nbr(_geo_internals->Points)) {
     List_T *points = Tree2List(_geo_internals->Points);
     for(int i = 0; i < List_Nbr(points); i++){
@@ -182,19 +183,25 @@ int GModel::importGEOInternals()
           if(gf)
             comp.push_back(gf);
         }
-        std::list<GEdge*> U0;
+	std::list<GEdge*> b[4];
         for(int j = 0; j < 4; j++){
-          for(unsigned int k = 0; k < s->compoundBoundary[j].size(); k++){
-            GEdge *ge = getEdgeByTag(s->compoundBoundary[j][k]);
-            if(ge) U0.push_back(ge);
-          }
-        }
+	  for(unsigned int k = 0; k < s->compoundBoundary[j].size(); k++){
+	    GEdge *ge = getEdgeByTag(s->compoundBoundary[j][k]);
+	    if(ge) b[j].push_back(ge);
+	  }
+	}
         int param = CTX::instance()->mesh.remeshParam;
-        GFaceCompound::typeOfMapping typ = GFaceCompound::HARMONIC;
-        if (param == 1) typ =  GFaceCompound::CONFORMAL;
-        if (param == 2) typ =  GFaceCompound::RBF;
+
+	GFaceCompound::typeOfCompound typ = GFaceCompound::HARMONIC_CIRCLE;
+	if (param == 1) typ =  GFaceCompound::CONFORMAL_SPECTRAL;
+	if (param == 2) typ =  GFaceCompound::RADIAL_BASIS;
+	if (param == 3) typ =  GFaceCompound::HARMONIC_PLANE;
+	if (param == 4) typ =  GFaceCompound::CONVEX_CIRCLE;
+	if (param == 5) typ =  GFaceCompound::CONVEX_PLANE;
+	if (param == 6) typ =  GFaceCompound::HARMONIC_SQUARE;
+
         int algo = CTX::instance()->mesh.remeshAlgo;
-        f = new GFaceCompound(this, s->Num, comp, U0, typ, algo);
+	f = new GFaceCompound(this, s->Num, comp, b[0], b[1], b[2], b[3], typ, algo);
 
         f->meshAttributes.recombine = s->Recombine;
         f->meshAttributes.recombineAngle = s->RecombineAngle;

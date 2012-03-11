@@ -1,3 +1,8 @@
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+//
+// See the LICENSE.txt file for license information. Please report all
+// bugs and problems to <gmsh@geuz.org>.
+
 #include "GmshConfig.h"
 #if defined(HAVE_PETSC)
 #include "petsc.h"
@@ -13,17 +18,17 @@ template class linearSystemPETSc<double>;
 template class linearSystemPETSc<std::complex<double> >;
 #endif
 
-
-
-void linearSystemPETScBlockDouble::_kspCreate() {
-  KSPCreate(PETSC_COMM_WORLD, &_ksp);
+void linearSystemPETScBlockDouble::_kspCreate()
+{
+  KSPCreate(_sequential ? PETSC_COMM_SELF : PETSC_COMM_WORLD, &_ksp);
   if (this->_parameters.count("petscPrefix"))
     KSPAppendOptionsPrefix(_ksp, this->_parameters["petscPrefix"].c_str());
   KSPSetFromOptions(_ksp);
   _kspAllocated = true;
 }
 
-void linearSystemPETScBlockDouble::addToMatrix(int row, int col, const fullMatrix<double> &val)
+void linearSystemPETScBlockDouble::addToMatrix(int row, int col,
+                                               const fullMatrix<double> &val)
 {
   if (!_entriesPreAllocated)
     preAllocateEntries();
@@ -58,7 +63,8 @@ void linearSystemPETScBlockDouble::addToMatrix(int row, int col, const fullMatri
   #endif
 }
 
-void linearSystemPETScBlockDouble::addToRightHandSide(int row, const fullMatrix<double> &val)
+void linearSystemPETScBlockDouble::addToRightHandSide(int row,
+                                                      const fullMatrix<double> &val)
 {
   for (int ii = 0; ii < _blockSize; ii++) {
     PetscInt i = row * _blockSize + ii;
@@ -67,12 +73,14 @@ void linearSystemPETScBlockDouble::addToRightHandSide(int row, const fullMatrix<
   }
 }
 
-void linearSystemPETScBlockDouble::getFromMatrix(int row, int col, fullMatrix<double> &val ) const
+void linearSystemPETScBlockDouble::getFromMatrix(int row, int col,
+                                                 fullMatrix<double> &val ) const
 {
   Msg::Error("getFromMatrix not implemented for PETSc");
 }
 
-void linearSystemPETScBlockDouble::getFromRightHandSide(int row, fullMatrix<double> &val) const
+void linearSystemPETScBlockDouble::getFromRightHandSide(int row,
+                                                        fullMatrix<double> &val) const
 {
   for (int i = 0; i < _blockSize; i++) {
     int ii = row*_blockSize +i;
@@ -95,7 +103,6 @@ void linearSystemPETScBlockDouble::addToSolution(int row, const fullMatrix<doubl
   }
 }
 
-
 void linearSystemPETScBlockDouble::getFromSolution(int row, fullMatrix<double> &val) const
 {
   for (int i = 0; i < _blockSize; i++) {
@@ -112,17 +119,19 @@ void linearSystemPETScBlockDouble::getFromSolution(int row, fullMatrix<double> &
 
 void linearSystemPETScBlockDouble::allocate(int nbRows)
 {
+  MPI_Comm comm = _sequential ? PETSC_COMM_SELF: PETSC_COMM_WORLD;
   if (this->_parameters.count("petscOptions"))
     PetscOptionsInsertString(this->_parameters["petscOptions"].c_str());
   _blockSize = strtol (_parameters["blockSize"].c_str(), NULL, 10);
   if (_blockSize == 0)
     Msg::Error ("'blockSize' parameters must be set for linearSystemPETScBlock");
   clear();
-  MatCreate(PETSC_COMM_WORLD, &_a);
+  MatCreate(comm, &_a);
   MatSetSizes(_a,nbRows * _blockSize, nbRows * _blockSize, PETSC_DETERMINE, PETSC_DETERMINE);
-  if (Msg::GetCommSize() > 1) {
+  if (Msg::GetCommSize() > 1 && !_sequential) {
     MatSetType(_a, MATMPIBAIJ);
-  } else {
+  }
+  else {
     MatSetType(_a, MATSEQBAIJ);
   }
   if (_parameters.count("petscPrefix"))
@@ -136,7 +145,7 @@ void linearSystemPETScBlockDouble::allocate(int nbRows)
   _localRowEnd /= _blockSize;
   // override the default options with the ones from the option
   // database (if any)
-  VecCreate(PETSC_COMM_WORLD, &_x);
+  VecCreate(comm, &_x);
   VecSetSizes(_x, nbRows * _blockSize, PETSC_DETERMINE);
   // override the default options with the ones from the option
   // database (if any)
@@ -185,7 +194,9 @@ int linearSystemPETScBlockDouble::systemSolve()
   KSPSolve(_ksp, _b, _x);
   return 1;
 }
-void linearSystemPETScBlockDouble::insertInSparsityPattern (int i, int j) {
+
+void linearSystemPETScBlockDouble::insertInSparsityPattern (int i, int j)
+{
   i -= _localRowStart;
   if (i<0 || i>= _localSize) return;
   _sparsity.insertEntry (i,j);
@@ -255,12 +266,12 @@ void linearSystemPETScBlockDouble::zeroSolution()
   }
 }
 
-
-linearSystemPETScBlockDouble::linearSystemPETScBlockDouble()
+linearSystemPETScBlockDouble::linearSystemPETScBlockDouble(bool sequential)
 {
   _entriesPreAllocated = false;
   _isAllocated = false;
   _kspAllocated = false;
+  _sequential = sequential;
 }
 
 double linearSystemPETScBlockDouble::normInfRightHandSide() const

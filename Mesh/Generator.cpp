@@ -504,6 +504,7 @@ static void Mesh2D(GModel *m)
 
   // collapseSmallEdges(*m);
   
+#if defined(HAVE_ANN)
   //For centerline field, clean the cut parts
   Centerline *center = 0;
   FieldManager *fields = GModel::current()->getFields();
@@ -512,7 +513,8 @@ static void Mesh2D(GModel *m)
     center = dynamic_cast<Centerline*> (myField);
   } 
   if (center) center->cleanMesh();
-
+#endif
+  
   double t2 = Cpu();
   CTX::instance()->meshTimer[1] = t2 - t1;
   Msg::StatusBar(2, true, "Done meshing 2D (%g s)", CTX::instance()->meshTimer[1]);
@@ -611,8 +613,11 @@ void RecombineMesh(GModel *m)
   Msg::StatusBar(2, true, "Done recombining 2D mesh (%g s)", t2 - t1);
 }
 
+//#include <google/profiler.h>
+
 void GenerateMesh(GModel *m, int ask)
 {
+  //  ProfilerStart("gmsh.prof");
   if(CTX::instance()->lock) {
     Msg::Info("I'm busy! Ask me that later...");
     return;
@@ -682,4 +687,5 @@ void GenerateMesh(GModel *m, int ask)
 
   CTX::instance()->lock = 0;
   CTX::instance()->mesh.changed = ENT_ALL;
+  //  ProfilerStop();
 }

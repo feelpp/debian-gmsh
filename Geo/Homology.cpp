@@ -14,20 +14,12 @@
 
 #if defined(HAVE_KBIPACK)
 
-template <class TTypeA, class TTypeB>
-  bool convert(const TTypeA& input, TTypeB& output ){
-  std::stringstream stream;
-  stream << input;
-  stream >> output;
-  return stream.good();
-}
-
 Homology::Homology(GModel* model, std::vector<int> physicalDomain,
 		   std::vector<int> physicalSubdomain,
-                   bool save0N, bool saveOrig,
+                   bool saveOrig,
 		   bool combine, bool omit, bool smoothen) :
   _model(model), _domain(physicalDomain), _subdomain(physicalSubdomain),
-  _save0N(save0N), _saveOrig(saveOrig),
+  _saveOrig(saveOrig),
   _combine(combine), _omit(omit), _smoothen(smoothen)
 {
   _fileName = "";
@@ -119,7 +111,8 @@ CellComplex* Homology::createCellComplex()
 
 Homology::~Homology()
 {
-
+  for(unsigned int i = 0; i < _chains.size(); i++)
+    delete _chains.at(i);
 }
 
 void Homology::findHomologyBasis(CellComplex* cellComplex)
@@ -130,7 +123,6 @@ void Homology::findHomologyBasis(CellComplex* cellComplex)
 				    _subdomainEntities);
     ownComplex = true;
   }
-  std::string domainString = _getDomainString(_domain, _subdomain);
 
   Msg::StatusBar(2, true, "Reducing cell complex...");
 
@@ -151,7 +143,7 @@ void Homology::findHomologyBasis(CellComplex* cellComplex)
   Msg::StatusBar(2, true, "Done computing homology space basis (%g s)", t2 - t1);
 
   int dim = cellComplex->getDim();
-
+  std::string domain = _getDomainString(_domain, _subdomain);
   int HRank[4];
   for(int j = 0; j < 4; j++){
     HRank[j] = 0;
@@ -162,12 +154,12 @@ void Homology::findHomologyBasis(CellComplex* cellComplex)
       std::string generator = "";
       convert(i, generator);
 
-      std::string name = "H" + dimension + domainString + generator;
+      std::string name = "H" + dimension + domain + generator;
       std::map<Cell*, int, Less_Cell> chain;
       chainComplex.getBasisChain(chain, i, j, 3, _smoothen);
       int torsion = chainComplex.getTorsion(j,i);
-      if(_eraseNullCells(chain)) {
-        if(!_save0N && (j != 0 && j != dim)) _createPhysicalGroup(chain, name);
+      if(!chain.empty()) {
+        _createChain(chain, name);
         HRank[j] = HRank[j] + 1;
         if(torsion != 1){
           Msg::Warning("H%d %d has torsion coefficient %d!",
@@ -181,7 +173,7 @@ void Homology::findHomologyBasis(CellComplex* cellComplex)
 
   if(ownComplex) delete cellComplex;
 
-  Msg::Info("Ranks of homology spaces:");
+  Msg::Info("Ranks of domain %shomology spaces:", domain.c_str());
   Msg::Info("H0 = %d", HRank[0]);
   Msg::Info("H1 = %d", HRank[1]);
   Msg::Info("H2 = %d", HRank[2]);
@@ -221,7 +213,7 @@ void Homology::findCohomologyBasis(CellComplex* cellComplex)
   Msg::StatusBar(2, true, "Done computing cohomology space basis (%g s)", t2- t1);
 
   int dim = cellComplex->getDim();
-
+  std::string domain = _getDomainString(_domain, _subdomain);
   int HRank[4];
   for(int i = 0; i < 4; i++) HRank[i] = 0;
   for(int j = 3; j > -1; j--){
@@ -234,12 +226,12 @@ void Homology::findCohomologyBasis(CellComplex* cellComplex)
       convert(i, generator);
 
       std::string name = "H" + dimension + "*" +
-	_getDomainString(_domain, _subdomain) + generator;
+	domain + generator;
       std::map<Cell*, int, Less_Cell> chain;
       chainComplex.getBasisChain(chain, i, j, 3, _smoothen);
       int torsion = chainComplex.getTorsion(j,i);
-      if(_eraseNullCells(chain)) {
-        if(!_save0N && (j != 0 && j != dim)) _createPhysicalGroup(chain, name);
+      if(!chain.empty()) {
+        _createChain(chain, name);
         HRank[j] = HRank[j] + 1;
         if(torsion != 1){
           Msg::Warning("H%d* %d has torsion coefficient %d!", j, i, torsion);
@@ -252,7 +244,7 @@ void Homology::findCohomologyBasis(CellComplex* cellComplex)
 
   if(ownComplex) delete cellComplex;
 
-  Msg::Info("Ranks of cohomology spaces:");
+  Msg::Info("Ranks of domain %scohomology spaces:", domain.c_str());
   Msg::Info("H0* = %d", HRank[0]);
   Msg::Info("H1* = %d", HRank[1]);
   Msg::Info("H2* = %d", HRank[2]);
@@ -261,6 +253,33 @@ void Homology::findCohomologyBasis(CellComplex* cellComplex)
 
   Msg::StatusBar(2, false, "H0*: %d, H1*: %d, H2*: %d, H3*: %d",
 		 HRank[0], HRank[1], HRank[2], HRank[3]);
+}
+
+void Homology::addChainsToModel(int dim, bool post)
+{
+  for(unsigned int i = 0; i < _chains.size(); i++) {
+    if(dim != -1 && _chains.at(i)->getDim() == dim)
+      _chains.at(i)->addToModel(this->getModel(), post);
+    else if(dim == -1) _chains.at(i)->addToModel(this->getModel(), post);
+  }
+}
+
+void Homology::_createChain(std::map<Cell*, int, Less_Cell>& preChain,
+                            std::string name)
+{
+  Chain<int>* chain = new Chain<int>();
+  chain->setName(name);
+
+  for(citer cit = preChain.begin(); cit != preChain.end(); cit++){
+    Cell* cell = cit->first;
+    int coeff = cit->second;
+    if(coeff == 0) continue;
+
+    std::vector<MVertex*> v;
+    cell->getMeshVertices(v);
+    chain->addElemChain(ElemChain(cell->getDim(), v), coeff);
+  }
+  _chains.push_back(chain);
 }
 
 std::string Homology::_getDomainString(const std::vector<int>& domain,
@@ -294,85 +313,6 @@ std::string Homology::_getDomainString(const std::vector<int>& domain,
   }
   domainString += ") ";
   return domainString;
-}
-
-int Homology::_eraseNullCells(std::map<Cell*, int, Less_Cell>& chain)
-{
-  std::vector<Cell*> toRemove;
-  for(citer cit = chain.begin(); cit != chain.end(); cit++){
-    if(cit->second == 0) toRemove.push_back(cit->first);
-  }
-  for(unsigned int i = 0; i < toRemove.size(); i++) chain.erase(toRemove[i]);
-  return chain.size();
-}
-
-void Homology::_createPhysicalGroup(std::map<Cell*, int, Less_Cell>& chain, std::string name)
-{
-  std::vector<MElement*> elements;
-  std::map<int, std::vector<double> > data;
-  MElementFactory factory;
-  int dim = 0;
-
-  typedef std::map<Cell*, int, Less_Cell>::iterator citer;
-  for(citer cit = chain.begin(); cit != chain.end(); cit++){
-    Cell* cell = cit->first;
-    int coeff = cit->second;
-    if(coeff == 0) continue;
-
-    std::vector<MVertex*> v;
-    cell->getMeshVertices(v);
-    dim = cell->getDim();
-
-    MElement* e = factory.create(cell->getTypeMSH(), v);
-    if(cell->getDim() > 0 && coeff < 0) e->revert(); // flip orientation
-    elements.push_back(e);
-
-    // if cell coefficient is other than -1 or 1, add multiple
-    // identical MElements to the physical group
-    for(int i = 1; i < abs(coeff); i++) {
-      MElement* ecopy = factory.create(cell->getTypeMSH(), v);
-      if(cell->getDim() > 0 && coeff < 0) ecopy->revert();
-      elements.push_back(ecopy);
-    }
-
-    std::vector<double> coeffs (1,abs(coeff));
-    data[e->getNum()] = coeffs;
-  }
-
-  GModel* m = this->getModel();
-  int max[4];
-  for(int i = 0; i < 4; i++)
-    max[i] = m->getMaxElementaryNumber(i);
-  int entityNum = *std::max_element(max,max+4) + 1;
-  for(int i = 0; i < 4; i++)
-    max[i] = m->getMaxPhysicalNumber(i);
-  int physicalNum = *std::max_element(max,max+4) + 1;
-
-  std::map<int, std::vector<MElement*> > entityMap;
-  entityMap[entityNum] = elements;
-  std::map<int, std::map<int, std::string> > physicalMap;
-  std::map<int, std::string> physicalInfo;
-  physicalInfo[physicalNum] = name;
-  physicalMap[entityNum] = physicalInfo;
-
-  if(!data.empty()){
-    m->storeChain(dim, entityMap, physicalMap);
-    m->setPhysicalName(name, dim, physicalNum);
-
-#if defined(HAVE_POST)
-    // create PView for instant visualization
-    std::string pnum = "";
-    convert(physicalNum, pnum);
-    std::string postname = pnum + ": " + name;
-    PView* view = new PView(postname, "ElementData", m, data, 0, 1);
-    // the user should be interested about the orientations
-    int size = 30;
-    PViewOptions* opt = view->getOptions();
-    if(opt->tangents == 0) opt->tangents = size;
-    if(opt->normals == 0) opt->normals = size;
-    view->setOptions(opt);
-#endif
-  }
 }
 
 bool Homology::writeBasisMSH(bool binary)

@@ -920,7 +920,7 @@ int GModel::indexMeshVertices(bool all, int singlePartition)
       for(unsigned int j = 0; j < entities[i]->getNumMeshElements(); j++){
         MElement *e = entities[i]->getMeshElement(j);
         for(int k = 0; k < e->getNumVertices(); k++){
-          if(!singlePartition || e->getPartition() == singlePartition)
+          if(singlePartition <= 0 || e->getPartition() == singlePartition)
             e->getVertex(k)->setIndex(0);
           else if(e->getVertex(k)->getIndex() == -1)
             e->getVertex(k)->setIndex(-2);
@@ -984,9 +984,15 @@ void GModel::storeChain(int dim,
                         std::map<int, std::vector<MElement*> > &entityMap,
                         std::map<int, std::map<int, std::string> > &physicalMap)
 {
-  // create new discrete entities that have no associated MVertices
   _storeElementsInEntities(entityMap);
   _storePhysicalTagsInEntities(dim, physicalMap);
+  std::map<int, std::vector<MElement*> >::iterator it;
+  for(it = entityMap.begin(); it != entityMap.end(); it++) {
+    if(dim == 0) _chainVertices.insert(getVertexByTag(it->first));
+    else if(dim == 1) _chainEdges.insert(getEdgeByTag(it->first));
+    else if(dim == 2) _chainFaces.insert(getFaceByTag(it->first));
+    else if(dim == 3) _chainRegions.insert(getRegionByTag(it->first));
+  }
 }
 
 template<class T>
@@ -1057,11 +1063,11 @@ void GModel::_storeElementsInEntities(std::map< int, std::vector<MElement* > >& 
 }
 
 template<class T>
-static void _associateEntityWithElementVertices(GEntity *ge, std::vector<T*> &elements)
+static void _associateEntityWithElementVertices(GEntity *ge, std::vector<T*> &elements, bool force=false)
 {
   for(unsigned int i = 0; i < elements.size(); i++){
     for(int j = 0; j < elements[i]->getNumVertices(); j++){
-      if (!elements[i]->getVertex(j)->onWhat() ||
+      if (force || !elements[i]->getVertex(j)->onWhat() ||
 	  elements[i]->getVertex(j)->onWhat()->dim() > ge->dim())
 	elements[i]->getVertex(j)->setEntity(ge);
     }
@@ -1137,6 +1143,25 @@ void GModel::_pruneMeshVertexAssociations()
     entities[i]->mesh_vertices.clear();
   }
   _associateEntityWithMeshVertices();
+  // associate mesh vertices primarily with chain entities
+  for(riter it = _chainRegions.begin(); it != _chainRegions.end(); ++it){
+    _associateEntityWithElementVertices(*it, (*it)->tetrahedra, true);
+    _associateEntityWithElementVertices(*it, (*it)->hexahedra, true);
+    _associateEntityWithElementVertices(*it, (*it)->prisms, true);
+    _associateEntityWithElementVertices(*it, (*it)->pyramids, true);
+    _associateEntityWithElementVertices(*it, (*it)->polyhedra, true);
+  }
+  for(fiter it = _chainFaces.begin(); it != _chainFaces.end(); ++it){
+    _associateEntityWithElementVertices(*it, (*it)->triangles, true);
+    _associateEntityWithElementVertices(*it, (*it)->quadrangles, true);
+    _associateEntityWithElementVertices(*it, (*it)->polygons, true);
+  }
+  for(eiter it = _chainEdges.begin(); it != _chainEdges.end(); ++it){
+    _associateEntityWithElementVertices(*it, (*it)->lines, true);
+  }
+  for(viter it = _chainVertices.begin(); it != _chainVertices.end(); ++it){
+    _associateEntityWithElementVertices(*it, (*it)->points, true);
+  }
   _storeVerticesInEntities(vertices);
 }
 
@@ -1304,7 +1329,7 @@ static void recurConnectMElementsByMFace(const MFace &f,
       }
     }
   }
-  printf("group pf %d elements found\n",group.size());
+  printf("group pf %d elements found\n",(int)group.size());
 }
 
 static void recurConnectMElementsByMFaceOld(const MFace &f,
@@ -1739,7 +1764,7 @@ void GModel::createTopologyFromFaces(std::vector<discreteFace*> &discFaces, int 
   for (std::vector<discreteFace*>::iterator it = discFaces.begin();
        it != discFaces.end(); it++)
     (*it)->findEdges(map_edges);
-  
+
   // return if no boundary edges (torus, sphere, ...)
   if (map_edges.empty()) return;
 
@@ -2041,24 +2066,29 @@ void GModel::save(std::string fileName)
   GModel::setCurrent(temp);
 }
 
-GFaceCompound* GModel::addCompoundFace(std::vector<GFace*> faces, int typeP, int typeS)
+GFace* GModel::addCompoundFace(std::vector<GFace*> faces, int param, int typeS)
 {
-
+#if defined(HAVE_SOLVER)
   int num =  getMaxElementaryNumber(2) + 1;
 
   std::list<GFace*> comp(faces.begin(), faces.end());
   std::list<GEdge*> U0;
 
-  GFaceCompound::typeOfMapping typ = GFaceCompound::HARMONIC;
-  if (typeP == 1) typ =  GFaceCompound::CONFORMAL;
-  if (typeP == 2) typ =  GFaceCompound::RBF;
+  GFaceCompound::typeOfCompound typ = GFaceCompound::HARMONIC_CIRCLE;
+  if (param == 1) typ =  GFaceCompound::CONFORMAL_SPECTRAL;
+  if (param == 2) typ =  GFaceCompound::RADIAL_BASIS;
+  if (param == 3) typ =  GFaceCompound::HARMONIC_PLANE;
+  if (param == 4) typ =  GFaceCompound::CONVEX_CIRCLE;
+  if (param == 5) typ =  GFaceCompound::CONVEX_PLANE;
+  if (param == 6) typ =  GFaceCompound::HARMONIC_SQUARE;
 
   GFaceCompound *gfc = new GFaceCompound(this, num, comp, U0, typ, typeS);
 
   add(gfc);
-
   return gfc;
-
+#else
+  return 0;
+#endif
 }
 
 GVertex *GModel::addVertex(double x, double y, double z, double lc)
@@ -2079,6 +2109,13 @@ GEdge *GModel::addCircleArcCenter(double x, double y, double z, GVertex *start,
   if(_factory)
     return _factory->addCircleArc(this, GModelFactory::CENTER_START_END,
                                   start, end, SPoint3(x, y, z));
+  return 0;
+}
+
+GEdge *GModel::addCircleArcCenter(GVertex *start, GVertex *center, GVertex *end)
+{
+  if(_factory)
+    return _factory->addCircleArc(this, start, center, end);
   return 0;
 }
 
@@ -2812,7 +2849,8 @@ void GModel::computeHomology()
     bool prepareToRestore = (itp.first != --itp.second);
     itp.second++;
     Homology* homology = new Homology(this, itp.first->first.first,
-                                      itp.first->first.second, false, prepareToRestore);
+                                      itp.first->first.second,
+                                      prepareToRestore);
     CellComplex *cellcomplex = homology->createCellComplex();
     if(cellcomplex->getSize(0)){
       for(std::multimap<dpair, std::string>::iterator itt = itp.first;
@@ -2827,6 +2865,10 @@ void GModel::computeHomology()
         else
           Msg::Error("Unknown type of homology computation: %s", type.c_str());
       }
+      // do not save 0-, and n-chains, where n is the dimension of the model
+      // (usually not needed for anything, available through the plugin)
+      if(this->getDim() != 1) homology->addChainsToModel(1);
+      if(this->getDim() != 2) homology->addChainsToModel(2);
       _pruneMeshVertexAssociations();
     }
     delete cellcomplex;

@@ -1184,36 +1184,36 @@ std::string opt_solver_executable4(OPT_ARGS_STR)
   return opt_solver_executable(4, action, val);
 }
 
-std::string opt_solver_hostname(OPT_ARGS_STR)
+std::string opt_solver_remote_login(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
-    CTX::instance()->solver.hostname[num] = val;
-  return CTX::instance()->solver.hostname[num];
+    CTX::instance()->solver.remoteLogin[num] = val;
+  return CTX::instance()->solver.remoteLogin[num];
 }
 
-std::string opt_solver_hostname0(OPT_ARGS_STR)
+std::string opt_solver_remote_login0(OPT_ARGS_STR)
 {
-  return opt_solver_hostname(0, action, val);
+  return opt_solver_remote_login(0, action, val);
 }
 
-std::string opt_solver_hostname1(OPT_ARGS_STR)
+std::string opt_solver_remote_login1(OPT_ARGS_STR)
 {
-  return opt_solver_hostname(1, action, val);
+  return opt_solver_remote_login(1, action, val);
 }
 
-std::string opt_solver_hostname2(OPT_ARGS_STR)
+std::string opt_solver_remote_login2(OPT_ARGS_STR)
 {
-  return opt_solver_hostname(2, action, val);
+  return opt_solver_remote_login(2, action, val);
 }
 
-std::string opt_solver_hostname3(OPT_ARGS_STR)
+std::string opt_solver_remote_login3(OPT_ARGS_STR)
 {
-  return opt_solver_hostname(3, action, val);
+  return opt_solver_remote_login(3, action, val);
 }
 
-std::string opt_solver_hostname4(OPT_ARGS_STR)
+std::string opt_solver_remote_login4(OPT_ARGS_STR)
 {
-  return opt_solver_hostname(4, action, val);
+  return opt_solver_remote_login(4, action, val);
 }
 
 #if defined(HAVE_FLTK)
@@ -3943,7 +3943,7 @@ double opt_geometry_occ_fix_degenerated(OPT_ARGS_NUM)
       (CTX::instance()->geom.occFixDegenerated);
   }
 #endif
-  return CTX::instance()->geom.occFixSmallEdges;
+  return CTX::instance()->geom.occFixDegenerated;
 }
 
 double opt_geometry_occ_fix_small_edges(OPT_ARGS_NUM)
@@ -4883,6 +4883,13 @@ double opt_mesh_binary(OPT_ARGS_NUM)
   return CTX::instance()->mesh.binary;
 }
 
+double opt_mesh_bunin(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->mesh.bunin = (int)val;
+  return CTX::instance()->mesh.bunin;
+}
+
 double opt_mesh_bdf_field_format(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET){
@@ -5144,7 +5151,15 @@ double opt_mesh_hom_no_metric(OPT_ARGS_NUM)
 double opt_mesh_cgns_import_order(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET) {
-    CTX::instance()->mesh.cgnsImportOrder = (int)val;
+    int value = (int)val;
+    double order = val;
+    while(order >= 2.0) {
+      order = order / 2.0;
+    }
+
+    if (order != 1.0)
+      value = 1;
+    CTX::instance()->mesh.cgnsImportOrder = value;
   }
   return CTX::instance()->mesh.cgnsImportOrder;
 }
@@ -6430,10 +6445,12 @@ double opt_view_auto_position(OPT_ARGS_NUM)
   GET_VIEW(0.);
   if(action & GMSH_SET) {
     opt->autoPosition = (int)val;
+    if(opt->autoPosition < 0 || opt->autoPosition > 9)
+      opt->autoPosition = 0;
   }
 #if defined(HAVE_FLTK)
   if(_gui_action_valid(action, num)) {
-    FlGui::instance()->options->view.butt[7]->value(opt->autoPosition);
+    FlGui::instance()->options->view.choice[16]->value(opt->autoPosition);
     FlGui::instance()->options->activate("view_axes_auto_2d");
   }
 #endif
@@ -8618,6 +8635,25 @@ unsigned int opt_view_color_axes(OPT_ARGS_COL)
   }
 #endif
   return opt->color.axes;
+#else
+  return 0;
+#endif
+}
+
+unsigned int opt_view_color_background2d(OPT_ARGS_COL)
+{
+#if defined(HAVE_POST)
+  GET_VIEW(0);
+  if(action & GMSH_SET) {
+    opt->color.background2d = val;
+  }
+#if defined(HAVE_FLTK)
+  if(_gui_action_valid(action, num)){
+    CCC(opt->color.background2d, FlGui::instance()->options->view.color[13]);
+    drawContext::global()->resetFontTextures();
+  }
+#endif
+  return opt->color.background2d;
 #else
   return 0;
 #endif

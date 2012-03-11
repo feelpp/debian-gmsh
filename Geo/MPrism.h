@@ -64,6 +64,7 @@ class MPrism : public MElement {
   virtual int getNumVertices() const { return 6; }
   virtual double getInnerRadius();
   virtual MVertex *getVertex(int num){ return _v[num]; }
+  virtual void setVertex(int num,   MVertex *v){_v[num]=v;}
   virtual int getNumEdges(){ return 9; }
   virtual MEdge getEdge(int num)
   {
@@ -141,6 +142,10 @@ class MPrism : public MElement {
     default: u = 0.; v = 0.; w =  0.; break;
     }
   }
+  virtual SPoint3 barycenterUVW()
+  {
+    return SPoint3(1/3., 1/3., 0.);
+  }
   virtual bool isInside(double u, double v, double w)
   {
     double tol = _isInsideTolerance;
@@ -150,8 +155,7 @@ class MPrism : public MElement {
     return true;
   }
   virtual void getIntegrationPoints(int pOrder, int *npts, IntPt **pts);
- private:
-  int edges_prism(const int edge, const int vert) const
+  static int edges_prism(const int edge, const int vert)
   {
     static const int e[9][2] = {
       {0, 1},
@@ -166,7 +170,7 @@ class MPrism : public MElement {
     };
     return e[edge][vert];
   }
-  int faces_prism(const int face, const int vert) const
+  static int faces_prism(const int face, const int vert)
   {
     static const int f[5][4] = {
       {0, 2, 1, -1},

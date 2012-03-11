@@ -7,6 +7,7 @@
 #define _CONTEXT_H_
 
 #include <vector>
+#include <map>
 #include <string>
 #include "CGNSOptions.h"
 #include "meshPartitionOptions.h"
@@ -39,6 +40,8 @@ struct contextMeshOptions {
   int highOrderNoMetric;
   int multiplePasses;
   int cgnsImportOrder;
+  std::map<int,int> algo2d_per_face;
+  int bunin;
 };
 
 struct contextGeometryOptions {
@@ -215,7 +218,7 @@ class CTX {
     int plugins, listen;
     double timeout;
     std::string socketName;
-    std::string name[5], executable[5], hostname[5];
+    std::string name[5], executable[5], remoteLogin[5];
   }solver;
   // print options
   struct{

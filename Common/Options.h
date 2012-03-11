@@ -63,12 +63,12 @@ std::string opt_solver_executable1(OPT_ARGS_STR);
 std::string opt_solver_executable2(OPT_ARGS_STR);
 std::string opt_solver_executable3(OPT_ARGS_STR);
 std::string opt_solver_executable4(OPT_ARGS_STR);
-std::string opt_solver_hostname(OPT_ARGS_STR);
-std::string opt_solver_hostname0(OPT_ARGS_STR);
-std::string opt_solver_hostname1(OPT_ARGS_STR);
-std::string opt_solver_hostname2(OPT_ARGS_STR);
-std::string opt_solver_hostname3(OPT_ARGS_STR);
-std::string opt_solver_hostname4(OPT_ARGS_STR);
+std::string opt_solver_remote_login(OPT_ARGS_STR);
+std::string opt_solver_remote_login0(OPT_ARGS_STR);
+std::string opt_solver_remote_login1(OPT_ARGS_STR);
+std::string opt_solver_remote_login2(OPT_ARGS_STR);
+std::string opt_solver_remote_login3(OPT_ARGS_STR);
+std::string opt_solver_remote_login4(OPT_ARGS_STR);
 std::string opt_view_name(OPT_ARGS_STR);
 std::string opt_view_format(OPT_ARGS_STR);
 std::string opt_view_filename(OPT_ARGS_STR);
@@ -386,6 +386,7 @@ double opt_mesh_partition_qua_weight(OPT_ARGS_NUM);
 double opt_mesh_partition_tet_weight(OPT_ARGS_NUM);
 double opt_mesh_partition_tri_weight(OPT_ARGS_NUM);
 double opt_mesh_binary(OPT_ARGS_NUM);
+double opt_mesh_bunin(OPT_ARGS_NUM);
 double opt_mesh_bdf_field_format(OPT_ARGS_NUM);
 double opt_mesh_nb_smoothing(OPT_ARGS_NUM);
 double opt_mesh_algo2d(OPT_ARGS_NUM);
@@ -672,6 +673,7 @@ unsigned int opt_view_color_normals(OPT_ARGS_COL);
 unsigned int opt_view_color_text2d(OPT_ARGS_COL);
 unsigned int opt_view_color_text3d(OPT_ARGS_COL);
 unsigned int opt_view_color_axes(OPT_ARGS_COL);
+unsigned int opt_view_color_background2d(OPT_ARGS_COL);
 
 // Data structures and global functions
 

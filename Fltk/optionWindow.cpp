@@ -96,6 +96,20 @@ static Fl_Menu_Item menu_axes_mode[] = {
   {0}
 };
 
+static Fl_Menu_Item menu_position[] = {
+  {"Manual",       0, 0, 0},
+  {"Automatic",    0, 0, 0},
+  {"Top left",     0, 0, 0},
+  {"Top right",    0, 0, 0},
+  {"Bottom left",  0, 0, 0},
+  {"Bottom right", 0, 0, 0},
+  {"Top",          0, 0, 0},
+  {"Bottom",       0, 0, 0},
+  {"Left",         0, 0, 0},
+  {"Right",        0, 0, 0},
+  {0}
+};
+
 Fl_Menu_Item menu_font_names[] = {
   {"Times-Roman",           0, 0, (void*)FL_TIMES},
   {"Times-Bold",            0, 0, (void*)FL_TIMES_BOLD},
@@ -385,11 +399,14 @@ static void geometry_options_ok_cb(Fl_Widget *w, void *data)
   opt_geometry_auto_coherence(0, GMSH_SET, o->geo.butt[8]->value());
   opt_geometry_light(0, GMSH_SET, o->geo.butt[9]->value());
   opt_geometry_highlight_orphans(0, GMSH_SET, o->geo.butt[10]->value());
+
   opt_geometry_occ_fix_degenerated(0, GMSH_SET, o->geo.butt[16]->value());
+  opt_geometry_occ_fix_small_edges(0, GMSH_SET, o->geo.butt[11]->value());
   opt_geometry_occ_fix_small_faces(0, GMSH_SET, o->geo.butt[12]->value());
   opt_geometry_occ_sew_faces(0, GMSH_SET, o->geo.butt[13]->value());
-  opt_geometry_light_two_side(0, GMSH_SET, o->geo.butt[14]->value());
   opt_geometry_occ_connect_faces(0, GMSH_SET, o->geo.butt[15]->value());
+
+  opt_geometry_light_two_side(0, GMSH_SET, o->geo.butt[14]->value());
   int old_hide_compound = (int)opt_geometry_hide_compounds(0, GMSH_GET, 0);
   opt_geometry_hide_compounds(0, GMSH_SET, o->geo.butt[17]->value());
 
@@ -824,6 +841,10 @@ static void view_options_ok_cb(Fl_Widget *w, void *data)
       if(force || (val != center_glyphs))
         opt_view_center_glyphs(i, GMSH_SET, val);
 
+      val = o->view.choice[16]->value();
+      if(force || (val != auto_position))
+        opt_view_auto_position(i, GMSH_SET, val);
+
       // view_butts
 
       val = o->view.butt[0]->value();
@@ -849,10 +870,6 @@ static void view_options_ok_cb(Fl_Widget *w, void *data)
       val = o->view.butt[3]->value();
       if(force || (val != mikado))
         opt_view_axes_mikado(i, GMSH_SET, val);
-
-      val = o->view.butt[7]->value();
-      if(force || (val != auto_position))
-        opt_view_auto_position(i, GMSH_SET, val);
 
       val = o->view.butt[25]->value();
       if(force || (val != axes_auto_position))
@@ -2893,10 +2910,11 @@ optionWindow::optionWindow(int deltaFontSize)
       view.value[18]->align(FL_ALIGN_RIGHT);
       view.value[18]->callback(view_options_ok_cb);
 
-      view.butt[7] = new Fl_Check_Button
-        (L + 2 * WB, 2 * WB + 8 * BH, BW, BH, "Position 2D axes/value scale automatically");
-      view.butt[7]->type(FL_TOGGLE_BUTTON);
-      view.butt[7]->callback(view_options_ok_cb, (void*)"view_axes_auto_2d");
+      view.choice[16] = new Fl_Choice
+        (L + 2 * WB, 2 * WB + 8 * BH, IW, BH, "2D axes/value scale position");
+      view.choice[16]->menu(menu_position);
+      view.choice[16]->align(FL_ALIGN_RIGHT);
+      view.choice[16]->callback(view_options_ok_cb, (void*)"view_axes_auto_2d");
 
       view.value[20] = new Fl_Value_Input
         (L + 2 * WB, 2 * WB + 9 * BH, IW / 2, BH);
@@ -3873,7 +3891,7 @@ void optionWindow::activate(const char *what)
     }
   }
   else if(!strcmp(what, "view_axes_auto_2d")){
-    if(view.butt[7]->value()){
+    if(view.choice[16]->value()){
       view.value[20]->deactivate();
       view.value[21]->deactivate();
       view.value[22]->deactivate();
