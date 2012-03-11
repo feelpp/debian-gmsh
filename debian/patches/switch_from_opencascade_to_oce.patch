@@ -6,8 +6,8 @@ Last-Update: 2012-02-10
 
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -764,15 +764,6 @@
- endif(ENABLE_PETSC)
+@@ -797,15 +797,6 @@
+ endif(HAVE_SOLVER)
  
  if(ENABLE_OCC)
 -  if(WIN32 OR CYGWIN)
@@ -22,7 +22,7 @@ Last-Update: 2012-02-10
    set(OCC_LIBS_REQUIRED
        # subset of DataExchange
        TKSTEP TKSTEP209 TKSTEPAttr TKSTEPBase TKIGES TKXSBase
-@@ -783,6 +774,30 @@
+@@ -816,6 +807,30 @@
        TKBRep TKGeomBase TKG3d TKG2d
        # FoundationClasses
        TKAdvTools TKMath TKernel)
@@ -53,7 +53,7 @@ Last-Update: 2012-02-10
    list(LENGTH OCC_LIBS_REQUIRED NUM_OCC_LIBS_REQUIRED)
    set(OCC_LIBS)
    foreach(OCC ${OCC_LIBS_REQUIRED})
-@@ -819,6 +834,7 @@
+@@ -852,6 +867,7 @@
        endif(NOT OCC_CONFIG_H)
      endif(OCC_INC)
    endif(NUM_OCC_LIBS EQUAL NUM_OCC_LIBS_REQUIRED)
