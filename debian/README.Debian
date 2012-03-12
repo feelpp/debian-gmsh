@@ -58,7 +58,7 @@ export LD_PRELOAD=/usr/lib/libmpi.so
 * Compiling api_demos
 ------------
 
-to build api_demos go into the newly created directory
+to build api_demos go into the newly created directory: 
 cmake ../../../gmsh/utils/api_demos  -DCMAKE_CXX_FLAGS="-DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX -fopenmp -lgl2ps -lGL -lglut" -DCMAKE_INCLUDE_PATH:="/usr/include/mpi;/usr/include/gmsh" -DCMAKE_VERBOSE_MAKEFILE=ON
 
  -- Christophe Trophime <christophe.trophime@lncmi.cnrs.fr>, Mon Mar 12 18:30:00 2012
