@@ -4,15 +4,17 @@ BUILDDIR = $(CURDIR)/debian/build
 %:
 	dh $@ --buildsystem=cmake --builddirectory=$(BUILDDIR) --with python2 --parallel
 
+export OMPI_MCA_plm_rsh_agent=/bin/false                #workaround to start MPI-applications in chroot
+
 extra_flags += -DCMAKE_CXX_FLAGS="-DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX -fopenmp -lmpi" \
 -DCMAKE_INCLUDE_PATH:="/usr/include/mpi"\
 -DENABLE_METIS:=OFF\
 -DENABLE_TAUCS:=OFF\
 
 # PETSC_DIR is the location of PETSc.
-export PETSC_DIR=/usr/lib/petscdir/3.1
+export PETSC_DIR=/usr/lib/petscdir/3.2
 export PETSC_ARCH=linux-gnu-c-opt
-export SLEPC_DIR=/usr/lib/slepcdir/3.1
+export SLEPC_DIR=/usr/lib/slepcdir/3.2
 
 override_dh_auto_clean:
 	rm -rf $(BUILDDIR)
@@ -41,3 +43,15 @@ override_dh_auto_build:
 	# To avoid the texi2dvi pb add LC_ALL=C
 	dh_auto_build -- pdf html info LC_ALL=C
 	chrpath -d $(BUILDDIR)/wrappers/gmshpy/*.so
+
+override_dh_auto_test:
+	mkdir test-dir
+	cp demos/transfinite.geo test-dir
+	cd test-dir; $(BUILDDIR)/gmsh transfinite.geo -2 -o transfinite2d.mesh
+	cd test-dir; $(BUILDDIR)/gmsh transfinite.geo -3 -o transfinite3d.mesh
+	cd test-dir; $(BUILDDIR)/gmsh transfinite.geo -2 -o transfinite2d.msh
+	cd test-dir; $(BUILDDIR)/gmsh transfinite.geo -3 -o transfinite3d.msh
+	cd test-dir; $(BUILDDIR)/gmsh transfinite.geo -2 -o transfinite2d.stl
+	cd test-dir; $(BUILDDIR)/gmsh transfinite.geo -3 -o transfinite3d.stl
+	cd test-dir; ls -ln;
+	rm -rf test-dir
