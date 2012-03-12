@@ -118,3 +118,14 @@ License: other
  royalty-free perpetual license to install, use, modify, prepare derivative
  works, incorporate into other computer software, distribute, and sublicense
  such enhancements or derivative works thereof, in binary and source code form.
+
+Files: contrib/rtree/*
+Copyright: 1983 Antonin Guttman, UC Berkely 
+           1983 Michael Stonebraker, UC Berkely
+           1994 Melinda Green <melinda@superliminal.com>
+           1995 Paul Brook
+           2004 Greg Douglas
+            
+License: other
+ Voro++ Copyright (c) 2008, The Regents of the University of California, through
+ Lawrence Berkeley National Laboratory (subject to receipt of any required
