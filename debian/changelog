@@ -1,18 +1,23 @@
-gmsh (2.5.1~beta2~svn11604~dfsg-1) UNRELEASED; urgency=low
+gmsh (2.5.1~beta2~svn11604~dfsg-1) unstable; urgency=low
 
-  * Imported Upstream version 2.5.1~beta2~svn11604~dfsg
-  * Update copyright file due to released DEP-5.
-  * Add copyright info about voro++.
-  * Remove use_tetgen.patch. Was applied by upstream.
-  * Remove use_mmg3d.patch. Was applied by upstream.
-  * Remove use_gmm.patch. Was applied by upstream.
-  * Update patches.
-  * Remove use_libann.patch. Was applied by upstream.
-  * Update oce-patch.
-  * Install some files for compiling api_demos. Thanks to Christophe Trophime.
-  * Fix compilation of api_demos.
+  * [e5d1f6e] Imported Upstream version 2.5.1~beta2~svn11604~dfsg
+  * [7384987] Update copyright file due to released DEP-5.
+  * [5f6befc] Add copyright info about contrib/voro++.
+  * [f73fee5] Add copyright info about contrib/rtree
+  * [dc55a25] Remove use_tetgen.patch. Was applied by upstream.
+  * [b1f3470] Remove use_mmg3d.patch. Was applied by upstream.
+  * [fb7f10c] Remove use_gmm.patch. Was applied by upstream.
+  * [6e12760] Remove use_libann.patch. Was applied by upstream.
+  * [5eca597] Install some files for compiling api_demos. 
+              Thanks to Christophe Trophime.
+  * [3986e6b] Add additional liboce-libraries into BD.
+  * [b30cb02] Update Standards-Version to 3.9.3. No changes.
+  * [6e7f410] Add libslepc3.2 to BD.
+  * [9ed8464] Add auto-test to check functionality after build.
+  * [4580e65] Add a hint to README.Debian, how to compile api_demos.
+              Thanks to Christophe Trophime.
 
- -- Anton Gladky <gladky.anton@gmail.com>  Sun, 11 Mar 2012 22:32:24 +0100
+ -- Anton Gladky <gladky.anton@gmail.com>  Mon, 12 Mar 2012 19:25:39 +0100
 
 gmsh (2.5.1~beta2~svn11301~dfsg-2) unstable; urgency=low
 
