@@ -1,3 +1,10 @@
+gmsh (2.5.1~beta2~svn11604~dfsg-2) unstable; urgency=low
+
+  * [ae6f5e4] Remove PETSC/SLEPC from BD on s390x.
+  * [f1f98f2] Replace libpng12-dev by libpng-dev. (Closes: #662352)
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Wed, 14 Mar 2012 22:16:01 +0100
+
 gmsh (2.5.1~beta2~svn11604~dfsg-1) unstable; urgency=low
 
   * [e5d1f6e] Imported Upstream version 2.5.1~beta2~svn11604~dfsg
