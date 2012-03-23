@@ -6,7 +6,10 @@ BUILDDIR = $(CURDIR)/debian/build
 
 export OMPI_MCA_plm_rsh_agent=/bin/false                #workaround to start MPI-applications in chroot
 
-extra_flags += -DCMAKE_CXX_FLAGS="-DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX -fopenmp -lmpi" \
+extra_flags += \
+-DCMAKE_CXX_FLAGS="-DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX -fopenmp -lmpi -fPIC\
+                  -Wall $(shell dpkg-buildflags --get CXXFLAGS)"\
+-DCMAKE_C_FLAGS="-fPIC -Wall $(shell dpkg-buildflags --get CFLAGS)"\
 -DCMAKE_INCLUDE_PATH:="/usr/include/mpi"\
 -DENABLE_METIS:=OFF\
 -DENABLE_TAUCS:=OFF\
@@ -39,7 +42,7 @@ override_dh_auto_configure:
 override_dh_auto_build:
 	dh_auto_build
 	dh_auto_build -- lib
-	dh_auto_build -- shared
+	#dh_auto_build -- shared
 	# To avoid the texi2dvi pb add LC_ALL=C
 	dh_auto_build -- pdf html info LC_ALL=C
 	chrpath -d $(BUILDDIR)/wrappers/gmshpy/*.so
