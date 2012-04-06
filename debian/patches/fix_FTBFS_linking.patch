@@ -1,0 +1,15 @@
+Description: this linking causes a FTBFS 
+Author: Anton Gladky <gladky.anton@gmail.com>
+Last-Update: 2012-04-06
+
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1033,7 +1033,7 @@
+   message("WARNING: By enabling ENABLE_MSVC_STATIC_RUNTIME, shared library wont link. "
+           "Change in msvc /MT flag to /MD in the shared project properties")
+ endif(MSVC AND ENABLE_MSVC_STATIC_RUNTIME)		  
+-target_link_libraries(shared ${LINK_LIBRARIES})
++
+ 
+ # binary targets
+ if(HAVE_FLTK)
