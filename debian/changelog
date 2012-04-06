@@ -1,3 +1,11 @@
+gmsh (2.5.1~beta2~svn11604~dfsg-3) unstable; urgency=low
+
+  * [946b2fd] Add -fPIC to CFLAGS and CXXFLAGS. Add dpkg-buildflags.
+  * [b21e598] Fix FTBFS due to wrong linking. (Closes: #664948)
+  * [3dcb437] Remove useless commands in dh_auto_build.
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Fri, 06 Apr 2012 18:21:27 +0200
+
 gmsh (2.5.1~beta2~svn11604~dfsg-2) unstable; urgency=low
 
   * [ae6f5e4] Remove PETSC/SLEPC from BD on s390x.
