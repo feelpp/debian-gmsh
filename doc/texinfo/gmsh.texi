@@ -1398,7 +1398,7 @@ contain floating point formatting characters: @code{%e}, @code{%g},
 etc.). The eigth case permits to use the value of a @var{char-option} as
 a @var{char-expression}. The ninth case gets the value of an environment
 variable from the operating system. The last case in the definition
-allows to ask the user for a value interactively. The various
+allows one to ask the user for a value interactively. The various
 @w{@var{char-option}s} are listed in @ref{Options}.
 
 Character expressions are mostly used to specify non-numeric options and
@@ -2921,7 +2921,7 @@ above.
 @item Extrude @{ Surface @{ @var{expression-list} @}; @var{layers} < Using Index[@var{expr}]; > < Using View[@var{expr}]; > @}
 Extrudes a boundary layer from the specified surfaces. If no view is
 specified, the boundary layer is created using gouraud-shaped (smoothed)
-normal field. Specifying a boundary layer index allows to extrude
+normal field. Specifying a boundary layer index allows one to extrude
 several independent boundary layers (with independent normal smoothing).
 
 @item Transfinite Line @{ @var{expression-list} @} | "*" = @var{expression} < Using Progression | Bump @var{expression} >;

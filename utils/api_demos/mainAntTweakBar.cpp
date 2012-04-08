@@ -14,6 +14,7 @@
 #include "GModel.h"
 #include "MElement.h"
 #include "drawContext.h"
+#include <cstring>
 
 static drawContext *ctx = 0;
 static mousePosition clickPos, prevPos;

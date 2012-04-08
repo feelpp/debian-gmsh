@@ -15,7 +15,6 @@ set(SRC
   drawScales.cpp 
   drawGraph2d.cpp 
   drawGlyph.cpp 
-  gl2ps.cpp
   gl2gif.cpp
   gl2jpeg.cpp
   gl2png.cpp
