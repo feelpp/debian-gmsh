@@ -1,3 +1,10 @@
+gmsh (2.5.1~beta2~svn11604~dfsg-4) unstable; urgency=low
+
+  * [edaa41f] Change the name of shared library to gmsh1.
+  * [c805ae4] Fix linking problem of shared library.
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Sun, 08 Apr 2012 07:33:03 +0200
+
 gmsh (2.5.1~beta2~svn11604~dfsg-3) unstable; urgency=low
 
   * [946b2fd] Add -fPIC to CFLAGS and CXXFLAGS. Add dpkg-buildflags.
