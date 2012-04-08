@@ -18,7 +18,7 @@ Last-Update: 2011-12-09
  # shared library target: we don't build it by default either
  add_library(shared SHARED EXCLUDE_FROM_ALL ${GMSH_SRC})
 -set_target_properties(shared PROPERTIES OUTPUT_NAME Gmsh)
-+set_target_properties(shared PROPERTIES OUTPUT_NAME gmsh-2.5.1)
++set_target_properties(shared PROPERTIES OUTPUT_NAME gmsh1)
  if(HAVE_LAPACK AND LAPACK_FLAGS)
    set_target_properties(shared PROPERTIES LINK_FLAGS ${LAPACK_FLAGS})
  endif(HAVE_LAPACK AND LAPACK_FLAGS)
