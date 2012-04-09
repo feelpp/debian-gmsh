@@ -174,11 +174,35 @@ static SMetric3 metric_based_on_surface_curvature(const GFace *gf, double u, dou
 
 static SMetric3 metric_based_on_surface_curvature(const GEdge *ge, double u)
 {
-  SMetric3 mesh_size(1.e-12);
-  std::list<GFace *> faces = ge->faces();
-  std::list<GFace *>::iterator it = faces.begin();
-  int count = 0;
-  while(it != faces.end()){
+  const GEdgeCompound* ptrCompoundEdge = dynamic_cast<const GEdgeCompound*>(ge);
+  if (ptrCompoundEdge)
+  {
+      double cmax, cmin;
+      SVector3 dirMax,dirMin;
+      cmax = ptrCompoundEdge->curvatures(u,&dirMax, &dirMin, &cmax,&cmin);
+      if (cmin == 0)cmin =1.e-5;
+      if (cmax == 0)cmax =1.e-5;
+      double lambda2 =  ((2 * M_PI) /( fabs(cmax) *  CTX::instance()->mesh.minCircPoints ) );
+      double lambda1 =  ((2 * M_PI) /( fabs(cmin) *  CTX::instance()->mesh.minCircPoints ) );
+      SVector3 Z = crossprod(dirMax,dirMin);
+
+      lambda1 = std::max(lambda1, CTX::instance()->mesh.lcMin);
+      lambda2 = std::max(lambda2, CTX::instance()->mesh.lcMin);
+      lambda1 = std::min(lambda1, CTX::instance()->mesh.lcMax);
+      lambda2 = std::min(lambda2, CTX::instance()->mesh.lcMax);
+
+      SMetric3 curvMetric (1./(lambda1*lambda1),1./(lambda2*lambda2),1.e-5,dirMin, dirMax, Z );
+      return curvMetric;
+  }
+
+  else
+  {
+    SMetric3 mesh_size(1.e-12);
+    std::list<GFace *> faces = ge->faces();
+    std::list<GFace *>::iterator it = faces.begin();
+    int count = 0;
+    while(it != faces.end())
+    {
     if (((*it)->geomType() != GEntity::CompoundSurface) &&
         ((*it)->geomType() != GEntity::DiscreteSurface)){
       SPoint2 par = ge->reparamOnFace((*it), u, 1);
@@ -193,42 +217,8 @@ static SMetric3 metric_based_on_surface_curvature(const GEdge *ge, double u)
   double lambda =  ((2 * M_PI) /( fabs(Crv) *  CTX::instance()->mesh.minCircPoints ) );
   SMetric3 curvMetric (1./(lambda*lambda));
   
-  return intersection(mesh_size,curvMetric);
-}
-
-static SMetric3 metric_based_on_surface_curvature_ES(const GEdge *ge, double u)
-{
-    // If the curve is a compound curve, find the corresponding discrete curve. Then loop over all
-    // neighboring (discrete) surfaces and compute the metric as the intersection of the surface metrics
-
-    SMetric3 mesh_size(1.e-12);
-    int iDiscEdge;
-    double tLoc;
-    if (ge->geomType() == GEntity::CompoundCurve)
-    {
-        const GEdgeCompound* ptrEdgeCompound = dynamic_cast<const GEdgeCompound*>(ge);
-        ptrEdgeCompound->getLocalParameter(u, iDiscEdge, tLoc);
-        std::vector <GEdge*> DiscreteEdge = ptrEdgeCompound->getCompounds(); //vector of pointers to GEdge
-        GEdge* ptrDiscEdge = DiscreteEdge[iDiscEdge]; //Single pointer to GEdge
-
-        std::list<GFace *> faces = ptrDiscEdge->faces();
-        std::list<GFace *>::iterator it = faces.begin();
-        int count = 0;
-        while(it != faces.end())
-        {
-
-//            SMetric3 m = metric_based_on_surface_curvature(*it, u, v); //This doesn't work!!!!
-            SPoint2 par = ge->reparamOnFace((*it), u, 1);
-            SMetric3 m = metric_based_on_surface_curvature (*it, par.x(), par.y());
-            if (!count) mesh_size = m;
-            else mesh_size = intersection(mesh_size, m);
-            count++;
-
-          ++it;
-        }
-    }
-
-    return mesh_size;
+  return intersection_conserve_mostaniso(mesh_size,curvMetric);
+  }
 }
 
 static SMetric3 metric_based_on_surface_curvature(const GVertex *gv)
@@ -239,76 +229,26 @@ static SMetric3 metric_based_on_surface_curvature(const GVertex *gv)
        ite != l_edges.end(); ++ite){
     GEdge *_myGEdge = *ite;
     Range<double> bounds = _myGEdge->parBounds(0);
-    if (gv == _myGEdge->getBeginVertex())
-      mesh_size = intersection
-        (mesh_size,
-         metric_based_on_surface_curvature(_myGEdge, bounds.low()));
-    else
-      mesh_size = intersection
-        (mesh_size, 
-         metric_based_on_surface_curvature(_myGEdge, bounds.high()));
+
+    // ES: Added extra if condition to use the code below only with compund curves
+    // This is because we want to call the function
+    // metric_based_on_surface_curvature(const GEdge *ge, double u) for the case when
+    // ge is a compound edge
+    if (_myGEdge->geomType() == GEntity::CompoundCurve)
+    {
+        if (gv == _myGEdge->getBeginVertex())
+          mesh_size = intersection
+            (mesh_size,
+             metric_based_on_surface_curvature(_myGEdge, bounds.low()));
+        else
+          mesh_size = intersection
+            (mesh_size,
+             metric_based_on_surface_curvature(_myGEdge, bounds.high()));
+    }
+
   }
   return mesh_size;
 }
-
-static SMetric3 metric_based_on_surface_curvature_ES(const GVertex *gv)
-{
-  SMetric3 mesh_size(1.e-5);
-  std::list <GFace*>::const_iterator itf;
-
-  int iDiscEdge;
-  double tLoc;
-
-  std::list<GEdge*> l_edges = gv->edges();
-  std::list<GFace*> l_faces;
-  for (std::list<GEdge*>::const_iterator ite = l_edges.begin(); ite != l_edges.end(); ++ite)
-  {
-      if ((*ite)->geomType() == GEntity::CompoundCurve)
-      {
-          const GEdgeCompound* ptrEdgeCompound = dynamic_cast<const GEdgeCompound*>(*ite);
-          Range<double> bounds = (*ite)->parBounds(0);
-
-          if (gv == (*ite)->getBeginVertex())
-          {
-              ptrEdgeCompound->getLocalParameter(bounds.low(), iDiscEdge, tLoc);
-          }
-          else
-          {
-              ptrEdgeCompound->getLocalParameter(bounds.high(), iDiscEdge, tLoc);
-          }
-
-          std::vector <GEdge*> DiscreteEdge = ptrEdgeCompound->getCompounds(); //vector of pointers to GEdge
-          GEdge* ptrDiscEdge = DiscreteEdge[iDiscEdge]; //Single pointer to GEdge
-
-
-        std::list<GFace *> neighFaces =  ptrDiscEdge->faces();
-        for (itf = neighFaces.begin(); itf != neighFaces.end(); ++itf)
-        {
-            l_faces.push_back(*itf);
-        }
-      }
-  }
-
-  l_faces.sort();
-  l_faces.unique();
-
-  itf = l_faces.begin();
-  int count = 0;
-  while(itf != l_faces.end())
-  {
-      SPoint2 par = gv->reparamOnFace((*itf), 1);
-      SMetric3 m = metric_based_on_surface_curvature (*itf, par.x(), par.y());
-      if (!count) mesh_size = m;
-      else mesh_size = intersection(mesh_size, m);
-      count++;
-
-    ++itf;
-  }
-
-  return mesh_size;
-}
-
-
 
 // the mesh vertex is classified on a model vertex.  we compute the
 // maximum of the curvature of model faces surrounding this point if
@@ -520,19 +460,22 @@ backgroundMesh::backgroundMesh(GFace *_gf)
   // those triangles are local to the backgroundMesh so that
   // they do not depend on the actual mesh that can be deleted
 
+  std::set<SPoint2> myBCNodes;
   for (unsigned int i = 0; i < _gf->triangles.size(); i++){
     MTriangle *e = _gf->triangles[i];
     MVertex *news[3];
     for (int j=0;j<3;j++){
-      std::map<MVertex*,MVertex*>::iterator it = _3Dto2D.find(e->getVertex(j));
+      MVertex *v = e->getVertex(j);
+      std::map<MVertex*,MVertex*>::iterator it = _3Dto2D.find(v);
       MVertex *newv =0;
       if (it == _3Dto2D.end()){
         SPoint2 p;
-        bool success = reparamMeshVertexOnFace(e->getVertex(j), _gf, p);
+        bool success = reparamMeshVertexOnFace(v, _gf, p);
         newv = new MVertex (p.x(), p.y(), 0.0);
         _vertices.push_back(newv);
-        _3Dto2D[e->getVertex(j)] = newv;
-        _2Dto3D[newv] = e->getVertex(j);
+        _3Dto2D[v] = newv;
+        _2Dto3D[newv] = v;
+	if(v->onWhat()->dim()<2) myBCNodes.insert(p);
       }
       else newv = it->second;
       news[j] = newv;
@@ -540,6 +483,24 @@ backgroundMesh::backgroundMesh(GFace *_gf)
     _triangles.push_back(new MTriangle(news[0],news[1],news[2]));
   }
   
+#if defined(HAVE_ANN)
+  //printf("creating uv kdtree %d \n", myBCNodes.size());
+    index = new ANNidx[2];
+    dist  = new ANNdist[2];
+    nodes = annAllocPts(myBCNodes.size(), 3);
+    std::set<SPoint2>::iterator itp = myBCNodes.begin();
+    int ind = 0;
+    while (itp != myBCNodes.end()){
+      SPoint2 pt = *itp;
+      //fprintf(of, "SP(%g,%g,%g){%g};\n", pt.x(), pt.y(), 0.0, 10000);
+      nodes[ind][0] = pt.x();
+      nodes[ind][1] = pt.y();
+      nodes[ind][2] = 0.0;
+      itp++; ind++;
+    }
+    uv_kdtree = new ANNkd_tree(nodes, myBCNodes.size(), 3);
+#endif
+
   // build a search structure
   _octree = new MElementOctree(_triangles); 
   
@@ -567,10 +528,17 @@ backgroundMesh::~backgroundMesh()
   for (unsigned int i = 0; i < _vertices.size(); i++) delete _vertices[i];
   for (unsigned int i = 0; i < _triangles.size(); i++) delete _triangles[i];
   delete _octree;
+#if defined(HAVE_ANN)
+  if(uv_kdtree) delete uv_kdtree;
+  if(nodes) annDeallocPts(nodes);
+  delete[]index;
+  delete[]dist;
+#endif
 }
 
 static void propagateValuesOnFace(GFace *_gf,
-                                  std::map<MVertex*,double> &dirichlet)
+                                  std::map<MVertex*,double> &dirichlet,
+				  bool in_parametric_plane = false)
 {
 #if defined(HAVE_SOLVER)
   linearSystem<double> *_lsys = 0;
@@ -601,6 +569,17 @@ static void propagateValuesOnFace(GFace *_gf,
     for (int j=0;j<3;j++)vs.insert(_gf->triangles[k]->getVertex(j));
   for (unsigned int k = 0; k < _gf->quadrangles.size(); k++)
     for (int j=0;j<4;j++)vs.insert(_gf->quadrangles[k]->getVertex(j));
+
+  std::map<MVertex*,SPoint3> theMap;
+  if ( in_parametric_plane) {
+    for (std::set<MVertex*>::iterator it = vs.begin(); it != vs.end(); ++it){
+      SPoint2 p;
+      reparamMeshVertexOnFace ( *it, _gf, p);
+      theMap[*it] = SPoint3((*it)->x(),(*it)->y(),(*it)->z());
+      (*it)->setXYZ(p.x(),p.y(),0.0);
+    }    
+  }
+
   for (std::set<MVertex*>::iterator it = vs.begin(); it != vs.end(); ++it)
     myAssembler.numberVertex(*it, 0, 1);
   
@@ -620,7 +599,13 @@ static void propagateValuesOnFace(GFace *_gf,
   for (std::set<MVertex*>::iterator it = vs.begin(); it != vs.end(); ++it){
     myAssembler.getDofValue(*it, 0, 1, dirichlet[*it]);
   }
-  
+
+  if ( in_parametric_plane) {
+    for (std::set<MVertex*>::iterator it = vs.begin(); it != vs.end(); ++it){
+      SPoint3 p = theMap[(*it)];
+      (*it)->setXYZ(p.x(),p.y(),p.z());
+    }
+  }
   delete _lsys;
 #endif
 }
@@ -746,8 +731,8 @@ void backgroundMesh::propagatecrossField(GFace *_gf)
     }
   }
   
-  propagateValuesOnFace(_gf,_cosines4);
-  propagateValuesOnFace(_gf,_sines4);
+  propagateValuesOnFace(_gf,_cosines4,false);
+  propagateValuesOnFace(_gf,_sines4,false);
   
   std::map<MVertex*,MVertex*>::iterator itv2 = _2Dto3D.begin();
   for ( ; itv2 != _2Dto3D.end(); ++itv2){
@@ -814,8 +799,23 @@ double backgroundMesh::operator() (double u, double v, double w) const
   double uv2[3];
   MElement *e = _octree->find(u, v, w, 2, true);
   if (!e) {
-    Msg::Error("BGM octree: cannot find %g %g %g", u, v, w);
-    return -1000.0;//0.4;
+#if defined(HAVE_ANN)
+    //printf("BGM octree not found --> find in kdtree \n");
+    double pt[3] = {u,v,0.0};
+
+    uv_kdtree->annkSearch(pt, 2, index, dist);
+    SPoint3  p1(nodes[index[0]][0], nodes[index[0]][1], nodes[index[0]][2]);
+    SPoint3  p2(nodes[index[1]][0], nodes[index[1]][1], nodes[index[1]][2]);
+    SPoint3 pnew; double d;
+    signedDistancePointLine(p1,p2, SPoint3(u,v,0.0), d, pnew);
+    double uvw[3]={pnew.x(),pnew.y(), 0.0};
+    double UV[3];
+    e = _octree->find(pnew.x(), pnew.y(), 0.0, 2, true); 
+#endif
+    if(!e){
+      Msg::Error("BGM octree: cannot find UVW=%g %g %g", u, v, w);
+      return -1000.0;//0.4;
+    }
   }
   e->xyz2uvw(uv, uv2);
   std::map<MVertex*,double>::const_iterator itv1 = _sizes.find(e->getVertex(0));
@@ -841,8 +841,22 @@ double backgroundMesh::getAngle(double u, double v, double w) const
   double uv2[3];
   MElement *e = _octree->find(u, v, w, 2, true);
   if (!e) {
-    Msg::Error("BGM octree : cannot find %g %g %g", u, v, w);
-    return 0.0;
+#if defined(HAVE_ANN)
+    //printf("BGM octree not found --> find in kdtree \n");
+    double pt[3] = {u,v,0.0};
+    uv_kdtree->annkSearch(pt, 2, index, dist);
+    SPoint3  p1(nodes[index[0]][0], nodes[index[0]][1], nodes[index[0]][2]);
+    SPoint3  p2(nodes[index[1]][0], nodes[index[1]][1], nodes[index[1]][2]);
+    SPoint3 pnew; double d;
+    signedDistancePointLine(p1,p2, SPoint3(u,v,0.0), d, pnew);
+    double uvw[3]={pnew.x(),pnew.y(), 0.0};
+    double UV[3];
+    e = _octree->find(pnew.x(), pnew.y(), 0.0, 2,true); 
+#endif
+    if(!e){
+      Msg::Error("BGM octree angle: cannot find UVW=%g %g %g", u, v, w);
+      return -1000.0;
+    }
   }
   e->xyz2uvw(uv, uv2);
   std::map<MVertex*,double>::const_iterator itv1 = _angles.find(e->getVertex(0));

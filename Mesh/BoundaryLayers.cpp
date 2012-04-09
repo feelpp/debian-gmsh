@@ -29,7 +29,7 @@ static void addExtrudeNormals(std::vector<T*> &elements, int invert,
     Msg::Error("Boundary layer index should be 0 or 1");
     return;
   }
-
+ 
   if(octree && !gouraud){ // get extrusion direction from post-processing view
     std::set<MVertex*> verts;
     for(unsigned int i = 0; i < elements.size(); i++)
@@ -218,8 +218,7 @@ int Mesh2DWithBoundaryLayers(GModel *m)
     }
   }
 
-  if(sourceEdges.empty() && sourceFaces.empty())
-    return 0;
+  if(sourceEdges.empty() && sourceFaces.empty()) return 0;
 
   // compute mesh dependencies in source faces (so we can e.g. create
   // a boundary layer on an extruded mesh)
@@ -280,6 +279,7 @@ int Mesh2DWithBoundaryLayers(GModel *m)
           vdest = ge->getEndVertex();
         }
         GPoint p = vsrc->point();
+	
         ep->Extrude(ep->mesh.NbLayer - 1, ep->mesh.NbElmLayer[ep->mesh.NbLayer - 1],
                     p.x(), p.y(), p.z());
         vdest->setPosition(p);

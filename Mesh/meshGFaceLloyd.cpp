@@ -189,7 +189,7 @@ class lpcvt{
   std::vector<double> angles;
   std::vector<voronoi_cell> temp;
   fullMatrix<double> gauss_points;
-  fullMatrix<double> gauss_weights;
+  fullVector<double> gauss_weights;
   int gauss_num;
  public :
   lpcvt();
@@ -433,8 +433,8 @@ void smoothing::optimize_face(GFace* gf){
   double ratio;
   double factor;
   lpcvt obj;
-  double initial_conditions[2*triangulator.numPoints];
-  double variables_scales[2*triangulator.numPoints];
+  double* initial_conditions = static_cast<double*>(malloc(2*triangulator.numPoints*sizeof(double)));
+  double* variables_scales = static_cast<double*>(malloc(2*triangulator.numPoints*sizeof(double)));
   alglib::ae_int_t maxits;
   alglib::minlbfgsstate state;
   alglib::minlbfgsreport rep;
@@ -541,6 +541,9 @@ void smoothing::optimize_face(GFace* gf){
                            gf->additionalVertices.end());
   // clear the list of additional vertices
   gf->additionalVertices.clear();
+	
+  free(initial_conditions);
+  free(variables_scales);
 }
 
 void smoothing::optimize_model(){
@@ -1440,7 +1443,7 @@ double lpcvt::F(voronoi_element element,int p){
     x = Tx(u,v,generator,C1,C2);
 	y = Ty(u,v,generator,C1,C2);
 	point = SPoint2(x,y);
-	weight = gauss_weights(i,0);
+	weight = gauss_weights(i);
 	rho = element.get_rho(u,v);
 	energy = energy + weight*rho*f(generator,point,m,p);
   }
@@ -1480,7 +1483,7 @@ SVector3 lpcvt::simple(voronoi_element element,int p){
     x = Tx(u,v,generator,C1,C2);
 	y = Ty(u,v,generator,C1,C2);
 	point = SPoint2(x,y);
-	weight = gauss_weights(i,0);
+	weight = gauss_weights(i);
 	rho = element.get_rho(u,v);
 	comp_x = comp_x + weight*rho*df_dx(generator,point,m,p);
 	comp_y = comp_y + weight*rho*df_dy(generator,point,m,p);
@@ -1525,7 +1528,7 @@ SVector3 lpcvt::dF_dC1(voronoi_element element,int p){
     x = Tx(u,v,generator,C1,C2);
 	y = Ty(u,v,generator,C1,C2);
 	point = SPoint2(x,y);
-	weight = gauss_weights(i,0);
+	weight = gauss_weights(i);
 	rho = element.get_rho(u,v);
 	drho_dx = element.get_drho_dx();
 	drho_dy = element.get_drho_dy();
@@ -1575,7 +1578,7 @@ SVector3 lpcvt::dF_dC2(voronoi_element element,int p){
 	x = Tx(u,v,generator,C1,C2);
 	y = Ty(u,v,generator,C1,C2);
 	point = SPoint2(x,y);
-	weight = gauss_weights(i,0);
+	weight = gauss_weights(i);
 	rho = element.get_rho(u,v);
 	drho_dx = element.get_drho_dx();
 	drho_dy = element.get_drho_dy();

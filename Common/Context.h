@@ -33,11 +33,12 @@ struct contextMeshOptions {
   int order, secondOrderLinear, secondOrderIncomplete;
   int secondOrderExperimental, meshOnlyVisible;
   int smoothInternalEdges, minCircPoints, minCurvPoints;
+  int smoothNLayers;
+  double smoothDistoThreshold, smoothPoissonRatio;
   int saveAll, saveTri, saveGroupsOfNodes, binary, bdfFieldFormat, saveParametric;
   int smoothNormals, reverseAllNormals, zoneDefinition, clip;
   int saveElementTagType;
   int switchElementTags;
-  int highOrderNoMetric;
   int multiplePasses;
   int cgnsImportOrder;
   std::map<int,int> algo2d_per_face;
@@ -100,7 +101,7 @@ class CTX {
   // position and size of various windows in the GUI
   int menuPosition[2], glPosition[2], glSize[2], msgSize;
   int optPosition[2], visPosition[2], clipPosition[2], manipPosition[2];
-  int statPosition[2], ctxPosition[2], solverPosition[2];
+  int statPosition[2], ctxPosition[2], solverPosition[2], solverSize[2];
   int pluginPosition[2], pluginSize[2], fieldPosition[2], fieldSize[2];
   int fileChooserPosition[2];
   // use the system menu bar on Mac OS X?
@@ -225,7 +226,8 @@ class CTX {
     int fileFormat, epsQuality, epsCompress, epsPS3Shading;
     int epsOcclusionCulling, epsBestRoot;
     double epsLineWidthFactor, epsPointSizeFactor;
-    int jpegQuality, jpegSmoothing, geoLabels, text, texAsEquation;
+    int jpegQuality, jpegSmoothing, geoLabels, geoOnlyPhysicals;
+    int text, texAsEquation;
     int gifDither, gifSort, gifInterlace, gifTransparent;
     int posElementary, posElement, posGamma, posEta, posRho, posDisto;
     int compositeWindows, deleteTmpFiles, background;

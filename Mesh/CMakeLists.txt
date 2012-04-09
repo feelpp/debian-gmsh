@@ -24,7 +24,6 @@ CenterlineField.cpp
     BoundaryLayers.cpp 
     BDS.cpp 
     HighOrder.cpp 
-      highOrderSmoother.cpp 
       highOrderTools.cpp 
     meshPartition.cpp
     meshRefine.cpp
@@ -32,6 +31,7 @@ CenterlineField.cpp
     QuadTriUtils.cpp
       QuadTriExtruded2D.cpp QuadTriExtruded3D.cpp QuadTriTransfinite3D.cpp
     simple3D.cpp
+  DivideAndConquer.cpp
     Voronoi3D.cpp
     Levy3D.cpp
     periodical.cpp

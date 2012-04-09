@@ -19,8 +19,9 @@ project(gmsh CXX C)
 # this variable controls the default value of the "ENABLE_XXX" options which are
 # normally set to ON (useful if you want to configure a minimal version of Gmsh:
 # e.g. "cmake -DDEFAULT=0 -DENABLE_POST=1 -DENABLE_PARSER=1")
-set(DEFAULT ON CACHE INTERNAL "Default value for options")
+set(DEFAULT ON CACHE INTERNAL "Default value for enabled-by-default options")
 
+option(ENABLE_3M "Enable 3M" OFF)
 option(ENABLE_ACIS "Enable ACIS geometrical models" ${DEFAULT})
 option(ENABLE_ANN "Enable ANN to compute Approximate Nearest Neighbors" ${DEFAULT})
 option(ENABLE_APP_BUNDLE "Create .app bundle on Mac when installing" ${DEFAULT})
@@ -61,7 +62,7 @@ option(ENABLE_SLEPC "Enable SLEPc eigensolvers" ${DEFAULT})
 option(ENABLE_SOLVER "Enable solver components" ${DEFAULT})
 option(ENABLE_TAUCS "Enable Taucs linear algebra solver" ${DEFAULT})
 option(ENABLE_TETGEN "Enable Tetgen mesh generator" ${DEFAULT})
-option(ENABLE_TETGEN_NEW "Enable experimental version of Tetgen" OFF)
+option(ENABLE_TETGEN_OLD "Use old version of Tetgen" OFF)
 option(ENABLE_VORO3D "Enable Voro3D" ${DEFAULT})
 option(ENABLE_WRAP_JAVA "Build Java wrappers" OFF)
 option(ENABLE_WRAP_PYTHON "Build Python wrappers" ${DEFAULT})
@@ -93,14 +94,15 @@ set(GMSH_API
     Geo/discreteFace.h Geo/discreteRegion.h Geo/SPoint2.h Geo/SPoint3.h
     Geo/SVector3.h Geo/STensor3.h Geo/SBoundingBox3d.h Geo/Pair.h Geo/Range.h 
     Geo/SOrientedBoundingBox.h Geo/CellComplex.h Geo/ChainComplex.h Geo/Cell.h
-    Geo/Homology.h Geo/partitionEdge.h Geo/CGNSOptions.h Geo/gmshLevelset.h
+    Geo/Homology.h Geo/Chain.h Geo/partitionEdge.h Geo/CGNSOptions.h Geo/gmshLevelset.h
   Mesh/meshGEdge.h Mesh/meshGFace.h Mesh/meshGFaceOptimize.h Mesh/meshPartition.h
-    Mesh/meshGFaceDelaunayInsertion.h Mesh/simple3D.h Mesh/meshPartitionOptions.h Mesh/Voronoi3D.h Mesh/Levy3D.h Mesh/periodical.h
+    Mesh/meshGFaceDelaunayInsertion.h Mesh/simple3D.h Mesh/meshPartitionOptions.h 
+    Mesh/Voronoi3D.h Mesh/Levy3D.h Mesh/periodical.h
   Numeric/mathEvaluator.h
   Solver/dofManager.h Solver/femTerm.h Solver/laplaceTerm.h Solver/elasticityTerm.h
     Solver/crossConfTerm.h Solver/orthogonalTerm.h
     Solver/linearSystem.h Solver/linearSystemGMM.h Solver/linearSystemCSR.h 
-    Solver/linearSystemFull.h Solver/elasticitySolver.h
+    Solver/linearSystemFull.h Solver/elasticitySolver.h Solver/sparsityPattern.h 
   Post/PView.h Post/PViewData.h Plugin/PluginManager.h Post/OctreePost.h
   Graphics/drawContext.h
   contrib/kbipack/gmp_normal_form.h contrib/kbipack/gmp_matrix.h 
@@ -141,6 +143,7 @@ endif(APPLE)
 include(CheckTypeSize)
 include(CheckFunctionExists)
 include(CheckIncludeFile)
+include(CheckCXXCompilerFlag)
 
 if(MSVC)
   # remove annoying warning about bool/int cast performance
@@ -454,6 +457,12 @@ if(HAVE_FLTK OR HAVE_QT OR ENABLE_GRAPHICS)
     set_config_option(HAVE_MPEG_ENCODE "Mpeg")
   endif(ENABLE_MPEG_ENCODE)
 
+  if(ENABLE_3M AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/contrib/3M)
+    add_subdirectory(contrib/3M)
+    include_directories(contrib/3M)
+    set_config_option(HAVE_3M "3M")
+  endif(ENABLE_3M AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/contrib/3M)
+
   if(ENABLE_OSMESA)
     find_library(OSMESA_LIB OSMesa)
     if(OSMESA_LIB)
@@ -594,17 +603,15 @@ if(HAVE_MESH)
     set_config_option(HAVE_MMG3D "Mmg3d")
   endif(ENABLE_MMG3D)
 
-  if(ENABLE_TETGEN_NEW AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/contrib/TetgenNew/tetgen.h)
-    add_subdirectory(contrib/TetgenNew)
-    include_directories(contrib/TetgenNew)
-    set_config_option(HAVE_TETGEN "Tetgen(New)")
+  if(ENABLE_TETGEN AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/contrib/Tetgen1.5/tetgen.h)
+    add_subdirectory(contrib/Tetgen1.5)
+    include_directories(contrib/Tetgen1.5)
+    set_config_option(HAVE_TETGEN "Tetgen(1.5)")
     add_definitions(-DTETLIBRARY)
-    message("WARNING: You are including an experimental version of Tetgen "
-            "that is KNOWN TO BE BUGGY on 64 bits archs and on WIN32/MSVC.")
-  elseif(ENABLE_TETGEN AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/contrib/Tetgen/tetgen.h)
-    add_subdirectory(contrib/Tetgen)
-    include_directories(contrib/Tetgen)
-    set_config_option(HAVE_TETGEN "Tetgen")
+  elseif(ENABLE_TETGEN_OLD AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/contrib/Tetgen1.4/tetgen.h)
+    add_subdirectory(contrib/Tetgen1.4)
+    include_directories(contrib/Tetgen1.4)
+    set_config_option(HAVE_TETGEN "Tetgen(1.4)")
     add_definitions(-DTETLIBRARY)
   elseif(ENABLE_TETGEN)
     find_library(TETGEN_LIB tet PATH_SUFFIXES lib)
@@ -614,7 +621,7 @@ if(HAVE_MESH)
       list(APPEND EXTERNAL_INCLUDES ${TETGEN_INC})
       set_config_option(HAVE_TETGEN "Tetgen")
     endif(TETGEN_LIB AND TETGEN_INC)
-  endif(ENABLE_TETGEN_NEW AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/contrib/TetgenNew/tetgen.h)
+  endif(ENABLE_TETGEN AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/contrib/Tetgen1.5/tetgen.h)
   if(HAVE_TETGEN)
     message("WARNING: By including Tetgen you have to comply with Tetgen's "
             "special licensing requirements stated in contrib/Tetgen/LICENSE.")
@@ -909,13 +916,6 @@ if(DLFCN_H)
   list(APPEND EXTERNAL_LIBRARIES ${CMAKE_DL_LIBS})
 endif(DLFCN_H)
 
-if(UNIX)
-  # do not optimize some files on Unix
-  file(GLOB_RECURSE NON_OPTIMIZED_SRC Common/GmshPredicates.cpp Mesh/BDS.cpp
-       Parser/Gmsh.tab.cpp contrib/Tetgen*/*.cxx)
-  set_source_files_properties(${NON_OPTIMIZED_SRC} COMPILE_FLAGS "-O0")
-endif(UNIX)
-
 if(MSVC)
   add_definitions(-D_USE_MATH_DEFINES -DNOMINMAX 
                   -D_CRT_SECURE_NO_DEPRECATE -D_SCL_SECURE_NO_DEPRECATE)
@@ -925,6 +925,13 @@ endif(MSVC)
 if(WIN32 OR CYGWIN)
   list(APPEND EXTERNAL_LIBRARIES wsock32 ws2_32)
 endif(WIN32 OR CYGWIN)
+
+check_cxx_compiler_flag("-O0" NOOPT)
+if(NOOPT)
+  file(GLOB_RECURSE NON_OPTIMIZED_SRC Numeric/robustPredicates.cpp Mesh/BDS.cpp
+       Parser/Gmsh.tab.cpp contrib/Tetgen*/*.cxx)
+  set_source_files_properties(${NON_OPTIMIZED_SRC} COMPILE_FLAGS "-O0")
+endif(NOOPT)
 
 list(SORT CONFIG_OPTIONS)
 set(GMSH_CONFIG_OPTIONS "")
@@ -1052,6 +1059,12 @@ if(WIN32 AND NOT MSVC OR CYGWIN)
 elseif(MSVC)
   set_target_properties(gmsh PROPERTIES LINK_FLAGS "/STACK:16777216")
 endif(WIN32 AND NOT MSVC OR CYGWIN)
+
+# force full warnings to encourage everybody to write clean(er) code
+check_cxx_compiler_flag("-Wall" WALL)
+if(WALL)
+  set_target_properties(gmsh lib shared PROPERTIES COMPILE_FLAGS "-Wall")
+endif(WALL)
 
 find_program(BISON bison)
 find_program(FLEX flex)
@@ -1228,7 +1241,7 @@ set(CPACK_SOURCE_GENERATOR TGZ)
 set(CPACK_SOURCE_IGNORE_FILES "${CMAKE_CURRENT_BINARY_DIR}" "/CVS/" "/.svn" "~$" 
     "DS_Store$" "GmshConfig.h$" "GmshVersion.h$" "/benchmarks/" "/tmp/" 
     "/bin/" "/lib/" "/nightly/" "GPATH" "GRTAGS" "GSYMS" "GTAGS" "/HTML/" 
-    "/projects/" "/TetgenNew/") #"/Tetgen.*/.*(cxx|h)")
+    "/projects/")
 
 if(UNIX)
   # make sure we remove previous installs before doing the next one

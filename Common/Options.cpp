@@ -1777,6 +1777,20 @@ double opt_general_solver_position1(OPT_ARGS_NUM)
   return CTX::instance()->solverPosition[1];
 }
 
+double opt_general_solver_size0(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->solverSize[0] = (int)val;
+  return CTX::instance()->solverSize[0];
+}
+
+double opt_general_solver_size1(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->solverSize[1] = (int)val;
+  return CTX::instance()->solverSize[1];
+}
+
 double opt_general_context_position0(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
@@ -5046,6 +5060,9 @@ double opt_mesh_algo3d(OPT_ARGS_NUM)
     case ALGO_3D_FRONTAL:
       FlGui::instance()->options->mesh.choice[3]->value(1);
       break;
+    case ALGO_3D_RTREE:
+      FlGui::instance()->options->mesh.choice[3]->value(5);
+      break;
     case ALGO_3D_DELAUNAY:
     default:
       FlGui::instance()->options->mesh.choice[3]->value(0);
@@ -5108,6 +5125,33 @@ double opt_mesh_smooth_internal_edges(OPT_ARGS_NUM)
   return CTX::instance()->mesh.smoothInternalEdges;
 }
 
+double opt_mesh_ho_nlayers(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->mesh.smoothNLayers = (int)val;
+  return CTX::instance()->mesh.smoothNLayers;
+}
+
+double opt_mesh_ho_mindisto(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->mesh.smoothDistoThreshold = val;
+  return CTX::instance()->mesh.smoothDistoThreshold;
+}
+
+double opt_mesh_ho_poisson(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET) {
+    double ratio = val;
+    if (ratio <= -1.0)
+      ratio = -0.999;
+    else if (ratio >= 0.5)
+      ratio = 0.499;
+    CTX::instance()->mesh.smoothPoissonRatio = ratio;
+  }
+  return CTX::instance()->mesh.smoothPoissonRatio;
+}
+
 double opt_mesh_second_order_experimental(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
@@ -5139,13 +5183,6 @@ double opt_mesh_second_order_incomplete(OPT_ARGS_NUM)
       (CTX::instance()->mesh.secondOrderIncomplete);
 #endif
   return CTX::instance()->mesh.secondOrderIncomplete;
-}
-
-double opt_mesh_hom_no_metric(OPT_ARGS_NUM)
-{
-  if(action & GMSH_SET)
-    CTX::instance()->mesh.highOrderNoMetric = (int)val;
-  return CTX::instance()->mesh.highOrderNoMetric;
 }
 
 double opt_mesh_cgns_import_order(OPT_ARGS_NUM)
@@ -5716,7 +5753,7 @@ double opt_view_nb_non_empty_timestep(OPT_ARGS_NUM)
   GET_VIEW(0.);
   if(!data) return 0;
   int n = 0;
-  for(unsigned int i = 0; i < data->getNumTimeSteps(); i++)
+  for(int i = 0; i < data->getNumTimeSteps(); i++)
     if(data->hasTimeStep(i)) n++;
   return n;
 #else
@@ -7862,6 +7899,13 @@ double opt_print_geo_labels(OPT_ARGS_NUM)
   if(action & GMSH_SET)
     CTX::instance()->print.geoLabels = (int)val;
   return CTX::instance()->print.geoLabels;
+}
+
+double opt_print_geo_only_physicals(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->print.geoOnlyPhysicals = (int)val;
+  return CTX::instance()->print.geoOnlyPhysicals;
 }
 
 double opt_print_pos_elementary(OPT_ARGS_NUM)

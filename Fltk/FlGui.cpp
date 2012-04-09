@@ -840,6 +840,8 @@ void FlGui::storeCurrentWindowsInfo()
 #if defined(HAVE_ONELAB) && (FL_MAJOR_VERSION == 1) && (FL_MINOR_VERSION == 3)
   CTX::instance()->solverPosition[0] = onelab->x();
   CTX::instance()->solverPosition[1] = onelab->y();
+  CTX::instance()->solverSize[0] = onelab->w();
+  CTX::instance()->solverSize[1] = onelab->h();
 #endif
   fileChooserGetPosition(&CTX::instance()->fileChooserPosition[0],
                          &CTX::instance()->fileChooserPosition[1]);
@@ -890,15 +892,22 @@ void window_cb(Fl_Widget *w, void *data)
       oldy = FlGui::instance()->graph[0]->win->y();
       oldw = FlGui::instance()->graph[0]->win->w();
       oldh = FlGui::instance()->graph[0]->win->h();
+//#define FS
+#ifndef FS
       FlGui::instance()->graph[0]->win->resize(Fl::x(), Fl::y(), Fl::w(), Fl::h());
       FlGui::instance()->graph[0]->hideMessages();
       FlGui::check();
-      //FlGui::instance()->graph[0]->win->fullscreen();
+#else
+      FlGui::instance()->graph[0]->win->fullscreen();
+#endif
       zoom = 0;
     }
     else{
+#ifndef FS
       FlGui::instance()->graph[0]->win->resize(oldx, oldy, oldw, oldh);
-      //FlGui::instance()->graph[0]->win->fullscreen_off(oldx, oldy, oldw, oldh);
+#else
+      FlGui::instance()->graph[0]->win->fullscreen_off();
+#endif
       zoom = 1;
     }
     FlGui::instance()->menu->win->show();

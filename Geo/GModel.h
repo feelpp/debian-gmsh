@@ -312,8 +312,8 @@ class GModel
   int getNumMeshElements(unsigned c[5]);
 
   // access a mesh element by coordinates (using an octree search)
-  MElement *getMeshElementByCoord(SPoint3 &p, int dim = -1);
-  std::vector<MElement*> getMeshElementsByCoord(SPoint3 &p, int dim = -1);
+  MElement *getMeshElementByCoord(SPoint3 &p, int dim=-1, bool strict=true);
+  std::vector<MElement*> getMeshElementsByCoord(SPoint3 &p, int dim=-1);
 
   // access a mesh element by tag, using the element cache
   MElement *getMeshElementByTag(int n);
@@ -450,12 +450,14 @@ class GModel
   GEntity *revolve(GEntity *e, std::vector<double> p1, std::vector<double> p2,
                    double angle);
   GEntity *extrude(GEntity *e, std::vector<double> p1, std::vector<double> p2);
+  GEntity *extrudeBoundaryLayer(GEntity *e, int nbLayers, double hLayers, int dir=1, int view=-1);
   GEntity *addPipe(GEntity *e, std::vector<GEdge *>  edges);
 
   void addRuledFaces(std::vector<std::vector<GEdge *> > edges);
   GFace *addFace(std::vector<GEdge *> edges, std::vector< std::vector<double > > points);
   GFace *addPlanarFace(std::vector<std::vector<GEdge *> > edges);
-  GFace *addCompoundFace(std::vector<GFace*> faces, int typeP, int typeS);
+  GEdge *addCompoundEdge(std::vector<GEdge*> edges, int num=-1);
+  GFace *addCompoundFace(std::vector<GFace*> faces, int type, int split, int num=-1);
   GRegion *addVolume(std::vector<std::vector<GFace*> > faces);
 
   // create solid geometry primitives using the factory
@@ -487,6 +489,11 @@ class GModel
                               std::vector<int> &elementary,
                               std::vector<int> &partition);
 
+  // for elements cut having new vertices
+  void store(std::vector<MVertex*> &vertices, int dim,
+            std::map<int, std::vector<MElement*> > &entityMap,
+            std::map<int, std::map<int, std::string> > &physicalMap);
+
   // store mesh elements of a chain in a new elementary and physical entity
   void storeChain(int dim,
                   std::map<int, std::vector<MElement*> > &entityMap,
@@ -504,7 +511,8 @@ class GModel
   // Gmsh native CAD format (readGEO is static, since it can create
   // multiple models)
   static int readGEO(const std::string &name);
-  int writeGEO(const std::string &name, bool printLabels=true);
+  int writeGEO(const std::string &name, bool printLabels=true,
+               bool onlyPhysicals=false);
   int importGEOInternals();
   int exportDiscreteGEOInternals();
 

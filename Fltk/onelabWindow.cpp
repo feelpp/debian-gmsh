@@ -90,11 +90,11 @@ static void mergePostProcessingFile(const std::string &fileName)
 {
   if(!FlGui::instance()->onelab->mergeAuto()) return;
 
-  int n = PView::list.size();
+  unsigned int n = PView::list.size();
   // store old step values
   std::vector<int> steps(n, 0);
   if(FlGui::instance()->onelab->showLastStep()){
-    for(int i = 0; i < PView::list.size(); i++)
+    for(unsigned int i = 0; i < PView::list.size(); i++)
       steps[i] = (int)opt_view_nb_timestep(i, GMSH_GET, 0);
   }
 
@@ -135,7 +135,7 @@ static void mergePostProcessingFile(const std::string &fileName)
 
   // hide everything except the onelab X-Y graphs
   if(FlGui::instance()->onelab->hideNewViews()){
-    for(int i = 0; i < PView::list.size(); i++){
+    for(unsigned int i = 0; i < PView::list.size(); i++){
       if(PView::list[i]->getData()->getFileName().substr(0, 6) != "OneLab")
         PView::list[i]->getOptions()->visible = 0;
     }
@@ -143,7 +143,7 @@ static void mergePostProcessingFile(const std::string &fileName)
   else if(n != PView::list.size()){
     // if we created new views, assume we only want to see those (and the
     // onelab X-Y graphs)
-    for(int i = 0; i < n; i++){
+    for(unsigned int i = 0; i < n; i++){
       if(PView::list[i]->getData()->getFileName().substr(0, 6) != "OneLab")
         PView::list[i]->getOptions()->visible = 0;
     }
@@ -152,7 +152,7 @@ static void mergePostProcessingFile(const std::string &fileName)
   // if we added steps, go to the last one
   if(FlGui::instance()->onelab->showLastStep()){
     steps.resize(PView::list.size(), 0);
-    for(int i = 0; i < PView::list.size(); i++){
+    for(unsigned int i = 0; i < PView::list.size(); i++){
       int step = (int)opt_view_nb_timestep(i, GMSH_GET, 0);
       if(step > steps[i])
         opt_view_timestep(i, GMSH_SET|GMSH_GUI, step - 1);
@@ -160,7 +160,7 @@ static void mergePostProcessingFile(const std::string &fileName)
   }
 
   drawContext::global()->draw();
-  if(n != (int)PView::list.size())
+  if(n != PView::list.size())
     FlGui::instance()->menu->setContext(menu_post, 0);
 }
 
@@ -203,13 +203,22 @@ bool onelab::localNetworkClient::run()
       std::string checkCommand = (ps.empty() ? "" : ps[0].getValue());
       get(ps, getName() + "/9ComputeCommand");
       std::string computeCommand = (ps.empty() ? "" : ps[0].getValue());
+    /*
       if(action == "check")
         command += " " + modelName + " " + checkCommand;
       else if(action == "compute")
         command += " " + modelName + " " + computeCommand;
+    */
+    if(action == "check")
+      command.append(" " + modelName + " " + checkCommand) ;
+    else if(action == "compute")
+      command.append(" " + modelName + " " + computeCommand);
     }
+    /*
     // append "-onelab" command line argument
     command += " " + _socketSwitch + " \"" + getName() + "\"";
+    */
+    command.append(" " + getSocketSwitch() + " " + getName() + " %s");
   }
   else{
     Msg::Info("Listening on socket '%s'", sockname.c_str());
@@ -453,11 +462,19 @@ static void initializeLoop(const std::string &level)
         onelab::server::instance()->set(numbers[i]);
         changed = true;
       }
-      else if(numbers[i].getMin() != -onelab::parameter::maxNumber() &&
-              numbers[i].getStep()){
-        numbers[i].setValue(numbers[i].getMin());
-        onelab::server::instance()->set(numbers[i]);
-        changed = true;
+      else if(numbers[i].getStep() > 0){
+	if(numbers[i].getMin() != -onelab::parameter::maxNumber()){
+	  numbers[i].setValue(numbers[i].getMin());
+	  onelab::server::instance()->set(numbers[i]);
+	  changed = true;
+	}
+      }
+      else if(numbers[i].getStep() < 0){
+	if(numbers[i].getMax() != onelab::parameter::maxNumber()){
+	  numbers[i].setValue(numbers[i].getMax());
+	  onelab::server::instance()->set(numbers[i]);
+	  changed = true;
+	}
       }
     }
   }
@@ -476,6 +493,7 @@ static bool incrementLoop(const std::string &level)
   for(unsigned int i = 0; i < numbers.size(); i++){
     if(numbers[i].getAttribute("Loop") == level){
       loop = true;
+
       if(numbers[i].getChoices().size() > 1){
         // FIXME should store loopVariable attribute in the parameter
         // -- the following test will loop forever if 2 values are
@@ -492,14 +510,25 @@ static bool incrementLoop(const std::string &level)
           }
         }
       }
-      else if(numbers[i].getMax() != onelab::parameter::maxNumber() &&
-              numbers[i].getValue() < numbers[i].getMax() &&
-              numbers[i].getStep()){
-        numbers[i].setValue(numbers[i].getValue() + numbers[i].getStep());
-        onelab::server::instance()->set(numbers[i]);
-        Msg::Info("Recomputing with new step %s=%g",
-                  numbers[i].getName().c_str(), numbers[i].getValue());
-        recompute = true;
+      else if(numbers[i].getStep() > 0){
+	if(numbers[i].getMax() != onelab::parameter::maxNumber() &&
+	   numbers[i].getValue() < numbers[i].getMax()){
+	  numbers[i].setValue(numbers[i].getValue() + numbers[i].getStep());
+	  onelab::server::instance()->set(numbers[i]);
+	  Msg::Info("Recomputing with new step %s=%g",
+		    numbers[i].getName().c_str(), numbers[i].getValue());
+	  recompute = true;
+	}
+      }
+      else if(numbers[i].getStep() < 0){
+	if(numbers[i].getMin() != -onelab::parameter::maxNumber() &&
+	   numbers[i].getValue() > numbers[i].getMin()){
+	  numbers[i].setValue(numbers[i].getValue() + numbers[i].getStep());
+	  onelab::server::instance()->set(numbers[i]);
+	  Msg::Info("Recomputing with new step %s=%g",
+		    numbers[i].getName().c_str(), numbers[i].getValue());
+	  recompute = true;
+	}
       }
     }
   }
@@ -536,13 +565,20 @@ static bool incrementLoop()
 static std::vector<double> getRange(onelab::number &p)
 {
   std::vector<double> v;
+
   if(p.getChoices().size()){
     v = p.getChoices();
   }
   else if(p.getMin() != -onelab::parameter::maxNumber() &&
-          p.getMax() != onelab::parameter::maxNumber() && p.getStep()){
-    for(double d = p.getMin(); d <= p.getMax(); d += p.getStep())
-      v.push_back(d);
+          p.getMax() != onelab::parameter::maxNumber()){
+    if(p.getStep() > 0){
+      for(double d = p.getMin(); d <= p.getMax(); d += p.getStep())
+	v.push_back(d);
+    }
+    else if(p.getStep() < 0){
+      for(double d = p.getMin(); d <= p.getMax(); d -= p.getStep())
+	v.push_back(d);
+    }
   }
   return v;
 }
@@ -925,8 +961,8 @@ onelabWindow::onelabWindow(int deltaFontSize)
 {
   FL_NORMAL_SIZE -= _deltaFontSize;
 
-  int width = 29 * FL_NORMAL_SIZE;
-  int height = 15 * BH + 3 * WB;
+  int width = CTX::instance()->solverSize[0];
+  int height = CTX::instance()->solverSize[1];
 
   _win = new paletteWindow
     (width, height, CTX::instance()->nonModalWindows ? true : false, "OneLab");
@@ -1199,7 +1235,7 @@ void onelabWindow::rebuildSolverList()
       hosts.push_back(opt_solver_remote_login(i, GMSH_GET, ""));
     }
   }
-  for(int i = 0; i < 5; i++){
+  for(unsigned int i = 0; i < 5; i++){
     if(i < names.size()){
       onelab::server::citer it = onelab::server::instance()->findClient(names[i]);
       if(it != onelab::server::instance()->lastClient())

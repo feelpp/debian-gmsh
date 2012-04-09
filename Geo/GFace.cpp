@@ -51,7 +51,6 @@ GFace::GFace(GModel *model, int tag)
 GFace::~GFace()
 {
   std::list<GEdge*>::iterator it = l_edges.begin();
-
   while (it != l_edges.end()){
     (*it)->delFace(this);
     ++it;
@@ -545,9 +544,9 @@ end:
       double d = meanPlane.a * v->x() + meanPlane.b * v->y() +
         meanPlane.c * v->z() - meanPlane.d;
       if(fabs(d) > lc * 1.e-3) {
-        Msg::Warning("Plane surface %d (%gx+%gy+%gz=%g) is not plane!",
+        Msg::Debug("Plane surface %d (%gx+%gy+%gz=%g) is not plane!",
                      tag(), meanPlane.a, meanPlane.b, meanPlane.c, meanPlane.d);
-        Msg::Warning("Control point %d = (%g,%g,%g), val=%g",
+        Msg::Debug("Control point %d = (%g,%g,%g), val=%g",
                      v->tag(), v->x(), v->y(), v->z(), d);
         break;
       }

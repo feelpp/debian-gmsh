@@ -553,9 +553,6 @@ int GModel::adaptMesh(std::vector<int> technique, std::vector<simpleFunction<dou
         metric->addMetric(technique[imetric], f[imetric], parameters[imetric]);
       }
       fields->setBackgroundField(metric);
-      // int id = fields->newId();
-      // (*fields)[id] = new meshMetric(this, technique, f, parameters);
-      // fields->background_field = id;
 
       opt_mesh_lc_integration_precision(0, GMSH_SET, 1.e-4);
       opt_mesh_algo2d(0, GMSH_SET, 7.0); //bamg
@@ -739,14 +736,15 @@ int GModel::getNumMeshElements(unsigned c[5])
   return 0;
 }
 
-MElement *GModel::getMeshElementByCoord(SPoint3 &p, int dim)
+MElement *GModel::getMeshElementByCoord(SPoint3 &p, int dim, bool strict)
 {
   if(!_octree){
     Msg::Debug("Rebuilding mesh element octree");
     _octree = new MElementOctree(this);
   }
-  return _octree->find(p.x(), p.y(), p.z(), dim);
+  return _octree->find(p.x(), p.y(), p.z(), dim, strict);
 }
+
 std::vector<MElement*> GModel::getMeshElementsByCoord(SPoint3 &p, int dim)
 {
   if(!_octree){
@@ -978,6 +976,16 @@ void GModel::deleteMeshPartitions()
     for(unsigned int j = 0; j < entities[i]->getNumMeshElements(); j++)
       entities[i]->getMeshElement(j)->setPartition(0);
   meshPartitions.clear();
+}
+
+void GModel::store(std::vector<MVertex*> &vertices, int dim,
+          std::map<int, std::vector<MElement*> > &entityMap,
+          std::map<int, std::map<int, std::string> > &physicalMap)
+{
+  _storeVerticesInEntities(vertices);
+  _storeElementsInEntities(entityMap);
+  _storePhysicalTagsInEntities(dim, physicalMap);
+  _associateEntityWithMeshVertices();
 }
 
 void GModel::storeChain(int dim,
@@ -2065,13 +2073,55 @@ void GModel::save(std::string fileName)
   CreateOutputFile(fileName, guess);
   GModel::setCurrent(temp);
 }
+GEdge* GModel::addCompoundEdge(std::vector<GEdge*> edges, int num){
 
-GFace* GModel::addCompoundFace(std::vector<GFace*> faces, int param, int typeS)
+  if (num ==-1) num =  getMaxElementaryNumber(1) + 1;
+  GEdgeCompound *gec = new GEdgeCompound(this, num, edges);
+  add(gec);
+
+  //create old geo format for the compound edge
+  //necessary for boundary layers
+  if(FindCurve(num)){
+    Msg::Error("Curve %d already exists", num);
+  }
+  else{
+    Curve *c = Create_Curve(num, MSH_SEGM_COMPOUND, 1, NULL, NULL, -1, -1, 0., 1.);
+    for(int i= 0; i< edges.size(); i++)
+      c->compound.push_back(edges[i]->tag());
+
+    // Curve *c = Create_Curve(num, MSH_SEGM_DISCRETE, 1,
+    // 			    NULL, NULL, -1, -1, 0., 1.);
+    // List_T *points = Tree2List(getGEOInternals()->Points);
+    // GVertex *gvb = gec->getBeginVertex();
+    // GVertex *gve = gec->getEndVertex();
+    // int nb = 2 ;
+    // c->Control_Points = List_Create(nb, 1, sizeof(Vertex *));
+    // for(int i = 0; i < List_Nbr(points); i++) {
+    //   Vertex *v;
+    //   List_Read(points, i, &v);
+    //   if (v->Num == gvb->tag()) {
+    // 	List_Add(c->Control_Points, &v);
+    // 	c->beg = v;
+    //   }
+    //   if (v->Num == gve->tag()) {
+    // 	List_Add(c->Control_Points, &v);
+    // 	c->end = v;
+    //   }
+    // }
+
+    End_Curve(c);
+    Tree_Add(getGEOInternals()->Curves, &c);
+    CreateReversedCurve(c);
+  }
+
+  return gec;
+}
+GFace* GModel::addCompoundFace(std::vector<GFace*> faces, int param, int split, int num)
 {
 #if defined(HAVE_SOLVER)
-  int num =  getMaxElementaryNumber(2) + 1;
+  if (num ==-1) num = getMaxElementaryNumber(2) + 1;
 
-  std::list<GFace*> comp(faces.begin(), faces.end());
+  std::list<GFace*> faces_comp(faces.begin(), faces.end());
   std::list<GEdge*> U0;
 
   GFaceCompound::typeOfCompound typ = GFaceCompound::HARMONIC_CIRCLE;
@@ -2081,8 +2131,36 @@ GFace* GModel::addCompoundFace(std::vector<GFace*> faces, int param, int typeS)
   if (param == 4) typ =  GFaceCompound::CONVEX_CIRCLE;
   if (param == 5) typ =  GFaceCompound::CONVEX_PLANE;
   if (param == 6) typ =  GFaceCompound::HARMONIC_SQUARE;
+  if (param == 7) typ =  GFaceCompound::CONFORMAL_FE;
 
-  GFaceCompound *gfc = new GFaceCompound(this, num, comp, U0, typ, typeS);
+  GFaceCompound *gfc = new GFaceCompound(this, num, faces_comp, U0, typ, split);
+  
+  //create old geo format for the compound face
+  //necessary for boundary layers
+  if(FindSurface(num)){
+    Msg::Error("Surface %d already exists", num);
+  }
+  else{
+    Surface *s = Create_Surface(num, MSH_SURF_COMPOUND);
+    for(int i= 0; i< faces.size(); i++)
+      s->compound.push_back(faces[i]->tag());
+
+    // Surface *s = Create_Surface(num, MSH_SURF_DISCRETE);
+    // std::list<GEdge*> edges = gfc->edges();
+    // s->Generatrices = List_Create(edges.size(), 1, sizeof(Curve *));
+    // List_T *curves = Tree2List(_geo_internals->Curves);
+    // Curve *c;
+    // for(std::list<GEdge*>::iterator ite = edges.begin(); ite != edges.end(); ite++){
+    //   for(int i = 0; i < List_Nbr(curves); i++) {
+    // 	List_Read(curves, i, &c);
+    // 	if (c->Num == (*ite)->tag()) {
+    // 	  List_Add(s->Generatrices, &c);
+    // 	}
+    //   }
+    // }
+    
+    Tree_Add(_geo_internals->Surfaces, &s);
+  }
 
   add(gfc);
   return gfc;
@@ -2187,6 +2265,13 @@ GEntity *GModel::extrude(GEntity *e, std::vector<double> p1, std::vector<double>
 {
   if(_factory)
     return _factory->extrude(this, e, p1, p2);
+  return 0;
+}
+
+GEntity *GModel::extrudeBoundaryLayer(GEntity *e, int nbLayers, double hLayers, int dir, int view)
+{
+  if(_factory)
+    return _factory->extrudeBoundaryLayer(this, e, nbLayers,hLayers, dir, view);
   return 0;
 }
 
@@ -2851,27 +2936,26 @@ void GModel::computeHomology()
     Homology* homology = new Homology(this, itp.first->first.first,
                                       itp.first->first.second,
                                       prepareToRestore);
-    CellComplex *cellcomplex = homology->createCellComplex();
-    if(cellcomplex->getSize(0)){
-      for(std::multimap<dpair, std::string>::iterator itt = itp.first;
-          itt != itp.second; itt++){
-        // restore cell complex to non-reduced state if we are reusing it
-        if(itt != itp.first) cellcomplex->restoreComplex();
-        std::string type = itt->second;
-        if(type == "Homology")
-          homology->findHomologyBasis(cellcomplex);
-        else if(type == "Cohomology")
-          homology->findCohomologyBasis(cellcomplex);
-        else
-          Msg::Error("Unknown type of homology computation: %s", type.c_str());
+
+    // do not save 0-, and n-chains, where n is the dimension of the model
+    // (usually not needed for anything, available through the plugin)
+    for(std::multimap<dpair, std::string>::iterator itt = itp.first;
+        itt != itp.second; itt++){
+      std::string type = itt->second;
+      if(type == "Homology") {
+        homology->findHomologyBasis();
+        if(this->getDim() != 1) homology->addChainsToModel(1);
+        if(this->getDim() != 2) homology->addChainsToModel(2);
       }
-      // do not save 0-, and n-chains, where n is the dimension of the model
-      // (usually not needed for anything, available through the plugin)
-      if(this->getDim() != 1) homology->addChainsToModel(1);
-      if(this->getDim() != 2) homology->addChainsToModel(2);
-      _pruneMeshVertexAssociations();
+      else if(type == "Cohomology") {
+        homology->findCohomologyBasis();
+        if(this->getDim() != 1) homology->addCochainsToModel(1);
+        if(this->getDim() != 2) homology->addCochainsToModel(2);
+      }
+      else
+        Msg::Error("Unknown type of homology computation: %s", type.c_str());
     }
-    delete cellcomplex;
+    _pruneMeshVertexAssociations();
     delete homology;
   }
 #else

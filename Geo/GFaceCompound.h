@@ -20,6 +20,12 @@ template <class scalar> class simpleFunction;
 #include "meshGFaceOptimize.h"
 #include "linearSystem.h"
 #include "GRbf.h"
+#include "MElementOctree.h"
+
+#if defined(HAVE_ANN)
+#include <ANN/ANN.h>
+class ANNkd_tree;
+#endif
 
 #define AR_MAX 5 //maximal geometrical aspect ratio
 
@@ -53,11 +59,12 @@ class GRbf;
 class GFaceCompound : public GFace {
  public:
   typedef enum {ITERU=0,ITERV=1,ITERD=2} iterationStep;
-  typedef enum {HARMONIC_CIRCLE=0, CONFORMAL_SPECTRAL=1, RADIAL_BASIS=2, HARMONIC_PLANE=3, 
-	       CONVEX_CIRCLE=4,CONVEX_PLANE=5, HARMONIC_SQUARE=6} typeOfCompound;
+  typedef enum {HARMONIC_CIRCLE=0, CONFORMAL_SPECTRAL=1, RADIAL_BASIS=2, HARMONIC_PLANE=3,
+		CONVEX_CIRCLE=4,CONVEX_PLANE=5, HARMONIC_SQUARE=6, CONFORMAL_FE=7} typeOfCompound;
   typedef enum {HARMONIC=0,CONFORMAL=1, RBF=2, CONVEX=3} typeOfMapping;
-  typedef enum {UNITCIRCLE, MEANPLANE, SQUARE, ALREADYFIXED} typeOfIsomorphism;
-  void computeNormals(std::map<MVertex*, SVector3> &normals) const;
+  typedef enum {UNITCIRCLE, MEANPLANE, SQUARE, ALREADYFIXED,SPECTRAL, FE} typeOfIsomorphism;
+  mutable int nbSplit;
+
  protected:
   mutable std::set<MVertex *> ov;
   mutable GRbf *_rbf;
@@ -69,6 +76,12 @@ class GFaceCompound : public GFace {
   mutable int nbT;
   mutable GFaceCompoundTriangle *_gfct;
   mutable Octree *oct;
+  mutable MElementOctree *octNew;
+  mutable std::vector<MVertex*> myParamVert;
+  mutable std::vector<MElement*> myParamElems;
+  mutable std::map<MVertex*,MVertex*> _3Dto2D;
+  mutable std::map<MVertex*,MVertex*> _2Dto3D;
+  mutable std::map<int,SPoint3> XYZoct;
   mutable std::set<MVertex*> allNodes;
   mutable v2t_cont adjv;
   mutable bool mapv2Tri;
@@ -77,73 +90,97 @@ class GFaceCompound : public GFace {
   mutable std::map<MVertex*, SVector3> _normals;
   mutable std::list<MTriangle*> fillTris;
   mutable std::set<MVertex*> fillNodes;
+  mutable std::vector<GFace*> fillFaces;
   mutable std::vector<MVertex*> _ordered;
   mutable std::vector<double> _coords;
   mutable std::map<MVertex*, int> _mapV;
   linearSystem <double> *_lsys;
+#if defined(HAVE_ANN)
+   mutable ANNkd_tree *uv_kdtree;
+   mutable ANNpointArray nodes;
+   ANNidxArray index;
+   ANNdistArray dist;
+#endif
   void buildOct() const ;
-  void buildAllNodes() const; 
+  void buildAllNodes() const;
+
+  //different type of parametrizations
   void parametrize(iterationStep, typeOfMapping) const;
   bool parametrize_conformal(int iter, MVertex *v1, MVertex *v2) const;
   bool parametrize_conformal_spectral() const;
-  void compute_distance() const;
+
+  //check for parametrizations
   bool checkOrientation(int iter, bool moveBoundaries=false) const;
   bool checkOverlap(std::vector<MVertex *> &vert) const;
-  void one2OneMap(bool moveBoundaries=false) const;
+  bool one2OneMap() const;
   void convexBoundary(double nTot) const;
   double checkAspectRatio() const;
+
+  //tools for filling interior holes of surfaces
+  void fillNeumannBCS() const;
+  void fillNeumannBCS_Plane() const;
+  void orientFillTris(std::list<MTriangle*> loopfillTris)const;
+  void printFillTris()const;
+
   void computeNormals () const;
   void getBoundingEdges();
-  void getUniqueEdges(std::set<GEdge*> &_unique); 
+  void getUniqueEdges(std::set<GEdge*> &_unique);
   void computeALoop(std::set<GEdge*> &_unique, std::list<GEdge*> &);
-  void getTriangle(double u, double v, GFaceCompoundTriangle **lt, 
+  void getTriangle(double u, double v, GFaceCompoundTriangle **lt,
                    double &_u, double &_v) const;
   virtual double locCurvature(MTriangle *t, double u, double v) const;
-  void printStuff(int iNewton=0) const;
-  bool trivial() const;
+
   double getSizeH() const;
   double getSizeBB(const std::list<GEdge* > &elist) const;
-  void fillNeumannBCS() const;
-  /* double sumAngles(std::vector<MVertex*> ordered) const; */
- 
- public: 
+  bool trivial() const;
+  void printStuff(int iNewton=0) const;
+
+ public:
   GFaceCompound(GModel *m, int tag, std::list<GFace*> &compound,
 		std::list<GEdge*> &U0, typeOfCompound typ = HARMONIC_CIRCLE,
-		int allowPartition=1, 
+		int allowPartition=1,
 		linearSystem<double>* lsys =0);
  GFaceCompound(GModel *m, int tag, std::list<GFace*> &compound,
 	       std::list<GEdge*> &U0, std::list<GEdge*> &V0,
 	       std::list<GEdge*> &U1, std::list<GEdge*> &V1,
 	       typeOfCompound typ = HARMONIC_CIRCLE,
-	       int allowPartition=1, 
+	       int allowPartition=1,
 	       linearSystem<double>* lsys =0);
-  virtual ~GFaceCompound();
-  Range<double> parBounds(int i) const 
+ ~GFaceCompound();
+
+  Range<double> parBounds(int i) const
   { return trivial() ? (*(_compound.begin()))->parBounds(i) : Range<double>(-1, 1); }
-  virtual GPoint point(double par1, double par2) const; 
-  typeOfCompound getTypeOfCompound() { return _toc;}
+
+  GPoint point(double par1, double par2) const;
+  GPoint pointInRemeshedOctree(double par1, double par2) const;
   SPoint2 parFromPoint(const SPoint3 &p, bool onSurface=true) const;
+  SPoint2 parFromVertex(MVertex *v) const;
   virtual Pair<SVector3,SVector3> firstDer(const SPoint2 &param) const;
-  virtual void secondDer(const SPoint2 &, SVector3 *, SVector3 *, SVector3 *) const; 
+  virtual void secondDer(const SPoint2 &, SVector3 *, SVector3 *, SVector3 *) const;
   virtual GEntity::GeomType geomType() const { return CompoundSurface; }
   ModelType getNativeType() const { return GmshModel; }
   void * getNativePtr() const { return 0; }
   virtual SPoint2 getCoordinates(MVertex *v) const;
   virtual double curvatureMax(const SPoint2 &param) const;
   virtual double curvatures(const SPoint2 &param, SVector3 *dirMax, SVector3 *dirMin,
-   double *curvMax, double *curvMin) const;
-  virtual int genusGeom () const;
-  virtual bool checkTopology() const;
-  bool parametrize() const ;
+			    double *curvMax, double *curvMin) const;
+  bool parametrize() const;
+  void computeNormals(std::map<MVertex*, SVector3> &normals) const;
   void coherenceNormals();
   void coherencePatches() const;
+  virtual int genusGeom () const;
+  virtual bool checkTopology() const;
+
   virtual std::list<GFace*> getCompounds() const { return _compound; }
-  mutable int nbSplit;
+  typeOfCompound getTypeOfCompound() { return _toc;}
   int getNbSplit() const { return nbSplit; }
   int allowPartition() const{ return _allowPartition; }
   void setType(typeOfIsomorphism type){ _type=type;}
-  // useful for mesh generators ----------------------------------------
-  GPoint intersectionWithCircle (const SVector3 &n1, const SVector3 &n2, const SVector3 &p, const double &d, double uv[2]) const;
+
+  // useful for mesh generators
+  GPoint intersectionWithCircle (const SVector3 &n1, const SVector3 &n2, const SVector3 &p,
+				 const double &d, double uv[2]) const;
+
  private:
   mutable typeOfCompound _toc;
   mutable typeOfMapping _mapping;
@@ -158,13 +195,13 @@ template<class scalar> class linearSystem;
 class GFaceCompound : public GFace {
  public:
   typedef enum {ITERU=0,ITERV=1,ITERD=2} iterationStep;
-  typedef enum {HARMONIC_CIRCLE=0, CONFORMAL_SPECTRAL=1, RADIAL_BASIS=2, HARMONIC_PLANE=3, 
-	       CONVEX_CIRCLE=4,CONVEX_PLANE=5, HARMONIC_SQUARE=6} typeOfCompound;
+  typedef enum {HARMONIC_CIRCLE=0, CONFORMAL_SPECTRAL=1, RADIAL_BASIS=2, HARMONIC_PLANE=3,
+		CONVEX_CIRCLE=4,CONVEX_PLANE=5, HARMONIC_SQUARE=6, CONFORMAL_FE=7} typeOfCompound;
   typedef enum {HARMONIC=0,CONFORMAL=1, RBF=2, CONVEX=3} typeOfMapping;
-  typedef enum {UNITCIRCLE, MEANPLANE, SQUARE, ALREADYFIXED} typeOfIsomorphism;
+  typedef enum {UNITCIRCLE, MEANPLANE, SQUARE, ALREADYFIXED,SPECTRAL, FE} typeOfIsomorphism;
  GFaceCompound(GModel *m, int tag, std::list<GFace*> &compound,
-	       std::list<GEdge*> &U0, typeOfMapping typ = HARMONIC, 
-	       int allowPartition=1, 
+	       std::list<GEdge*> &U0, typeOfMapping typ = HARMONIC,
+	       int allowPartition=1,
 	       linearSystem<double>* lsys =0)
     : GFace(m, tag)
   {
@@ -173,8 +210,8 @@ class GFaceCompound : public GFace {
  GFaceCompound(GModel *m, int tag, std::list<GFace*> &compound,
 	       std::list<GEdge*> &U0, std::list<GEdge*> &V0,
 	       std::list<GEdge*> &U1, std::list<GEdge*> &V1,
-	       typeOfCompound typ = HARMONIC_CIRCLE, 
-	       int allowPartition=1, 
+	       typeOfCompound typ = HARMONIC_CIRCLE,
+	       int allowPartition=1,
 	       linearSystem<double>* lsys =0)
     : GFace(m, tag)
   {
@@ -186,7 +223,8 @@ class GFaceCompound : public GFace {
   {
     return Pair<SVector3, SVector3>(SVector3(0, 0, 0), SVector3(0, 0, 0));
   }
-  void secondDer(const SPoint2 &param, 
+  SPoint2 parFromVertex(MVertex *v) const { return SPoint2(); }
+  void secondDer(const SPoint2 &param,
                          SVector3 *dudu, SVector3 *dvdv, SVector3 *dudv) const{}
   virtual SPoint2 getCoordinates(MVertex *v) const { return SPoint2(); }
   void parametrize() const {}

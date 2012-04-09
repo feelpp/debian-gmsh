@@ -10,6 +10,8 @@
 #include "meshGRegion.h"
 #include <queue>
 #include <fstream>
+#include "CenterlineField.h"
+#include <algorithm>
 
 #if defined(HAVE_RTREE) 
 #include "rtree.h"
@@ -17,7 +19,7 @@
 
 #define k1 0.7 //k1*h is the minimal distance between two nodes
 #define k2 0.5 //k2*h is the minimal distance to the boundary
-#define sqrt2 1.4143
+#define sqrt3 1.73205081
 
 /*********definitions*********/
 
@@ -85,32 +87,22 @@ class Wrapper{
 
 /*********functions*********/
 
-double max(double a,double b){
-  if(a>b) return a;
-  else return b;
-}
-
-double uniform_distance(SPoint3 p1,SPoint3 p2,Metric m){
-  double det;
+double infinity_distance(SPoint3 p1,SPoint3 p2,Metric m){
   double distance;
-  double a,b,c,d,e,f,g,h,i;
   double x1,y1,z1;
   double x2,y2,z2;
+  double a,b,c,d,e,f,g,h,i;
 	
-  det = m.get_m11()*(m.get_m22()*m.get_m33() - m.get_m32()*m.get_m23());
-  det = det - m.get_m12()*(m.get_m21()*m.get_m33() - m.get_m31()*m.get_m23());
-  det = det + m.get_m13()*(m.get_m21()*m.get_m32() - m.get_m31()*m.get_m22());
-	
-  a = (m.get_m22()*m.get_m33() - m.get_m32()*m.get_m23())/det;
-  b = (m.get_m13()*m.get_m32() - m.get_m33()*m.get_m12())/det;
-  c = (m.get_m12()*m.get_m23() - m.get_m22()*m.get_m13())/det;
-  d = (m.get_m23()*m.get_m31() - m.get_m33()*m.get_m21())/det;
-  e = (m.get_m11()*m.get_m33() - m.get_m31()*m.get_m13())/det;
-  f = (m.get_m13()*m.get_m21() - m.get_m23()*m.get_m11())/det;
-  g = (m.get_m21()*m.get_m32() - m.get_m31()*m.get_m22())/det;
-  h = (m.get_m12()*m.get_m31() - m.get_m32()*m.get_m11())/det;
-  i = (m.get_m11()*m.get_m22() - m.get_m21()*m.get_m12())/det;
-	
+  a = m.get_m11();
+  b = m.get_m21();
+  c = m.get_m31();
+  d = m.get_m12();
+  e = m.get_m22();
+  f = m.get_m32();
+  g = m.get_m13();
+  h = m.get_m23();
+  i = m.get_m33();
+		
   x1 = a*p1.x() + b*p1.y() + c*p1.z();
   y1 = d*p1.x() + e*p1.y() + f*p1.z();
   z1 = g*p1.x() + h*p1.y() + i*p1.z();
@@ -119,7 +111,7 @@ double uniform_distance(SPoint3 p1,SPoint3 p2,Metric m){
   y2 = d*p2.x() + e*p2.y() + f*p2.z();
   z2 = g*p2.x() + h*p2.y() + i*p2.z();
 	
-  distance = max(max(fabs(x2-x1),fabs(y2-y1)),fabs(z2-z1)); 		
+  distance = std::max(std::max(fabs(x2-x1),fabs(y2-y1)),fabs(z2-z1)); 		
   return distance;
 }
 
@@ -137,7 +129,7 @@ bool rtree_callback(Node* neighbour,void* w){
   m = spawn->get_metric();
 	
   if(neighbour!=parent){
-    distance = uniform_distance(spawn->get_point(),neighbour->get_point(),m);
+    distance = infinity_distance(spawn->get_point(),neighbour->get_point(),m);
 	if(distance<k1*h){
 	  wrapper->set_too_close(1);
 	  return false;
@@ -371,7 +363,7 @@ void Filler::treat_region(GRegion* gr){
     y = boundary_vertices[i]->y();
     z = boundary_vertices[i]->z();
     node = new Node(SPoint3(x,y,z));
-	compute_parameters(node);
+	compute_parameters(node,gr);
 	rtree.Insert(node->min,node->max,node);
 	fifo.push(node);
 	print_node(node,file);
@@ -389,7 +381,7 @@ void Filler::treat_region(GRegion* gr){
 	n4 = new Node();
 	n5 = new Node();
 	n6 = new Node();
-	offsprings(octree,parent,n1,n2,n3,n4,n5,n6);
+	offsprings(gr,octree,parent,n1,n2,n3,n4,n5,n6);
 	data.clear();
 	data.push_back(n1);
 	data.push_back(n2);
@@ -405,7 +397,7 @@ void Filler::treat_region(GRegion* gr){
 	  y = point.y();
 	  z = point.z();
 	  if(inside_domain(octree,x,y,z)){
-		compute_parameters(spawn);
+		compute_parameters(spawn,gr);
 	    if(far_from_boundary(octree,spawn)){
 		  wrapper.set_too_close(0);
 		  wrapper.set_spawn(spawn);
@@ -466,6 +458,53 @@ double Filler::get_size(double x,double y,double z){
   return 0.25;
 }
 
+Metric Filler::get_clf_metric(double x,double y,double z,GEntity* ge){
+  SVector3 v1,v2,v3;
+  Metric m;
+  Field* field;
+  FieldManager* manager;
+	
+  m = Metric();
+  manager = ge->model()->getFields();
+  if(manager->getBackgroundField()>0){
+    field = manager->get(manager->getBackgroundField());
+	if(field){
+	  (*field)(x,y,z,v1,v2,v3,ge);
+		
+	  m.set_m11(v1.x());	
+	  m.set_m21(v1.y());
+	  m.set_m31(v1.z());
+		
+	  m.set_m12(v2.x());
+	  m.set_m22(v2.y());
+	  m.set_m32(v2.z());
+		
+	  m.set_m13(v3.x());
+	  m.set_m23(v3.y());
+	  m.set_m33(v3.z());
+	}
+  }
+	
+  return m;
+}
+
+double Filler::get_clf_size(double x,double y,double z,GEntity* ge){
+  double h;
+  Field* field;
+  FieldManager* manager;
+	
+  h = 0.25;	
+  manager = ge->model()->getFields();
+  if(manager->getBackgroundField()>0){
+    field = manager->get(manager->getBackgroundField());
+	if(field){
+	  h = (*field)(x,y,z,ge);
+	}
+  }
+	
+  return h;
+}
+
 bool Filler::inside_domain(MElementOctree* octree,double x,double y,double z){
   MElement* element;
   element = (MElement*)octree->find(x,y,z,3,true);
@@ -496,7 +535,7 @@ bool Filler::far_from_boundary(MElementOctree* octree,Node* node){
   else return 0;
 }
 
-void Filler::compute_parameters(Node* node){
+void Filler::compute_parameters(Node* node,GEntity* ge){
   double x,y,z;
   double h;
   Metric m;
@@ -508,17 +547,18 @@ void Filler::compute_parameters(Node* node){
   z = point.z();
   m = get_metric(x,y,z);
   h = get_size(x,y,z);
+  
   node->set_size(h);
   node->set_metric(m);
-  node->min[0] = x - sqrt2*k1*h;
-  node->min[1] = y - sqrt2*k1*h;
-  node->min[2] = z - sqrt2*k1*h;
-  node->max[0] = x + sqrt2*k1*h;
-  node->max[1] = y + sqrt2*k1*h;
-  node->max[2] = z + sqrt2*k1*h;
+  node->min[0] = x - sqrt3*h;
+  node->min[1] = y - sqrt3*h;
+  node->min[2] = z - sqrt3*h;
+  node->max[0] = x + sqrt3*h;
+  node->max[1] = y + sqrt3*h;
+  node->max[2] = z + sqrt3*h;
 }
 
-void Filler::offsprings(MElementOctree* octree,Node* node,Node* n1,Node* n2,Node* n3,Node* n4,Node* n5,Node* n6){
+void Filler::offsprings(GEntity* ge,MElementOctree* octree,Node* node,Node* n1,Node* n2,Node* n3,Node* n4,Node* n5,Node* n6){
   double x,y,z;
   double x1,y1,z1;
   double x2,y2,z2;
@@ -538,32 +578,32 @@ void Filler::offsprings(MElementOctree* octree,Node* node,Node* n1,Node* n2,Node
   h = node->get_size();
   m = node->get_metric();
 	
-  h1 = improvement(octree,point,h,SVector3(m.get_m11(),m.get_m21(),m.get_m31()));
+  h1 = improvement(ge,octree,point,h,SVector3(m.get_m11(),m.get_m21(),m.get_m31()));
   x1 = x + h1*m.get_m11();
   y1 = y + h1*m.get_m21();
   z1 = z + h1*m.get_m31();
   
-  h2 = improvement(octree,point,h,SVector3(-m.get_m11(),-m.get_m21(),-m.get_m31()));
+  h2 = improvement(ge,octree,point,h,SVector3(-m.get_m11(),-m.get_m21(),-m.get_m31()));
   x2 = x - h2*m.get_m11();
   y2 = y - h2*m.get_m21();
   z2 = z - h2*m.get_m31();
   
-  h3 = improvement(octree,point,h,SVector3(m.get_m12(),m.get_m22(),m.get_m32()));
+  h3 = improvement(ge,octree,point,h,SVector3(m.get_m12(),m.get_m22(),m.get_m32()));
   x3 = x + h3*m.get_m12();
   y3 = y + h3*m.get_m22();
   z3 = z + h3*m.get_m32();
   
-  h4 = improvement(octree,point,h,SVector3(-m.get_m12(),-m.get_m22(),-m.get_m32()));
+  h4 = improvement(ge,octree,point,h,SVector3(-m.get_m12(),-m.get_m22(),-m.get_m32()));
   x4 = x - h4*m.get_m12();
   y4 = y - h4*m.get_m22();
   z4 = z - h4*m.get_m32();
   
-  h5 = improvement(octree,point,h,SVector3(m.get_m13(),m.get_m23(),m.get_m33()));
+  h5 = improvement(ge,octree,point,h,SVector3(m.get_m13(),m.get_m23(),m.get_m33()));
   x5 = x + h5*m.get_m13();
   y5 = y + h5*m.get_m23();
   z5 = z + h5*m.get_m33();
   
-  h6 = improvement(octree,point,h,SVector3(-m.get_m13(),-m.get_m23(),-m.get_m33()));
+  h6 = improvement(ge,octree,point,h,SVector3(-m.get_m13(),-m.get_m23(),-m.get_m33()));
   x6 = x - h6*m.get_m13();
   y6 = y - h6*m.get_m23();
   z6 = z - h6*m.get_m33();
@@ -576,7 +616,7 @@ void Filler::offsprings(MElementOctree* octree,Node* node,Node* n1,Node* n2,Node
   *n6 = Node(SPoint3(x6,y6,z6));
 }
 
-double Filler::improvement(MElementOctree* octree,SPoint3 point,double h_nearer,SVector3 direction){
+double Filler::improvement(GEntity* ge,MElementOctree* octree,SPoint3 point,double h_nearer,SVector3 direction){
   double x,y,z;
   double average;
   double h_farther;
@@ -638,18 +678,23 @@ void Filler::print_node(Node* node,std::ofstream& file){
   x1 = x + h*m.get_m11();
   y1 = y + h*m.get_m21();
   z1 = z + h*m.get_m31();
+  
   x2 = x - h*m.get_m11();
   y2 = y - h*m.get_m21();
   z2 = z - h*m.get_m31();
+  
   x3 = x + h*m.get_m12();
   y3 = y + h*m.get_m22();
   z3 = z + h*m.get_m32();
+  
   x4 = x - h*m.get_m12();
   y4 = y - h*m.get_m22();
   z4 = z - h*m.get_m32();
+  
   x5 = x + h*m.get_m13();
   y5 = y + h*m.get_m23();
   z5 = z + h*m.get_m33();
+  
   x6 = x - h*m.get_m13();
   y6 = y - h*m.get_m23();
   z6 = z - h*m.get_m33();
