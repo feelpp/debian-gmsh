@@ -31,6 +31,7 @@
 #include "CenterlineField.h"
 #include "Field.h"
 #include "Options.h"
+#include "simple3D.h"
 
 #if defined(HAVE_POST)
 #include "PView.h"
@@ -483,7 +484,7 @@ static void Mesh2D(GModel *m)
 	smm.optimize_face(*it);
 	int rec = 1;//(CTX::instance()->mesh.recombineAll || (*it)->meshAttributes.recombine);
 	m->writeMSH("afterLLoyd.msh");
-	if(rec){printf("recombine\n"); recombineIntoQuads(*it);}
+	if(rec) recombineIntoQuads(*it);
 	m->writeMSH("afterRecombine.msh");
       }
     }
@@ -503,7 +504,7 @@ static void Mesh2D(GModel *m)
 #endif
 
   // collapseSmallEdges(*m);
-  
+
 #if defined(HAVE_ANN)
   //For centerline field, clean the cut parts
   Centerline *center = 0;
@@ -511,10 +512,10 @@ static void Mesh2D(GModel *m)
   if (fields->getBackgroundField() > 0 ){
     Field *myField = fields->get(fields->getBackgroundField());
     center = dynamic_cast<Centerline*> (myField);
-  } 
+  }
   if (center) center->cleanMesh();
 #endif
-  
+
   double t2 = Cpu();
   CTX::instance()->meshTimer[1] = t2 - t1;
   Msg::StatusBar(2, true, "Done meshing 2D (%g s)", CTX::instance()->meshTimer[1]);
@@ -556,11 +557,16 @@ static void Mesh3D(GModel *m)
   FindConnectedRegions(delaunay, connected);
   for(unsigned int i = 0; i < connected.size(); i++){
     MeshDelaunayVolume(connected[i]);
+    if(CTX::instance()->mesh.algo3d == ALGO_3D_RTREE){
+      Filler f;
+      f.treat_region(connected[i][0]);
+    }
   }
 
   double t2 = Cpu();
   CTX::instance()->meshTimer[2] = t2 - t1;
   Msg::StatusBar(2, true, "Done meshing 3D (%g s)", CTX::instance()->meshTimer[2]);
+
 }
 
 void OptimizeMeshNetgen(GModel *m)

@@ -582,9 +582,13 @@ StringXNumber GeneralOptions_Number[] = {
     "Size (in pixels) of small axes" },
   { F|S, "SolverPositionX" , opt_general_solver_position0 , 650. ,
     "Horizontal position (in pixels) of the upper left corner of the solver "
-    "windows" },
+    "window" },
   { F|S, "SolverPositionY" , opt_general_solver_position1 , 150. ,
-    "Vertical position (in pixels) of the upper left corner of the solver windows" },
+    "Vertical position (in pixels) of the upper left corner of the solver window" },
+  { F|S, "SolverHeight" , opt_general_solver_size1 , 400. ,
+    "Height (in pixels) of the solver window" },
+  { F|S, "SolverWidth" , opt_general_solver_size0 , 300. ,
+    "Width (in pixels) of the solver window" },
   { F|S, "StatisticsPositionX" , opt_general_statistics_position0 , 650. ,
     "Horizontal position (in pixels) of the upper left corner of the statistic "
     "window" },
@@ -772,7 +776,7 @@ StringXNumber MeshOptions_Number[] = {
 #else
     ALGO_3D_FRONTAL ,
 #endif
-    "3D mesh algorithm (1=Delaunay, 4=Frontal, 5=Frontal Delaunay, 6=Frontal Hex, 7=MMG3D)" },
+    "3D mesh algorithm (1=Delaunay, 4=Frontal, 5=Frontal Delaunay, 6=Frontal Hex, 7=MMG3D, 9=R-tree)" },
   { F|O, "AngleSmoothNormals" , opt_mesh_angle_smooth_normals , 30.0 ,
     "Threshold angle below which normals are not smoothed" },
   { F|O, "AnisoMax" , opt_mesh_aniso_max, 1.e33,
@@ -869,9 +873,15 @@ StringXNumber MeshOptions_Number[] = {
 
   { F|O, "Hexahedra" , opt_mesh_hexahedra , 1. ,
     "Display mesh hexahedra?" },
-  { F|O, "HighOrderNoMetric" , opt_mesh_hom_no_metric , 0. ,
-    "Don't use metric computation to create high-order meshes." },
-
+  { F|0, "HighOrderNumLayers", opt_mesh_ho_nlayers, 3.,
+    "Number of high order mesh elements to consider for optimization."},
+  { F|O, "HighOrderOptimize" , opt_mesh_smooth_internal_edges , 0.,
+    "Number of smoothing steps of internal edges for high order meshes" },
+  { F|0, "HighOrderPoissonRatio", opt_mesh_ho_poisson, 0.33,
+    "Poisson ratio of the material used in the elastic smoother for high order meshes."
+    "Must be between -1.0 and 0.5, excluded."},
+  { F|O, "HighOrderSmoothingThreshold", opt_mesh_ho_mindisto, 0.5,
+    "Distorition threshold when choosing which high order element to optimize."},
 
   { F|O, "LabelSampling" , opt_mesh_label_sampling , 1. ,
     "Label sampling rate (display one label every `LabelSampling' elements)" },
@@ -998,7 +1008,7 @@ StringXNumber MeshOptions_Number[] = {
   { F|O, "RemeshAlgorithm" , opt_mesh_remesh_algo , 0 ,
     "Remeshing algorithm (0=no split, 1=automatic, 2=automatic only with metis)" },
   { F|O, "RemeshParametrization" , opt_mesh_remesh_param , 0 ,
-    "Remeshing using discrete parametrization (0=harmonic_circle, 1=conformal, 2=rbf, 3=harmonic_plane, 4=convex_circle, 5=convex_plane, 6=harmonic square" },
+    "Remeshing using discrete parametrization (0=harmonic_circle, 1=conformal_spectral, 2=rbf, 3=harmonic_plane, 4=convex_circle, 5=convex_plane, 6=harmonic square, 7=conformal_fe" },
 
   { F|O, "RefineSteps" , opt_mesh_refine_steps , 10 ,
     "Number of refinement steps in the MeshAdapt-based 2D algorithms" },
@@ -1027,8 +1037,6 @@ StringXNumber MeshOptions_Number[] = {
     "Should second order vertices simply be created by linear interpolation?" },
   { F|O, "Smoothing" , opt_mesh_nb_smoothing , 1. ,
     "Number of smoothing steps applied to the final mesh" },
-  { F|O, "SmoothInternalEdges" , opt_mesh_smooth_internal_edges , 0 ,
-    "Number of smoothing steps of internal edges for high order meshes" },
   { F|O, "SmoothNormals" , opt_mesh_smooth_normals , 0. ,
     "Smooth the mesh normals?" },
   { F|O, "SmoothRatio" , opt_mesh_smooth_ratio , 1.8 ,
@@ -1415,6 +1423,8 @@ StringXNumber PrintOptions_Number[] = {
 
   { F|O, "GeoLabels" , opt_print_geo_labels , 1. ,
     "Save labels in unrolled Gmsh geometries" },
+  { F|O, "GeoOnlyPhysicals" , opt_print_geo_only_physicals , 1. ,
+    "Only save entities that belong to physical groups" },
   { F|O, "GifDither" , opt_print_gif_dither , 0. ,
     "Apply dithering to GIF output" },
   { F|O, "GifInterlace" , opt_print_gif_interlace , 0. ,

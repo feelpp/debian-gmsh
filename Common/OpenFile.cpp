@@ -41,6 +41,10 @@
 #include "drawContext.h"
 #endif
 
+#if defined(HAVE_3M)
+#include "3M.h"
+#endif
+
 #define SQU(a)      ((a)*(a))
 
 static void FinishUpBoundingBox()
@@ -277,7 +281,7 @@ int MergeFile(std::string fileName, bool warnIfMissing)
 
   CTX::instance()->geom.draw = 0; // don't try to draw the model while reading
 
-#if defined(HAVE_POST)
+#if defined(HAVE_FLTK) && defined(HAVE_POST)
   int numViewsBefore = PView::list.size();
 #endif
 
@@ -363,6 +367,11 @@ int MergeFile(std::string fileName, bool warnIfMissing)
     status = GModel::current()->readCGNS(fileName);
   }
 #endif
+#if defined(HAVE_3M)
+  else if(ext == ".csv"){
+    status = readFile3M(fileName);
+  }
+#endif
   else {
     CTX::instance()->geom.draw = 1;
     if(!strncmp(header, "$PTS", 4) || !strncmp(header, "$NO", 3) ||
@@ -375,6 +384,8 @@ int MergeFile(std::string fileName, bool warnIfMissing)
         tmp->readMSH(fileName);
         status = GeomMeshMatcher::instance()->match(tmp2, tmp);
         delete tmp;
+	GModel::setCurrent(tmp2);
+	tmp2->setVisibility(1);
       }
       else
 	status = GModel::current()->readMSH(fileName);
