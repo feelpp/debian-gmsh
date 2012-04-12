@@ -1,3 +1,9 @@
+gmsh (2.5.1~beta2~svn11845~dfsg-2) unstable; urgency=low
+
+  * [0537c1a] Disable slepc/petsc on armhf-platform, because it causes FTBFS.
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Thu, 12 Apr 2012 19:54:07 +0200
+
 gmsh (2.5.1~beta2~svn11845~dfsg-1) unstable; urgency=low
 
   * [194ca02] Add get_orig-script.
