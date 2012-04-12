@@ -17,8 +17,8 @@ Build-Depends: debhelper (>= 8), cmake, gfortran, libgl1-mesa-dev,
  libblas-dev, liblapack-dev, libgl2ps-dev, freeglut3-dev,
  python-dev (>= 2.6.6-3~), swig2.0,
  chrpath, libann-dev,
- libpetsc3.2-dev [!kfreebsd-amd64 !kfreebsd-i386 !armel !s390x],
- libslepc3.2-dev [!kfreebsd-amd64 !kfreebsd-i386 !armel !s390x]
+ libpetsc3.2-dev [!kfreebsd-amd64 !kfreebsd-i386 !armel !armhf !s390x],
+ libslepc3.2-dev [!kfreebsd-amd64 !kfreebsd-i386 !armel !armhf !s390x]
 Standards-Version: 3.9.3
 DM-Upload-Allowed: yes
 X-Python-Version: current
