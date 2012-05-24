@@ -25,6 +25,7 @@ class MTriangle;
 class discreteEdge;
 class discreteFace;
 class MElement;
+class SPoint3;
 
 // A branch of a 1D tree
 struct Branch{
@@ -63,12 +64,12 @@ class Centerline : public Field{
   int nbPoints;
   double recombine;
   int NF, NV, NE, NR;
-  bool is_cut;
-  bool is_closed;
-  bool is_extruded;
+  int is_cut, is_closed, is_extruded;
   double hLayer;
   int nbElemLayer;
 
+  //inlet point
+  SPoint3 ptin;
   //all (unique) lines of centerlines
   std::vector<MLine*> lines;
   //the stuctured tree of the centerlines
@@ -117,7 +118,7 @@ class Centerline : public Field{
   double operator() (double x, double y, double z, GEntity *ge=0);
   //anisotropic operator
   void operator() (double x, double y, double z, SMetric3 &metr, GEntity *ge=0);
-  
+
   //temporary operator where v1, v2 and v3 are three orthonormal directions
   void operator()(double x,double y,double z,SVector3& v1,SVector3& v2,SVector3& v3,GEntity* ge=0);
 	
@@ -140,15 +141,15 @@ class Centerline : public Field{
   //Computes for each MLine the minRadius
   void distanceToSurface();
 
+  //actions
+  void run();
+
   // Cut the mesh in different parts of small aspect ratio
   void cutMesh();
-
   //Create In and Outlet Planar Faces
-  void closeVolume();
-
-  //Create extruded wall
-  void extrudeWall();
-  void extrudeBoundaryLayerWall();
+  void createClosedVolume(GEdge *gin, std::vector<GEdge*> boundEdges);
+  //extrude outer wall
+  void extrudeBoundaryLayerWall(GEdge *gin, std::vector<GEdge*> boundEdges);
 
   // Cut the tubular structure with a disk
   // perpendicular to the tubular structure
@@ -156,7 +157,6 @@ class Centerline : public Field{
 
   //create discrete faces
   void createFaces();
-  void createClosedVolume();
   void createSplitCompounds();
 
   //Print for debugging

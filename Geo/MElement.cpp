@@ -106,6 +106,30 @@ double MElement::rhoShapeMeasure()
     return 0.;
 }
 
+void MElement::scaledJacRange(double &jmin, double &jmax)
+{
+  jmin = jmax = 1.0;
+#if defined(HAVE_MESH)
+  extern double mesh_functional_distorsion(MElement*,double,double);
+  if (getPolynomialOrder() == 1) return;
+  const bezierBasis *jac = getJacobianFuncSpace()->bezier;
+  fullVector<double>Ji(jac->points.size1());
+  for (int i=0;i<jac->points.size1();i++){
+    double u = jac->points(i,0);
+    double v = jac->points(i,1);
+    if (getType() == TYPE_QUA){
+      u = -1 + 2*u;
+      v = -1 + 2*v;
+    }
+    Ji(i) = mesh_functional_distorsion(this,u,v);
+  }
+  fullVector<double> Bi( jac->matrixLag2Bez.size1() );
+  jac->matrixLag2Bez.mult(Ji,Bi);
+  jmin = *std::min_element(Bi.getDataPtr(),Bi.getDataPtr()+Bi.size());
+  jmax = *std::max_element(Bi.getDataPtr(),Bi.getDataPtr()+Bi.size());
+#endif
+}
+
 void MElement::getNode(int num, double &u, double &v, double &w)
 {
   // only for MElements that don't have a lookup table for this
@@ -148,6 +172,27 @@ void MElement::getThirdDerivativeShapeFunctions(double u, double v, double w, do
   if(fs) fs->dddf(u, v, w, s);
   else Msg::Error("Function space not implemented for this type of element");
 };
+
+SPoint3 MElement::barycenter_infty ()
+{
+  double xmin =  getVertex(0)->x();
+  double xmax = xmin;
+  double ymin =  getVertex(0)->y();
+  double ymax = ymin;
+  double zmin =  getVertex(0)->z();
+  double zmax = zmin;
+  int n = getNumVertices();
+  for(int i = 0; i < n; i++) {
+    MVertex *v = getVertex(i);
+    xmin = std::min(xmin,v->x());
+    xmax = std::max(xmax,v->x());
+    ymin = std::min(ymin,v->y());
+    ymax = std::max(ymax,v->y());
+    zmin = std::min(zmin,v->z());
+    zmax = std::max(zmax,v->z());
+  }
+  return SPoint3(0.5*(xmin+xmax),0.5*(ymin+ymax),0.5*(zmin+zmax));
+}
 
 SPoint3 MElement::barycenter()
 {
@@ -277,9 +322,9 @@ static double _computeDeterminantAndRegularize(MElement *ele, double jac[3][3])
     }
   case 3:
     {
-      dJ = fabs(jac[0][0] * jac[1][1] * jac[2][2] + jac[0][2] * jac[1][0] * jac[2][1] +
-                jac[0][1] * jac[1][2] * jac[2][0] - jac[0][2] * jac[1][1] * jac[2][0] -
-                jac[0][0] * jac[1][2] * jac[2][1] - jac[0][1] * jac[1][0] * jac[2][2]);
+      dJ = (jac[0][0] * jac[1][1] * jac[2][2] + jac[0][2] * jac[1][0] * jac[2][1] +
+	    jac[0][1] * jac[1][2] * jac[2][0] - jac[0][2] * jac[1][1] * jac[2][0] -
+	    jac[0][0] * jac[1][2] * jac[2][1] - jac[0][1] * jac[1][0] * jac[2][2]);
       break;
     }
   }

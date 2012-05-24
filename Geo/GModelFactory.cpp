@@ -285,20 +285,22 @@ std::vector<GFace *> GeoFactory::addRuledFaces(GModel *gm,
   return faces;
 }
 
-GEntity* GeoFactory::extrudeBoundaryLayer(GModel *gm, GEntity *e, int nbLayers, double hLayer, int dir, int view)
+std::vector<GEntity*> GeoFactory::extrudeBoundaryLayer(GModel *gm, GEntity *e, int nbLayers, double hLayer, int dir, int view)
 {
 
-  ExtrudeParams ep;
-  ep.mesh.BoundaryLayerIndex = dir;
-  ep.mesh.ViewIndex = view;
-  ep.mesh.NbLayer = 1; //this may be more general for defining different layers
-  ep.mesh.hLayer.clear();
-  ep.mesh.hLayer.push_back(hLayer);
-  ep.mesh.NbElmLayer.clear(); 
-  ep.mesh.NbElmLayer.push_back(nbLayers);
-  ep.mesh.ExtrudeMesh = true;
-  ep.geo.Source = e->tag();
-
+  ExtrudeParams *ep = new  ExtrudeParams;
+  ep->mesh.BoundaryLayerIndex = dir;
+  ep->mesh.ViewIndex = view;//view -5 for centerline based extrude
+  ep->mesh.NbLayer = 1; //this may be more general for defining different layers
+  ep->mesh.hLayer.clear();
+  ep->mesh.hLayer.push_back(hLayer);
+  ep->mesh.NbElmLayer.clear(); 
+  ep->mesh.NbElmLayer.push_back(nbLayers);
+  ep->mesh.ExtrudeMesh = true;
+  if (CTX::instance()->mesh.recombineAll)  ep->mesh.Recombine = true;
+  else ep->mesh.Recombine = false;
+  ep->geo.Source = e->tag();
+ 
   int type  = BOUNDARY_LAYER; 
   double T0=0., T1=0., T2=0.;
   double A0=0., A1=0., A2=0.;
@@ -313,32 +315,19 @@ GEntity* GeoFactory::extrudeBoundaryLayer(GModel *gm, GEntity *e, int nbLayers, 
     shape.Type = v->Typ;
   }
   else if (e->dim() == 1){
-    ((GEdge*)e)->meshAttributes.extrude = &ep;
+    ((GEdge*)e)->meshAttributes.extrude = ep;
     Curve *c = FindCurve(e->tag());
     if(!c) printf("curve %d not found \n", e->tag());
      shape.Num = c->Num;
      shape.Type = c->Typ;
   }
   else if (e->dim() == 2){
-    ((GFace*)e)->meshAttributes.extrude = &ep;
+    ((GFace*)e)->meshAttributes.extrude = ep;
     Surface *s = FindSurface(e->tag());
-    // Msg::Info("Geo internal model has:");
-    // List_T *points = Tree2List(gm->getGEOInternals()->Points);
-    // List_T *curves = Tree2List(gm->getGEOInternals()->Curves);
-    // List_T *surfaces = Tree2List(gm->getGEOInternals()->Surfaces);
-    // Msg::Info("%d Vertices", List_Nbr(points));
-    // Msg::Info("%d Edges", List_Nbr(curves));
-    // Msg::Info("%d Faces", List_Nbr(surfaces));
-    // for(int i = 0; i < List_Nbr(surfaces); i++) {
-    //   Surface *s;
-    //   List_Read(surfaces, i, &s);
-    //   printf("surface %d \n", s->Num);
-    // }
     if(!s) {
       printf("surface %d NOT found \n", e->tag());
       exit(1);
     }
-  
     shape.Num = s->Num;
     shape.Type = s->Typ;
   }
@@ -351,40 +340,79 @@ GEntity* GeoFactory::extrudeBoundaryLayer(GModel *gm, GEntity *e, int nbLayers, 
                 T0, T1, T2,
                 A0, A1, A2,
                 X0, X1, X2, alpha,
-                &ep,
+                ep,
                 list_out);
 
   //create GEntities 
   gm->importGEOInternals();
 
   //return the new created entity
-  GEntity *newEnt=0;
-  if (e->dim() == 1){
-   for(GModel::eiter it = gm->firstEdge(); it != gm->lastEdge(); it++){
-     GEdge *ge = *it;
-    if(ge->getNativeType() == GEntity::GmshModel &&
-       ge->geomType() == GEntity::BoundaryLayerCurve){
-      ExtrudeParams *ep = ge->meshAttributes.extrude;
-      if(ep && ep->mesh.ExtrudeMesh && ep->geo.Mode == COPIED_ENTITY &&
-	std::abs(ep->geo.Source) ==e->tag() )
-	  newEnt = ge;
-      }
-    }
+  int nbout = List_Nbr(list_out);
+  std::vector<GEntity*> extrudedEntities;
+  //GEntity *newEnt =0;
+  if(e->dim()==1){
+    Shape e;
+    Shape s;
+    List_Read(list_out, 0, &e);
+    List_Read(list_out, 1, &s);
+    GEdge *ge = gm->getEdgeByTag(e.Num);
+    GFace *gf = gm->getFaceByTag(s.Num);
+    extrudedEntities.push_back((GEntity*)ge);
+    extrudedEntities.push_back((GEntity*)gf);
+    for (int j=2; j<nbout; j++){
+      Shape el;
+      List_Read(list_out, j, &el);
+      GEdge *gel = gm->getEdgeByTag(el.Num);
+      extrudedEntities.push_back((GEntity*)gel);
+    }  
   }
-  else if (e->dim() ==2){
-    for(GModel::fiter it = gm->firstFace(); it != gm->lastFace(); it++){
-      GFace *gf = *it;
-      if(gf->getNativeType() == GEntity::GmshModel &&
-	 gf->geomType() == GEntity::BoundaryLayerSurface){
-	ExtrudeParams *ep = gf->meshAttributes.extrude;
-	if(ep && ep->mesh.ExtrudeMesh && ep->geo.Mode == COPIED_ENTITY 
-	   && std::abs(ep->geo.Source) == e->tag())
-	  newEnt = gf;
-      }
-    }
+  else if(e->dim()==2){
+    Shape s;
+    Shape v;
+    List_Read(list_out, 0, &s);
+    List_Read(list_out, 1, &v);
+    GFace *gf = gm->getFaceByTag(s.Num);
+    GRegion *gr = gm->getRegionByTag(v.Num);
+    extrudedEntities.push_back((GEntity*)gf);
+    extrudedEntities.push_back((GEntity*)gr);
+    for (int j=2; j<nbout; j++){
+      Shape sl;
+      List_Read(list_out, j, &sl);
+      GFace *gfl = gm->getFaceByTag(sl.Num);
+      extrudedEntities.push_back((GEntity*)gfl);
+    }  
   }
 
-  return newEnt;
+  return extrudedEntities;
+
+  // //return the new created entity
+  // GEntity *newEnt=0;
+  // if (e->dim() == 1){
+  //  for(GModel::eiter it = gm->firstEdge(); it != gm->lastEdge(); it++){
+  //    GEdge *ge = *it;
+  //   if(ge->getNativeType() == GEntity::GmshModel &&
+  //      ge->geomType() == GEntity::BoundaryLayerCurve){
+  //     ExtrudeParams *ep = ge->meshAttributes.extrude;
+  //     if(ep && ep->mesh.ExtrudeMesh && ep->geo.Mode == COPIED_ENTITY &&
+  // 	std::abs(ep->geo.Source) ==e->tag() )
+  // 	  newEnt = ge;
+  //     }
+  //   }
+  // }
+  // else if (e->dim() ==2){
+  //   for(GModel::fiter it = gm->firstFace(); it != gm->lastFace(); it++){
+  //     GFace *gf = *it;
+  //     if(gf->getNativeType() == GEntity::GmshModel &&
+  // 	 gf->geomType() == GEntity::BoundaryLayerSurface){
+  // 	ExtrudeParams *ep = gf->meshAttributes.extrude;
+  // 	if(ep && ep->mesh.ExtrudeMesh && ep->geo.Mode == COPIED_ENTITY 
+  // 	   && std::abs(ep->geo.Source) == e->tag())
+  // 	  newEnt = gf;
+  //     }
+  //   }
+  // }
+
+  // return newEnt;
 
 };
 

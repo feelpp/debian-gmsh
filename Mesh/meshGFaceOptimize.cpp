@@ -631,17 +631,21 @@ static bool _isItAGoodIdeaToMoveThatVertex (GFace *gf,
   v1->setParameter(1,after.y());
   v1->setXYZ(pafter.x(),pafter.y(),pafter.z());
 
+  bool badQuality = false;
   for (unsigned int j=0;j<e1.size();++j){
     surface_new += surfaceFaceUV(e1[j],gf);
     qualityNew[j] = (e1[j]->getNumVertices() == 4) ? e1[j]->etaShapeMeasure() : e1[j]->gammaShapeMeasure();
-    if (qualityNew[j] < 0.01)return false;
+    if (qualityNew[j] < 0.01) {
+      badQuality = true;
+      break;
+    }
   }
 
   v1->setParameter(0,before.x());
   v1->setParameter(1,before.y());
   v1->setXYZ(pbefore.x(),pbefore.y(),pbefore.z());
 
-  if ( (surface_new - surface_old)  > 1.e-10 * surface_old) {
+  if (badQuality || (surface_new - surface_old)  > 1.e-10 * surface_old) {
     return false;
   }
   return true;
@@ -1054,7 +1058,7 @@ struct  quadBlob {
       v2t_cont :: const_iterator it = adj.find(v);
       int ss = temp.size();
       std::vector<MElement*> elems = it->second;
-
+      
       //EMI: try to orient BNodes the same as quad orientations
        for (int j=0;j<elems.size();j++){
        	 bool found  =false;
@@ -1072,8 +1076,8 @@ struct  quadBlob {
        }
        if (found) break;
        }
-
-       //JF this does not orient 
+       
+       //JF this does not orient quads
       // for (int j=0;j<elems.size();j++){
       // 	bool found = false;
       // 	if(inBlob(elems[j])){
@@ -1087,14 +1091,14 @@ struct  quadBlob {
       // 	    found = true;
       // 	    break;
       // 	  }
-      // 	   //else if (e.getVertex(1) == v &&
-      // 	  //  	   inBoundary(e.getVertex(0),bnodes) &&
-      // 	  //  	   !inBoundary(e.getVertex(0),temp)) {
-      // 	  //   v = e.getVertex(0);
-      // 	  //   temp.push_back(e.getVertex(0));
-      // 	  //   found = true;
-      // 	  //   break;
-      // 	  // }
+      // 	   else if (e.getVertex(1) == v &&
+      // 	    	   inBoundary(e.getVertex(0),bnodes) &&
+      // 	    	   !inBoundary(e.getVertex(0),temp)) {
+      // 	     v = e.getVertex(0);
+      // 	     temp.push_back(e.getVertex(0));
+      // 	     found = true;
+      // 	     break;
+      // 	   }
       // 	}
       // 	}
       // 	if (found)break;
@@ -1886,7 +1890,6 @@ static void _relocateVertex(GFace *gf, MVertex *ver,
       after = SPoint2(gp.u(),gp.v());
     }
     bool success = _isItAGoodIdeaToMoveThatVertex (gf,  lt, ver,before,after);
-
     if (success){
       ver->setParameter(0, after.x());
       ver->setParameter(1, after.y());

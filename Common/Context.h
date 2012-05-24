@@ -42,7 +42,9 @@ struct contextMeshOptions {
   int multiplePasses;
   int cgnsImportOrder;
   std::map<int,int> algo2d_per_face;
+  std::map<int,int> curvature_control_per_face;
   int bunin;
+  int ignorePartBound;
 };
 
 struct contextGeometryOptions {
@@ -100,7 +102,7 @@ class CTX {
   int tooltips;
   // position and size of various windows in the GUI
   int menuPosition[2], glPosition[2], glSize[2], msgSize;
-  int optPosition[2], visPosition[2], clipPosition[2], manipPosition[2];
+  int optPosition[2], visPosition[2], hotPosition[2], clipPosition[2], manipPosition[2];
   int statPosition[2], ctxPosition[2], solverPosition[2], solverSize[2];
   int pluginPosition[2], pluginSize[2], fieldPosition[2], fieldSize[2];
   int fileChooserPosition[2];

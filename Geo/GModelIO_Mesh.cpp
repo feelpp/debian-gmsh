@@ -299,7 +299,7 @@ int GModel::readMSH(const std::string &name)
 
       const bool parametric = !strncmp(&str[1], "ParametricNodes", 15);
       if(!fgets(str, sizeof(str), fp)) return 0;
-      int numVertices;
+      int numVertices = -1;
       if(sscanf(str, "%d", &numVertices) != 1) return 0;
       Msg::Info("%d vertices", numVertices);
       Msg::ResetProgressMeter();
@@ -526,10 +526,10 @@ int GModel::readMSH(const std::string &name)
             if(dom2 && !doms[1]) Msg::Error("Domain element %d not found for element %d", dom2, num);
 #endif
 	  }
-
-          MElement *e = createElementMSH(this, num, type, physical, elementary,
-                                         partition, vertices, elements, physicals,
-                                         own, p, doms[0], doms[1]);
+    if (CTX::instance()->mesh.ignorePartBound && elementary<0) continue;
+    MElement *e = createElementMSH(this, num, type, physical, elementary,
+                                   partition, vertices, elements, physicals,
+                                   own, p, doms[0], doms[1]);
 
 #if (FAST_ELEMENTS==1)
 	  elems[num] = e;
@@ -537,13 +537,101 @@ int GModel::readMSH(const std::string &name)
 	  elemphy[num] = physical;
 #endif
 
-          for(unsigned int j = 0; j < ghosts.size(); j++)
-            _ghostCells.insert(std::pair<MElement*, short>(e, ghosts[j]));
-          if(numElements > 100000)
-            Msg::ProgressMeter(i + 1, numElements, "Reading elements");
-          delete [] indices;
+    for(unsigned int j = 0; j < ghosts.size(); j++)
+      _ghostCells.insert(std::pair<MElement*, short>(e, ghosts[j]));
+    if(numElements > 100000)
+      Msg::ProgressMeter(i + 1, numElements, "Reading elements");
+    delete [] indices;
         }
-
+      }
+      else{
+        int numElementsPartial = 0;
+        while(numElementsPartial < numElements){
+          int header[3];
+          if(fread(header, sizeof(int), 3, fp) != 3) return 0;
+          if(swap) SwapBytes((char*)header, sizeof(int), 3);
+          int type = header[0];
+          int numElms = header[1];
+          int numTags = header[2];
+          int numVertices = MElement::getInfoMSH(type);
+          unsigned int n = 1 + numTags + numVertices;
+          int *data = new int[n];
+          for(int i = 0; i < numElms; i++) {
+            if(fread(data, sizeof(int), n, fp) != n) return 0;
+            if(swap) SwapBytes((char*)data, sizeof(int), n);
+            int num = data[0];
+            int physical = (numTags > 0) ? data[1] : 0;
+            int elementary = (numTags > 1) ? data[2] : 0;
+            int numPartitions = (version >= 2.2 && numTags > 3) ? data[3] : 0;
+            int partition = (version < 2.2 && numTags > 2) ? data[3] :
+              (version >= 2.2 && numTags > 3) ? data[4] : 0;
+            int parent = (version < 2.2 && numTags > 3) ||
+              (version >= 2.2 && numPartitions && numTags > 3 + numPartitions) ||
+              (version >= 2.2 && !numPartitions && numTags > 2) ?
+              data[numTags] : 0;
+            int *indices = &data[numTags + 1];
+            std::vector<MVertex*> vertices;
+            if(vertexVector.size()){
+              if(!getVertices(numVertices, indices, vertexVector, vertices, minVertex)) return 0;
+            }
+            else{
+              if(!getVertices(numVertices, indices, vertexMap, vertices)) return 0;
+            }
+            MElement *p = NULL;
+            bool own = false;
+            if(parent)
+	    {
+#if (FAST_ELEMENTS==1)
+	      std::map<int, MElement* >::iterator ite = elems.find(parent);
+	      if (ite == elems.end())
+		  Msg::Error("Parent element %d not found for element %d", parent, num);
+	      else
+	      {
+		  p = ite->second;
+		  parents[parent] = p;
+	      }
+	      std::set<MElement* >::iterator itpo = parentsOwned.find(p);
+	      if (itpo == parentsOwned.end())
+	      {
+		  own = true;
+		  parentsOwned.insert(p);
+	      }
+	      assert(p != NULL);
+#else
+	      std::map<int, MElement* >::iterator itp = parents.find(parent);
+              if(itp == parents.end()){
+                p = getParent(parent, type, elements);
+                if(p) parents[parent] = p;
+                else Msg::Error("Parent element %d not found", parent);
+              }
+              else p = itp->second;
+	      std::set<MElement* >::iterator itpo = parentsOwned.find(p);
+              if(itpo == parentsOwned.end()) {
+                own = true;
+                parentsOwned.insert(p);
+              }
+#endif
+            }
+            MElement *e = createElementMSH(this, num, type, physical, elementary,
+                                           partition, vertices, elements, physicals,
+                                           own, p);
+	    
+#if (FAST_ELEMENTS==1)
+	  elems[num] = e;
+	  elemreg[num] = elementary;
+	  elemphy[num] = physical;
+#endif
+            if(numPartitions > 1)
+              for(int j = 0; j < numPartitions - 1; j++)
+                _ghostCells.insert(std::pair<MElement*, short>(e, -data[5 + j]));
+            if(numElements > 100000)
+              Msg::ProgressMeter(numElementsPartial + i + 1, numElements,
+                                 "Reading elements");
+          }
+          delete [] data;
+          numElementsPartial += numElms;
+        }
+      } 
 #if (FAST_ELEMENTS==1)
 	for(int i = 0; i < 10; i++)
 	  elements[i].clear();
@@ -604,68 +692,6 @@ int GModel::readMSH(const std::string &name)
              }
 	}
 #endif
-      }
-      else{
-        int numElementsPartial = 0;
-        while(numElementsPartial < numElements){
-          int header[3];
-          if(fread(header, sizeof(int), 3, fp) != 3) return 0;
-          if(swap) SwapBytes((char*)header, sizeof(int), 3);
-          int type = header[0];
-          int numElms = header[1];
-          int numTags = header[2];
-          int numVertices = MElement::getInfoMSH(type);
-          unsigned int n = 1 + numTags + numVertices;
-          int *data = new int[n];
-          for(int i = 0; i < numElms; i++) {
-            if(fread(data, sizeof(int), n, fp) != n) return 0;
-            if(swap) SwapBytes((char*)data, sizeof(int), n);
-            int num = data[0];
-            int physical = (numTags > 0) ? data[1] : 0;
-            int elementary = (numTags > 1) ? data[2] : 0;
-            int numPartitions = (version >= 2.2 && numTags > 3) ? data[3] : 0;
-            int partition = (version < 2.2 && numTags > 2) ? data[3] :
-              (version >= 2.2 && numTags > 3) ? data[4] : 0;
-            int parent = (version < 2.2 && numTags > 3) ||
-              (version >= 2.2 && numPartitions && numTags > 3 + numPartitions) ||
-              (version >= 2.2 && !numPartitions && numTags > 2) ?
-              data[numTags] : 0;
-            int *indices = &data[numTags + 1];
-            std::vector<MVertex*> vertices;
-            if(vertexVector.size()){
-              if(!getVertices(numVertices, indices, vertexVector, vertices, minVertex)) return 0;
-            }
-            else{
-              if(!getVertices(numVertices, indices, vertexMap, vertices)) return 0;
-            }
-            MElement *p = NULL;
-            bool own = false;
-            if(parent) {
-              if(parents.find(parent) == parents.end()){
-                p = getParent(parent, type, elements);
-                if(p) parents[parent] = p;
-                else Msg::Error("Parent element %d not found", parent);
-              }
-              else p = parents.find(parent)->second;
-              if(parentsOwned.find(p) == parentsOwned.end()) {
-                own = true;
-                parentsOwned.insert(p);
-              }
-            }
-            MElement *e = createElementMSH(this, num, type, physical, elementary,
-                                           partition, vertices, elements, physicals,
-                                           own, p);
-            if(numPartitions > 1)
-              for(int j = 0; j < numPartitions - 1; j++)
-                _ghostCells.insert(std::pair<MElement*, short>(e, -data[5 + j]));
-            if(numElements > 100000)
-              Msg::ProgressMeter(numElementsPartial + i + 1, numElements,
-                                 "Reading elements");
-          }
-          delete [] data;
-          numElementsPartial += numElms;
-        }
-      }
     }
     else if(!strncmp(&str[1], "NodeData", 8)) {
 
@@ -3782,15 +3808,15 @@ GModel *GModel::createGModel(std::map<int, MVertex*> &vertexMap,
     nbVertices = (int)vertexIndices[i].size();
     indices = &vertexIndices[i][0];
     if(vertexVector.size()){
-      Msg::Error("Vertex not found aborting");
       if(!getVertices(nbVertices, indices, vertexVector, vertices)){
+        Msg::Error("Vertex not found aborting");
         delete gm;
         return 0;
       }
     }
     else{
-      Msg::Error("Vertex not found aborting");
       if(!getVertices(nbVertices, indices, vertexMap, vertices)){
+        Msg::Error("Vertex not found aborting");
         delete gm;
         return 0;
       }
@@ -3815,6 +3841,42 @@ GModel *GModel::createGModel(std::map<int, MVertex*> &vertexMap,
     gm->_storeVerticesInEntities(vertexMap);
 
   // store the physical tags
+  for(int i = 0; i < 4; i++)
+    gm->_storePhysicalTagsInEntities(i, physicals[i]);
+
+  return gm;
+}
+
+GModel *GModel::createGModel
+(std::map<int, std::vector<MElement*> > &entityToElementsMap,
+ std::map<int, std::vector<int> > &entityToPhysicalsMap)
+{
+  GModel* gm = new GModel();
+
+  std::map<int, MVertex*> vertexMap;
+  std::map<int, std::map<int, std::string> > physicals[4];
+  for(std::map<int, std::vector<MElement*> >::iterator it =
+        entityToElementsMap.begin(); it != entityToElementsMap.end();
+      it++) {
+    int entity = it->first;
+    for(unsigned int iE = 0; iE < it->second.size(); iE++) {
+      MElement* me = it->second[iE];
+      for(int iV = 0; iV < me->getNumVertices(); iV++) {
+        vertexMap[me->getVertex(iV)->getNum()] = me->getVertex(iV);
+      }
+      if(me->getPartition()) {
+        gm->getMeshPartitions().insert(me->getPartition());
+      }
+      std::vector<int> entityPhysicals = entityToPhysicalsMap[entity];
+      for(unsigned int i = 0; i < entityPhysicals.size(); i++) {
+        physicals[me->getDim()][entity][entityPhysicals[i]] = "unnamed";
+      }
+    }
+  }
+
+  gm->_storeElementsInEntities(entityToElementsMap);
+  gm->_associateEntityWithMeshVertices();
+  gm->_storeVerticesInEntities(vertexMap);
   for(int i = 0; i < 4; i++)
     gm->_storePhysicalTagsInEntities(i, physicals[i]);
 

@@ -450,7 +450,7 @@ class GModel
   GEntity *revolve(GEntity *e, std::vector<double> p1, std::vector<double> p2,
                    double angle);
   GEntity *extrude(GEntity *e, std::vector<double> p1, std::vector<double> p2);
-  GEntity *extrudeBoundaryLayer(GEntity *e, int nbLayers, double hLayers, int dir=1, int view=-1);
+  std::vector<GEntity*> extrudeBoundaryLayer(GEntity *e, int nbLayers, double hLayers, int dir=1, int view=-1);
   GEntity *addPipe(GEntity *e, std::vector<GEdge *>  edges);
 
   void addRuledFaces(std::vector<std::vector<GEdge *> > edges);
@@ -488,6 +488,13 @@ class GModel
                               std::vector<int> &physical,
                               std::vector<int> &elementary,
                               std::vector<int> &partition);
+
+  // create a GModel from newly created mesh elements
+  // (with their own newly created mesh vertices),
+  // and let element entities have given physical group tags
+  static GModel *createGModel
+    (std::map<int, std::vector<MElement*> > &entityToElementsMap,
+     std::map<int, std::vector<int> > &entityToPhysicalsMap);
 
   // for elements cut having new vertices
   void store(std::vector<MVertex*> &vertices, int dim,

@@ -20,7 +20,6 @@
 #include "Geo.h"
 #include "GeoInterpolation.h"
 #include "Options.h"
-#include "Colors.h"
 #include "Parser.h"
 #include "OpenFile.h"
 #include "CommandLine.h"
@@ -82,6 +81,12 @@ void yymsg(int level, const char *fmt, ...);
 void skip_until(const char *skip, const char *until);
 int PrintListOfDouble(char *format, List_T *list, char *buffer);
 fullMatrix<double> ListOfListOfDouble2Matrix(List_T *list);
+
+struct doubleXstring{
+  double d;
+  char *s;
+};
+
 %}
 
 %union {
@@ -126,7 +131,7 @@ fullMatrix<double> ListOfListOfDouble2Matrix(List_T *list);
 %type <u> ColorExpr
 %type <c> StringExpr StringExprVar SendToFile HomologyCommand
 %type <l> FExpr_Multi ListOfDouble ListOfDoubleOrAll RecursiveListOfDouble
-%type <l> RecursiveListOfListOfDouble
+%type <l> RecursiveListOfListOfDouble Enumeration
 %type <l> ListOfColor RecursiveListOfColor
 %type <l> ListOfShapes Transform Extrude MultipleShape
 %type <l> TransfiniteCorners InSphereCenter
@@ -1102,6 +1107,20 @@ DefineConstants :
     }
  ;
 
+Enumeration :
+    FExpr tAFFECT StringExpr
+    {
+      $$ = List_Create(20,20,sizeof(doubleXstring));
+      doubleXstring v = {$1, $3};
+      List_Add($$, &v);
+    }
+  | Enumeration ',' FExpr tAFFECT StringExpr
+    {
+      doubleXstring v = {$3, $5};
+      List_Add($$, &v);
+    }
+  ;
+
 FloatParameterOptions :
   | FloatParameterOptions FloatParameterOption
  ;
@@ -1118,6 +1137,21 @@ FloatParameterOption :
       Free($2);
       List_Delete($3);
     }
+  | ',' tSTRING '{' Enumeration '}'
+    {
+      std::string key($2);
+      for(int i = 0; i < List_Nbr($4); i++){
+        doubleXstring v;
+        List_Read($4, i, &v);
+        floatOptions[key].push_back(v.d);
+        charOptions[key].push_back(v.s);
+      }
+      Free($2);
+      for(int i = 0; i < List_Nbr($4); i++)
+        Free(((doubleXstring*)List_Pointer($4, i))->s);
+      List_Delete($4);
+    }
+
   | ',' tSTRING tBIGSTR
     {
       std::string key($2);
@@ -3424,12 +3458,12 @@ Transfinite :
         List_Delete($2);
       }
     }
-  | tMeshAlgorithm tSurface ListOfDouble FExpr tEND
+  | tMeshAlgorithm tSurface '{' RecursiveListOfDouble '}' FExpr tEND
     {
-      for(int i = 0; i < List_Nbr($3); i++){
+      for(int i = 0; i < List_Nbr($4); i++){
 	double d;
-	List_Read($3, i, &d);
-	CTX::instance()->mesh.algo2d_per_face[(int)d] = (int)$4;
+	List_Read($4, i, &d);
+	CTX::instance()->mesh.algo2d_per_face[(int)d] = (int)$6;
       }
     }
 
@@ -4233,14 +4267,14 @@ ColorExpr :
   | '{' tSTRING ',' FExpr '}'
     {
       int flag;
-      $$ = GetColorForString(ColorString, (int)$4, $2, &flag);
+      $$ = GetColorForString((int)$4, $2, &flag);
       if(flag) yymsg(0, "Unknown color '%s'", $2);
     }
 */
   | tSTRING
     {
       int flag;
-      $$ = GetColorForString(ColorString, -1, $1, &flag);
+      $$ = GetColorForString(-1, $1, &flag);
       if(flag) yymsg(0, "Unknown color '%s'", $1);
       Free($1);
     }
