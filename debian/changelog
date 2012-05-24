@@ -7,6 +7,7 @@ gmsh (2.5.1~beta2~svn12143~dfsg-1) unstable; urgency=low
   * [77b9389] Add alauzet.patch from gmsh-tetgen
   * [ad9026f] Add cgns.patch from gmsh-tetgen
   * [40004dc] Add pedantic.patch from gmsh-tetgen
+  * [ba6f120] Fix FTBFS against gcc-4.7 (bamg-library).
 
  -- Anton Gladky <gladky.anton@gmail.com>  Thu, 24 May 2012 22:06:11 +0200
 
