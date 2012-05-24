@@ -614,10 +614,11 @@ void Msg::InitializeOnelab(const std::string &name, const std::string &sockname)
     onelab::string o4(name + "/9ComputeCommand", "-3");
     o4.setVisible(false);
     _onelabClient->set(o4);
+
     std::vector<onelab::string> ps;
     _onelabClient->get(ps, name + "/Action");
     if(ps.size()){
-      Info("Performing OneLab '%s'", ps[0].getValue().c_str());
+      //Info("Performing OneLab '%s'", ps[0].getValue().c_str());
       if(ps[0].getValue() == "initialize") Exit(0);
     }
 
@@ -677,14 +678,18 @@ void Msg::ExchangeOnelabParameter(const std::string &key,
     ps[0].setMax(fopt["Max"][0]); ps[0].setMin(-onelab::parameter::maxNumber());
   }
   if(noRange && fopt.count("Step")) ps[0].setStep(fopt["Step"][0]);
-  if(noChoices && fopt.count("Choices")) ps[0].setChoices(fopt["Choices"]);
+  if(noChoices && fopt.count("Choices")){
+    ps[0].setChoices(fopt["Choices"]);
+    if(copt.count("Choices")) ps[0].setChoiceLabels(copt["Choices"]);
+  }
   if(fopt.count("Visible")) ps[0].setVisible(fopt["Visible"][0] ? true : false);
+  if(fopt.count("ReadOnly")) ps[0].setReadOnly(fopt["ReadOnly"][0] ? true : false);
   if(copt.count("Help")) ps[0].setHelp(copt["Help"][0]);
   if(copt.count("Label")) ps[0].setLabel(copt["Label"][0]);
   if(copt.count("ShortHelp")) ps[0].setLabel(copt["ShortHelp"][0]);
   if(noLoop && copt.count("Loop")) ps[0].setAttribute("Loop", copt["Loop"][0]);
   if(noGraph && copt.count("Graph")) ps[0].setAttribute("Graph", copt["Graph"][0]);
-  if(copt.count("Hightlight")) ps[0].setAttribute("Highlight", copt["Hightlight"][0]);
+  if(copt.count("Highlight")) ps[0].setAttribute("Highlight", copt["Highlight"][0]);
   _onelabClient->set(ps[0]);
 #endif
 }

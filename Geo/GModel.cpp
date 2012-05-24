@@ -577,6 +577,7 @@ int GModel::adaptMesh(std::vector<int> technique, std::vector<simpleFunction<dou
       nbElemsOld = nbElems;
     }
   }
+  //adapt only upper most dimension
   else{
 
     while(1) {
@@ -608,9 +609,6 @@ int GModel::adaptMesh(std::vector<int> technique, std::vector<simpleFunction<dou
         metric->addMetric(technique[imetric], f[imetric], parameters[imetric]);
       }
       fields->setBackgroundField(metric);
-      // int id = fields->newId();
-      // (*fields)[id] = new meshMetric(this, technique, f, parameters);
-      // fields->background_field = id;
 
       if (getDim() == 2){
         for (fiter fit = firstFace(); fit != lastFace(); ++fit){
@@ -632,7 +630,7 @@ int GModel::adaptMesh(std::vector<int> technique, std::vector<simpleFunction<dou
 
       nbElems = getNumMeshElements();
       if (++ITER >= niter) break;
-      if (fabs((double)(nbElems - nbElemsOld)) < 0.01 * nbElemsOld) break;
+      if (ITER > 3 && fabs((double)(nbElems - nbElemsOld)) < 0.01 * nbElemsOld) break;
 
       nbElemsOld = nbElems;
     }
@@ -2091,23 +2089,23 @@ GEdge* GModel::addCompoundEdge(std::vector<GEdge*> edges, int num){
 
     // Curve *c = Create_Curve(num, MSH_SEGM_DISCRETE, 1,
     // 			    NULL, NULL, -1, -1, 0., 1.);
-    // List_T *points = Tree2List(getGEOInternals()->Points);
-    // GVertex *gvb = gec->getBeginVertex();
-    // GVertex *gve = gec->getEndVertex();
-    // int nb = 2 ;
-    // c->Control_Points = List_Create(nb, 1, sizeof(Vertex *));
-    // for(int i = 0; i < List_Nbr(points); i++) {
-    //   Vertex *v;
-    //   List_Read(points, i, &v);
-    //   if (v->Num == gvb->tag()) {
-    // 	List_Add(c->Control_Points, &v);
-    // 	c->beg = v;
-    //   }
-    //   if (v->Num == gve->tag()) {
-    // 	List_Add(c->Control_Points, &v);
-    // 	c->end = v;
-    //   }
-    // }
+     List_T *points = Tree2List(getGEOInternals()->Points);
+     GVertex *gvb = gec->getBeginVertex();
+     GVertex *gve = gec->getEndVertex();
+     int nb = 2 ;
+     c->Control_Points = List_Create(nb, 1, sizeof(Vertex *));
+     for(int i = 0; i < List_Nbr(points); i++) {
+       Vertex *v;
+       List_Read(points, i, &v);
+       if (v->Num == gvb->tag()) {
+     	List_Add(c->Control_Points, &v);
+     	c->beg = v;
+       }
+       if (v->Num == gve->tag()) {
+     	List_Add(c->Control_Points, &v);
+     	c->end = v;
+       }
+     }
 
     End_Curve(c);
     Tree_Add(getGEOInternals()->Curves, &c);
@@ -2134,7 +2132,7 @@ GFace* GModel::addCompoundFace(std::vector<GFace*> faces, int param, int split, 
   if (param == 7) typ =  GFaceCompound::CONFORMAL_FE;
 
   GFaceCompound *gfc = new GFaceCompound(this, num, faces_comp, U0, typ, split);
-  
+
   //create old geo format for the compound face
   //necessary for boundary layers
   if(FindSurface(num)){
@@ -2145,20 +2143,35 @@ GFace* GModel::addCompoundFace(std::vector<GFace*> faces, int param, int split, 
     for(int i= 0; i< faces.size(); i++)
       s->compound.push_back(faces[i]->tag());
 
-    // Surface *s = Create_Surface(num, MSH_SURF_DISCRETE);
-    // std::list<GEdge*> edges = gfc->edges();
-    // s->Generatrices = List_Create(edges.size(), 1, sizeof(Curve *));
-    // List_T *curves = Tree2List(_geo_internals->Curves);
-    // Curve *c;
-    // for(std::list<GEdge*>::iterator ite = edges.begin(); ite != edges.end(); ite++){
-    //   for(int i = 0; i < List_Nbr(curves); i++) {
-    // 	List_Read(curves, i, &c);
-    // 	if (c->Num == (*ite)->tag()) {
-    // 	  List_Add(s->Generatrices, &c);
-    // 	}
-    //   }
-    // }
-    
+     std::list<GEdge*> edges = gfc->edges();
+
+     //Replace edges by their compounds
+     std::set<GEdge*> mySet;
+     std::list<GEdge*>::iterator it = edges.begin();
+     while(it != edges.end()){
+       if((*it)->getCompound()){
+	 mySet.insert((*it)->getCompound());
+       }
+       else{
+	 mySet.insert(*it);
+       }
+       ++it;
+     }
+     edges.clear();
+     edges.insert(edges.begin(), mySet.begin(), mySet.end());
+
+     s->Generatrices = List_Create(edges.size(), 1, sizeof(Curve *));
+     List_T *curves = Tree2List(_geo_internals->Curves);
+     Curve *c;
+     for(std::list<GEdge*>::iterator ite = edges.begin(); ite != edges.end(); ite++){
+       for(int i = 0; i < List_Nbr(curves); i++) {
+     	List_Read(curves, i, &c);
+     	if (c->Num == (*ite)->tag()) {
+     	  List_Add(s->Generatrices, &c);
+     	}
+       }
+     }
+
     Tree_Add(_geo_internals->Surfaces, &s);
   }
 
@@ -2268,11 +2281,12 @@ GEntity *GModel::extrude(GEntity *e, std::vector<double> p1, std::vector<double>
   return 0;
 }
 
-GEntity *GModel::extrudeBoundaryLayer(GEntity *e, int nbLayers, double hLayers, int dir, int view)
+std::vector<GEntity*> GModel::extrudeBoundaryLayer(GEntity *e, int nbLayers, double hLayers, int dir, int view)
 {
   if(_factory)
     return _factory->extrudeBoundaryLayer(this, e, nbLayers,hLayers, dir, view);
-  return 0;
+  std::vector<GEntity*> empty;
+  return empty;
 }
 
 GEntity *GModel::addPipe(GEntity *e, std::vector<GEdge *>  edges)
@@ -2583,12 +2597,12 @@ GEdge *getNewModelEdge(GFace *gf1, GFace *gf2,
   if(i1 == i2) return 0;
 
   std::map<std::pair<int, int>, GEdge*>::iterator it =
-    newEdges.find(std::make_pair<int, int>(i1, i2));
+    newEdges.find(std::make_pair(i1, i2));
   if(it == newEdges.end()){
     discreteEdge *ge = new discreteEdge
       (GModel::current(), GModel::current()->getMaxElementaryNumber(1) + 1, 0, 0);
     GModel::current()->add(ge);
-    newEdges[std::make_pair<int, int>(i1, i2)] = ge;
+    newEdges[std::make_pair(i1, i2)] = ge;
     return ge;
   }
   else

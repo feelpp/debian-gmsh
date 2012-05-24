@@ -996,6 +996,8 @@ StringXNumber MeshOptions_Number[] = {
   { F|O, "RandomFactor" , opt_mesh_rand_factor , 1.e-9 ,
     "Random factor used in the 2D meshing algorithm (should be increased if "
     "RandomFactor * size(triangle)/size(model) approaches machine accuracy)" },
+  { F|O, "IgnorePartitionBoundary" , opt_mesh_ignore_part_bound , 0. ,
+    "Ignore partitions boundaries (0=no, 1=yes)"},
 #if defined(HAVE_BLOSSOM)
   { F|O, "RecombinationAlgorithm" , opt_mesh_algo_recombine , 1 ,
 #else
@@ -1007,7 +1009,7 @@ StringXNumber MeshOptions_Number[] = {
 
   { F|O, "RemeshAlgorithm" , opt_mesh_remesh_algo , 0 ,
     "Remeshing algorithm (0=no split, 1=automatic, 2=automatic only with metis)" },
-  { F|O, "RemeshParametrization" , opt_mesh_remesh_param , 0 ,
+  { F|O, "RemeshParametrization" , opt_mesh_remesh_param , 4 ,
     "Remeshing using discrete parametrization (0=harmonic_circle, 1=conformal_spectral, 2=rbf, 3=harmonic_plane, 4=convex_circle, 5=convex_plane, 6=harmonic square, 7=conformal_fe" },
 
   { F|O, "RefineSteps" , opt_mesh_refine_steps , 10 ,

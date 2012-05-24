@@ -19,8 +19,11 @@ typedef std::map<std::pair<MVertex*, MVertex*>, std::vector<MVertex*> > edgeCont
 // are the high order representation of the face
 typedef std::map<MFace, std::vector<MVertex*>, Less_Face> faceContainer;
 
-void SetOrder1(GModel *m);
-void SetOrderN(GModel *m, int order, bool linear=true, bool incomplete=false);
+void SetOrder1(GModel *m, bool onlyVisible = false);
+void SetOrderN(GModel *m, int order, bool linear=true, bool incomplete=false, bool onlyVisible = false);
+void ElasticAnalogy ( GModel *m, double threshold, bool onlyVisible);
+void SetHighOrderComplete (GModel *m, bool onlyVisible); // generate complete elements
+void SetHighOrderInComplete (GModel *m, bool onlyVisible); // generate in-complete elements
 MTriangle* setHighOrder(MTriangle *t, GFace *gf, 
                         edgeContainer &edgeVertices, 
                         faceContainer &faceVertices, 
@@ -28,4 +31,10 @@ MTriangle* setHighOrder(MTriangle *t, GFace *gf,
 void checkHighOrderTriangles(const char* cc, GModel *m, 
                              std::vector<MElement*> &bad, double &minJGlob);
 
+struct distanceFromMeshToGeometry_t {
+  std::map<GEntity*, double> d_max, d2;
+};
+
+void computeDistanceFromMeshToGeometry (GModel *m, distanceFromMeshToGeometry_t &dist);
+void getMeshInfoForHighOrder (GModel *gm,    int &meshOrder,   bool &complete,  bool &CAD);
 #endif

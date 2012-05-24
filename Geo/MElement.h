@@ -181,6 +181,7 @@ class MElement
   virtual double etaShapeMeasure(){ return 0.; }
   virtual double distoShapeMeasure(){ return 1.0; }
   virtual double angleShapeMeasure() { return 1.0; }
+  virtual void scaledJacRange(double &jmin, double &jmax);
 
   // get the radius of the inscribed circle/sphere if it exists,
   // otherwise get the minimum radius of all the circles/spheres
@@ -195,6 +196,8 @@ class MElement
   // compute the barycenter
   virtual SPoint3 barycenter();
   virtual SPoint3 barycenterUVW();
+  // compute the barycenter in infinity norm
+  virtual SPoint3 barycenter_infty();
 
   // revert the orientation of the element
   virtual void revert(){}

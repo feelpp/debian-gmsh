@@ -37,6 +37,7 @@ option(ENABLE_FL_TREE "Enable FLTK tree browser widget" ${DEFAULT})
 option(ENABLE_FOURIER_MODEL "Enable Fourier geometrical models" OFF)
 option(ENABLE_GMM "Enable GMM linear algebra solvers" ${DEFAULT})
 option(ENABLE_GRAPHICS "Compile-in OpenGL graphics even if there is no GUI" OFF)
+option(ENABLE_OPTHOM "Enable optimization tool for high order meshes" ${DEFAULT})
 option(ENABLE_KBIPACK "Enable Kbipack for homology solver" ${DEFAULT})
 option(ENABLE_MATHEX "Enable MathEx expression parser" ${DEFAULT})
 option(ENABLE_MED "Enable MED mesh and post-processing file formats" ${DEFAULT})
@@ -90,7 +91,7 @@ set(GMSH_API
     Geo/MVertexBoundaryLayerData.h Geo/MEdge.h 
     Geo/MFace.h Geo/MElement.h Geo/MPoint.h Geo/MLine.h Geo/MTriangle.h 
     Geo/MQuadrangle.h Geo/MTetrahedron.h Geo/MHexahedron.h Geo/MPrism.h 
-    Geo/MPyramid.h Geo/MElementCut.h Geo/discreteVertex.h Geo/discreteEdge.h
+    Geo/MPyramid.h Geo/MElementCut.h Geo/MElementOctree.h Geo/discreteVertex.h Geo/discreteEdge.h
     Geo/discreteFace.h Geo/discreteRegion.h Geo/SPoint2.h Geo/SPoint3.h
     Geo/SVector3.h Geo/STensor3.h Geo/SBoundingBox3d.h Geo/Pair.h Geo/Range.h 
     Geo/SOrientedBoundingBox.h Geo/CellComplex.h Geo/ChainComplex.h Geo/Cell.h
@@ -108,6 +109,9 @@ set(GMSH_API
   contrib/kbipack/gmp_normal_form.h contrib/kbipack/gmp_matrix.h 
     contrib/kbipack/gmp_blas.h contrib/kbipack/mpz.h
   contrib/DiscreteIntegration/Integration3D.h
+  contrib/HighOrderMeshOptimizer/OptHOM.h
+  contrib/HighOrderMeshOptimizer/OptHomMesh.h
+  contrib/HighOrderMeshOptimizer/ParamCoord.h
   contrib/MathEx/mathex.h)
 
 execute_process(COMMAND date "+%Y%m%d" OUTPUT_VARIABLE DATE 
@@ -507,6 +511,13 @@ if(ENABLE_DINTEGRATION)
   include_directories(contrib/DiscreteIntegration)
   set_config_option(HAVE_DINTEGRATION "DIntegration")
 endif(ENABLE_DINTEGRATION)
+
+if(ENABLE_OPTHOM)
+  add_subdirectory(contrib/HighOrderMeshOptimizer)
+  include_directories(contrib/HighOrderMeshOptimizer)
+  set_config_option(HAVE_OPTHOM "OptHom")
+endif(ENABLE_OPTHOM)
+
 
 if(ENABLE_KBIPACK)
   find_library(GMP_LIB gmp)
@@ -1180,7 +1191,7 @@ if(MAKEINFO)
                      ARGS ${TEX_DIR}/gmsh.texi WORKING_DIRECTORY ${TEX_DIR})
   add_custom_target(txt DEPENDS ${TEX_DIR}/gmsh.txt)
   add_custom_command(OUTPUT ${TEX_DIR}/gmsh.html DEPENDS ${TEX_SRC} 
-                     COMMAND ${MAKEINFO} --html --no-split
+                     COMMAND ${MAKEINFO} --html --css-ref=http://geuz.org/geuz.css --no-split
                      ARGS ${TEX_DIR}/gmsh.texi WORKING_DIRECTORY ${TEX_DIR})
   add_custom_target(html DEPENDS ${TEX_DIR}/gmsh.html)
   install(FILES ${TEX_DIR}/gmsh.html DESTINATION ${GMSH_DOC} OPTIONAL)

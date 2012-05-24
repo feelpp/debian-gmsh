@@ -126,8 +126,7 @@ class GFaceCompound : public GFace {
   void getBoundingEdges();
   void getUniqueEdges(std::set<GEdge*> &_unique);
   void computeALoop(std::set<GEdge*> &_unique, std::list<GEdge*> &);
-  void getTriangle(double u, double v, GFaceCompoundTriangle **lt,
-                   double &_u, double &_v) const;
+
   virtual double locCurvature(MTriangle *t, double u, double v) const;
 
   double getSizeH() const;
@@ -160,6 +159,8 @@ class GFaceCompound : public GFace {
   virtual GEntity::GeomType geomType() const { return CompoundSurface; }
   ModelType getNativeType() const { return GmshModel; }
   void * getNativePtr() const { return 0; }
+  void getTriangle(double u, double v, GFaceCompoundTriangle **lt,
+                   double &_u, double &_v) const;
   virtual SPoint2 getCoordinates(MVertex *v) const;
   virtual double curvatureMax(const SPoint2 &param) const;
   virtual double curvatures(const SPoint2 &param, SVector3 *dirMax, SVector3 *dirMin,
@@ -199,20 +200,20 @@ class GFaceCompound : public GFace {
 		CONVEX_CIRCLE=4,CONVEX_PLANE=5, HARMONIC_SQUARE=6, CONFORMAL_FE=7} typeOfCompound;
   typedef enum {HARMONIC=0,CONFORMAL=1, RBF=2, CONVEX=3} typeOfMapping;
   typedef enum {UNITCIRCLE, MEANPLANE, SQUARE, ALREADYFIXED,SPECTRAL, FE} typeOfIsomorphism;
- GFaceCompound(GModel *m, int tag, std::list<GFace*> &compound,
-	       std::list<GEdge*> &U0, typeOfMapping typ = HARMONIC,
-	       int allowPartition=1,
-	       linearSystem<double>* lsys =0)
+  GFaceCompound(GModel *m, int tag, std::list<GFace*> &compound,
+                std::list<GEdge*> &U0, typeOfMapping typ = HARMONIC,
+                int allowPartition=1,
+                linearSystem<double>* lsys =0)
     : GFace(m, tag)
   {
     Msg::Error("Gmsh has to be compiled with solver support to use GFaceCompounds");
   }
- GFaceCompound(GModel *m, int tag, std::list<GFace*> &compound,
-	       std::list<GEdge*> &U0, std::list<GEdge*> &V0,
-	       std::list<GEdge*> &U1, std::list<GEdge*> &V1,
-	       typeOfCompound typ = HARMONIC_CIRCLE,
-	       int allowPartition=1,
-	       linearSystem<double>* lsys =0)
+  GFaceCompound(GModel *m, int tag, std::list<GFace*> &compound,
+                std::list<GEdge*> &U0, std::list<GEdge*> &V0,
+                std::list<GEdge*> &U1, std::list<GEdge*> &V1,
+                typeOfCompound typ = HARMONIC_CIRCLE,
+                int allowPartition=1,
+                linearSystem<double>* lsys =0)
     : GFace(m, tag)
   {
     Msg::Error("Gmsh has to be compiled with solver support to use GFaceCompounds");

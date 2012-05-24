@@ -330,9 +330,9 @@ Centerline::Centerline(std::string fileName): kdtree(0), kdtreeR(0), nodes(0), n
   nbElemLayer = 3;
 
   update_needed = false;
-  is_cut = false;
-  is_closed = false;
-  is_extruded = false;
+  is_cut = 0;
+  is_closed = 0;
+  is_extruded = 0;
 
 }
 Centerline::Centerline(): kdtree(0), kdtreeR(0), nodes(0), nodesR(0){
@@ -345,19 +345,19 @@ Centerline::Centerline(): kdtree(0), kdtreeR(0), nodes(0), nodesR(0){
   nbPoints = 25;
   hLayer = 0.3;
   nbElemLayer = 3;
-  is_cut = false;
-  is_closed = false;
-  is_extruded = false;
+  is_cut = 0;
+  is_closed = 0;
+  is_extruded = 0;
 
-  callbacks["closeVolume"] = new FieldCallbackGeneric<Centerline>(this, &Centerline::closeVolume, "Create In/Outlet planar faces \n");
-  callbacks["extrudeWall"] = new FieldCallbackGeneric<Centerline>(this, &Centerline::extrudeWall, "Extrude wall \n");
-  callbacks["cutMesh"] = new FieldCallbackGeneric<Centerline>(this, &Centerline::cutMesh, "Cut the initial mesh in different mesh partitions using the centerlines \n");
+  options["closeVolume"] = new FieldOptionInt(is_closed, "Action: Create In/Outlet planar faces");
+  options["extrudeWall"] = new FieldOptionInt(is_extruded, "Action: Extrude wall");
+  options["reMesh"] = new FieldOptionInt(is_cut, "Action: Cut the initial mesh in different mesh partitions using the centerlines");
+  callbacks["run"] = new FieldCallbackGeneric<Centerline>(this, &Centerline::run, "Run actions (closeVolume, extrudeWall, cutMesh) \n");
 
   options["FileName"] = new FieldOptionString (fileName, "File name for the centerlines", &update_needed);
   options["nbPoints"] = new FieldOptionInt(nbPoints, "Number of mesh elements in a circle");
   options["nbElemLayer"] = new FieldOptionInt(nbElemLayer, "Number of mesh elements the extruded layer");
   options["hLayer"] = new FieldOptionDouble(hLayer, "Thickness (% of radius) of the extruded layer");
-
 
 }
 
@@ -401,7 +401,9 @@ void Centerline::importFile(std::string fileName){
 
   int maxN = 0.0;
   std::vector<GEdge*> modEdges = mod->bindingsGetEdges();
- for (unsigned int i = 0; i < modEdges.size(); i++){
+  MVertex *vin = modEdges[0]->lines[0]->getVertex(0);
+  ptin = SPoint3(vin->x(), vin->y(), vin->z());
+  for (unsigned int i = 0; i < modEdges.size(); i++){
     GEdge *ge = modEdges[i];
     for(unsigned int j = 0; j < ge->lines.size(); j++){
       MLine *l = ge->lines[j];
@@ -499,7 +501,8 @@ void Centerline::createBranches(int maxN){
       edges.push_back(newBranch) ;
     }
   }
-  printf("*** Centerline in/outlets =%d branches =%d \n", (int)color_edges.size()+1, (int)edges.size());
+
+  Msg::Info("Centerline: in/outlets =%d branches =%d ", (int)color_edges.size()+1, (int)edges.size());
 
   //create children
   for(unsigned int i = 0; i < edges.size(); ++i) {
@@ -615,14 +618,14 @@ void Centerline::buildKdTree(){
 
 void Centerline::createSplitCompounds(){
 
-  //number of discrete vertices, edges, faces and regions for cut mesh
+  //number of discrete vertices, edges, faces and regions for the mesh
   NV = current->getMaxElementaryNumber(0);
   NE = current->getMaxElementaryNumber(1);
   NF = current->getMaxElementaryNumber(2);
   NR = current->getMaxElementaryNumber(3);
 
   // Remesh new faces (Compound Lines and Compound Surfaces)
-  Msg::Info("Centerline: create split compounds:");
+  Msg::Info("Centerline: creates split compounds");
 
   //Parametrize Compound Lines
   for (int i=0; i < NE; i++){
@@ -633,8 +636,6 @@ void Centerline::createSplitCompounds(){
     Msg::Info("Create Compound Line (%d) = %d discrete edge",
               num_gec, pe->tag());
     GEdge *gec = current->addCompoundEdge(e_compound,num_gec);
-    //GEdgeCompound *gec = new GEdgeCompound(current, num_gec, e_compound);
-    //current->add(gec);
   }
 
   // Parametrize Compound surfaces
@@ -647,16 +648,11 @@ void Centerline::createSplitCompounds(){
     Msg::Info("Create Compound Surface (%d) = %d discrete face",
               num_gfc, pf->tag());
 
-    GFace *gfc = current->addCompoundFace(f_compound, 1, 0, num_gfc); //1=conf_spectral 4=convex_circle
-    ////GFaceCompound::typeOfCompound typ = GFaceCompound::CONVEX_CIRCLE; 
-    ////GFaceCompound::typeOfCompound typ = GFaceCompound::HARMONIC_PLANE; 
-    //GFaceCompound::typeOfCompound typ = GFaceCompound::CONFORMAL_SPECTRAL; 
-    //GFaceCompound *gfc = new GFaceCompound(current, num_gfc, f_compound, U0,typ, 0);
-    //current->add(gfc);
+    GFace *gfc = current->addCompoundFace(f_compound, 7, 0, num_gfc); //1=conf_spectral 4=convex_circle, 7=conf_fe
 
     gfc->meshAttributes.recombine = recombine;
-    gfc->addPhysicalEntity(100);
-    current->setPhysicalName("newsurf", 2, 100);
+    gfc->addPhysicalEntity(1);
+    current->setPhysicalName("wall", 2, 1);//tag 1
 
   }
 
@@ -765,7 +761,7 @@ void Centerline::createFaces(){
         it != touched.end(); ++it)
       e2e.erase(*it);
   }
-  Msg::Info("Centerline action (cutMesh) has cut surface mesh in %d faces ", (int)faces.size());
+  Msg::Info("Centerline: action (cutMesh) has cut surface mesh in %d faces ", (int)faces.size());
 
   //create discFaces
   for(unsigned int i = 0; i < faces.size(); ++i){
@@ -790,82 +786,103 @@ void Centerline::createFaces(){
 
 }
 
-void Centerline::createClosedVolume(){
-
-  //identify the boundary edges by looping over all discreteFaces
-  std::vector<GEdge*> boundEdges;
-  for (int i= 0; i< NF; i++){
-    GFace *gf = current->getFaceByTag(i+1);
-    std::list<GEdge*> l_edges = gf->edges();
-    for(std::list<GEdge*>::iterator it = l_edges.begin(); it != l_edges.end(); it++){
-      std::vector<GEdge*>::iterator ite = std::find(boundEdges.begin(), boundEdges.end(), *it);
-      if (ite != boundEdges.end()) boundEdges.erase(ite);
-      else boundEdges.push_back(*it);
-    }
-  }
-
+void Centerline::createClosedVolume(GEdge *gin, std::vector<GEdge*> boundEdges){
+ 
   current->setFactory("Gmsh");
   std::vector<std::vector<GFace *> > myFaceLoops;
   std::vector<GFace *> myFaces;
   for (unsigned int i = 0; i<  boundEdges.size(); i++){
     std::vector<std::vector<GEdge *> > myEdgeLoops;
     std::vector<GEdge *> myEdges;
-    GEdge * gec = current->getEdgeByTag(NE+boundEdges[i]->tag());
+    GEdge * gec;
+    if(is_cut) gec = current->getEdgeByTag(NE+boundEdges[i]->tag());
+    else gec = current->getEdgeByTag(boundEdges[i]->tag());
     myEdges.push_back(gec);
     myEdgeLoops.push_back(myEdges);
     GFace *newFace = current->addPlanarFace(myEdgeLoops);
-    newFace->addPhysicalEntity(200);
-    current->setPhysicalName("in/out", 2, 200);
+    if (gin==boundEdges[i]) {
+      newFace->addPhysicalEntity(2);
+      current->setPhysicalName("inlet", 2, 2);//tag 2
+    }
+    else{
+      newFace->addPhysicalEntity(3);
+      current->setPhysicalName("outlets", 2, 3);//tag 3
+    }
     myFaces.push_back(newFace);
   }
 
- Msg::Info("Centerline action (closeVolume) has created %d in/out planar faces ", (int)boundEdges.size());
+  Msg::Info("Centerline: action (closeVolume) has created %d in/out planar faces ", (int)boundEdges.size());
 
   for (int i = 0; i < NF; i++){
-    GFace * gf = current->getFaceByTag(NF+i+1);
-     myFaces.push_back(gf);
+    GFace * gf;
+    if(is_cut) gf = current->getFaceByTag(NF+i+1);
+    else gf = current->getFaceByTag(i+1);
+    myFaces.push_back(gf);
   }
   myFaceLoops.push_back(myFaces);
   GRegion *reg = current->addVolume(myFaceLoops);
   reg->addPhysicalEntity(reg->tag());
-  current->setPhysicalName("newvol", 3, reg->tag());
+  current->setPhysicalName("lumenVolume", 3, reg->tag());
 
-  Msg::Info("Centerline action (closeVolume) has created volume %d ", reg->tag());
+  Msg::Info("Centerline: action (closeVolume) has created volume %d ", reg->tag());
 
 }
 
-void Centerline::extrudeBoundaryLayerWall(){
+void Centerline::extrudeBoundaryLayerWall(GEdge* gin, std::vector<GEdge*> boundEdges){
   
-  Msg::Info("Centerline: extrude boundary layer wall %d %g ", nbElemLayer,  hLayer);
+  Msg::Info("Centerline: extrude boundary layer wall (%d, %g%%R) ", nbElemLayer,  hLayer);
 
+  //orient extrude direction outward
+  int dir = 0;
+  MElement *e = current->getFaceByTag(1)->getMeshElement(0);
+  SVector3 ne = e->getFace(0).normal();
+  SVector3 ps(e->getVertex(0)->x(), e->getVertex(0)->y(), e->getVertex(0)->z());
+  double xyz[3] = {ps.x(), ps.y(), ps.z()};
+  kdtree->annkSearch(xyz, 1, index, dist);
+  SVector3 pc(nodes[index[0]][0], nodes[index[0]][1], nodes[index[0]][2]);
+  SVector3 nc = ps-pc;
+  if (dot(ne,nc) < 0) dir = 1;
+  if (dir ==1 && hLayer > 0 ) hLayer *= -1.0;
+
+  int shift = 0;
+  if(is_cut) shift = NE;
   for (int i= 0; i< NF; i++){
-    GFace *gf = current->getFaceByTag(NF+i+1);//at this moment compound is not meshed yet exist yet
+    GFace *gfc ; 
+    if (is_cut) gfc = current->getFaceByTag(NF+i+1);
+    else gfc = current->getFaceByTag(i+1);
     current->setFactory("Gmsh");
-    current->extrudeBoundaryLayer(gf, nbElemLayer,  hLayer, 0, -1);
     //view -5 to scale hLayer by radius in BoundaryLayers.cpp
+    std::vector<GEntity*> extrudedE = current->extrudeBoundaryLayer(gfc, nbElemLayer,  hLayer, dir, -5);
+    GFace *eFace = (GFace*) extrudedE[0];
+    eFace->addPhysicalEntity(5);
+    current->setPhysicalName("outerWall", 2, 5);//tag 5
+    GRegion *eRegion = (GRegion*) extrudedE[1];
+    eRegion->addPhysicalEntity(6);
+    current->setPhysicalName("wallVolume", 3, 6);//tag 6
+    for (int j= 2; j < extrudedE.size(); j++){
+      GFace *elFace = (GFace*) extrudedE[j];
+      std::list<GEdge*> l_edges = elFace->edges();
+      for(std::list<GEdge*>::iterator it = l_edges.begin(); it != l_edges.end(); it++){
+	GEdge *myEdge = *it;
+	if (is_cut) myEdge = current->getEdgeByTag((*it)->tag()-NE);
+	if( std::find(boundEdges.begin(), boundEdges.end(), myEdge) != boundEdges.end() ){
+	  if (myEdge==gin){
+	    elFace->addPhysicalEntity(7);
+	    current->setPhysicalName("inletRing", 2, 7);//tag 7
+	  }
+	  else{
+	    elFace->addPhysicalEntity(8);
+	    current->setPhysicalName("outletRings", 2, 8);//tag 8
+	  }
+	}
+      } 
+    }
   }
 
 }
 
-void Centerline::closeVolume(){
 
-  is_closed = true;
-  //printf("calling closed volume \n");
-  //exit(1);
-
-}
-
-void Centerline::extrudeWall(){
-
-  is_extruded = true;
-  //printf("calling extrude wall \n");
-  //exit(1);
-
-}
-
-void Centerline::cutMesh(){
-
-  is_cut = true;
+void Centerline::run(){
 
   if (update_needed){
     std::ifstream input;
@@ -876,19 +893,47 @@ void Centerline::cutMesh(){
     update_needed = false;
   }
 
-  // std::vector<GFace*> currentFaces =  current->bindingsGetFaces();
-  // for (int i=0; i< currentFaces.size(); i++){
-  //   printf("gf =%d \n", currentFaces[i]->tag());
-  //   if(currentFaces[i]->geomType() == GEntity::CompoundSurface) {
-  //     std::list<GFace*> cFaces = ((GFaceCompound*)currentFaces[i])->getCompounds();
-  //     for (std::list<GFace*>::iterator it = cFaces.begin(); it!= cFaces.end(); it++) {
-  //   	printf("comp  = %d\n", (*it)->tag());
-  //     }
-  //     if (cFaces.size() > 0) currentGFC.push_back(currentFaces[i]);
-  //   }
-  // }
+  if (is_cut) cutMesh();
+  else{
+    GFace *gf = current->getFaceByTag(1);
+    gf->addPhysicalEntity(1);
+    current->setPhysicalName("wall", 2, 1);//tag 1
+    current->createTopologyFromMesh();
+    NV = current->getMaxElementaryNumber(0);
+    NE = current->getMaxElementaryNumber(1);
+    NF = current->getMaxElementaryNumber(2);
+    NR = current->getMaxElementaryNumber(3);  
+  }
+  
+  //identify the boundary edges by looping over all discreteFaces
+  std::vector<GEdge*> boundEdges;
+  double dist_inlet = 1.e6;
+  GEdge *gin = NULL;
+  for (int i= 0; i< NF; i++){
+    GFace *gf = current->getFaceByTag(i+1);
+    std::list<GEdge*> l_edges = gf->edges();
+    for(std::list<GEdge*>::iterator it = l_edges.begin(); it != l_edges.end(); it++){
+      std::vector<GEdge*>::iterator ite = std::find(boundEdges.begin(), boundEdges.end(), *it);
+      if (ite != boundEdges.end()) boundEdges.erase(ite);
+      else boundEdges.push_back(*it);
+      GVertex *gv = (*it)->getBeginVertex();
+      SPoint3 pt(gv->x(), gv->y(), gv->z());
+      double dist = pt.distance(ptin);
+      if(dist < dist_inlet){
+	dist_inlet = dist;
+	gin = *it;
+      }			      
+    }
+  }
 
-  Msg::Info("Splitting surface mesh (%d tris) with centerline %s ", triangles.size(), fileName.c_str());
+  if (is_closed)   createClosedVolume(gin, boundEdges);
+  if (is_extruded) extrudeBoundaryLayerWall(gin, boundEdges);
+
+}
+
+void Centerline::cutMesh(){
+
+  Msg::Info("Centerline: action (cutMesh) splits surface mesh (%d tris) using %s ", triangles.size(), fileName.c_str());
 
   //splitMesh
   for(unsigned int i = 0; i < edges.size(); i++){
@@ -896,13 +941,14 @@ void Centerline::cutMesh(){
     double L = edges[i].length;
     double D = (edges[i].minRad+edges[i].maxRad);
     double AR = L/D;
-    printf("*** Centerline branch %d (AR=%g):  ", edges[i].tag, AR);
-    printf("children (%d) = ", edges[i].children.size());
-    for (int k= 0; k< edges[i].children.size() ; k++) printf("%d ", edges[i].children[k].tag);
-    printf("\n");
+    printf("*** Centerline branch %d (AR=%.1f) \n", edges[i].tag, AR);
+    //if ( edges[i].children.size()) printf("children (%d) = ", edges[i].children.size());
+    //for (int k= 0; k< edges[i].children.size() ; k++) printf("%d ", edges[i].children[k].tag);
+    //printf("\n");
    
-    int nbSplit = (int)floor(AR/2. + 0.5); 
-    if( AR > 3.0){
+    int nbSplit = (int)floor(AR/2 + 0.9); 
+    if( nbSplit > 1 ){
+      printf("->> cut branch in %d parts \n",  nbSplit);
       double li  = L/nbSplit;
       double lc = 0.0;
       for (unsigned int j= 0; j < lines.size(); j++){
@@ -912,7 +958,6 @@ void Centerline::cutMesh(){
 	  MVertex *v2 = lines[j]->getVertex(1);
 	  SVector3 pt(v1->x(), v1->y(), v1->z());
 	  SVector3 dir(v2->x()-v1->x(),v2->y()-v1->y(),v2->z()-v1->z());
-	  printf("->> cut length %d split \n",  nbSplit);
 	  std::map<MLine*,double>::iterator itr = radiusl.find(lines[j]);
 	  bool cutted = cutByDisk(pt, dir, itr->second);
 	  nbSplit--;
@@ -928,19 +973,19 @@ void Centerline::cutMesh(){
       else v2 = lines[lines.size()-1]->getVertex(0);
       SVector3 pt(v1->x(), v1->y(), v1->z());
       SVector3 dir(v2->x()-v1->x(),v2->y()-v1->y(),v2->z()-v1->z());
-      printf("-->> cut bifurcation \n");
+      printf("-->> cut branch at bifurcation \n");
       std::map<MLine*,double>::iterator itr = radiusl.find(lines[lines.size()-1]);
       bool cutted = cutByDisk(pt, dir, itr->second);
-      if(!cutted){
-	int l = lines.size()-1-lines.size()/(4*nbSplit);
-	v1 = lines[l]->getVertex(1);
-	v2 = lines[l]->getVertex(0);
-	pt = SVector3(v1->x(), v1->y(), v1->z());
-	dir = SVector3(v2->x()-v1->x(),v2->y()-v1->y(),v2->z()-v1->z());
-	printf("-->> cut bifurcation NEW \n");
-	itr = radiusl.find(lines[l]);
-	cutted = cutByDisk(pt, dir, itr->second);
-      }
+      // if(!cutted){
+      // 	int l = lines.size()-1-lines.size()/(4*nbSplit); //chech this!
+      // 	v1 = lines[l]->getVertex(1);
+      // 	v2 = lines[l]->getVertex(0);
+      // 	pt = SVector3(v1->x(), v1->y(), v1->z());
+      // 	dir = SVector3(v2->x()-v1->x(),v2->y()-v1->y(),v2->z()-v1->z());
+      // 	printf("-->> cut bifurcation NEW \n");
+      // 	itr = radiusl.find(lines[l]);
+      // 	cutted = cutByDisk(pt, dir, itr->second);
+      // }
     }
  }
 
@@ -955,10 +1000,6 @@ void Centerline::cutMesh(){
 
   //create compounds
   createSplitCompounds();
-  if (is_closed) createClosedVolume();
-
-  //extrude wall
-  if(is_extruded) extrudeBoundaryLayerWall();
 
   Msg::Info("Splitting mesh by centerlines done ");
 
@@ -972,7 +1013,7 @@ bool Centerline::cutByDisk(SVector3 &PT, SVector3 &NORM, double &maxRad){
   double d = -a * PT.x() - b * PT.y() - c * PT.z();
   //printf("cut disk (R=%g)= %g %g %g %g \n", maxRad, a, b, c, d);
 
-  int maxStep = 40;
+  int maxStep = 20;
   const double EPS = 0.007;
 
   std::set<MEdge,Less_Edge> allEdges;
@@ -1069,25 +1110,31 @@ double Centerline::operator() (double x, double y, double z, GEntity *ge){
    double xyz[3] = {x,y,z};
 
    //take xyz = closest point on boundary in case we are on the planar in/out faces
-   bool isCompound = (ge->dim() == 2 && ge->geomType() == GEntity::CompoundSurface) ? true: false;
-   std::list<GFace*> cFaces;
-   if (isCompound) cFaces = ((GFaceCompound*)ge)->getCompounds();
-   if ( ge->dim() == 3 || (ge->dim() == 2 && ge->geomType() == GEntity::Plane) ||
-	(isCompound && (*cFaces.begin())->geomType() == GEntity::Plane) ){
-     int num_neighbours = 1;
-     kdtreeR->annkSearch(xyz, num_neighbours, index, dist);
-     xyz[0] = nodesR[index[0]][0];
-     xyz[1] = nodesR[index[0]][1];
-     xyz[2] = nodesR[index[0]][2];
+   bool isCompound = false;
+   if(ge){
+     if (ge->dim() == 2 && ge->geomType() == GEntity::CompoundSurface) isCompound = true; 
+     std::list<GFace*> cFaces;
+     if (isCompound) cFaces = ((GFaceCompound*)ge)->getCompounds();
+     if ( ge->dim() == 3 || (ge->dim() == 2 && ge->geomType() == GEntity::Plane) ||
+	  (isCompound && (*cFaces.begin())->geomType() == GEntity::Plane) ){
+       int num_neighbours = 1;
+       kdtreeR->annkSearch(xyz, num_neighbours, index, dist);
+       xyz[0] = nodesR[index[0]][0];
+       xyz[1] = nodesR[index[0]][1];
+       xyz[2] = nodesR[index[0]][2];
+     }
    }
 
    int num_neighbours = 1;
    kdtree->annkSearch(xyz, num_neighbours, index, dist);
    double d = sqrt(dist[0]);
    double lc = 2*M_PI*d/nbPoints;
-   return lc;
+
+   if(!ge) { return d;}
+   else  return lc;
 
 }
+
 
 void  Centerline::operator() (double x, double y, double z, SMetric3 &metr, GEntity *ge){
 
@@ -1129,7 +1176,7 @@ void  Centerline::operator() (double x, double y, double z, SMetric3 &metr, GEnt
    //dir_n = normal direction of the disk
    //dir_t = tangential direction of the disk
    SVector3 dir_a = p1-p0;
-   SVector3 dir_n(x-p0.x(), y-p0.y(), z-p0.z()); 
+   SVector3 dir_n(xyz[0]-p0.x(), xyz[1]-p0.y(), xyz[2]-p0.z()); 
    SVector3 dir_t;
    buildOrthoBasis2(dir_a, dir_n, dir_t);
    
@@ -1137,20 +1184,34 @@ void  Centerline::operator() (double x, double y, double z, SMetric3 &metr, GEnt
    double lc_a = 3.5*lc;
    double lc_n, lc_t;
 
-   if (onTubularSurface){
-     lc_n = lc_t = lc;
+   if ( onTubularSurface){
+     double e = radMax/5.;
+     double hn = e/50.;
+     lc_n = hn; 
+     double crv = 1./radMax;
+     double oneOverD2 = .5/(lc*lc) * (1. + sqrt (1. + ( 4.*crv*crv*lc*lc*lc*lc/ (lc_n*lc_n*CTX::instance()->mesh.smoothRatio*CTX::instance()->mesh.smoothRatio))));
+
+     lc_n = lc_t = sqrt(1./oneOverD2);
    }
    else{
-     double e = radMax/4.;
-     double hn = e/10.;
+     /// thickness of the refined layer
+     double e = radMax/5.;
+     // small size
+     double hn = e/50.;
      double rm = std::max(radMax-ds, radMax-e);
-     lc_t = 2*M_PI*rm/nbPoints;
+
+     lc_t = lc;
+     lc_n = std::min(lc,ds*(1.3-1) + hn); 
+
+     double crv = 1./radMax;
+     double oneOverD2 = .5/(lc*lc) * (1. + sqrt (1. + ( 4.*crv*crv*lc*lc*lc*lc/ (lc_n*lc_n*CTX::instance()->mesh.smoothRatio*CTX::instance()->mesh.smoothRatio))));
+     lc_t = sqrt(1./oneOverD2);
+
+
      //lc_n = lc_t = lc;
      //double ratio = 1.02; //1. + (lc_t-hn)/e;
      //printf("ratio =%g \n", ratio);
      //lc_n = ds*(ratio-1) + hn;
-     if (ds < e) lc_n = hn; 
-     else lc_n = lc_t;
    }
    double lam_a = 1./(lc_a*lc_a);
    double lam_n = 1./(lc_n*lc_n);
@@ -1164,10 +1225,12 @@ void  Centerline::operator() (double x, double y, double z, SMetric3 &metr, GEnt
    return;
 }
 
-/**************************************************/
-/******************Temporary code******************/
-/**************************************************/
+//used so far by Tristan for mesh algo hex
 void Centerline::operator()(double x,double y,double z,SVector3& v1,SVector3& v2,SVector3& v3,GEntity* ge){
+
+  printf("EMI do not go here \n");
+  exit(1);
+
   if(update_needed){
     std::ifstream input;
 	input.open(fileName.c_str());

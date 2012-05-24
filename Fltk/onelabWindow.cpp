@@ -16,6 +16,7 @@
 #include <FL/Fl_Check_Button.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Input_Choice.H>
+#include <FL/Fl_Output.H>
 #include <FL/fl_ask.H>
 #include "inputRange.h"
 #include "Context.h"
@@ -203,22 +204,13 @@ bool onelab::localNetworkClient::run()
       std::string checkCommand = (ps.empty() ? "" : ps[0].getValue());
       get(ps, getName() + "/9ComputeCommand");
       std::string computeCommand = (ps.empty() ? "" : ps[0].getValue());
-    /*
+      if(modelName.size()) command.append(" \"" + modelName + "\"");
       if(action == "check")
-        command += " " + modelName + " " + checkCommand;
+        command.append(" "+ checkCommand) ;
       else if(action == "compute")
-        command += " " + modelName + " " + computeCommand;
-    */
-    if(action == "check")
-      command.append(" " + modelName + " " + checkCommand) ;
-    else if(action == "compute")
-      command.append(" " + modelName + " " + computeCommand);
+        command.append(" "+ computeCommand);
     }
-    /*
-    // append "-onelab" command line argument
-    command += " " + _socketSwitch + " \"" + getName() + "\"";
-    */
-    command.append(" " + getSocketSwitch() + " " + getName() + " %s");
+    command.append(" " + getSocketSwitch() + " \"" + getName() + "\" %s");
   }
   else{
     Msg::Info("Listening on socket '%s'", sockname.c_str());
@@ -279,41 +271,58 @@ bool onelab::localNetworkClient::run()
       {
         std::string version, type, name;
         onelab::parameter::getInfoFromChar(message, version, type, name);
-        if(type == "number"){
-          onelab::number p;
-          p.fromChar(message);
-          set(p);
+        if(onelab::parameter::version() != version){
+          Msg::Error("OneLab version mismatch (server: %s / client: %s)",
+                     onelab::parameter::version().c_str(), version.c_str());
+        }
+        else if(type == "number"){
+          onelab::number p; p.fromChar(message); set(p);
         }
         else if(type == "string"){
-          onelab::string p;
-          p.fromChar(message);
-          set(p);
+          onelab::string p; p.fromChar(message); set(p);
+        }
+        else if(type == "region"){
+          onelab::region p; p.fromChar(message); set(p);
+        }
+        else if(type == "function"){
+          onelab::function p; p.fromChar(message); set(p);
         }
         else
-          Msg::Error("FIXME not done for this parameter type: %s", type.c_str());
+          Msg::Error("Unknown OneLab parameter type: %s", type.c_str());
       }
       break;
     case GmshSocket::GMSH_PARAMETER_QUERY:
       {
         std::string version, type, name, reply;
         onelab::parameter::getInfoFromChar(message, version, type, name);
-        if(type == "number"){
-          std::vector<onelab::number> par;
-          get(par, name);
+        if(onelab::parameter::version() != version){
+          Msg::Error("OneLab version mismatch (server: %s / client: %s)",
+                     onelab::parameter::version().c_str(), version.c_str());
+        }
+        else if(type == "number"){
+          std::vector<onelab::number> par; get(par, name);
           if(par.size() == 1) reply = par[0].toChar();
         }
         else if(type == "string"){
-          std::vector<onelab::string> par;
-          get(par, name);
+          std::vector<onelab::string> par; get(par, name);
+          if(par.size() == 1) reply = par[0].toChar();
+        }
+        else if(type == "region"){
+          std::vector<onelab::region> par; get(par, name);
+          if(par.size() == 1) reply = par[0].toChar();
+        }
+        else if(type == "function"){
+          std::vector<onelab::function> par; get(par, name);
           if(par.size() == 1) reply = par[0].toChar();
         }
         else
-          Msg::Error("FIXME not done for this parameter type: %s", type.c_str());
+          Msg::Error("Unknown OneLab parameter type in query: %s", type.c_str());
+
         if(reply.size()){
           server->SendMessage(GmshSocket::GMSH_PARAMETER, reply.size(), &reply[0]);
         }
         else{
-          reply = "Parameter '" + name + "' not found";
+          reply = "OneLab parameter '" + name + "' not found";
           server->SendMessage(GmshSocket::GMSH_INFO, reply.size(), &reply[0]);
         }
       }
@@ -321,31 +330,40 @@ bool onelab::localNetworkClient::run()
     case GmshSocket::GMSH_PARAM_QUERY_ALL:
       {
         std::string version, type, name, reply;
+        std::vector<std::string> replies;
         onelab::parameter::getInfoFromChar(message, version, type, name);
-	if(type == "number"){
-	  std::vector<onelab::number> numbers;
-	  get(numbers);
+        if(onelab::parameter::version() != version){
+          Msg::Error("OneLab version mismatch (server: %s / client: %s)",
+                     onelab::parameter::version().c_str(), version.c_str());
+        }
+	else if(type == "number"){
+	  std::vector<onelab::number> numbers; get(numbers);
 	  for(std::vector<onelab::number>::iterator it = numbers.begin();
-              it != numbers.end(); it++){
-	    reply = (*it).toChar();
-	    server->SendMessage(GmshSocket::GMSH_PARAM_QUERY_ALL, reply.size(), &reply[0]);
-	  }
-	  reply = "OneLab: sent all numbers";
-	  server->SendMessage(GmshSocket::GMSH_PARAM_QUERY_END, reply.size(), &reply[0]);
-	}
-	else if(type == "string"){
-	  std::vector<onelab::string> strings;
-	  get(strings);
+              it != numbers.end(); it++) replies.push_back((*it).toChar());
+        }
+        else if(type == "string"){
+	  std::vector<onelab::string> strings; get(strings);
 	  for(std::vector<onelab::string>::iterator it = strings.begin();
-              it != strings.end(); it++){
-	    reply = (*it).toChar();
-	    server->SendMessage(GmshSocket::GMSH_PARAM_QUERY_ALL, reply.size(), &reply[0]);
-	  }
-	  reply = "OneLab: sent all strings";
-	  server->SendMessage(GmshSocket::GMSH_PARAM_QUERY_END, reply.size(), &reply[0]);
-	}
+              it != strings.end(); it++) replies.push_back((*it).toChar());
+        }
+        else if(type == "region"){
+	  std::vector<onelab::region> regions; get(regions);
+	  for(std::vector<onelab::region>::iterator it = regions.begin();
+              it != regions.end(); it++) replies.push_back((*it).toChar());
+        }
+        else if(type == "function"){
+	  std::vector<onelab::function> functions; get(functions);
+	  for(std::vector<onelab::function>::iterator it = functions.begin();
+              it != functions.end(); it++) replies.push_back((*it).toChar());
+        }
         else
-          Msg::Error("FIXME query not done for this parameter type: %s", type.c_str());
+          Msg::Error("Unknown OneLab parameter type in query: %s", type.c_str());
+
+        for(unsigned int i = 0; i < replies.size(); i++)
+          server->SendMessage
+            (GmshSocket::GMSH_PARAM_QUERY_ALL, replies[i].size(), &replies[i][0]);
+        reply = "Sent all OneLab " + type + "s";
+        server->SendMessage(GmshSocket::GMSH_PARAM_QUERY_END, reply.size(), &reply[0]);
       }
       break;
     case GmshSocket::GMSH_PROGRESS:
@@ -436,17 +454,21 @@ static std::string getMshFileName(onelab::client *c)
 
 static void guessModelName(onelab::client *c)
 {
-  std::vector<onelab::string> ps;
-  c->get(ps, c->getName() + "/1ModelName");
-  if(ps.empty()){
-    std::vector<std::string> split = SplitFileName(GModel::current()->getFileName());
-    std::string ext = "";
-    onelab::server::instance()->get(ps, c->getName() + "/FileExtension");
-    if(ps.size()) ext = ps[0].getValue();
-    std::string name(split[0] + split[1] + ext);
-    onelab::string o(c->getName() + "/1ModelName", name, "Model name");
-    o.setKind("file");
-    c->set(o);
+  std::vector<onelab::number> n;
+  c->get(n, c->getName() + "/GuessModelName");
+  if(n.size() && n[0].getValue()){
+    std::vector<onelab::string> ps;
+    c->get(ps, c->getName() + "/1ModelName");
+    if(ps.empty()){
+      std::vector<std::string> split = SplitFileName(GModel::current()->getFileName());
+      std::string ext = "";
+      onelab::server::instance()->get(ps, c->getName() + "/FileExtension");
+      if(ps.size()) ext = ps[0].getValue();
+      std::string name(split[0] + split[1] + ext);
+      onelab::string o(c->getName() + "/1ModelName", name, "Model name");
+      o.setKind("file");
+      c->set(o);
+    }
   }
 }
 
@@ -666,9 +688,11 @@ static void importPhysicalGroups(onelab::client *c, GModel *m)
         name = std::string("Physical") +
           ((dim == 3) ? "Volume" : (dim == 2) ? "Surface" :
            (dim == 1) ? "Line" : "Point") + num.str();
+      name.insert(0, "Gmsh/Physical groups/");
       onelab::region p(name, num.str());
       p.setDimension(dim);
-      p.setAttribute("ReadOnly", "Yes");
+      p.setReadOnly(true);
+      //p.setVisible(false);
       c->set(p);
     }
   }
@@ -805,9 +829,9 @@ void onelab_cb(Fl_Widget *w, void *data)
 
   do{ // enter loop
 
-    // the Gmsh client is special: it always gets executed first. (The
-    // meta-model will allow more flexibility: but in the simple GUI
-    // we can assume this)
+    // the Gmsh client is special: it always gets executed first. (A
+    // special-puropose meta-model allows more flexibility: but in the simple
+    // GUI we can assume this)
     runGmshClient(action);
 
     if(action == "compute")
@@ -843,80 +867,6 @@ void onelab_cb(Fl_Widget *w, void *data)
   FlGui::instance()->onelab->stop(false);
   FlGui::instance()->onelab->setButtonMode("check", "compute");
   if(action != "initialize") FlGui::instance()->onelab->show();
-}
-
-static void onelab_check_button_cb(Fl_Widget *w, void *data)
-{
-  if(!data) return;
-  std::string name = FlGui::instance()->onelab->getPath((Fl_Tree_Item*)data);
-  std::vector<onelab::number> numbers;
-  onelab::server::instance()->get(numbers, name);
-  if(numbers.size()){
-    Fl_Check_Button *o = (Fl_Check_Button*)w;
-    numbers[0].setValue(o->value());
-    onelab::server::instance()->set(numbers[0]);
-  }
-}
-
-static void onelab_input_range_cb(Fl_Widget *w, void *data)
-{
-  if(!data) return;
-  std::string name = FlGui::instance()->onelab->getPath((Fl_Tree_Item*)data);
-  std::vector<onelab::number> numbers;
-  onelab::server::instance()->get(numbers, name);
-  if(numbers.size()){
-    inputRange *o = (inputRange*)w;
-    if(o->doCallbackOnValues()){
-      numbers[0].setValue(o->value());
-      numbers[0].setMin(o->minimum());
-      numbers[0].setMax(o->maximum());
-      numbers[0].setStep(o->step());
-      numbers[0].setChoices(o->choices());
-    }
-    o->doCallbackOnValues(true);
-    numbers[0].setAttribute("Loop", o->loop());
-    numbers[0].setAttribute("Graph", o->graph());
-    onelab::server::instance()->set(numbers[0]);
-    updateOnelabGraphs();
-  }
-}
-
-static void onelab_input_choice_cb(Fl_Widget *w, void *data)
-{
-  if(!data) return;
-  std::string name = FlGui::instance()->onelab->getPath((Fl_Tree_Item*)data);
-  std::vector<onelab::string> strings;
-  onelab::server::instance()->get(strings, name);
-  if(strings.size()){
-    Fl_Input_Choice *o = (Fl_Input_Choice*)w;
-    strings[0].setValue(o->value());
-    onelab::server::instance()->set(strings[0]);
-  }
-}
-
-static void onelab_input_choice_file_chooser_cb(Fl_Widget *w, void *data)
-{
-  Fl_Input_Choice *but = (Fl_Input_Choice*)w->parent();
-  if(fileChooser(FILE_CHOOSER_SINGLE, "Choose", "", but->value())){
-    but->value(fileChooserGetName(1).c_str());
-    but->do_callback(but, data);
-  }
-}
-
-static void onelab_input_choice_file_edit_cb(Fl_Widget *w, void *data)
-{
-  Fl_Input_Choice *but = (Fl_Input_Choice*)w->parent();
-  std::string prog = FixWindowsPath(CTX::instance()->editor);
-  std::string file = FixWindowsPath(but->value());
-  SystemCall(ReplaceSubString("%s", file, prog));
-}
-
-static void onelab_input_choice_file_merge_cb(Fl_Widget *w, void *data)
-{
-  Fl_Input_Choice *but = (Fl_Input_Choice*)w->parent();
-  std::string file = FixWindowsPath(but->value());
-  MergeFile(file);
-  drawContext::global()->draw();
 }
 
 static void onelab_choose_executable_cb(Fl_Widget *w, void *data)
@@ -1007,56 +957,212 @@ onelabWindow::onelabWindow(int deltaFontSize)
   FL_NORMAL_SIZE += _deltaFontSize;
 }
 
-void onelabWindow::_addParameter(onelab::number &p)
+static bool getFlColor(const std::string &str, Fl_Color &c)
 {
+  if(str == "1"){
+    c = FL_YELLOW;
+    return true;
+  }
+  int r, g, b;
+  if(str.size() && GetRGBForString(str.c_str(), r, g, b)){
+    c = fl_color_cube(r * (FL_NUM_RED - 1) / 255,
+                      g * (FL_NUM_GREEN - 1) / 255,
+                      b * (FL_NUM_BLUE - 1) / 255);
+    return true;
+  }
+  c = FL_BLACK;
+  return false;
+}
+
+template<class T>
+void onelabWindow::_addParameter(T &p)
+{
+  bool highlight = false;
+  Fl_Color c;
+  if(getFlColor(p.getAttribute("Highlight"), c)) highlight = true;
   Fl_Tree_Item *n = _tree->add(p.getName().c_str());
   n->labelsize(FL_NORMAL_SIZE + 5);
-  std::string label = p.getShortName();
   _tree->begin();
-  if(p.getChoices().size() == 2 && p.getChoices()[0] == 0 && p.getChoices()[1] == 1){
-    Fl_Check_Button *but = new Fl_Check_Button(1, 1, _itemWidth, 1);
-    _treeWidgets.push_back(but);
-    but->copy_label(label.c_str());
-    but->value(p.getValue());
-    but->callback(onelab_check_button_cb, (void*)n);
-    n->widget(but);
-    if(p.getAttribute("Highlight").size())
-      n->labelbgcolor(FL_YELLOW);
-  }
-  else{
-    inputRange *but = new inputRange
-      (1, 1, _itemWidth, 1, onelab::parameter::maxNumber());
-    _treeWidgets.push_back(but);
-    but->copy_label(label.c_str());
-    but->value(p.getValue());
-    but->minimum(p.getMin());
-    but->maximum(p.getMax());
-    but->step(p.getStep());
-    but->choices(p.getChoices());
-    but->loop(p.getAttribute("Loop"));
-    but->graph(p.getAttribute("Graph"));
-    if(p.getAttribute("Highlight").size())
-      but->color(FL_YELLOW);
-    but->align(FL_ALIGN_RIGHT);
-    but->callback(onelab_input_range_cb, (void*)n);
-    but->when(FL_WHEN_RELEASE | FL_WHEN_ENTER_KEY);
-    n->widget(but);
-  }
+  Fl_Widget *widget = _addParameterWidget(p, n, highlight, c);
+  _treeWidgets.push_back(widget);
+  widget->copy_label(p.getShortName().c_str());
+  n->widget(widget);
   _tree->end();
 }
 
-void onelabWindow::_addParameter(onelab::string &p)
+static void onelab_number_check_button_cb(Fl_Widget *w, void *data)
 {
-  Fl_Tree_Item *n = _tree->add(p.getName().c_str());
-  n->labelsize(FL_NORMAL_SIZE + 5);
-  std::string label = p.getShortName();
-  _tree->begin();
+  if(!data) return;
+  std::string name = FlGui::instance()->onelab->getPath((Fl_Tree_Item*)data);
+  std::vector<onelab::number> numbers;
+  onelab::server::instance()->get(numbers, name);
+  if(numbers.size()){
+    Fl_Check_Button *o = (Fl_Check_Button*)w;
+    numbers[0].setValue(o->value());
+    onelab::server::instance()->set(numbers[0]);
+  }
+}
+
+static void onelab_number_choice_cb(Fl_Widget *w, void *data)
+{
+  if(!data) return;
+  std::string name = FlGui::instance()->onelab->getPath((Fl_Tree_Item*)data);
+  std::vector<onelab::number> numbers;
+  onelab::server::instance()->get(numbers, name);
+  if(numbers.size()){
+    Fl_Choice *o = (Fl_Choice*)w;
+    std::vector<double> choices = numbers[0].getChoices();
+    if(o->value() < (int)choices.size()) numbers[0].setValue(choices[o->value()]);
+    onelab::server::instance()->set(numbers[0]);
+  }
+}
+
+static void onelab_number_input_range_cb(Fl_Widget *w, void *data)
+{
+  if(!data) return;
+  std::string name = FlGui::instance()->onelab->getPath((Fl_Tree_Item*)data);
+  std::vector<onelab::number> numbers;
+  onelab::server::instance()->get(numbers, name);
+  if(numbers.size()){
+    inputRange *o = (inputRange*)w;
+    if(o->doCallbackOnValues()){
+      numbers[0].setValue(o->value());
+      numbers[0].setMin(o->minimum());
+      numbers[0].setMax(o->maximum());
+      numbers[0].setStep(o->step());
+      numbers[0].setChoices(o->choices());
+    }
+    o->doCallbackOnValues(true);
+    numbers[0].setAttribute("Loop", o->loop());
+    numbers[0].setAttribute("Graph", o->graph());
+    onelab::server::instance()->set(numbers[0]);
+    updateOnelabGraphs();
+  }
+}
+
+Fl_Widget *onelabWindow::_addParameterWidget(onelab::number &p, Fl_Tree_Item *n,
+                                             bool highlight, Fl_Color c)
+{
+  // non-editable value
+  if(p.getReadOnly()){
+    Fl_Output *but = new Fl_Output(1, 1, _itemWidth, 1);
+    char tmp[128];
+    sprintf(tmp, "%g", p.getValue());
+    but->value(tmp);
+    but->align(FL_ALIGN_RIGHT);
+    if(highlight) but->color(c);
+    return but;
+  }
+
+  // enumeration (display choices as value labels, not numbers)
+  if(p.getChoices().size() &&
+     p.getChoices().size() == p.getValueLabels().size()){
+    Fl_Choice *but = new Fl_Choice(1, 1, _itemWidth, 1);
+    std::vector<Fl_Menu_Item> menu;
+    std::map<double, std::string> labels(p.getValueLabels());
+    for(std::map<double, std::string>::iterator it = labels.begin();
+        it != labels.end(); it++){
+      char *str = strdup(it->second.c_str());
+      _treeStrings.push_back(str);
+      Fl_Menu_Item menuItem = {str, 0, 0, 0, 0};
+      menu.push_back(menuItem);
+    }
+    Fl_Menu_Item it = {0};
+    menu.push_back(it);
+    but->copy(&menu[0]);
+    for(unsigned int i = 0; i < p.getChoices().size(); i++){
+      if(p.getValue() == p.getChoices()[i]){
+        but->value(i);
+        break;
+      }
+    }
+    but->callback(onelab_number_choice_cb, (void*)n);
+    but->align(FL_ALIGN_RIGHT);
+    if(highlight) n->labelbgcolor(c);
+    return but;
+  }
+
+  // check box (boolean choice)
+  if(p.getChoices().size() == 2 &&
+     p.getChoices()[0] == 0 && p.getChoices()[1] == 1){
+    Fl_Check_Button *but = new Fl_Check_Button(1, 1, _itemWidth, 1);
+    but->value(p.getValue());
+    but->callback(onelab_number_check_button_cb, (void*)n);
+    if(highlight) n->labelbgcolor(c);
+    return but;
+  }
+
+  // general number input
+  inputRange *but = new inputRange
+    (1, 1, _itemWidth, 1, onelab::parameter::maxNumber());
+  but->value(p.getValue());
+  but->minimum(p.getMin());
+  but->maximum(p.getMax());
+  but->step(p.getStep());
+  but->choices(p.getChoices());
+  but->loop(p.getAttribute("Loop"));
+  but->graph(p.getAttribute("Graph"));
+  but->callback(onelab_number_input_range_cb, (void*)n);
+  but->when(FL_WHEN_RELEASE | FL_WHEN_ENTER_KEY);
+  but->align(FL_ALIGN_RIGHT);
+  if(highlight) but->color(c);
+  return but;
+}
+
+static void onelab_string_input_choice_cb(Fl_Widget *w, void *data)
+{
+  if(!data) return;
+  std::string name = FlGui::instance()->onelab->getPath((Fl_Tree_Item*)data);
+  std::vector<onelab::string> strings;
+  onelab::server::instance()->get(strings, name);
+  if(strings.size()){
+    Fl_Input_Choice *o = (Fl_Input_Choice*)w;
+    strings[0].setValue(o->value());
+    onelab::server::instance()->set(strings[0]);
+  }
+}
+
+static void onelab_input_choice_file_chooser_cb(Fl_Widget *w, void *data)
+{
+  Fl_Input_Choice *but = (Fl_Input_Choice*)w->parent();
+  if(fileChooser(FILE_CHOOSER_SINGLE, "Choose", "", but->value())){
+    but->value(fileChooserGetName(1).c_str());
+    but->do_callback(but, data);
+  }
+}
+
+static void onelab_input_choice_file_edit_cb(Fl_Widget *w, void *data)
+{
+  Fl_Input_Choice *but = (Fl_Input_Choice*)w->parent();
+  std::string prog = FixWindowsPath(CTX::instance()->editor);
+  std::string file = FixWindowsPath(but->value());
+  SystemCall(ReplaceSubString("%s", file, prog));
+}
+
+static void onelab_input_choice_file_merge_cb(Fl_Widget *w, void *data)
+{
+  Fl_Input_Choice *but = (Fl_Input_Choice*)w->parent();
+  std::string file = FixWindowsPath(but->value());
+  MergeFile(file);
+  drawContext::global()->draw();
+}
+
+Fl_Widget *onelabWindow::_addParameterWidget(onelab::string &p, Fl_Tree_Item *n,
+                                             bool highlight, Fl_Color c)
+{
+  // non-editable value
+  if(p.getReadOnly()){
+    Fl_Output *but = new Fl_Output(1, 1, _itemWidth, 1);
+    but->value(p.getValue().c_str());
+    but->align(FL_ALIGN_RIGHT);
+    if(highlight) but->color(c);
+    return but;
+  }
+
+  // general string input
   Fl_Input_Choice *but = new Fl_Input_Choice(1, 1, _itemWidth, 1);
-  _treeWidgets.push_back(but);
-  but->copy_label(label.c_str());
   std::vector<Fl_Menu_Item> menu;
   for(unsigned int j = 0; j < p.getChoices().size(); j++){
-    // need to manually manage the label strings
     char *str = strdup(p.getChoices()[j].c_str());
     _treeStrings.push_back(str);
     bool divider = (p.getKind() == "file" &&
@@ -1078,24 +1184,105 @@ void onelabWindow::_addParameter(onelab::string &p)
   menu.push_back(it);
   but->menubutton()->copy(&menu[0]);
   but->value(p.getValue().c_str());
-  if(p.getAttribute("Highlight").size())
-    but->input()->color(FL_YELLOW);
-  but->align(FL_ALIGN_RIGHT);
-  but->callback(onelab_input_choice_cb, (void*)n);
+  but->callback(onelab_string_input_choice_cb, (void*)n);
   but->when(FL_WHEN_RELEASE | FL_WHEN_ENTER_KEY);
-  n->widget(but);
-  _tree->end();
+  but->align(FL_ALIGN_RIGHT);
+  if(highlight) but->input()->color(c);
+  return but;
+}
+
+static std::string _set2string(const std::set<std::string> &s)
+{
+  std::string out;
+  for(std::set<std::string>::const_iterator it = s.begin(); it != s.end(); it++){
+    if(it != s.begin()) out += ", ";
+    out += *it;
+  }
+  return out;
+}
+
+static std::string trim(const std::string &str, const std::string& white=" ")
+{
+  size_t beg = str.find_first_not_of(white);
+  if(beg == std::string::npos) return "";
+  size_t end = str.find_last_not_of(white);
+  return str.substr(beg, end - beg + 1);
+}
+
+static std::set<std::string> _string2set(const std::string &s)
+{
+  std::set<std::string> out;
+  std::string::size_type first = 0;
+  while(1){
+    std::string str = trim(onelab::parameter::getNextToken(s, first, ','));
+    //str.erase(std::remove(str.begin(), str.end(), ' '), str.end());
+    if(str.empty()) break;
+    out.insert(str);
+  }
+  return out;
+}
+
+static void onelab_region_input_cb(Fl_Widget *w, void *data)
+{
+  if(!data) return;
+  std::string name = FlGui::instance()->onelab->getPath((Fl_Tree_Item*)data);
+  std::vector<onelab::region> regions;
+  onelab::server::instance()->get(regions, name);
+  if(regions.size()){
+    Fl_Input *o = (Fl_Input*)w;
+    regions[0].setValue(_string2set(o->value()));
+    onelab::server::instance()->set(regions[0]);
+  }
+}
+
+Fl_Widget *onelabWindow::_addParameterWidget(onelab::region &p, Fl_Tree_Item *n,
+                                             bool highlight, Fl_Color c)
+{
+  // non-editable value
+  if(p.getReadOnly()){
+    Fl_Output *but = new Fl_Output(1, 1, _itemWidth, 1);
+    but->value(_set2string(p.getValue()).c_str());
+    but->align(FL_ALIGN_RIGHT);
+    if(highlight) but->color(c);
+    return but;
+  }
+
+  // general group input -- will be improved :-)
+  Fl_Input *but = new Fl_Input(1, 1, _itemWidth, 1);
+  but->value(_set2string(p.getValue()).c_str());
+  but->align(FL_ALIGN_RIGHT);
+  but->callback(onelab_region_input_cb, (void*)n);
+  if(highlight) but->color(c);
+  return but;
+}
+
+Fl_Widget *onelabWindow::_addParameterWidget(onelab::function &p, Fl_Tree_Item *n,
+                                             bool highlight, Fl_Color c)
+{
+  // non-editable value
+  //if(p.getReadOnly()){
+    Fl_Output *but = new Fl_Output(1, 1, _itemWidth, 1);
+    but->value("TODO function");
+    but->align(FL_ALIGN_RIGHT);
+    if(highlight) but->color(c);
+    return but;
+  //}
 }
 
 void onelabWindow::rebuildTree()
 {
   FL_NORMAL_SIZE -= _deltaFontSize;
 
-  _itemWidth = (int)(0.5 * _tree->w());
+  _itemWidth = (int)(0.45 * _tree->w());
 
   std::vector<std::string> closed;
   for (Fl_Tree_Item *n = _tree->first(); n; n = n->next())
     if(n->is_close()) closed.push_back(getPath(n));
+
+  if(_treeWidgets.empty()){ // first time we build the tree
+    closed.push_back("Gmsh");
+    closed.push_back("Gmsh/Physical groups");
+  }
 
   _tree->clear();
   _tree->sortorder(FL_TREE_SORT_ASCENDING);
@@ -1120,6 +1307,20 @@ void onelabWindow::rebuildTree()
   for(unsigned int i = 0; i < strings.size(); i++){
     if(!strings[i].getVisible()) continue;
     _addParameter(strings[i]);
+  }
+
+  std::vector<onelab::region> regions;
+  onelab::server::instance()->get(regions);
+  for(unsigned int i = 0; i < regions.size(); i++){
+    if(!regions[i].getVisible()) continue;
+    _addParameter(regions[i]);
+  }
+
+  std::vector<onelab::function> functions;
+  onelab::server::instance()->get(functions);
+  for(unsigned int i = 0; i < functions.size(); i++){
+    if(!functions[i].getVisible()) continue;
+    _addParameter(functions[i]);
   }
 
   for(Fl_Tree_Item *n = _tree->first(); n; n = n->next()){

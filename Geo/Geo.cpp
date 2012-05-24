@@ -246,7 +246,6 @@ void End_Curve(Curve *c)
       }
     }
   }
-
   c->degenerated = false;
 
   if(c->Typ == MSH_SEGM_CIRC || c->Typ == MSH_SEGM_CIRC_INV ||
@@ -535,6 +534,7 @@ Curve *Create_Curve(int Num, int Typ, int Order, List_T *Liste,
     pC->Control_Points = NULL;
     pC->beg = NULL;
     pC->end = NULL;
+    pC->degenerated = false;
     return pC;
   }
 
@@ -2685,20 +2685,6 @@ void ExtrudeShapes(int type, List_T *list_in,
                    ExtrudeParams *e,
                    List_T *list_out)
 {
-
-   // Msg::Info("IN EXTRUDE SHAPE Geo internal model has:");
-   //  List_T *points = Tree2List(GModel::current()->getGEOInternals()->Points);
-   //  List_T *curves = Tree2List(GModel::current()->getGEOInternals()->Curves);
-   //  List_T *surfaces = Tree2List(GModel::current()->getGEOInternals()->Surfaces);
-   //  Msg::Info("%d Vertices", List_Nbr(points));
-   //  Msg::Info("%d Edges", List_Nbr(curves));
-   //  Msg::Info("%d Faces", List_Nbr(surfaces));
-   //  for(int i = 0; i < List_Nbr(surfaces); i++) {
-   //    Surface *s;
-   //    List_Read(surfaces, i, &s);
-   //    printf("surface %d \n", s->Num);
-   //  }
-
  
   for(int i = 0; i < List_Nbr(list_in); i++){
     Shape shape;
@@ -2763,6 +2749,7 @@ void ExtrudeShapes(int type, List_T *list_in,
     case MSH_SURF_TRIC:
     case MSH_SURF_PLAN:
     case MSH_SURF_DISCRETE:
+    case MSH_SURF_COMPOUND:
       {
         Volume *pv = 0;
         Shape top;
@@ -2806,9 +2793,10 @@ void ExtrudeShapes(int type, List_T *list_in,
 
 static int compareTwoPoints(const void *a, const void *b)
 {
+ 
   Vertex *q = *(Vertex **)a;
   Vertex *w = *(Vertex **)b;
-
+  
   if(q->Typ != w->Typ)
     return q->Typ - w->Typ;
 
@@ -2871,7 +2859,8 @@ static int compareTwoSurfaces(const void *a, const void *b)
   // checking types is the "right thing" to do (see e.g. compareTwoCurves)
   // but it would break backward compatibility (see e.g. tutorial/t2.geo),
   // so let's just do it for boundary layer surfaces for now:
-  if(s1->Typ == MSH_SURF_BND_LAYER || s2->Typ == MSH_SURF_BND_LAYER){
+  if(s1->Typ == MSH_SURF_BND_LAYER || s2->Typ == MSH_SURF_BND_LAYER || 
+     s1->Typ == MSH_SURF_COMPOUND || s2->Typ == MSH_SURF_COMPOUND ){
     if(s1->Typ != s2->Typ) return s1->Typ - s2->Typ;
   }
 
@@ -3020,6 +3009,7 @@ static void ReplaceDuplicatePoints()
   Tree_Action(points2delete, Free_Vertex);
   Tree_Delete(points2delete);
   Tree_Delete(allNonDuplicatedPoints);
+ 
 }
 
 static void ReplaceDuplicateCurves()
