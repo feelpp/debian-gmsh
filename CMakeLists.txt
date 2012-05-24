@@ -815,6 +815,15 @@ if(HAVE_SOLVER)
 endif(HAVE_SOLVER)
 
 if(ENABLE_OCC)
+  if(WIN32 OR CYGWIN)
+    if(HAVE_64BIT_SIZE_T)
+      set(OCC_SYS_NAME win64)
+    else(HAVE_64BIT_SIZE_T)
+      set(OCC_SYS_NAME win32)
+    endif(HAVE_64BIT_SIZE_T)
+  else(WIN32 OR CYGWIN)
+    set(OCC_SYS_NAME ${CMAKE_SYSTEM_NAME})
+  endif(WIN32 OR CYGWIN)
   set(OCC_LIBS_REQUIRED
       # subset of DataExchange
       TKSTEP TKSTEP209 TKSTEPAttr TKSTEPBase TKIGES TKXSBase
@@ -825,30 +834,6 @@ if(ENABLE_OCC)
       TKBRep TKGeomBase TKG3d TKG2d
       # FoundationClasses
       TKAdvTools TKMath TKernel)
-  # First try to detect OpenCascade Community Edition, based on CMake
-  find_package(OCE QUIET COMPONENTS ${OCC_LIBS_REQUIRED})
-  if(OCE_ALL_FOUND)
-    list(APPEND EXTERNAL_LIBRARIES ${OCC_LIBS_REQUIRED})
-    list(APPEND EXTERNAL_INCLUDES ${OCE_INCLUDE_DIRS})
-    set_config_option(HAVE_OCC "OpenCascade(OCE)")
-    add_definitions(-DHAVE_NO_OCC_CONFIG_H)
-    if(HAVE_64BIT_SIZE_T)
-      add_definitions(-D_OCC64)
-    endif(HAVE_64BIT_SIZE_T)
-    if(CYGWIN)
-      list(APPEND EXTERNAL_LIBRARIES "winspool")
-    elseif(MSVC)
-      add_definitions(-DWNT)
-    endif(CYGWIN)
-  else(OCE_ALL_FOUND)
-    if(OCE_FOUND)
-      message(STATUS "Found OCE version ${OCE_VERSION}, but those libraries are missing: " ${OCE_MISSING_TOOLKITS})
-    endif(OCE_FOUND)
-    if(WIN32 OR CYGWIN)
-      set(OCC_SYS_NAME win32)
-    else(WIN32 OR CYGWIN)
-      set(OCC_SYS_NAME ${CMAKE_SYSTEM_NAME})
-    endif(WIN32 OR CYGWIN)
   list(LENGTH OCC_LIBS_REQUIRED NUM_OCC_LIBS_REQUIRED)
   set(OCC_LIBS)
   foreach(OCC ${OCC_LIBS_REQUIRED})
@@ -885,7 +870,6 @@ if(ENABLE_OCC)
       endif(NOT OCC_CONFIG_H)
     endif(OCC_INC)
   endif(NUM_OCC_LIBS EQUAL NUM_OCC_LIBS_REQUIRED)
-  endif(OCE_ALL_FOUND)
   if(HAVE_OCC AND ENABLE_SALOME)
     add_subdirectory(contrib/Salome)
     include_directories(contrib/Salome)
@@ -1033,7 +1017,7 @@ endforeach(DIR)
 # want to build the lib we need to recompile everything (the first
 # time--it's a separate target)
 add_library(lib STATIC EXCLUDE_FROM_ALL ${GMSH_SRC})
-set_target_properties(lib PROPERTIES OUTPUT_NAME gmsh)
+set_target_properties(lib PROPERTIES OUTPUT_NAME Gmsh)
 if(MSVC)
   set_target_properties(lib PROPERTIES DEBUG_POSTFIX d) 
   if(ENABLE_MSVC_STATIC_RUNTIME)
@@ -1043,7 +1027,7 @@ endif(MSVC)
 
 # shared library target: we don't build it by default either
 add_library(shared SHARED EXCLUDE_FROM_ALL ${GMSH_SRC})
-set_target_properties(shared PROPERTIES OUTPUT_NAME gmsh1)
+set_target_properties(shared PROPERTIES OUTPUT_NAME Gmsh)
 if(HAVE_LAPACK AND LAPACK_FLAGS)
   set_target_properties(shared PROPERTIES LINK_FLAGS ${LAPACK_FLAGS})
 endif(HAVE_LAPACK AND LAPACK_FLAGS)
@@ -1051,7 +1035,7 @@ if(MSVC AND ENABLE_MSVC_STATIC_RUNTIME)
   message("WARNING: By enabling ENABLE_MSVC_STATIC_RUNTIME, shared library wont link. "
           "Change in msvc /MT flag to /MD in the shared project properties")
 endif(MSVC AND ENABLE_MSVC_STATIC_RUNTIME)		  
-target_link_libraries(shared ${LINK_LIBRARIES} -shared -lgl2ps -lGL -lglut)
+target_link_libraries(shared ${LINK_LIBRARIES})
 
 # binary targets
 if(HAVE_FLTK)
@@ -1066,7 +1050,7 @@ else(HAVE_FLTK)
   add_executable(gmsh_dynamic EXCLUDE_FROM_ALL Common/Main.cpp)
   target_link_libraries(gmsh_dynamic shared)
 endif(HAVE_FLTK)
-target_link_libraries(gmsh ${LINK_LIBRARIES} -lgl2ps -lGL -lglut)
+target_link_libraries(gmsh ${LINK_LIBRARIES})
 
 # increase stack to 16Mb on Windows to avoid overflows in recursive
 # tet classification for large 3D Delaunay grids + force static
@@ -1114,7 +1098,7 @@ if(UNIX)
 endif(UNIX)
 
 set(WELCOME_FILE ${CMAKE_CURRENT_SOURCE_DIR}/doc/WELCOME.txt)
-#set(LICENSE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/doc/LICENSE.txt)
+set(LICENSE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/doc/LICENSE.txt)
 set(CREDITS_FILE ${CMAKE_CURRENT_SOURCE_DIR}/doc/CREDITS.txt)
 file(GLOB TUTORIAL_FILES ${CMAKE_CURRENT_SOURCE_DIR}/tutorial/?*.*)
 file(GLOB DEMO_FILES ${CMAKE_CURRENT_SOURCE_DIR}/demos/?*.*)
@@ -1209,7 +1193,7 @@ endif(TEXI2PDF)
 if(MAKEINFO AND TEXI2PDF)
   add_custom_target(doc COMMAND ${CMAKE_COMMAND} -E tar zcf 
                     ${CMAKE_CURRENT_BINARY_DIR}/gmsh-${GMSH_VERSION}-doc.tgz
-                    doc/CREDITS.txt doc/VERSIONS.txt
+                    doc/CREDITS.txt doc/LICENSE.txt doc/VERSIONS.txt
                     doc/gmsh.1 doc/texinfo/gmsh.html doc/texinfo/gmsh.info 
                     doc/texinfo/gmsh.pdf doc/texinfo/gmsh.txt
                     COMMAND ${CMAKE_COMMAND} -E remove ${TEX_OBJ}

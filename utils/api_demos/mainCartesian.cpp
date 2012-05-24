@@ -12,7 +12,7 @@
 #include "GmshMessage.h"
 #include "cartesian.h"
 
-static void my_insertActiveCells(double x, double y, double z, double rmax,
+static void insertActiveCells(double x, double y, double z, double rmax,
                               cartesianBox<double> &box)
 {
   int id1 = box.getCellContainingPoint(x - rmax, y - rmax, z - rmax);
@@ -27,7 +27,7 @@ static void my_insertActiveCells(double x, double y, double z, double rmax,
         box.insertActiveCell(box.getCellIndex(i, j, k));
 }
 
-static void my_computeLevelset(GModel *gm, cartesianBox<double> &box)
+static void computeLevelset(GModel *gm, cartesianBox<double> &box)
 {
   // tolerance for desambiguation
   const double tol = box.getLC() * 1.e-12;
@@ -82,10 +82,10 @@ static void my_computeLevelset(GModel *gm, cartesianBox<double> &box)
   for (unsigned int j = 0; j < dist.size(); j++)
     box.setNodalValue(indices[j], dist[j]);
 
-  if(box.getChildBox()) my_computeLevelset(gm, *box.getChildBox());
+  if(box.getChildBox()) computeLevelset(gm, *box.getChildBox());
 }
 
-static void my_fillPointCloud(GEdge *ge, double sampling, std::vector<SPoint3> &points)
+static void fillPointCloud(GEdge *ge, double sampling, std::vector<SPoint3> &points)
 {
   Range<double> t_bounds = ge->parBounds(0);
   double t_min = t_bounds.low();
@@ -99,7 +99,7 @@ static void my_fillPointCloud(GEdge *ge, double sampling, std::vector<SPoint3> &
   }
 }
 
-static int my_removeBadChildCells(cartesianBox<double> *parent)
+static int removeBadChildCells(cartesianBox<double> *parent)
 {
   cartesianBox<double> *child = parent->getChildBox();
   if(!child) return 0;
@@ -135,10 +135,10 @@ static int my_removeBadChildCells(cartesianBox<double> *parent)
             (k != K - 1 && !parent->activeCellExists(parent->getCellIndex(i, j, k + 1)))))
             for(int ii = 0; ii < 8; ii++) child->eraseActiveCell(idx[ii]);
       }
-  return my_removeBadChildCells(child);
+  return removeBadChildCells(child);
 }
 
-static void my_removeParentCellsWithChildren(cartesianBox<double> *box)
+static void removeParentCellsWithChildren(cartesianBox<double> *box)
 {
   if(!box->getChildBox()) return;
   for(int i = 0; i < box->getNxi(); i++)
@@ -157,7 +157,7 @@ static void my_removeParentCellsWithChildren(cartesianBox<double> *box)
           }
         }
       }
-  my_removeParentCellsWithChildren(box->getChildBox());
+  removeParentCellsWithChildren(box->getChildBox());
 }
 
 static void removeOutsideCells(cartesianBox<double> *box)
@@ -226,7 +226,7 @@ int main(int argc,char *argv[])
     double s = sampling / pow(2., levels - 1);
     Msg::Info("Filling refined point cloud on curves and curved surfaces");
     for (GModel::eiter eit = gm->firstEdge(); eit != gm->lastEdge(); eit++)
-      my_fillPointCloud(*eit, s, refinePoints);
+      fillPointCloud(*eit, s, refinePoints);
 
     // FIXME: refine this by computing e.g. "mean" curvature
     if(refineCurvedSurfaces){
@@ -263,13 +263,13 @@ int main(int argc,char *argv[])
   Msg::Info("Inserting active cells in the cartesian grid");
   Msg::Info("  level %d", box.getLevel());
   for (unsigned int i = 0; i < points.size(); i++)
-    my_insertActiveCells(points[i].x(), points[i].y(), points[i].z(), rmax, box);
+    insertActiveCells(points[i].x(), points[i].y(), points[i].z(), rmax, box);
 
   cartesianBox<double> *parent = &box, *child;
   while((child = parent->getChildBox())){
     Msg::Info("  level %d", child->getLevel());
     for(unsigned int i = 0; i < refinePoints.size(); i++)
-      my_insertActiveCells(refinePoints[i].x(), refinePoints[i].y(), refinePoints[i].z(),
+      insertActiveCells(refinePoints[i].x(), refinePoints[i].y(), refinePoints[i].z(),
                         rtube / pow(2., (levels - child->getLevel())), *child);
     parent = child;
   }
@@ -278,8 +278,8 @@ int main(int argc,char *argv[])
   // which there is no parent neighbor; then remove parent cells that
   // have children
   Msg::Info("Removing cells to match X-FEM mesh topology constraints");
-  my_removeBadChildCells(&box);
-  my_removeParentCellsWithChildren(&box);
+  removeBadChildCells(&box);
+  removeParentCellsWithChildren(&box);
 
   // we generate duplicate nodes at this point so we can easily access
   // cell values at each level; we will clean up by renumbering after
@@ -288,7 +288,7 @@ int main(int argc,char *argv[])
   box.createNodalValues();
 
   Msg::Info("Computing levelset on the cartesian grid");
-  my_computeLevelset(gm, box);
+  computeLevelset(gm, box);
 
   Msg::Info("Removing cells outside the structure");
   removeOutsideCells(&box);

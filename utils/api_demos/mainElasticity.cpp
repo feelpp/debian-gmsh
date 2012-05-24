@@ -3,7 +3,6 @@
 #include "elasticitySolver.h"
 #include "PView.h"
 #include "PViewData.h"
-#include <cstring>
 
 void Info (int i, char* c){
   printf("%d %s\n",i,c);
