@@ -1,17 +1,14 @@
-gmsh (2.5.1~beta2~svn12143~dfsg-1) UNRELEASED; urgency=low
+gmsh (2.5.1~beta2~svn12143~dfsg-1) unstable; urgency=low
 
-  * Imported Upstream version 2.5.1~beta2~svn12143~dfsg
-  * Import debian/rules changes from non-free version
-  * Remove change_shared_library_name.patch. Applied by upstream.
-  * Remove skip_license_file.patch. Applied by upstream.
-  * Remove fix_spelling_errors.patch. Applied by upstream.
-  * Remove delete_gl2ps_from_source.patch. Applied by upstream.
-  * Remove switch_from_opencascade_to_oce.patch. Applied by upstream.
-  * Remove api_demos.patch. Applied by upstream.
-  * Remove skip_license_file.patch. Applied by upstream.
-  * Remove fix_FTBFS_linking.patch. Applied by upstream.
+  * [2d76517] Imported Upstream version 2.5.1~beta2~svn12143~dfsg.
+              (Closes: #674358)
+  * [551fd6f] Import debian/rules changes from non-free version
+  * [fa51002] Refresh patches
+  * [77b9389] Add alauzet.patch from gmsh-tetgen
+  * [ad9026f] Add cgns.patch from gmsh-tetgen
+  * [40004dc] Add pedantic.patch from gmsh-tetgen
 
- -- Anton Gladky <gladky.anton@gmail.com>  Thu, 24 May 2012 21:15:53 +0200
+ -- Anton Gladky <gladky.anton@gmail.com>  Thu, 24 May 2012 22:06:11 +0200
 
 gmsh (2.5.1~beta2~svn11845~dfsg-2) unstable; urgency=low
 
