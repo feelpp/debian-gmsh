@@ -8,3 +8,4 @@ fix_FTBFS_linking.patch
 alauzet.patch
 cgns.patch
 pedantic.patch
+fix_FTBFS_gcc-4.7_bamg.patch
