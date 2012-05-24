@@ -1,3 +1,18 @@
+gmsh (2.5.1~beta2~svn12143~dfsg-1) UNRELEASED; urgency=low
+
+  * Imported Upstream version 2.5.1~beta2~svn12143~dfsg
+  * Import debian/rules changes from non-free version
+  * Remove change_shared_library_name.patch. Applied by upstream.
+  * Remove skip_license_file.patch. Applied by upstream.
+  * Remove fix_spelling_errors.patch. Applied by upstream.
+  * Remove delete_gl2ps_from_source.patch. Applied by upstream.
+  * Remove switch_from_opencascade_to_oce.patch. Applied by upstream.
+  * Remove api_demos.patch. Applied by upstream.
+  * Remove skip_license_file.patch. Applied by upstream.
+  * Remove fix_FTBFS_linking.patch. Applied by upstream.
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Thu, 24 May 2012 21:15:53 +0200
+
 gmsh (2.5.1~beta2~svn11845~dfsg-2) unstable; urgency=low
 
   * [0537c1a] Disable slepc/petsc on armhf-platform, because it causes FTBFS.
