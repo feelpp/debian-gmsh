@@ -1,4 +1,3 @@
-skip_license_file.patch
 fix_spelling_errors.patch
 delete_gl2ps_from_source.patch
 switch_from_opencascade_to_oce.patch
