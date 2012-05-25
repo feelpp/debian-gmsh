@@ -6,19 +6,30 @@ BUILDDIR = $(CURDIR)/debian/build
 
 export OMPI_MCA_plm_rsh_agent=/bin/false                #workaround to start MPI-applications in chroot
 
+disable_mpi_archs = armel armhf kfreebsd-amd64 kfreebsd-i386 mips mipsel
+
 extra_flags += \
--DCMAKE_CXX_FLAGS="-DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX -fopenmp -lmpi -fPIC \
-                   -Wall $(shell dpkg-buildflags --get CXXFLAGS)" \
 -DCMAKE_C_FLAGS="-fPIC -Wall $(shell dpkg-buildflags --get CFLAGS)" \
--DCMAKE_INCLUDE_PATH:STRING="/usr/include/mpi" \
--DPYTHON_EXECUTABLE:FILEPATH=/usr/bin/python2.7 \
 -DPYTHON_INCLUDE_DIR:PATH=/usr/include/python2.7 \
 -DPYTHON_LIBRARY:FILEPATH=/usr/lib/libpython2.7.so \
 -DENABLE_METIS:BOOL=OFF \
 -DENABLE_TAUCS:BOOL=OFF \
--DENABLE_MPI:BOOL=ON \
 -DENABLE_OSMESA:BOOL=OFF \
 -DENABLE_CGNS:BOOL=OFF
+
+ifeq (,$(filter $(DEB_HOST_ARCH),$(disable_mpi_archs)))
+	extra_flags += \
+	-DCMAKE_CXX_FLAGS="-DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX -fopenmp -lmpi -fPIC \
+	                   -Wall $(shell dpkg-buildflags --get CXXFLAGS)" \
+	-DCMAKE_INCLUDE_PATH:STRING="/usr/include/mpi" \
+	-DENABLE_MPI:BOOL=ON
+else
+	extra_flags += \
+	-DCMAKE_CXX_FLAGS="-DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX -fopenmp -fPIC \
+	                   -Wall $(shell dpkg-buildflags --get CXXFLAGS)" \
+	-DCMAKE_INCLUDE_PATH:STRING="/usr/include/mpi" \
+	-DENABLE_MPI:BOOL=OFF
+endif
 
 # PETSC_DIR is the location of PETSc.
 export PETSC_DIR=/usr/lib/petscdir/3.2
