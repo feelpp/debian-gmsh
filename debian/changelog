@@ -1,3 +1,10 @@
+gmsh (2.5.1~beta2~svn12143~dfsg-2) unstable; urgency=low
+
+  * [97cda71] Disable MPI on armel, armhf, kfreebsd-amd64, kfreebsd-i386, 
+              mips and mipsel. Hopefully will fix FTBFS on those platforms.
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Fri, 25 May 2012 21:40:37 +0200
+
 gmsh (2.5.1~beta2~svn12143~dfsg-1) unstable; urgency=low
 
   * [2d76517] Imported Upstream version 2.5.1~beta2~svn12143~dfsg.
