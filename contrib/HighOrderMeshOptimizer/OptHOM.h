@@ -25,7 +25,7 @@ public:
   // returns 1 if the mesh has been optimized with success i.e. all jacobians are in the range
   // returns 0 if the mesh is valid (all jacobians positive, JMIN > 0) but JMIN < barrier_min || JMAX > barrier_max
   // returns -1 if the mesh is invalid : some jacobians cannot be made positive
-  int optimize(double lambda, double lambda2, double barrier_min, double barrier_max, int pInt, int itMax);  // optimize one list of elements
+  int optimize(double lambda, double lambda2, double barrier_min, double barrier_max, bool optimizeMetricMin, int pInt, int itMax);  // optimize one list of elements
   void recalcJacDist();
   inline void getJacDist(double &minJ, double &maxJ, double &maxD, double &avgD);
   void updateMesh(const alglib::real_1d_array &x);
@@ -37,15 +37,17 @@ public:
 private:
 
 //  double lambda, lambda2, powM, powP, invLengthScaleSq;
-  double lambda, lambda2, jacBar, bTerm, invLengthScaleSq;
+  double lambda, lambda2, jacBar, invLengthScaleSq;
   int iter, progressInterv;            // Current iteration, interval of iterations for reporting
+  bool _optimizeMetricMin;
   double initObj, initMaxDist, initAvgDist;  // Values for reporting
   double minJac, maxJac, maxDist, avgDist;  // Values for reporting
 
-  inline void setBarrierTerm(double jacBarrier) { bTerm = jacBarrier/(1.-jacBarrier); }
+  inline void setBarrierTerm(double jacBarrier) {jacBar = jacBarrier;}
   inline double compute_f(double v);
   inline double compute_f1(double v);
   bool addJacObjGrad(double &Obj, alglib::real_1d_array &gradObj);
+  bool addMetricMinObjGrad(double &Obj, alglib::real_1d_array &gradObj);
   bool addDistObjGrad(double Fact, double Fact2, double &Obj, alglib::real_1d_array &gradObj);
   void calcScale(alglib::real_1d_array &scale);
   void OptimPass(alglib::real_1d_array &x, const alglib::real_1d_array &initGradObj, int itMax);
@@ -57,7 +59,7 @@ private:
 inline double OptHOM::compute_f(double v)
 {
   if (v > jacBar) {
-    const double l = log((1 + bTerm) * v - bTerm);
+    const double l = log((v - jacBar) / (1 -jacBar));
     const double m = (v - 1);
     return l * l + m * m;
   }
@@ -72,9 +74,7 @@ inline double OptHOM::compute_f(double v)
 inline double OptHOM::compute_f1(double v)
 {
   if (v > jacBar) {
-    const double veps = (1 + bTerm) * v - bTerm;
-    const double m = 2 * (v - 1);
-    return m + 2 * log(veps) / veps * (1 + bTerm);
+    return 2 * (v - 1) + 2 * log((v - jacBar) / (1 - jacBar)) / (v - jacBar);
   }
   else return -1.e300;
 //  if (v < 1.) return -powM*pow(1.-v,powM-1.);

@@ -20,7 +20,10 @@
 OptHOM::OptHOM(GEntity *ge, const std::set<MElement*> &els, std::set<MVertex*> & toFix, int method) :
        mesh(ge, els, toFix, method)
 {
+  _optimizeMetricMin = false;
 };
+
+
 
 // Contribution of the element Jacobians to the objective function value and gradients (2D version)
 bool OptHOM::addJacObjGrad(double &Obj, alglib::real_1d_array &gradObj)
@@ -31,9 +34,7 @@ bool OptHOM::addJacObjGrad(double &Obj, alglib::real_1d_array &gradObj)
 
   for (int iEl = 0; iEl < mesh.nEl(); iEl++) {
     std::vector<double> sJ(mesh.nBezEl(iEl));                   // Scaled Jacobians
-    //    mesh.scaledJac(iEl,sJ);
     std::vector<double> gSJ(mesh.nBezEl(iEl)*mesh.nPCEl(iEl));  // Gradients of scaled Jacobians
-    //    mesh.gradScaledJac(iEl,gSJ);
     mesh.scaledJacAndGradients (iEl,sJ,gSJ);
     
     for (int l = 0; l < mesh.nBezEl(iEl); l++) {
@@ -48,6 +49,29 @@ bool OptHOM::addJacObjGrad(double &Obj, alglib::real_1d_array &gradObj)
 
   return true;
 
+}
+
+bool OptHOM::addMetricMinObjGrad(double &Obj, alglib::real_1d_array &gradObj)
+{
+
+  minJac = 1.e300;
+  maxJac = -1.e300;
+
+  for (int iEl = 0; iEl < mesh.nEl(); iEl++) {
+    std::vector<double> sJ(mesh.nBezEl(iEl));                   // Scaled Jacobians
+    std::vector<double> gSJ(mesh.nBezEl(iEl)*mesh.nPCEl(iEl));  // Gradients of scaled Jacobians
+    mesh.metricMinAndGradients (iEl,sJ,gSJ);
+    
+    for (int l = 0; l < mesh.nBezEl(iEl); l++) {
+      Obj += compute_f(sJ[l]);
+      const double f1 = compute_f1(sJ[l]);
+      for (int iPC = 0; iPC < mesh.nPCEl(iEl); iPC++)
+        gradObj[mesh.indPCEl(iEl,iPC)] += f1*gSJ[mesh.indGSJ(iEl,l,iPC)];
+      minJac = std::min(minJac, sJ[l]);
+      maxJac = std::max(maxJac, sJ[l]);
+    }
+  }
+  return true;
 }
 
 
@@ -89,9 +113,12 @@ void OptHOM::evalObjGrad(const alglib::real_1d_array &x, double &Obj, alglib::re
 
   addJacObjGrad(Obj, gradObj);
   addDistObjGrad(lambda, lambda2, Obj, gradObj);
+  if(_optimizeMetricMin)
+    addMetricMinObjGrad(Obj, gradObj);
+  
 
   if ((minJac > barrier_min) && (maxJac < barrier_max)) {
-    printf("INFO: reached Jacobian requirements, setting null gradient\n");
+    printf("INFO: reached %s (%g %g) requirements, setting null gradient\n", _optimizeMetricMin ? "svd" : "jacobian", minJac, maxJac);
     Obj = 0.;
     for (int i = 0; i < gradObj.length(); i++) gradObj[i] = 0.;
   }
@@ -127,14 +154,16 @@ void OptHOM::recalcJacDist()
   minJac = 1.e300;
   maxJac = -1.e300;
   for (int iEl = 0; iEl < mesh.nEl(); iEl++) {
-    std::vector<double> sJ(mesh.nBezEl(iEl));                   // Scaled Jacobians
-    mesh.scaledJac(iEl,sJ);
+    std::vector<double> sJ(mesh.nBezEl(iEl));                       // Scaled Jacobians
+    std::vector<double> dumGSJ(mesh.nBezEl(iEl)*mesh.nPCEl(iEl));   // (Dummy) gradients of scaled Jacobians
+    mesh.scaledJacAndGradients (iEl,sJ,dumGSJ);
+    if(_optimizeMetricMin)
+      mesh.metricMinAndGradients (iEl,sJ,dumGSJ);
     for (int l = 0; l < mesh.nBezEl(iEl); l++) {
       minJac = std::min(minJac, sJ[l]);
       maxJac = std::max(maxJac, sJ[l]);
     }
   }
-
 }
 
 
@@ -235,7 +264,7 @@ void OptHOM::OptimPass(alglib::real_1d_array &x, const alglib::real_1d_array &in
 
 
 
-int OptHOM::optimize(double weightFixed, double weightFree, double b_min, double b_max, int pInt, int itMax)
+int OptHOM::optimize(double weightFixed, double weightFree, double b_min, double b_max, bool optimizeMetricMin, int pInt, int itMax)
 {
 
   barrier_min = b_min;
@@ -244,6 +273,7 @@ int OptHOM::optimize(double weightFixed, double weightFree, double b_min, double
 //  powM = 4;
 //  powP = 3;
 
+  _optimizeMetricMin = optimizeMetricMin;
   // Set weights & length scale for non-dimensionalization
   lambda = weightFixed;
   lambda2 = weightFree;
@@ -284,7 +314,7 @@ int OptHOM::optimize(double weightFixed, double weightFree, double b_min, double
     recalcJacDist();
     jacBar = (minJac > 0.) ? 0.9*minJac : 1.1*minJac;
     setBarrierTerm(jacBar);
-    if (ITER ++ > 15) break;
+    if (ITER ++ > 50) break;
   }
 
   //  for (int i = 0; i<3; i++) {

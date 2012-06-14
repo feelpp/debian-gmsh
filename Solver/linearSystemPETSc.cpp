@@ -61,6 +61,7 @@ void linearSystemPETScBlockDouble::addToMatrix(int row, int col,
       modval(jj, ii) = buff;
     }
   #endif
+  _matrixModified=true;
 }
 
 void linearSystemPETScBlockDouble::addToRightHandSide(int row,
@@ -164,7 +165,7 @@ bool linearSystemPETScBlockDouble::isAllocated() const
 void linearSystemPETScBlockDouble::clear()
 {
   if(_isAllocated){
-#if (PETSC_VERSION_RELEASE == 0 || ((PETSC_VERSION_MAJOR == 3) && (PETSC_VERSION_MINOR == 2))) // petsc-dev
+#if (PETSC_VERSION_RELEASE == 0 || ((PETSC_VERSION_MAJOR == 3) && (PETSC_VERSION_MINOR >= 2)))
     MatDestroy(&_a);
     VecDestroy(&_x);
     VecDestroy(&_b);
@@ -177,18 +178,37 @@ void linearSystemPETScBlockDouble::clear()
   _isAllocated = false;
 }
 
+void linearSystemPETScBlockDouble::print()
+{
+  _try(MatAssemblyBegin(_a, MAT_FINAL_ASSEMBLY));
+  _try(MatAssemblyEnd(_a, MAT_FINAL_ASSEMBLY));
+  _try(VecAssemblyBegin(_b));
+  _try(VecAssemblyEnd(_b));
+  if(Msg::GetCommRank()==0)
+    printf("a :\n");
+  MatView(_a, PETSC_VIEWER_STDOUT_WORLD);
+  if(Msg::GetCommRank()==0)
+    printf("b :\n");
+  VecView(_b, PETSC_VIEWER_STDOUT_WORLD);
+  if(Msg::GetCommRank()==0)
+    printf("x :\n");
+  VecView(_x, PETSC_VIEWER_STDOUT_WORLD);
+}
+
+
 int linearSystemPETScBlockDouble::systemSolve()
 {
   if (!_kspAllocated)
     _kspCreate();
-  if (_parameters["matrix_reuse"] == "same_sparsity")
-    KSPSetOperators(_ksp, _a, _a, SAME_NONZERO_PATTERN);
-  else if (_parameters["matrix_reuse"] == "same_matrix")
+  if (!_matrixModified || _parameters["matrix_reuse"] == "same_matrix")
     KSPSetOperators(_ksp, _a, _a, SAME_PRECONDITIONER);
+  else if (_parameters["matrix_reuse"] == "same_sparsity")
+    KSPSetOperators(_ksp, _a, _a, SAME_NONZERO_PATTERN);
   else
     KSPSetOperators(_ksp, _a, _a, DIFFERENT_NONZERO_PATTERN);
   MatAssemblyBegin(_a, MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(_a, MAT_FINAL_ASSEMBLY);
+  _matrixModified=false;
   VecAssemblyBegin(_b);
   VecAssemblyEnd(_b);
   KSPSolve(_ksp, _b, _x);
@@ -271,6 +291,7 @@ linearSystemPETScBlockDouble::linearSystemPETScBlockDouble(bool sequential)
   _entriesPreAllocated = false;
   _isAllocated = false;
   _kspAllocated = false;
+  _matrixModified=true;
   _sequential = sequential;
 }
 

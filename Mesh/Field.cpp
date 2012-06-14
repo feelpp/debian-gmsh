@@ -24,8 +24,10 @@
 #include "mathEvaluator.h"
 #include "BackgroundMesh.h"
 #include "CenterlineField.h"
+#include "STensor3.h"
 
 #if defined(HAVE_POST)
+#include "PView.h"
 #include "OctreePost.h"
 #include "PViewDataList.h"
 #include "MVertex.h"
@@ -43,6 +45,16 @@ Field::~Field()
   for(std::map<std::string, FieldCallback*>::iterator it = callbacks.begin();
       it != callbacks.end(); ++it)
     delete it->second;
+}
+
+FieldOption *Field::getOption(const std::string optionName)
+{
+  std::map<std::string, FieldOption*>::iterator it = options.find(optionName);
+  if (it == options.end()) {
+    Msg::Error("field option :%s does not exist", optionName.c_str());
+    return NULL;
+  }
+  return it->second;
 }
 
 void FieldManager::reset()
@@ -1867,7 +1879,6 @@ double BoundaryLayerField::operator() (double x, double y, double z, GEntity *ge
   //  current_distance = dist;
   const double lc = dist*(ratio-1) + hwall_t;
   //    double lc = hwall * pow (ratio, dist / hwall);
-  //  printf("coucou\n");
   return std::min (hfar,lc);
 }
 
@@ -1896,6 +1907,7 @@ void BoundaryLayerField::operator() (AttractorField *cc, double dist,
   lc_t = std::min(lc_t, CTX::instance()->mesh.lcMax);
 
   std::pair<AttractorInfo,SPoint3> pp = cc->getAttractorInfo();
+  double beta = CTX::instance()->mesh.smoothRatio;
   if (pp.first.dim ==0){
     GVertex *v = GModel::current()->getVertexByTag(pp.first.ent);
     SVector3 t1;    
@@ -1913,9 +1925,10 @@ void BoundaryLayerField::operator() (AttractorField *cc, double dist,
     if (dist < thickness){
       SVector3 t1 = e->firstDer(pp.first.u);
       double crv = e->curvature(pp.first.u);
+      double rho = 1./crv;
       const double b = lc_t;
       const double h = lc_n;
-      double oneOverD2 = .5/(b*b) * (1. + sqrt (1. + ( 4.*crv*crv*b*b*b*b/ (h*h*CTX::instance()->mesh.smoothRatio*CTX::instance()->mesh.smoothRatio))));
+      double oneOverD2 = .5/(b*b) * (1. + sqrt (1. + ( 4.*crv*crv*b*b*b*b/ (h*h*beta*beta))));
       metr = buildMetricTangentToCurve(t1,sqrt(1./oneOverD2),lc_n);
       return;
     }
@@ -1934,8 +1947,10 @@ void BoundaryLayerField::operator() (AttractorField *cc, double dist,
       cmax = gf->curvatures(SPoint2(pp.first.u,pp.first.v),&dirMax, &dirMin, &cmax,&cmin);
       const double b = lc_t;
       const double h = lc_n;
-      double oneOverD2_min = .5/(b*b) * (1. + sqrt (1. + ( 4.*cmin*cmin*b*b*b*b/ (h*h*CTX::instance()->mesh.smoothRatio*CTX::instance()->mesh.smoothRatio))));
-      double oneOverD2_max = .5/(b*b) * (1. + sqrt (1. + ( 4.*cmax*cmax*b*b*b*b/ (h*h*CTX::instance()->mesh.smoothRatio*CTX::instance()->mesh.smoothRatio))));
+      double rhoMin = 1./cmin;
+      double rhoMax = 1./cmax;
+      double oneOverD2_min = .5/(b*b) * (1. + sqrt (1. + ( 4.*cmin*cmin*b*b*b*b/ (h*h*beta*beta))));
+      double oneOverD2_max = .5/(b*b) * (1. + sqrt (1. + ( 4.*cmax*cmax*b*b*b*b/ (h*h*beta*beta))));
       double dmin = sqrt(1./oneOverD2_min);
       double dmax = sqrt(1./oneOverD2_max);      
       dmin = std::min(dmin,dmax*tgt_aniso_ratio);

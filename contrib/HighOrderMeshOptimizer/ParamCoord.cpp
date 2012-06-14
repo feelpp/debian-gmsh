@@ -172,3 +172,12 @@ void ParamCoordParent::gXyz2gUvw(MVertex* vert, const SPoint3 &uvw, const std::v
   }
 
 }
+
+
+
+void ParamCoordParent::exportParamCoord(MVertex *v, const SPoint3 &uvw)
+{
+  for (int d = 0; d < v->onWhat()->dim(); ++d) {
+    v->setParameter(d, uvw[d]);
+  }
+}
