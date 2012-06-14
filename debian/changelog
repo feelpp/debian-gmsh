@@ -1,3 +1,11 @@
+gmsh (2.5.1~beta2~svn12375~dfsg-1) unstable; urgency=low
+
+  * [f29f130] Imported Upstream version 2.5.1~beta2~svn12375~dfsg.
+              (Closes: #677544)
+  * [a5d25f5] Remove patch, applied by upstream.
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Thu, 14 Jun 2012 22:28:02 +0200
+
 gmsh (2.5.1~beta2~svn12143~dfsg-2) unstable; urgency=low
 
   * [97cda71] Disable MPI on armel, armhf, kfreebsd-amd64, kfreebsd-i386, 
