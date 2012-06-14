@@ -3,9 +3,9 @@ Author: Christophe Trophime <christophe.trophime@lncmi.cnrs.fr>
 Reviewed-by: Anton Gladky <gladky.anton@gmail.com>
 Last-Update: <YYYY-MM-DD>
 
---- gmsh-2.5.1~beta2~svn12143~dfsg.orig/Geo/STensor3.h
-+++ gmsh-2.5.1~beta2~svn12143~dfsg/Geo/STensor3.h
-@@ -171,6 +171,8 @@ SMetric3 intersection_conserve_mostaniso
+--- a/Geo/STensor3.h
++++ b/Geo/STensor3.h
+@@ -171,6 +171,8 @@
  // compute the largest inscribed ellipsoid...
  SMetric3 intersection (const SMetric3 &m1,
                         const SMetric3 &m2);
@@ -14,9 +14,9 @@ Last-Update: <YYYY-MM-DD>
  SMetric3 interpolation (const SMetric3 &m1,
                          const SMetric3 &m2,
                          const double t);
---- gmsh-2.5.1~beta2~svn12143~dfsg.orig/Geo/STensor3.cpp
-+++ gmsh-2.5.1~beta2~svn12143~dfsg/Geo/STensor3.cpp
-@@ -38,6 +38,27 @@ SMetric3 intersection (const SMetric3 &m
+--- a/Geo/STensor3.cpp
++++ b/Geo/STensor3.cpp
+@@ -38,6 +38,27 @@
    return iv;
  }
  
@@ -44,9 +44,9 @@ Last-Update: <YYYY-MM-DD>
  // preserve orientation of m1 !!!
  SMetric3 intersection_conserveM1 (const SMetric3 &m1, const SMetric3 &m2)
  {
---- gmsh-2.5.1~beta2~svn12143~dfsg.orig/Mesh/Field.cpp
-+++ gmsh-2.5.1~beta2~svn12143~dfsg/Mesh/Field.cpp
-@@ -467,6 +467,55 @@ class CylinderField : public Field
+--- a/Mesh/Field.cpp
++++ b/Mesh/Field.cpp
+@@ -479,6 +479,55 @@
    }
  };
  
@@ -102,7 +102,7 @@ Last-Update: <YYYY-MM-DD>
  class FrustumField : public Field
  {
    double x1,y1,z1;
-@@ -1268,17 +1317,21 @@ class MinAnisoField : public Field
+@@ -1280,17 +1329,21 @@
    }
    virtual void operator() (double x, double y, double z, SMetric3 &metr, GEntity *ge=0)
    {
@@ -124,7 +124,7 @@ Last-Update: <YYYY-MM-DD>
  	}
  	v = intersection_conserve_mostaniso(v,ff);
        }
-@@ -1316,6 +1369,77 @@ class MinAnisoField : public Field
+@@ -1328,6 +1381,77 @@
    }
  };
  
@@ -202,7 +202,7 @@ Last-Update: <YYYY-MM-DD>
  class MinField : public Field
  {
    std::list<int> idlist;
-@@ -1334,7 +1458,18 @@ class MinField : public Field
+@@ -1346,7 +1470,18 @@
      double v = MAX_LC;
      for(std::list<int>::iterator it = idlist.begin(); it != idlist.end(); it++) {
        Field *f = (GModel::current()->getFields()->get(*it));
@@ -222,7 +222,7 @@ Last-Update: <YYYY-MM-DD>
      }
      return v;
    }
-@@ -1362,7 +1497,18 @@ class MaxField : public Field
+@@ -1374,7 +1509,18 @@
      double v = -MAX_LC;
      for(std::list<int>::iterator it = idlist.begin(); it != idlist.end(); it++) {
        Field *f = (GModel::current()->getFields()->get(*it));
@@ -242,7 +242,7 @@ Last-Update: <YYYY-MM-DD>
      }
      return v;
    }
-@@ -2017,6 +2163,7 @@ FieldManager::FieldManager()
+@@ -2032,6 +2178,7 @@
  #endif
    map_type_name["Box"] = new FieldFactoryT<BoxField>();
    map_type_name["Cylinder"] = new FieldFactoryT<CylinderField>();
@@ -250,7 +250,7 @@ Last-Update: <YYYY-MM-DD>
    map_type_name["Frustum"] = new FieldFactoryT<FrustumField>();
    map_type_name["LonLat"] = new FieldFactoryT<LonLatField>();
  #if defined(HAVE_POST)
-@@ -2026,6 +2173,7 @@ FieldManager::FieldManager()
+@@ -2041,6 +2188,7 @@
    map_type_name["Restrict"] = new FieldFactoryT<RestrictField>();
    map_type_name["Min"] = new FieldFactoryT<MinField>();
    map_type_name["MinAniso"] = new FieldFactoryT<MinAnisoField>();
@@ -258,9 +258,9 @@ Last-Update: <YYYY-MM-DD>
    map_type_name["Max"] = new FieldFactoryT<MaxField>();
    map_type_name["UTM"] = new FieldFactoryT<UTMField>();
    map_type_name["Laplacian"] = new FieldFactoryT<LaplacianField>();
---- gmsh-2.5.1~beta2~svn12143~dfsg.orig/Mesh/BackgroundMesh.cpp
-+++ gmsh-2.5.1~beta2~svn12143~dfsg/Mesh/BackgroundMesh.cpp
-@@ -397,6 +397,7 @@ SMetric3 BGM_MeshMetric(GEntity *ge,
+--- a/Mesh/BackgroundMesh.cpp
++++ b/Mesh/BackgroundMesh.cpp
+@@ -402,6 +402,7 @@
                          double U, double V, 
                          double X, double Y, double Z)
  {
@@ -268,7 +268,7 @@ Last-Update: <YYYY-MM-DD>
    // default lc (mesh size == size of the model)
    double l1 = CTX::instance()->lc;
    const double max_lc =  CTX::instance()->mesh.lcMax;
-@@ -414,11 +415,15 @@ SMetric3 BGM_MeshMetric(GEntity *ge,
+@@ -419,11 +420,15 @@
    // lc from fields
    SMetric3 l4(1./(max_lc*max_lc));
    FieldManager *fields = ge->model()->getFields();
@@ -284,7 +284,7 @@ Last-Update: <YYYY-MM-DD>
          /*
          if (ge->tag() == 3){
            printf("X = %12.5E , l4 = %12.5E %12.5E %12.5E l2 = %12.5E\n",X,l4(0,0),l4(1,1),l4(0,1),l2);
-@@ -445,7 +450,7 @@ SMetric3 BGM_MeshMetric(GEntity *ge,
+@@ -450,7 +455,7 @@
    
    SMetric3 LC(1./(lc*lc));
    SMetric3 m = intersection_conserveM1(intersection_conserveM1 (l4, LC),l3);
