@@ -48,7 +48,7 @@ class linearSystemPETSc : public linearSystem<scalar> {
   protected:
   MPI_Comm _comm;
   int _blockSize; // for block Matrix
-  bool _isAllocated, _kspAllocated, _entriesPreAllocated;
+  bool _isAllocated, _kspAllocated, _entriesPreAllocated, _matrixModified;
   Mat _a;
   Vec _b, _x;
   KSP _ksp;
@@ -82,7 +82,7 @@ class linearSystemPETSc : public linearSystem<scalar> {
 };
 
 class linearSystemPETScBlockDouble : public linearSystem<fullMatrix<double> > {
-  bool _entriesPreAllocated, _isAllocated, _kspAllocated;
+  bool _entriesPreAllocated, _isAllocated, _kspAllocated, _matrixModified;
   sparsityPattern _sparsity;
   Mat _a;
   Vec _b, _x;
@@ -91,6 +91,7 @@ class linearSystemPETScBlockDouble : public linearSystem<fullMatrix<double> > {
   bool _sequential;
   public:
   void _kspCreate();
+  void print();
   virtual void addToMatrix(int row, int col, const fullMatrix<double> &val);
   virtual void addToRightHandSide(int row, const fullMatrix<double> &val);
   virtual void addToSolution(int row,  const fullMatrix<double> &val);

@@ -118,14 +118,6 @@ Curvature& Curvature::getInstance()
    _EntityArray.resize(global_face_list.size());
    std::copy(global_face_list.begin(),global_face_list.end(),_EntityArray.begin());
 
-//   std::cout << "Retrieve compounds: some preliminary info:" << std::endl;
-//   std::cout << "The size of _ptFinalEntityList = " << _EntityArray.size() << std::endl;
-//   std::cout << "Number of elements in all faces: " << std::endl;
-//   for(int i = 0; i < _EntityArray.size(); ++i)
-//   {
-//     std::cout << "\t" << _EntityArray[i]->getNumMeshElements() << " elements" << std::endl;
-//   }
-
 #endif
  }
 
@@ -1195,11 +1187,6 @@ void Curvature::computeCurvature_Rusinkiewicz(int isMax)
         const int vj = _VertexToInt[old_vj];
         proj_curv(t, b, m[0], m[1], m[2], _pdir1[vj], _pdir2[vj], c1, c12, c2);
         wt = _cornerareas[EIdx][j]/_pointareas[vj];
-//          wt = 1.0;
-//        if (_isOnBoundary[vj])
-//        {
-//            wt = 2.0*wt;
-//        }
 
         _curv1[vj]  += wt*c1;
         _curv12[vj] += wt*c12;
@@ -1403,8 +1390,6 @@ void Curvature::triangleNodalValuesAndDirections(MTriangle* triangle, SVector3* 
   }
 }
 
-
-
   //========================================================================================================
 
 void Curvature::edgeNodalValues(MLine* edge, double& c0, double& c1, int isAbs)
@@ -1447,10 +1432,6 @@ void Curvature::edgeNodalValuesAndDirections(MLine* edge, SVector3* dMax, SVecto
     int V0 = 0;
     int V1 = 0;
 
-    //LineVertices[0] is a pointer the first vertex of the edge
-    //LineVertices[1] is a pointer the second vertex of the edge
-
-
     std::map<int,int>::iterator vertexIterator;
     vertexIterator = _VertexToInt.find( LineVertices[0]->getNum() );
     if ( vertexIterator != _VertexToInt.end() )  V0 = (*vertexIterator).second;
@@ -1490,6 +1471,52 @@ void Curvature::edgeNodalValuesAndDirections(MLine* edge, SVector3* dMax, SVecto
 
       cMin[0]  = _curv2[V0];
       cMin[1]  = _curv2[V1];
+    }
+}
+  //========================================================================================================
+
+void Curvature::vertexNodalValues(MVertex* A, double& c0, int isAbs)
+   {
+     int V0 = 0;
+
+     std::map<int,int>::iterator vertexIterator;
+
+     vertexIterator = _VertexToInt.find( A->getNum() );
+     if ( vertexIterator != _VertexToInt.end() )  V0 = (*vertexIterator).second;
+     else  std::cout << "Didn't find vertex with number " << A->getNum() << " in _VertextToInt !" << std::endl;
+ 
+     
+     if (isAbs){
+       c0 = std::abs(_VertexCurve[V0]); //Mean curvature in vertex 0
+      }
+     else{
+       c0 = _VertexCurve[V0]; //Mean curvature in vertex 0
+      }
+
+   }
+
+void Curvature::vertexNodalValuesAndDirections(MVertex *A, SVector3* dMax, SVector3* dMin, double* cMax, double* cMin, int isAbs)
+{
+   
+    int V0 = 0;
+   
+    std::map<int,int>::iterator vertexIterator;
+    vertexIterator = _VertexToInt.find( A->getNum() );
+    if ( vertexIterator != _VertexToInt.end() )  V0 = (*vertexIterator).second;
+    else
+      std::cout << "Didn't find vertex with number " << A->getNum() << " in _VertextToInt !" << std::endl;
+
+    if (isAbs){
+      dMax[0] = _pdir1[V0];
+      dMin[0] = _pdir2[V0];
+      cMax[0]  = std::abs(_curv1[V0]);
+      cMin[0]  = std::abs(_curv2[V0]);
+    }
+    else{
+      dMax[0] = _pdir1[V0];
+      dMin[0] = _pdir2[V0];
+      cMax[0]  = _curv1[V0];
+      cMin[0]  = _curv2[V0];
     }
 }
 

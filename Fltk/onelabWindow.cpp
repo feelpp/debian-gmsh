@@ -673,31 +673,6 @@ static void updateOnelabGraphs()
     drawContext::global()->draw();
 }
 
-static void importPhysicalGroups(onelab::client *c, GModel *m)
-{
-  std::map<int, std::vector<GEntity*> > groups[4];
-  m->getPhysicalGroups(groups);
-  for(int dim = 0; dim < 3; dim++){
-    for(std::map<int, std::vector<GEntity*> >::iterator it = groups[dim].begin();
-        it != groups[dim].end(); it++){
-      // create "read-only" onelab region
-      std::string name = m->getPhysicalName(dim, it->first);
-      std::ostringstream num;
-      num << it->first;
-      if(name.empty())
-        name = std::string("Physical") +
-          ((dim == 3) ? "Volume" : (dim == 2) ? "Surface" :
-           (dim == 1) ? "Line" : "Point") + num.str();
-      name.insert(0, "Gmsh/Physical groups/");
-      onelab::region p(name, num.str());
-      p.setDimension(dim);
-      p.setReadOnly(true);
-      //p.setVisible(false);
-      c->set(p);
-    }
-  }
-}
-
 static void runGmshClient(const std::string &action)
 {
   onelab::server::citer it = onelab::server::instance()->findClient("Gmsh");
@@ -712,7 +687,6 @@ static void runGmshClient(const std::string &action)
     // first pass is special to prevent model reload, as well as
     // remeshing if a mesh file already exists on disk
     modelName = GModel::current()->getName();
-    importPhysicalGroups(c, GModel::current());
     if(!StatFile(mshFileName))
       onelab::server::instance()->setChanged(false, "Gmsh");
   }
@@ -724,7 +698,6 @@ static void runGmshClient(const std::string &action)
       // the model name has changed
       modelName = GModel::current()->getName();
       geometry_reload_cb(0, 0);
-      importPhysicalGroups(c, GModel::current());
     }
   }
   else if(action == "compute"){
@@ -735,7 +708,6 @@ static void runGmshClient(const std::string &action)
       // changed
       modelName = GModel::current()->getName();
       geometry_reload_cb(0, 0);
-      importPhysicalGroups(c, GModel::current());
       if(FlGui::instance()->onelab->meshAuto()){
         mesh_3d_cb(0, 0);
         CreateOutputFile(mshFileName, CTX::instance()->mesh.fileFormat);
@@ -829,10 +801,13 @@ void onelab_cb(Fl_Widget *w, void *data)
 
   do{ // enter loop
 
-    // the Gmsh client is special: it always gets executed first. (A
-    // special-puropose meta-model allows more flexibility: but in the simple
-    // GUI we can assume this)
-    runGmshClient(action);
+    //check whether the client is a onelab Metamodel
+    std::vector<onelab::number> n;
+    onelab::server::instance()->get(n,"HasGmsh");
+    bool metamodel = (n.size() && n[0].getValue());
+
+    // If the client is a NOT a metamodel Gmsh gets executed
+    if(!metamodel) runGmshClient(action);
 
     if(action == "compute")
       FlGui::instance()->onelab->checkForErrors("Gmsh");
@@ -855,6 +830,10 @@ void onelab_cb(Fl_Widget *w, void *data)
         FlGui::instance()->onelab->checkForErrors(c->getName());
       if(FlGui::instance()->onelab->stop()) break;
     }
+
+    // update geometry in Gmsh window which might have been by the metamodel
+    if(metamodel)
+      geometry_reload_cb(0, 0);
 
     if(action != "initialize"){
       updateOnelabGraphs();

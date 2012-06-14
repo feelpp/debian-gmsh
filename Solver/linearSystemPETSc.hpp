@@ -3,7 +3,7 @@
 #include <petscksp.h>
 #include "linearSystemPETSc.h"
 
-#if (PETSC_VERSION_RELEASE == 0 || ((PETSC_VERSION_MAJOR == 3) && (PETSC_VERSION_MINOR == 2))) // petsc-dev
+#if (PETSC_VERSION_RELEASE == 0 || ((PETSC_VERSION_MAJOR == 3) && (PETSC_VERSION_MINOR >= 2)))
 #define PetscTruth PetscBool
 #define PetscOptionsGetTruth PetscOptionsGetBool
 #endif
@@ -40,6 +40,7 @@ linearSystemPETSc<scalar>::linearSystemPETSc(MPI_Comm com)
   _isAllocated = false;
   _blockSize = 0;
   _kspAllocated = false;
+  _matrixModified=true;
 }
 
 template <class scalar>
@@ -47,7 +48,7 @@ linearSystemPETSc<scalar>::~linearSystemPETSc()
 {
   clear();
   if(_kspAllocated)
-#if (PETSC_VERSION_RELEASE == 0 || ((PETSC_VERSION_MAJOR == 3) && (PETSC_VERSION_MINOR == 2))) // petsc-dev
+#if (PETSC_VERSION_RELEASE == 0 || ((PETSC_VERSION_MAJOR == 3) && (PETSC_VERSION_MINOR >= 2)))
     _try(KSPDestroy(&_ksp));
 #else
     _try(KSPDestroy(_ksp));
@@ -152,7 +153,7 @@ template <class scalar>
 void linearSystemPETSc<scalar>::clear()
 {
   if(_isAllocated){
-#if (PETSC_VERSION_RELEASE == 0 || ((PETSC_VERSION_MAJOR == 3) && (PETSC_VERSION_MINOR == 2))) // petsc-dev
+#if (PETSC_VERSION_RELEASE == 0 || ((PETSC_VERSION_MAJOR == 3) && (PETSC_VERSION_MINOR >= 2)))
     _try(MatDestroy(&_a));
     _try(VecDestroy(&_x));
     _try(VecDestroy(&_b));
@@ -212,6 +213,7 @@ void linearSystemPETSc<scalar>::addToMatrix(int row, int col, const scalar &val)
   PetscInt i = row, j = col;
   PetscScalar s = val;
   _try(MatSetValues(_a, 1, &i, 1, &j, &s, ADD_VALUES));
+  _matrixModified=true;
 }
 
 template <class scalar>
@@ -272,14 +274,15 @@ int linearSystemPETSc<scalar>::systemSolve()
 {
   if (!_kspAllocated)
     _kspCreate();
-  if (linearSystem<scalar>::_parameters["matrix_reuse"] == "same_sparsity")
-    _try(KSPSetOperators(_ksp, _a, _a, SAME_NONZERO_PATTERN));
-  else if (linearSystem<scalar>::_parameters["matrix_reuse"] == "same_matrix")
+  if (!_matrixModified || linearSystem<scalar>::_parameters["matrix_reuse"] == "same_matrix")
     _try(KSPSetOperators(_ksp, _a, _a, SAME_PRECONDITIONER));
+  else if (linearSystem<scalar>::_parameters["matrix_reuse"] == "same_sparsity")
+    _try(KSPSetOperators(_ksp, _a, _a, SAME_NONZERO_PATTERN));
   else
     _try(KSPSetOperators(_ksp, _a, _a, DIFFERENT_NONZERO_PATTERN));
   _try(MatAssemblyBegin(_a, MAT_FINAL_ASSEMBLY));
   _try(MatAssemblyEnd(_a, MAT_FINAL_ASSEMBLY));
+  _matrixModified=false;
   /*MatInfo info;
     MatGetInfo(_a, MAT_LOCAL, &info);
     printf("mallocs %.0f    nz_allocated %.0f    nz_used %.0f    nz_unneeded %.0f\n", info.mallocs, info.nz_allocated, info.nz_used, info.nz_unneeded);*/
