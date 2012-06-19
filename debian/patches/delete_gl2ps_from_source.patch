@@ -14,7 +14,7 @@ Last-Update: 2011-12-09
    gl2png.cpp
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -1050,7 +1050,7 @@
+@@ -1060,7 +1060,7 @@
    add_executable(gmsh_dynamic EXCLUDE_FROM_ALL Common/Main.cpp)
    target_link_libraries(gmsh_dynamic shared)
  endif(HAVE_FLTK)

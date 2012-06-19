@@ -4,7 +4,7 @@ Last-Update: 2011-12-09
 
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -1017,7 +1017,7 @@
+@@ -1027,7 +1027,7 @@
  # want to build the lib we need to recompile everything (the first
  # time--it's a separate target)
  add_library(lib STATIC EXCLUDE_FROM_ALL ${GMSH_SRC})
@@ -13,7 +13,7 @@ Last-Update: 2011-12-09
  if(MSVC)
    set_target_properties(lib PROPERTIES DEBUG_POSTFIX d) 
    if(ENABLE_MSVC_STATIC_RUNTIME)
-@@ -1027,7 +1027,7 @@
+@@ -1037,7 +1037,7 @@
  
  # shared library target: we don't build it by default either
  add_library(shared SHARED EXCLUDE_FROM_ALL ${GMSH_SRC})

@@ -5,6 +5,5 @@ delete_gl2ps_from_source.patch
 switch_from_opencascade_to_oce.patch
 api_demos.patch
 fix_FTBFS_linking.patch
-alauzet.patch
 cgns.patch
 pedantic.patch
