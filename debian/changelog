@@ -1,3 +1,10 @@
+gmsh (2.6.0-1) unstable; urgency=low
+
+  * [47ff0e6] Imported Upstream version 2.6.0
+  * [e3079c4] Refresh patches, remove ones applied by upstream.
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Tue, 19 Jun 2012 22:43:42 +0200
+
 gmsh (2.5.1~beta2~svn12375~dfsg-1) unstable; urgency=low
 
   * [f29f130] Imported Upstream version 2.5.1~beta2~svn12375~dfsg.
