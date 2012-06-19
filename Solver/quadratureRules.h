@@ -1,15 +1,11 @@
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
-// C++ Interface: quadratureRules
+// See the LICENSE.txt file for license information. Please report all
+// bugs and problems to <gmsh@geuz.org>.
 //
-// Description:
+// Contributor(s):
+//   Eric Bechet
 //
-//
-// Author:  <Eric Bechet>, (C) 2009
-//
-// Copyright: See COPYING file that comes with this distribution
-//
-//
-
 
 #ifndef _QUADRATURERULES_H_
 #define _QUADRATURERULES_H_
@@ -74,7 +70,7 @@ class GaussQuadrature : public QuadratureBase
     return npts;
   }
   // copy constructor
-  GaussQuadrature(const GaussQuadrature &other) : info(other.info), order(other.order){}
+  GaussQuadrature(const GaussQuadrature &other) : order(other.order), info(other.info){}
 };
 
 #endif //_QUADRATURERULES_H_
