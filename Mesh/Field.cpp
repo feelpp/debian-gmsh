@@ -1660,7 +1660,7 @@ class AttractorField : public Field
         annDeallocPts(zeronodes);
         delete kdtree;
       }
-      
+
       std::vector<SPoint3> points;
       std::vector<SPoint2> uvpoints;
       std::vector<int> offset;
@@ -1674,18 +1674,21 @@ class AttractorField : public Field
 	    SBoundingBox3d bb = f->bounds();
 	    SVector3 dd = bb.max() - bb.min();
 	    double maxDist = dd.norm() / n_nodes_by_edge ;
-	    bool success = f->fillPointCloud(maxDist, &points, &uvpoints);
+	    f->fillPointCloud(maxDist, &points, &uvpoints);
 	    offset.push_back(points.size());
 	  }
 	}
       }
 
 
-      int totpoints = 
-	nodes_id.size() + 
+      int totpoints =
+	nodes_id.size() +
 	(n_nodes_by_edge-2) * edges_id.size() +
-        ((points.size()) ? points.size() : n_nodes_by_edge * n_nodes_by_edge * faces_id.size());
-      printf("%d points found in points clouds (%d edges)\n",totpoints, edges_id.size());
+        ((points.size()) ? points.size() :
+         n_nodes_by_edge * n_nodes_by_edge * faces_id.size());
+
+      Msg::Info("%d points found in points clouds (%d edges)", totpoints,
+                (int)edges_id.size());
 
       if(totpoints){
         zeronodes = annAllocPts(totpoints, 3);
@@ -1757,7 +1760,7 @@ class AttractorField : public Field
         }
         else {
           GFace *f = GModel::current()->getFaceByTag(*it);
-          if(f) {	    
+          if(f) {
 	    if (points.size()){
 	      for(int j = offset[count]; j < offset[count+1];j++) {
 		zeronodes[k][0] = points[j].x();
@@ -1783,7 +1786,7 @@ class AttractorField : public Field
 		}
 	      }
             }
-          }	  
+          }
         }
       }
       kdtree = new ANNkd_tree(zeronodes, totpoints, 3);
@@ -1847,7 +1850,7 @@ BoundaryLayerField::BoundaryLayerField()
 
 double BoundaryLayerField::operator() (double x, double y, double z, GEntity *ge)
 {
-  
+
   if (update_needed){
     for(std::list<int>::iterator it = nodes_id.begin();
 	it != nodes_id.end(); ++it) {
@@ -1863,7 +1866,7 @@ double BoundaryLayerField::operator() (double x, double y, double z, GEntity *ge
     }
     update_needed = false;
   }
-  
+
   double dist = 1.e22;
   AttractorField *cc;
   for (std::list<AttractorField*>::iterator it = _att_fields.begin();
@@ -1910,7 +1913,7 @@ void BoundaryLayerField::operator() (AttractorField *cc, double dist,
   double beta = CTX::instance()->mesh.smoothRatio;
   if (pp.first.dim ==0){
     GVertex *v = GModel::current()->getVertexByTag(pp.first.ent);
-    SVector3 t1;    
+    SVector3 t1;
     if (dist < thickness){
       t1 = SVector3(1,0,0);
     }
@@ -1925,17 +1928,17 @@ void BoundaryLayerField::operator() (AttractorField *cc, double dist,
     if (dist < thickness){
       SVector3 t1 = e->firstDer(pp.first.u);
       double crv = e->curvature(pp.first.u);
-      double rho = 1./crv;
       const double b = lc_t;
       const double h = lc_n;
-      double oneOverD2 = .5/(b*b) * (1. + sqrt (1. + ( 4.*crv*crv*b*b*b*b/ (h*h*beta*beta))));
-      metr = buildMetricTangentToCurve(t1,sqrt(1./oneOverD2),lc_n);
+      double oneOverD2 = .5/(b * b) *
+        (1. + sqrt (1. + (4. * crv * crv * b * b * b * b / (h * h * beta * beta))));
+      metr = buildMetricTangentToCurve(t1, sqrt(1. / oneOverD2), lc_n);
       return;
     }
     else {
       GPoint p = e->point(pp.first.u);
-      SVector3 t2 = SVector3(p.x() -x,p.y() -y,p.z() -z);
-      metr = buildMetricTangentToCurve(t2,lc_t,lc_n);
+      SVector3 t2 = SVector3(p.x() - x, p.y() - y, p.z() - z);
+      metr = buildMetricTangentToCurve(t2, lc_t, lc_n);
       return;
     }
   }
@@ -1943,18 +1946,19 @@ void BoundaryLayerField::operator() (AttractorField *cc, double dist,
     GFace *gf = GModel::current()->getFaceByTag(pp.first.ent);
     if (dist < thickness){
       double cmin, cmax;
-      SVector3 dirMax,dirMin;
-      cmax = gf->curvatures(SPoint2(pp.first.u,pp.first.v),&dirMax, &dirMin, &cmax,&cmin);
+      SVector3 dirMax, dirMin;
+      cmax = gf->curvatures(SPoint2(pp.first.u, pp.first.v),
+                            &dirMax, &dirMin, &cmax, &cmin);
       const double b = lc_t;
       const double h = lc_n;
-      double rhoMin = 1./cmin;
-      double rhoMax = 1./cmax;
-      double oneOverD2_min = .5/(b*b) * (1. + sqrt (1. + ( 4.*cmin*cmin*b*b*b*b/ (h*h*beta*beta))));
-      double oneOverD2_max = .5/(b*b) * (1. + sqrt (1. + ( 4.*cmax*cmax*b*b*b*b/ (h*h*beta*beta))));
-      double dmin = sqrt(1./oneOverD2_min);
-      double dmax = sqrt(1./oneOverD2_max);      
-      dmin = std::min(dmin,dmax*tgt_aniso_ratio);
-      metr = buildMetricTangentToSurface(dirMin,dirMax,dmin,dmax,lc_n);
+      double oneOverD2_min = .5/(b * b) *
+        (1. + sqrt(1. + (4. * cmin * cmin * b * b * b * b / (h * h * beta * beta))));
+      double oneOverD2_max = .5/(b * b) *
+        (1. + sqrt(1. + (4. * cmax * cmax * b * b * b * b / (h * h * beta * beta))));
+      double dmin = sqrt(1. / oneOverD2_min);
+      double dmax = sqrt(1. / oneOverD2_max);
+      dmin = std::min(dmin, dmax * tgt_aniso_ratio);
+      metr = buildMetricTangentToSurface(dirMin, dirMax, dmin, dmax, lc_n);
       return;
     }
     else {
@@ -2007,7 +2011,9 @@ void BoundaryLayerField::operator() (double x, double y, double z,
       _closest_point = CLOSEST;
     }
   }
-  if (iIntersect)for (int i=0;i<hop.size();i++)v = intersection_conserve_mostaniso(v,hop[i]);
+  if (iIntersect)
+    for (unsigned int i = 0; i < hop.size(); i++)
+      v = intersection_conserve_mostaniso(v, hop[i]);
   metr = v;
 }
 #endif

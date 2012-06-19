@@ -1,15 +1,11 @@
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
-// C++ Interface: solverAlgorithms
+// See the LICENSE.txt file for license information. Please report all
+// bugs and problems to <gmsh@geuz.org>.
 //
-// Description:
+// Contributor(s):
+//   Eric Bechet
 //
-//
-// Author:  <Eric Bechet>, (C) 2009
-//
-// Copyright: See COPYING file that comes with this distribution
-//
-//
-
 
 #ifndef _SOLVERALGORITHMS_H_
 #define _SOLVERALGORITHMS_H_
@@ -163,6 +159,7 @@ template<class Assembler> void FixDofs(Assembler &assembler, std::vector<Dof> &d
 class FilterDof
 {
  public:
+  virtual ~FilterDof(){}
   virtual bool operator()(Dof key) = 0;
 };
 
@@ -209,7 +206,7 @@ class FilterDofSet : public FilterDof
   }
   virtual void addDof(std::vector<Dof> &R)
   {
-    for(int i=0;i<R.size();i++)
+    for(unsigned int i=0;i<R.size();i++)
       this->addDof(R[i]);
   }
 };

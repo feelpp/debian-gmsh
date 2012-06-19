@@ -53,9 +53,10 @@ void printVoronoi(GRegion *gr,  std::set<SPoint3> &candidates)
   	itmap->second = allTets;
       }
     }
-    for (int j=0; j<4; j++){
+    for (int j = 0; j < 4; j++){
       MFace f = ele->getFace(j);
-      std::map<MFace, std::vector<MTetrahedron*>, Less_Face >::iterator itmap = face2Tet.find(f);
+      std::map<MFace, std::vector<MTetrahedron*>, Less_Face >::iterator itmap =
+        face2Tet.find(f);
       if (itmap == face2Tet.end()){
   	std::vector<MTetrahedron*>  oneTet;
   	oneTet.push_back(ele);
@@ -71,12 +72,12 @@ void printVoronoi(GRegion *gr,  std::set<SPoint3> &candidates)
 
   //print voronoi poles
   FILE *outfile;
-  smooth_normals *snorm = gr->model()->normals;
+  //smooth_normals *snorm = gr->model()->normals;
   outfile = fopen("nodes.pos", "w");
   fprintf(outfile, "View \"Voronoi poles\" {\n");
   std::map<MVertex*, std::set<MTetrahedron*> >::iterator itmap = node2Tet.begin();
   for(; itmap != node2Tet.end(); itmap++){
-    MVertex *v = itmap->first;
+    //MVertex *v = itmap->first;
     std::set<MTetrahedron*>  allTets = itmap->second;
     std::set<MTetrahedron*>::const_iterator it = allTets.begin();
     MTetrahedron *poleTet = *it;
@@ -98,7 +99,7 @@ void printVoronoi(GRegion *gr,  std::set<SPoint3> &candidates)
       double x[3] = {pc.x(), pc.y(), pc.z()};
       double uvw[3];
       poleTet->xyz2uvw(x, uvw);
-      bool inside = poleTet->isInside(uvw[0], uvw[1], uvw[2]);
+      //bool inside = poleTet->isInside(uvw[0], uvw[1], uvw[2]);
       //if (inside){
 	fprintf(outfile,"SP(%g,%g,%g)  {%g};\n",
 		pc.x(), pc.y(), pc.z(), maxRadius);
@@ -520,13 +521,12 @@ void MeshDelaunayVolume(std::vector<GRegion*> &regions)
     std::vector<MVertex*> numberedV;
     char opts[128];
     buildTetgenStructure(gr, in, numberedV);
-    //if (Msg::GetVerbosity() == 20) sprintf(opts, "peVvS0");
     if(CTX::instance()->mesh.algo3d == ALGO_3D_FRONTAL_DEL ||
        CTX::instance()->mesh.algo3d == ALGO_3D_FRONTAL_HEX ||
        CTX::instance()->mesh.algo3d == ALGO_3D_MMG3D ||
        CTX::instance()->mesh.algo2d == ALGO_2D_FRONTAL_QUAD ||
        CTX::instance()->mesh.algo2d == ALGO_2D_BAMG){
-      sprintf(opts, "-q1.5pY",  (Msg::GetVerbosity() < 3) ? 'Q':
+      sprintf(opts, "-q1.5pY%c",  (Msg::GetVerbosity() < 3) ? 'Q':
 	      (Msg::GetVerbosity() > 6) ? 'V': '\0');
     }
     else {

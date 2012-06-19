@@ -1,11 +1,10 @@
+// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
 //
-// Description : Filters for function space dof selection
+// See the LICENSE.txt file for license information. Please report all
+// bugs and problems to <gmsh@geuz.org>.
 //
-//
-// Author:  <Eric Bechet>::<Boris Sedji>,  02/2010
-//
-// Copyright: See COPYING file that comes with this distribution
-//
+// Contributor(s):
+//   Boris Sedji
 //
 
 #ifndef _FILTERS_H_
@@ -28,6 +27,7 @@ class FilterNodeEnriched
       _TagEnrichedVertex = TagEnrichedVertex;
       _EnrichComp = EnrichComp;
     }
+    virtual ~FilterNodeEnriched(){}
 
     virtual bool operator() (Dof &key) const{
       std::set<int>::iterator it1;
@@ -82,7 +82,7 @@ class FilterElementsCutByLevelSet
       }
     }
   }
-
+  virtual ~FilterElementsCutByLevelSet(){}
   virtual bool operator () (Dof & key) const{
     std::set<int>::const_iterator it1;
     std::set<int>::const_iterator it2;

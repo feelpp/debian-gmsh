@@ -69,8 +69,8 @@ option(ENABLE_WRAP_JAVA "Build Java wrappers" OFF)
 option(ENABLE_WRAP_PYTHON "Build Python wrappers" ${DEFAULT})
 
 set(GMSH_MAJOR_VERSION 2)
-set(GMSH_MINOR_VERSION 5)
-set(GMSH_PATCH_VERSION 1)
+set(GMSH_MINOR_VERSION 6)
+set(GMSH_PATCH_VERSION 0)
 set(GMSH_EXTRA_VERSION "" CACHE STRING "Gmsh extra version string")
 
 set(GMSH_VERSION "${GMSH_MAJOR_VERSION}.${GMSH_MINOR_VERSION}")
@@ -91,14 +91,14 @@ set(GMSH_API
     Geo/MVertexBoundaryLayerData.h Geo/MEdge.h 
     Geo/MFace.h Geo/MElement.h Geo/MPoint.h Geo/MLine.h Geo/MTriangle.h 
     Geo/MQuadrangle.h Geo/MTetrahedron.h Geo/MHexahedron.h Geo/MPrism.h 
-    Geo/MPyramid.h Geo/MElementCut.h Geo/MElementOctree.h Geo/discreteVertex.h Geo/discreteEdge.h
-    Geo/discreteFace.h Geo/discreteRegion.h Geo/SPoint2.h Geo/SPoint3.h
+    Geo/MPyramid.h Geo/MElementCut.h Geo/MElementOctree.h Geo/discreteVertex.h 
+    Geo/discreteEdge.h Geo/discreteFace.h Geo/discreteRegion.h Geo/SPoint2.h Geo/SPoint3.h
     Geo/SVector3.h Geo/STensor3.h Geo/SBoundingBox3d.h Geo/Pair.h Geo/Range.h 
     Geo/SOrientedBoundingBox.h Geo/CellComplex.h Geo/ChainComplex.h Geo/Cell.h
     Geo/Homology.h Geo/Chain.h Geo/partitionEdge.h Geo/CGNSOptions.h Geo/gmshLevelset.h
   Mesh/meshGEdge.h Mesh/meshGFace.h Mesh/meshGFaceOptimize.h Mesh/meshPartition.h
-    Mesh/meshGFaceDelaunayInsertion.h Mesh/simple3D.h Mesh/meshPartitionOptions.h Mesh/directions3D.h
-    Mesh/Voronoi3D.h Mesh/Levy3D.h Mesh/periodical.h
+    Mesh/meshGFaceDelaunayInsertion.h Mesh/simple3D.h Mesh/meshPartitionOptions.h 
+    Mesh/directions3D.h Mesh/Voronoi3D.h Mesh/Levy3D.h Mesh/periodical.h
   Numeric/mathEvaluator.h
   Solver/dofManager.h Solver/femTerm.h Solver/laplaceTerm.h Solver/elasticityTerm.h
     Solver/crossConfTerm.h Solver/orthogonalTerm.h
@@ -635,7 +635,7 @@ if(HAVE_MESH)
   endif(ENABLE_TETGEN AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/contrib/Tetgen1.5/tetgen.h)
   if(HAVE_TETGEN)
     message("WARNING: By including Tetgen you have to comply with Tetgen's "
-            "special licensing requirements stated in contrib/Tetgen/LICENSE.")
+            "special licensing requirements stated in contrib/Tetgen*/LICENSE.")
   endif(HAVE_TETGEN)
 endif(HAVE_MESH)
 
@@ -937,12 +937,22 @@ if(WIN32 OR CYGWIN)
   list(APPEND EXTERNAL_LIBRARIES wsock32 ws2_32)
 endif(WIN32 OR CYGWIN)
 
+# disable compile optimization on some known problematic files
 check_cxx_compiler_flag("-O0" NOOPT)
 if(NOOPT)
   file(GLOB_RECURSE NON_OPTIMIZED_SRC Numeric/robustPredicates.cpp Mesh/BDS.cpp
        Parser/Gmsh.tab.cpp contrib/Tetgen*/*.cxx)
   set_source_files_properties(${NON_OPTIMIZED_SRC} COMPILE_FLAGS "-O0")
 endif(NOOPT)
+
+# force full warnings to encourage everybody to write clean(er) code
+check_cxx_compiler_flag("-Wall" WALL)
+if(WALL)
+  file(GLOB_RECURSE WALL_SRC Common/*.cpp Fltk/*.cpp FunctionSpace/*.cpp
+       Geo/*.cpp Graphics/*.cpp Mesh/*.cpp Numeric/*.cpp Parser/*.cpp
+       Plugin/*.cpp Post/*.cpp Qt/*.cpp Solver/*.cpp)
+  set_source_files_properties(${WALL_SRC} COMPILE_FLAGS "-Wall")
+endif(WALL)
 
 list(SORT CONFIG_OPTIONS)
 set(GMSH_CONFIG_OPTIONS "")
@@ -1070,12 +1080,6 @@ if(WIN32 AND NOT MSVC OR CYGWIN)
 elseif(MSVC)
   set_target_properties(gmsh PROPERTIES LINK_FLAGS "/STACK:16777216")
 endif(WIN32 AND NOT MSVC OR CYGWIN)
-
-# force full warnings to encourage everybody to write clean(er) code
-check_cxx_compiler_flag("-Wall" WALL)
-if(WALL)
-  set_target_properties(gmsh lib shared PROPERTIES COMPILE_FLAGS "-Wall")
-endif(WALL)
 
 find_program(BISON bison)
 find_program(FLEX flex)
@@ -1252,7 +1256,9 @@ set(CPACK_SOURCE_GENERATOR TGZ)
 set(CPACK_SOURCE_IGNORE_FILES "${CMAKE_CURRENT_BINARY_DIR}" "/CVS/" "/.svn" "~$" 
     "DS_Store$" "GmshConfig.h$" "GmshVersion.h$" "/benchmarks/" "/tmp/" 
     "/bin/" "/lib/" "/nightly/" "GPATH" "GRTAGS" "GSYMS" "GTAGS" "/HTML/" 
-    "/projects/")
+    "/projects/" 
+    "/FunctionSpace/" "/Mesh/meshRecombine*" "/utils/solvers/legacy/"
+    "/contrib/3M/")
 
 if(UNIX)
   # make sure we remove previous installs before doing the next one
