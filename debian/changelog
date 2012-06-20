@@ -1,3 +1,11 @@
+gmsh (2.6.0.dfsg-2) unstable; urgency=low
+
+  * [5b8e374] Add dfsg-prefix to the upstream number.
+  * [3892439] Update patch, change the name of shared library.
+  * [d9902a5] Add alauzet patch, refresh other patches.
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Wed, 20 Jun 2012 18:59:00 +0200
+
 gmsh (2.6.0-1) unstable; urgency=low
 
   * [47ff0e6] Imported Upstream version 2.6.0
