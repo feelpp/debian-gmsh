@@ -7,3 +7,4 @@ api_demos.patch
 fix_FTBFS_linking.patch
 cgns.patch
 pedantic.patch
+alauzet.patch
