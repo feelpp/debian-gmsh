@@ -1,18 +1,3 @@
 debian/*.xpm /usr/share/pixmaps
 debian/gmsh.desktop /usr/share/applications
-#The following files are for compiling api_demos
-Common/Gmsh.h /usr/include/gmsh
-Geo/Chain.h /usr/include/gmsh
-Graphics/Camera.h /usr/include/gmsh
-Graphics/Trackball.h /usr/include/gmsh
-Solver/functionSpace.h /usr/include/gmsh
-Solver/STensor43.h /usr/include/gmsh
-Solver/STensor33.h /usr/include/gmsh
-Common/OS.h /usr/include/gmsh
-Common/Options.h /usr/include/gmsh
-Post/ColorTable.h /usr/include/gmsh
-Post/PViewOptions.h /usr/include/gmsh
-Common/OpenFile.h /usr/include/gmsh
-Common/StringUtils.h /usr/include/gmsh
-Mesh/Field.h  /usr/include/gmsh
-Post/PViewData.h /usr/include/gmsh
+usr/bin

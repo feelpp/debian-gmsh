@@ -1,3 +1,4 @@
 utils/converters
 utils/solvers
 utils/api_demos
+debian/tmp/usr/share/doc/gmsh/*

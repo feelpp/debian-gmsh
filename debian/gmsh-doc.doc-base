@@ -5,8 +5,8 @@ Abstract: This is the reference manual for gmsh.
 Section: Science/Mathematics
 
 Format: pdf
-Files: /usr/share/doc/gmsh/gmsh.pdf.gz
+Files: /usr/share/doc/gmsh-doc/gmsh.pdf.gz
 
 Format: HTML
-Index: /usr/share/doc/gmsh/gmsh.html
-Files: /usr/share/doc/gmsh/gmsh.html
+Index: /usr/share/doc/gmsh-doc/gmsh.html
+Files: /usr/share/doc/gmsh-doc/gmsh.html
