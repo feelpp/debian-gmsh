@@ -1,4 +1,4 @@
-Desctiption: fix compilation of api_demos
+Desctiption: Removes pedantic warnings
 Author: Christophe Trophime <christophe.trophime@lncmi.cnrs.fr>
 Reviewed-by: Anton Gladky <gladky.anton@gmail.com>
 Last-Update: 2012-03-11
