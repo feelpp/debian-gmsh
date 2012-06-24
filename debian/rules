@@ -2,8 +2,10 @@
 BUILDDIR = $(CURDIR)/debian/build
 JAVA_HOME=/usr/lib/jvm/default-java
 
+# Add --with javahelper for java-wrappers
+
 %:
-	dh $@ --buildsystem=cmake --builddirectory=$(BUILDDIR) --with python2 --with javahelper --parallel
+	dh $@ --buildsystem=cmake --builddirectory=$(BUILDDIR) --with python2 --parallel
 
 export OMPI_MCA_plm_rsh_agent=/bin/false                #workaround to start MPI-applications in chroot
 
