@@ -1,4 +1,4 @@
-Description: <short summary of the patch>
+Description: Apply anizotropic mesh technique according to Alauzet.
 Author: Christophe Trophime <christophe.trophime@lncmi.cnrs.fr>
 Reviewed-by: Anton Gladky <gladky.anton@gmail.com>
 Last-Update: 2012-06-20
