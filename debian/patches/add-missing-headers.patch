@@ -1,0 +1,37 @@
+Description: Adds missing headers 
+Author: Christophe Trophime <christophe.trophime@lncmi.cnrs.fr>
+Reviewed-by: Anton Gladky <gladky.anton@gmail.com>
+Last-Update: 2012-06-24
+
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -82,6 +82,7 @@
+   ${CMAKE_CURRENT_BINARY_DIR}/Common/GmshVersion.h
+   Common/Gmsh.h Common/Context.h Common/GmshDefines.h Common/GmshMessage.h
+     Common/VertexArray.h Common/Octree.h Common/OctreeInternals.h
++    Common/OS.h Common/Options.h Common/OpenFile.h Common/StringUtils.h
+   Numeric/Numeric.h Numeric/GaussIntegration.h Numeric/polynomialBasis.h
+     Numeric/JacobianBasis.h Numeric/fullMatrix.h
+     Numeric/simpleFunction.h Numeric/cartesian.h
+@@ -96,16 +97,21 @@
+     Geo/SVector3.h Geo/STensor3.h Geo/SBoundingBox3d.h Geo/Pair.h Geo/Range.h 
+     Geo/SOrientedBoundingBox.h Geo/CellComplex.h Geo/ChainComplex.h Geo/Cell.h
+     Geo/Homology.h Geo/Chain.h Geo/partitionEdge.h Geo/CGNSOptions.h Geo/gmshLevelset.h
++    Geo/Chain.h
+   Mesh/meshGEdge.h Mesh/meshGFace.h Mesh/meshGFaceOptimize.h Mesh/meshPartition.h
+     Mesh/meshGFaceDelaunayInsertion.h Mesh/simple3D.h Mesh/meshPartitionOptions.h 
+     Mesh/directions3D.h Mesh/Voronoi3D.h Mesh/Levy3D.h Mesh/periodical.h
++    Mesh/Field.h
+   Numeric/mathEvaluator.h
+   Solver/dofManager.h Solver/femTerm.h Solver/laplaceTerm.h Solver/elasticityTerm.h
+     Solver/crossConfTerm.h Solver/orthogonalTerm.h
+     Solver/linearSystem.h Solver/linearSystemGMM.h Solver/linearSystemCSR.h 
+     Solver/linearSystemFull.h Solver/elasticitySolver.h Solver/sparsityPattern.h 
++    Solver/functionSpace.h Solver/STensor43.h Solver/STensor33.h
+   Post/PView.h Post/PViewData.h Plugin/PluginManager.h Post/OctreePost.h
++    Post/ColorTable.h Post/PViewOptions.h Post/PViewData.h
+   Graphics/drawContext.h
++    Graphics/Camera.h Graphics/Trackball.h
+   contrib/kbipack/gmp_normal_form.h contrib/kbipack/gmp_matrix.h 
+     contrib/kbipack/gmp_blas.h contrib/kbipack/mpz.h
+   contrib/DiscreteIntegration/Integration3D.h
