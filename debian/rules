@@ -1,5 +1,8 @@
 #!/usr/bin/make -f
 BUILDDIR = $(CURDIR)/debian/build
+JAVA_HOME=/usr/lib/jvm/default-java
+
+# Add --with javahelper for java-wrappers
 
 %:
 	dh $@ --buildsystem=cmake --builddirectory=$(BUILDDIR) --with python2 --parallel
@@ -16,7 +19,8 @@ extra_flags += \
 -DENABLE_METIS:BOOL=OFF \
 -DENABLE_TAUCS:BOOL=OFF \
 -DENABLE_OSMESA:BOOL=OFF \
--DENABLE_CGNS:BOOL=OFF \
+-DENABLE_CGNS:BOOL=ON \
+-DENABLE_WRAP_JAVA:BOOL=ON \
 -DCMAKE_INCLUDE_PATH:STRING="/usr/include/mpi" \
 -DCMAKE_INSTALL_PREFIX:STRING="/usr" \
 

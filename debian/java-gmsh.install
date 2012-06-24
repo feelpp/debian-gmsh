@@ -1,0 +1,2 @@
+debian/build/wrappers/java/*.so gmshpy
+debian/build/wrappers/java/*.py gmshpy
