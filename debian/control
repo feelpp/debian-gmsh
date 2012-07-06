@@ -18,7 +18,8 @@ Build-Depends: debhelper (>= 8), cmake, gfortran, libgl1-mesa-dev,
  python-dev (>= 2.6.6-3~), swig2.0,
  chrpath, libann-dev,
  libpetsc3.2-dev [!kfreebsd-amd64 !kfreebsd-i386 !armel !armhf !s390x],
- libslepc3.2-dev [!kfreebsd-amd64 !kfreebsd-i386 !armel !armhf !s390x]
+ libslepc3.2-dev [!kfreebsd-amd64 !kfreebsd-i386 !armel !armhf !s390x],
+ javahelper, default-jdk
 Standards-Version: 3.9.3
 DM-Upload-Allowed: yes
 X-Python-Version: current
@@ -107,7 +108,7 @@ Description: Three-dimensional finite element mesh generator. Documentation
  
 Package: python-gmsh
 Section: python
-Architecture: all
+Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, mpi-default-bin,
  python (>= 2.7), python (<<2.8)
 Description: Three-dimensional finite element mesh generator. Documentation
@@ -129,7 +130,7 @@ Description: Three-dimensional finite element mesh generator. Documentation
  
 Package: java-gmsh
 Section: java
-Architecture: all
+Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, mpi-default-bin,
  python (>= 2.7), python (<<2.8)
 Description: Three-dimensional finite element mesh generator. Documentation

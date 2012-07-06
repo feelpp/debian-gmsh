@@ -5,7 +5,7 @@ JAVA_HOME=/usr/lib/jvm/default-java
 # Add --with javahelper for java-wrappers
 
 %:
-	dh $@ --buildsystem=cmake --builddirectory=$(BUILDDIR) --with python2 --parallel
+	dh $@ --buildsystem=cmake --builddirectory=$(BUILDDIR) --with python2 --with javahelper --parallel
 
 export OMPI_MCA_plm_rsh_agent=/bin/false                #workaround to start MPI-applications in chroot
 
@@ -19,7 +19,7 @@ extra_flags += \
 -DENABLE_METIS:BOOL=OFF \
 -DENABLE_TAUCS:BOOL=OFF \
 -DENABLE_OSMESA:BOOL=OFF \
--DENABLE_CGNS:BOOL=ON \
+-DENABLE_CGNS:BOOL=OFF \
 -DENABLE_WRAP_JAVA:BOOL=ON \
 -DCMAKE_INCLUDE_PATH:STRING="/usr/include/mpi" \
 -DCMAKE_INSTALL_PREFIX:STRING="/usr" \
@@ -58,6 +58,7 @@ override_dh_auto_clean:
 	rm -f doc/texinfo/gmsh.html
 	rm -f doc/texinfo/gmsh.pdf
 	rm -f doc/texinfo/gmsh.info
+	jh_build --clean
 
 override_dh_auto_configure:
 	dh_auto_configure -- $(extra_flags)
@@ -79,3 +80,8 @@ override_dh_auto_test:
 	cd test-dir; $(BUILDDIR)/gmsh transfinite.geo -3 -o transfinite3d.stl
 	cd test-dir; ls -ln;
 	rm -rf test-dir
+
+override_dh_auto_install:
+	dh_auto_install
+	jh_installlibs -pjava-gmsh -v
+	jh_depends -pjava-gmsh -v
