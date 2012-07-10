@@ -1,3 +1,14 @@
+gmsh (2.6.0.dfsg-3) unstable; urgency=low
+
+  [ Anton Gladky ]
+  * [3bf9207] Split gmsh into gmsh, libgmsh2, gmsh-doc and gmsh-dev. (Closes: #678319)
+
+  [ Christophe Trophime ]
+  * [7eb2740] Add separate packages for python and java wrappers
+  * [7d7eb90] Add upstream file
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Tue, 10 Jul 2012 20:40:14 +0200
+
 gmsh (2.6.0.dfsg-2) unstable; urgency=low
 
   * [5b8e374] Add dfsg-prefix to the upstream number.
