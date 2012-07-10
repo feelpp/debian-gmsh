@@ -30,3 +30,18 @@ Last-Update: 2012-06-20
  if(HAVE_LAPACK AND LAPACK_FLAGS)
    set_target_properties(shared PROPERTIES LINK_FLAGS ${LAPACK_FLAGS})
  endif(HAVE_LAPACK AND LAPACK_FLAGS)
+--- a/wrappers/java/CMakeLists.txt
++++ b/wrappers/java/CMakeLists.txt
+@@ -34,7 +34,11 @@
+   set_target_properties(WrapGmsh PROPERTIES PREFIX "")
+ endif(WIN32)
+ if(UNIX)
+-  set_target_properties(WrapGmsh PROPERTIES PREFIX "lib")
++  set_target_properties(WrapGmsh PROPERTIES 
++    PREFIX "lib"
++    OUTPUT_NAME java-gmsh
++    SOVERSION "${GMSH_MAJOR_VERSION}"
++  )
+ endif(UNIX)		
+ add_custom_command(TARGET WrapGmsh 
+ POST_BUILD # do the rest of the command after the build period

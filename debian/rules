@@ -80,8 +80,3 @@ override_dh_auto_test:
 	cd test-dir; $(BUILDDIR)/gmsh transfinite.geo -3 -o transfinite3d.stl
 	cd test-dir; ls -ln;
 	rm -rf test-dir
-
-override_dh_auto_install:
-	dh_auto_install
-	jh_installlibs -pjava-gmsh -v
-	jh_depends -pjava-gmsh -v
