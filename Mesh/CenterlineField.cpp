@@ -648,82 +648,6 @@ void Centerline::createSplitCompounds()
   }
 }
 
-void Centerline::cleanMesh()
-{
-  return;  // does not work yet !
-  ////////////////////////////////
-
-  if (!is_cut || !is_closed) return;
-
-  for (int i=0; i < NF; i++){
-    std::ostringstream oss;
-    oss << "new" << NF+i+1 ;
-    std::string name = oss.str();
-    current->setPhysicalName(name, 2, i+1);
-  }
-  Msg::Info("Writing new splitted mesh mySPLITMESH.msh");
-  current->writeMSH("mySPLITMESH.msh", 2.2, false, false);
-
-  std::set<MVertex*> allNod;
-  discreteFace * mySplitMesh;
-  std::vector<std::set<MVertex*> > inOutNod;
-  std::vector<discreteFace* > inOutMesh;
-
-  mySplitMesh= new discreteFace(current, 2*NF+1);
-  mySplitMesh->addPhysicalEntity(2*NF+1);
-  current->setPhysicalName("surface mesh", 2, 2*NF+1);
-  current->add(mySplitMesh);
-  for (unsigned int i=0; i < discFaces.size(); i++){
-    GFace *gfc =  current->getFaceByTag(NF+i+1);
-    for(unsigned int j = 0; j < gfc->triangles.size(); ++j){
-      MTriangle *t = gfc->triangles[j];
-      std::vector<MVertex *> v(3);
-      for(int k = 0; k < 3; k++){
-	v[k] = t->getVertex(k);
-	allNod.insert(v[k]);
-      }
-      mySplitMesh->triangles.push_back(new MTriangle(v[0], v[1], v[2]));
-    }
-    for(unsigned int j = 0; j < gfc->quadrangles.size(); ++j){
-      MQuadrangle *q = gfc->quadrangles[j];
-      std::vector<MVertex *> v(4);
-      for(int k = 0; k < 4; k++){
-	v[k] = q->getVertex(k);
-	allNod.insert(v[k]);
-      }
-      mySplitMesh->quadrangles.push_back(new MQuadrangle(v[0], v[1], v[2], v[3]));
-    }
-  }
-
-  //Removing discrete Vertices - Edges - Faces
-  for (int i=0; i < NV; i++){
-    GVertex *gv = current->getVertexByTag(i+1);
-    current->remove(gv);
-  }
-  for (int i=0; i < NE; i++){
-    GEdge *ge = current->getEdgeByTag(i+1);
-    GEdge *gec = current->getEdgeByTag(NE+i+1);
-    current->remove(ge);
-    current->remove(gec);
-  }
-  for (int i=0; i < NF; i++){
-    GFace *gf  = current->getFaceByTag(i+1);
-    current->remove(gf);
-  }
-  for (unsigned int i=0; i < discFaces.size(); i++){
-    GFace *gfc = current->getFaceByTag(NF+i+1);
-    current->remove(gfc);
-  }
-
-  //Put new mesh in a new discreteFace
- for(std::set<MVertex*>::iterator it = allNod.begin(); it != allNod.end(); ++it)
-   mySplitMesh->mesh_vertices.push_back(*it);
- mySplitMesh->meshStatistics.status = GFace::DONE;
-
- current->createTopologyFromMesh();
-
-}
-
 void Centerline::createFaces()
 {
   std::vector<std::vector<MTriangle*> > faces;
@@ -1215,7 +1139,7 @@ void  Centerline::operator() (double x, double y, double z, SMetric3 &metr, GEnt
    double rho = radMax;
    double hwall_n = thickness/20.;
    double hwall_t = 2*M_PI*rho/nbPoints;
-   double hfar =  radMax/5.;
+   double hfar =  radMax/4.;
    double lc_a = 3.*hwall_t;
 
    //dir_a = direction along the centerline
@@ -1240,25 +1164,27 @@ void  Centerline::operator() (double x, double y, double z, SMetric3 &metr, GEnt
    lc_t = std::min(lc_t, CTX::instance()->mesh.lcMax);
 
    //curvature metric
-   SMetric3 curvMetric;
+   SMetric3 curvMetric, curvMetric1, curvMetric2;
    if (ds <= thickness){
      metr = metricBasedOnSurfaceCurvature(dMin, dMax, cMin, cMax, radMax,
                                           beta, lc_n, lc_t, hwall_t);
    }
    else if (ds > thickness && onInOutlets){
-     curvMetric = buildMetricTangentToCurve(dir_n,lc_n,lc_t);
+     metr = buildMetricTangentToCurve(dir_n,lc_n,lc_t); 
    }
    else if (ds > thickness && !onInOutlets){
-     curvMetric = buildMetricTangentToCurve(dir_n,lc_n,lc_a);
-     metr = SMetric3(1./(lc_a*lc_a), 1./(lc_n*lc_n), 1./(lc_t*lc_t), dir_a, dir_n, dir_cross);
-     metr = intersection_conserveM1(metr,curvMetric);
+     //metr = buildMetricTangentToCurve(dir_n,lc_n,lc_t); 
+     //curvMetric = metricBasedOnSurfaceCurvature(dMin, dMax, cMin, cMax, radMax, beta, lc_n, lc_t, hwall_t);
+     curvMetric1 = buildMetricTangentToCurve(dir_n,lc_n,lc_a); //lc_t
+     curvMetric2 = buildMetricTangentToCurve(dir_cross,lc_t,lc_a); //lc_t
+     curvMetric = intersection(curvMetric1,curvMetric2); 
+     //metr = SMetric3(1./(lc_a*lc_a), 1./(hfar*hfar),1./(hfar*hfar), dir_a, dir_a1, dir_a2);
+     metr = SMetric3(1./(lc_a*lc_a), 1./(lc_n*lc_n), 1./(lc_t*lc_t), dir_a, dir_n, dir_cross); 
+     metr = intersection_conserveM1(metr,curvMetric);  
+     //metr = intersection(metr,curvMetric); 
    }
 
    return;
-
-   // double lc_a_curv = sqrt(1./dot(dir_a,curvMetric,dir_a));
-   // if (ds < thickness) lc_a = std::min(lc_a, lc_a_curv);
-   // return;
 
 }
 

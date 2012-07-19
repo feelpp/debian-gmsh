@@ -8,11 +8,12 @@ set(SRC
     meshGEdge.cpp 
       meshGEdgeExtruded.cpp
     meshGFace.cpp 
+    meshGFaceElliptic.cpp
       meshGFaceTransfinite.cpp meshGFaceExtruded.cpp 
       meshGFaceBamg.cpp meshGFaceBDS.cpp meshGFaceDelaunayInsertion.cpp 
       meshGFaceLloyd.cpp meshGFaceOptimize.cpp 
       meshGFaceQuadrilateralize.cpp meshGFaceBoundaryLayers.cpp
-    meshGRegion.cpp 
+    meshGRegion.cpp meshGRegionBoundaryLayers.cpp
       meshGRegionDelaunayInsertion.cpp meshGRegionTransfinite.cpp 
       meshGRegionExtruded.cpp  meshGRegionCarveHole.cpp 
       meshGRegionLocalMeshMod.cpp meshGRegionMMG3D.cpp
@@ -34,7 +35,8 @@ set(SRC
     Levy3D.cpp
     periodical.cpp
     directions3D.cpp
-  Field.cpp
+    yamakawa.cpp
+    Field.cpp
     CenterlineField.cpp
 )
 

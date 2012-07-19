@@ -108,6 +108,8 @@ class FlGui{
   char selectEntity(int type);
   // display status message
   void setStatus(const char *msg, int num);
+  // display status message and update progress bar
+  void setProgress(const char *msg, double val, double min, double max);
   // create the window for physical context dependant definitions
   void callForSolverPlugin(int dim);
   // add line in message console(s)

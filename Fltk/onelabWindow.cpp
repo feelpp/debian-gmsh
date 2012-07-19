@@ -277,6 +277,9 @@ bool onelab::localNetworkClient::run()
         }
         else if(type == "number"){
           onelab::number p; p.fromChar(message); set(p);
+          if(p.getName() == getName() + "/Progress")
+            FlGui::instance()->setProgress(p.getLabel().c_str(), p.getValue(),
+                                           p.getMin(), p.getMax());
         }
         else if(type == "string"){
           onelab::string p; p.fromChar(message); set(p);
@@ -708,7 +711,8 @@ static void runGmshClient(const std::string &action)
       // changed
       modelName = GModel::current()->getName();
       geometry_reload_cb(0, 0);
-      if(FlGui::instance()->onelab->meshAuto()){
+      if(!GModel::current()->empty() &&
+         FlGui::instance()->onelab->meshAuto()){
         mesh_3d_cb(0, 0);
         CreateOutputFile(mshFileName, CTX::instance()->mesh.fileFormat);
       }

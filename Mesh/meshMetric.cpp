@@ -166,8 +166,8 @@ void meshMetric::exportInfo(const char * fileendname)
       SVector3 gradudx = dgrads[0][ver];
       SVector3 gradudy = dgrads[1][ver];
       SVector3 gradudz = dgrads[2][ver];
-      out_hess << (gradudx(0)+gradudy(1)+gradudz(2));
-      if ((i==(e->getNumVertices()-1))){
+      out_hess << (gradudx(0) + gradudy(1) + gradudz(2));
+      if (i == (e->getNumVertices() - 1)){
 	out_ls << "};" << std::endl;
 	out_hess << "};" << std::endl;
       }
@@ -177,11 +177,11 @@ void meshMetric::exportInfo(const char * fileendname)
       }
       for (int k=0;k<3;k++){
         out_grad << grads[ver](k);
-        if ((k==2)&&(i==(e->getNumVertices()-1)))  out_grad << "};" << std::endl;
+        if ((k == 2) && (i == (e->getNumVertices() - 1))) out_grad << "};" << std::endl;
         else out_grad << ",";
         for (int l=0;l<3;l++){
           out_metric << _nodalMetrics[ver](k,l);
-          if ((k==2)&&(l==2)&&(i==(e->getNumVertices()-1))) out_metric << "};" << std::endl;
+          if ((k == 2) && (l == 2) && (i == (e->getNumVertices() - 1))) out_metric << "};" << std::endl;
           else out_metric << ",";
         }
       }
@@ -295,7 +295,7 @@ void meshMetric::computeHessian()
       d2udxy = coeffs(1); d2udxz = coeffs(2); d2udyz = coeffs(4);
       dudx = d2udx2*x+d2udxy*y+d2udxz*z+coeffs(6);
       dudy = d2udxy*x+d2udy2*y+d2udyz*z+coeffs(7);
-      dudz = d2udxz*z+d2udyz*z+d2udz2*z+coeffs(8);
+      dudz = d2udxz*x+d2udyz*y+d2udz2*z+coeffs(8);
     }
     double duNorm = sqrt(dudx*dudx+dudy*dudy+dudz*dudz);
     if (duNorm == 0. || _technique == meshMetric::HESSIAN) duNorm = 1.;

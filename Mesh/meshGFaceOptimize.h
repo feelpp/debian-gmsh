@@ -57,6 +57,10 @@ void buildListOfEdgeAngle(e2t_cont adj, std::vector<edge_angle> &edges_detected,
 void buildEdgeToElements(std::vector<MElement*> &tris, e2t_cont &adj);
 
 void laplaceSmoothing(GFace *gf, int niter=1);
+
+void _relocateVertex(GFace *gf, MVertex *ver,
+		     const std::vector<MElement*> &lt);
+
 /*
 void edgeSwappingLawson(GFace *gf);
 */
