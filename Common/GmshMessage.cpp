@@ -408,20 +408,19 @@ void Msg::ProgressMeter(int n, int N, const char *fmt, ...)
     if(strlen(fmt)) strcat(str, " ");
 
     char str2[1024];
-    sprintf(str2, "(%d %%)", _progressMeterCurrent);
-    strcat(str, str2);
+    sprintf(str2, "%s(%d %%)", str, _progressMeterCurrent);
 
-    if(_client) _client->Progress(str);
+    if(_client) _client->Progress(str2);
 
 #if defined(HAVE_FLTK)
-    if(FlGui::available()){
-      if(_verbosity > 4) FlGui::instance()->setStatus(str, 1);
+    if(FlGui::available() && _verbosity > 4){
       FlGui::instance()->check();
+      FlGui::instance()->setProgress(str, n, 0, N);
     }
 #endif
 
     if(CTX::instance()->terminal){
-      fprintf(stdout, "%s                     \r", str);
+      fprintf(stdout, "%s                     \r", str2);
       fflush(stdout);
     }
 
@@ -433,8 +432,9 @@ void Msg::ProgressMeter(int n, int N, const char *fmt, ...)
     if(_client) _client->Progress("Done!");
 
 #if defined(HAVE_FLTK)
-    if(FlGui::available()){
-      if(_verbosity > 4) FlGui::instance()->setStatus("", 1);
+    if(FlGui::available() && _verbosity > 4){
+      FlGui::instance()->check();
+      FlGui::instance()->setProgress("", 0, 0, N);
     }
 #endif
 
@@ -650,10 +650,7 @@ void Msg::ExchangeOnelabParameter(const std::string &key,
   _onelabClient->get(ps, name);
   bool noRange = true, noChoices = true, noLoop = true, noGraph = true;
   if(ps.size()){
-    if(ps[0].getReadOnly())
-      ps[0].setValue(val[0]); // use value from gmsh (so it is updated if necessary)
-    else
-      val[0] = ps[0].getValue(); // use value from server
+    val[0] = ps[0].getValue(); // always use value from server
     // keep track of these attributes, which can be changed server-side
     if(ps[0].getMin() != -onelab::parameter::maxNumber() ||
        ps[0].getMax() != onelab::parameter::maxNumber() ||
@@ -686,7 +683,12 @@ void Msg::ExchangeOnelabParameter(const std::string &key,
     if(copt.count("Choices")) ps[0].setChoiceLabels(copt["Choices"]);
   }
   if(fopt.count("Visible")) ps[0].setVisible(fopt["Visible"][0] ? true : false);
-  if(fopt.count("ReadOnly")) ps[0].setReadOnly(fopt["ReadOnly"][0] ? true : false);
+  if(fopt.count("ReadOnly")) {
+    ps[0].setReadOnly(fopt["ReadOnly"][0] ? true : false);
+    // If the parameter is set "read-only" here, the local value is used instead
+    // of that from the server
+    if(ps[0].getReadOnly()) ps[0].setValue(val[0]);
+  }
   if(copt.count("Help")) ps[0].setHelp(copt["Help"][0]);
   if(copt.count("Label")) ps[0].setLabel(copt["Label"][0]);
   if(copt.count("ShortHelp")) ps[0].setLabel(copt["ShortHelp"][0]);

@@ -902,10 +902,9 @@ bool GFaceCompound::parametrize() const
       Msg::Info("Parametrizing surface %d with 'FE conformal map'", tag());
       parametrize_conformal(0, NULL, NULL);
     }
-    printStuff(55);
-    oriented = false; //checkOrientation(0);
-    if (!oriented)  oriented = checkOrientation(0, true);
-    printStuff(77);
+    //printStuff(55);
+    oriented = checkOrientation(0, true);
+    //printStuff(77);
     if (_type==SPECTRAL &&  (!oriented  || checkOverlap(vert)) ){
       Msg::Warning("!!! parametrization switched to 'FE conformal' map");
       parametrize_conformal(0, NULL, NULL);
@@ -927,7 +926,7 @@ bool GFaceCompound::parametrize() const
     /*
     fullMatrix<double> Oper(3*allNodes.size(),3*allNodes.size());
     _rbf = new GRbf(sizeBox, variableEps, radFunInd, _normals, allNodes, _ordered);
-    _rbf->RbfLapSurface_global_CPM_high_2(_rbf->getXYZ(), _rbf->getN(), Oper);
+    _rbf->RbfLapSurface_local_CPM(false,_rbf->getXYZ(), _rbf->getN(), Oper);
     _rbf->solveHarmonicMap(Oper, _ordered, _coords, coordinates);
     */
     fullMatrix<double> Oper(3*allNodes.size(),3*allNodes.size());
@@ -935,6 +934,7 @@ bool GFaceCompound::parametrize() const
     _rbf = new GRbf(sizeBox, variableEps, radFunInd, _normals, allNodes, _ordered);
 
     linearSystemPETSc<double> sys;
+	  printf("system 0 = %p\n", &sys);
     #if 1
     _rbf->RbfLapSurface_local_CPM_sparse(_ordered, false, _rbf->getXYZ(), _rbf->getN(), sys);
     _rbf->solveHarmonicMap_sparse(sys, _rbf->getXYZ().size1()* 3,_ordered, _coords, coordinates);
@@ -1013,6 +1013,7 @@ void GFaceCompound::getBoundingEdges()
       l_edges.push_back(*itf);
       (*itf)->addFace(this);
     }
+
     std::list<GEdge*> loop;
     computeALoop(_unique,loop);
     while(!_unique.empty())  computeALoop(_unique, loop);

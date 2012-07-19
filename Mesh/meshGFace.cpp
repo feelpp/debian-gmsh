@@ -24,6 +24,8 @@
 #include "MLine.h"
 #include "MTriangle.h"
 #include "MQuadrangle.h"
+#include "CenterlineField.h"
+#include "meshGFaceElliptic.h"
 #include "Context.h"
 #include "GPoint.h"
 #include "GmshMessage.h"
@@ -480,7 +482,7 @@ void filterOverlappingElements(int dim, std::vector<MElement*> &e,
 
 void modifyInitialMeshForTakingIntoAccountBoundaryLayers(GFace *gf)
 {
-  BoundaryLayerColumns *_columns = buidAdditionalPoints2D (gf);
+  BoundaryLayerColumns *_columns = buildAdditionalPoints2D (gf);
 
   if (!_columns)return;
 
@@ -1119,7 +1121,9 @@ bool meshGenerator(GFace *gf, int RECUR_ITER,
 
   // BOUNDARY LAYER
   if (!onlyInitialMesh) {
-    if (gf->getMeshingAlgo() == ALGO_2D_FRONTAL_QUAD) buildBackGroundMesh (gf);
+    if (gf->getMeshingAlgo() == ALGO_2D_FRONTAL_QUAD) 
+      buildBackGroundMesh (gf);
+      //      backgroundMesh::setCrossFieldsByDistance(gf);
     modifyInitialMeshForTakingIntoAccountBoundaryLayers(gf);
   }
 
@@ -1419,6 +1423,32 @@ static bool buildConsecutiveListOfVertices(GFace *gf, GEdgeLoop &gel,
   recoverMap.insert(recoverMapLocal.begin(), recoverMapLocal.end());
 
   return true;
+}
+
+static bool meshGeneratorElliptic(GFace *gf, bool debug = true)
+{
+#if defined(HAVE_ANN)
+  Centerline *center = 0;
+  FieldManager *fields = GModel::current()->getFields();
+  if (fields->getBackgroundField() > 0 ){
+    Field *myField = fields->get(fields->getBackgroundField());
+    center = dynamic_cast<Centerline*> (myField);
+  }
+
+  bool recombine =  (CTX::instance()->mesh.recombineAll);
+  int nbBoundaries = gf->edges().size();
+
+  if (center && recombine && nbBoundaries == 2) {
+    printf("--> need for elliptic grid generator \n");
+    //bool success  = createRegularTwoCircleGrid(center, gf);
+    bool success  = createRegularTwoCircleGridPeriodic(center, gf);
+    return success;
+  }
+  else return false;
+
+#else
+  return false;
+#endif
 }
 
 static bool meshGeneratorPeriodic(GFace *gf, bool debug = true)
@@ -1857,6 +1887,13 @@ void meshGFace::operator() (GFace *gf, bool print)
   Msg::Debug("Computing edge loops");
 
   Msg::Debug("Generating the mesh");
+
+  if(meshGeneratorElliptic(gf)){
+    printf("--> elliptic grid generator for face %d done \n", gf->tag());
+    //gf->meshStatistics.status = GFace::DONE;
+    //return;
+  }
+
   if ((gf->getNativeType() != GEntity::AcisModel ||
        (!gf->periodic(0) && !gf->periodic(1))) &&
       (noSeam(gf) || gf->getNativeType() == GEntity::GmshModel ||

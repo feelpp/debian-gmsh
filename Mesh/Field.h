@@ -15,6 +15,7 @@
 #include <string>
 #include <string.h>
 #include <sstream>
+#include <algorithm>
 
 #if defined(HAVE_POST)
 class PView;
@@ -154,6 +155,7 @@ class BoundaryLayerField : public Field {
   BoundaryLayerField();
   virtual double operator() (double x, double y, double z, GEntity *ge=0);
   virtual void operator() (double x, double y, double z, SMetric3 &metr, GEntity *ge=0);
+  bool isFaceBL (int iF) const {return std::find(faces_id.begin(),faces_id.end(),iF) != faces_id.end();}
 };
 #endif
 class FieldOptionString : public FieldOption

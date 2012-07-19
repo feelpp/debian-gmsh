@@ -49,6 +49,9 @@ typedef unsigned long intptr_t;
 #include "StringUtils.h"
 #include "Generator.h"
 #include "gl2ps.h"
+#if defined(HAVE_3M)
+#include "3M.h"
+#endif
 
 // check (now!) if there are any pending events, and process them
 void FlGui::check(){ Fl::check(); }
@@ -383,10 +386,10 @@ int FlGui::testGlobalShortcuts(int event)
     status = 1;
   }
   // FIXME TEST
-  else if(Fl::test_shortcut('4') || Fl::test_shortcut(FL_F + 4)) {
-    RecombineMesh(GModel::current());
-    status = 2;
-  }
+  //else if(Fl::test_shortcut('4') || Fl::test_shortcut(FL_F + 4)) {
+  //  RecombineMesh(GModel::current());
+  //  status = 2;
+  //}
   else if(Fl::test_shortcut(FL_CTRL + 'q') || Fl::test_shortcut(FL_META + 'q')){
     // only necessary when using the system menu bar, but hey, it
     // cannot hurt...
@@ -810,6 +813,19 @@ void FlGui::setStatus(const char *msg, int num)
   }
 }
 
+void FlGui::setProgress(const char *msg, double val, double min, double max)
+{
+  for(unsigned int i = 0; i < FlGui::instance()->graph.size(); i++){
+    if(FlGui::instance()->graph[i]->label[1]->value() != val)
+      FlGui::instance()->graph[i]->label[1]->value(val);
+    if(FlGui::instance()->graph[i]->label[1]->minimum() != min)
+      FlGui::instance()->graph[i]->label[1]->minimum(min);
+    if(FlGui::instance()->graph[i]->label[1]->maximum() != max)
+      FlGui::instance()->graph[i]->label[1]->maximum(max);
+  }
+  setStatus(msg, 1);
+}
+
 void FlGui::storeCurrentWindowsInfo()
 {
   CTX::instance()->menuPosition[0] = menu->win->x();
@@ -847,6 +863,10 @@ void FlGui::storeCurrentWindowsInfo()
   CTX::instance()->solverSize[0] = onelab->w();
   CTX::instance()->solverSize[1] = onelab->h();
 #endif
+#if defined(HAVE_3M)
+  storeWindowPosition3M();
+#endif
+
   fileChooserGetPosition(&CTX::instance()->fileChooserPosition[0],
                          &CTX::instance()->fileChooserPosition[1]);
 }
