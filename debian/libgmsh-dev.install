@@ -1,4 +1,6 @@
 usr/include
+usr/lib/libgmsh.so
+usr/lib/libjava-gmsh.so
 #The following files are for compiling api_demos
 Common/Gmsh.h /usr/include/gmsh
 Geo/Chain.h /usr/include/gmsh
