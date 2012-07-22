@@ -1,3 +1,10 @@
+gmsh (2.6.1.dfsg-2) unstable; urgency=low
+
+  * [295a5bf] Fix dependencies. (Closes: #682189)
+  * [fee6101] Update upstream-file
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Sun, 22 Jul 2012 14:09:58 +0200
+
 gmsh (2.6.1.dfsg-1) unstable; urgency=low
 
   * [6e78479] Imported Upstream version 2.6.1.dfsg
