@@ -1,3 +1,10 @@
+gmsh (2.6.1.dfsg-3) unstable; urgency=low
+
+  * [af505ec] Prevent overwriting of libgmsh.so.2 due to splitting the package.
+              Policy 7.6.1. (Closes: #682164)
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Wed, 25 Jul 2012 22:28:56 +0200
+
 gmsh (2.6.1.dfsg-2) unstable; urgency=low
 
   * [295a5bf] Fix dependencies. (Closes: #682189)
