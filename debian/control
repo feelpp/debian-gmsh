@@ -49,6 +49,9 @@ Description: Three-dimensional finite element mesh generator
 Package: libgmsh2
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
+Replaces: gmsh (<< 2.6.0.dfsg-3)
+Breaks: gmsh (<< 2.6.0.dfsg-3)
+Recommends: gmsh
 Description: Three-dimensional finite element mesh generator. Shared library
  Gmsh is an automatic 3D finite element mesh generator (primarily
  Delaunay) with build-in CAD and post-processing facilities. Its
@@ -67,6 +70,9 @@ Description: Three-dimensional finite element mesh generator. Shared library
 Package: libgmsh-dev
 Architecture: any
 Section: libdevel
+Replaces: gmsh (<< 2.6.0.dfsg-3)
+Breaks: gmsh (<< 2.6.0.dfsg-3)
+Recommends: gmsh
 Depends: libgmsh2 (= ${binary:Version}), libjava-gmsh2 (= ${binary:Version}),
  ${misc:Depends}
 Description: Three-dimensional finite element mesh generator. Development files
@@ -87,6 +93,8 @@ Description: Three-dimensional finite element mesh generator. Development files
 Package: gmsh-doc
 Section: doc
 Architecture: all
+Replaces: gmsh (<< 2.6.0.dfsg-3)
+Breaks: gmsh (<< 2.6.0.dfsg-3)
 Recommends: gmsh
 Depends: ${misc:Depends} 
 Description: Three-dimensional finite element mesh generator. Documentation
@@ -107,6 +115,9 @@ Description: Three-dimensional finite element mesh generator. Documentation
 Package: python-gmsh
 Section: python
 Architecture: any
+Replaces: gmsh (<< 2.6.0.dfsg-3)
+Breaks: gmsh (<< 2.6.0.dfsg-3)
+Recommends: gmsh
 Depends: ${shlibs:Depends}, ${misc:Depends}, python (>= 2.7), python (<<2.8)
 Description: Three-dimensional finite element mesh generator. Documentation
  Gmsh is an automatic 3D finite element mesh generator (primarily
@@ -129,6 +140,7 @@ Package: libjava-gmsh2
 Section: java
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: gmsh
 Description: Three-dimensional finite element mesh generator. Documentation
  Gmsh is an automatic 3D finite element mesh generator (primarily
  Delaunay) with build-in CAD and post-processing facilities. Its
@@ -145,5 +157,3 @@ Description: Three-dimensional finite element mesh generator. Documentation
  capabilities.
  .
  This package contains the Java wrappers for gmsh
- 
- 
