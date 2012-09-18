@@ -2,6 +2,9 @@
 BUILDDIR = $(CURDIR)/debian/build
 JAVA_HOME=/usr/lib/jvm/default-java
 
+export DEB_CFLAGS_MAINT_APPEND  = -Wall -pedantic
+export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
+
 # Add --with javahelper for java-wrappers
 
 %:
@@ -9,11 +12,12 @@ JAVA_HOME=/usr/lib/jvm/default-java
 
 export OMPI_MCA_plm_rsh_agent=/bin/false                #workaround to start MPI-applications in chroot
 
+
 disable_mpi_archs = armel armhf kfreebsd-amd64 kfreebsd-i386 mips mipsel
 export LD_LIBRARY_PATH :=  $(CURDIR)/debian/tmp/usr/lib:$(LD_LIBRARY_PATH); 
 
+
 extra_flags += \
--DCMAKE_C_FLAGS="-fPIC -Wall $(shell dpkg-buildflags --get CFLAGS)" \
 -DPYTHON_INCLUDE_DIR:PATH=/usr/include/python2.7 \
 -DPYTHON_LIBRARY:FILEPATH=/usr/lib/libpython2.7.so \
 -DENABLE_METIS:BOOL=OFF \
