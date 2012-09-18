@@ -1,3 +1,16 @@
+gmsh (2.6.1.dfsg-4) unstable; urgency=low
+
+  [ Andreas Tille ]
+  * [9005c56] Remove the "Name" field from debian/upstream-file.
+
+  [ Anton Gladky ]
+  * [671fb32] Update copyright-file according to the last update of the 
+              corresponding file in upstream-repository. (Closes: #617931)
+  * [d835032] Use compat-level 9.
+  * [7e91be4] Add --as-needed to ldflags to escape overlinkage.
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Tue, 18 Sep 2012 23:27:20 +0200
+
 gmsh (2.6.1.dfsg-3) unstable; urgency=low
 
   * [af505ec] Prevent overwriting of libgmsh.so.2 due to splitting the package.
