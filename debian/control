@@ -5,7 +5,7 @@ Maintainer: Debian Science Maintainers <debian-science-maintainers@lists.alioth.
 Uploaders: Christophe Prud'homme <prudhomm@debian.org>, 
  Anton Gladky <gladky.anton@gmail.com>,
  Christophe Trophime <christophe.trophime@lncmi.cnrs.fr>
-Build-Depends: debhelper (>= 8), cmake, gfortran, libgl1-mesa-dev,
+Build-Depends: debhelper (>= 9), cmake, gfortran, libgl1-mesa-dev,
  libglu1-mesa-dev, libfltk1.3-dev (>=1.1.7),
  libpng-dev, libjpeg-dev, zlib1g-dev, texlive, texinfo,
  mpi-default-dev,
