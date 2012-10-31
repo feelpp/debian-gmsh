@@ -12,30 +12,24 @@ Gmsh is an academic 3D mesh generator with a simple enough interface.
 The documentation is available in several formats
 
 [PDF]
-/usr/share/doc/gmsh/gmsh.pdf.gz
+/usr/share/doc/gmsh-doc/gmsh.pdf.gz
 
 [Html]
-/usr/share/doc/gmsh/html/gmsh.html
+/usr/share/doc/gmsh-doc/gmsh.html
 
-** FAQ
-------
-
-A FAQ is also available here
-
-/usr/share/doc/gmsh/FAQ
 
 * Tutorials and Demos
 ---------------------
 
-A tutorial is available in /usr/share/doc/gmsh/tutorial.
-A few demos are available in /usr/share/doc/gmsh/demos.
+A tutorial is available in /usr/share/doc/gmsh-dic/tutorial.
+A few demos are available in /usr/share/doc/gmsh-doc/demos.
 
 * Solvers
 ---------
 If you want to have examples on plugin your own solver to gmsh
 have a look at the following two solvers ( C and perl )
 
-/usr/share/doc/gmsh/utils/solvers
+/usr/share/doc/gmsh-doc/solvers
 
 * Converters
 ------------
@@ -43,7 +37,7 @@ have a look at the following two solvers ( C and perl )
 You can find some converters from (autocad|maya|matlab) to gmsh format
 in
 
-/usr/share/doc/gmsh/utils/converters
+/usr/share/doc/gms-doc/converters
 
  -- Christophe Prud'homme <prudhomm@debian.org>, Wed Nov 17 09:17:28 2004
 
