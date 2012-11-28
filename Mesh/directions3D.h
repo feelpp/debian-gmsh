@@ -40,22 +40,60 @@ class Matrix{
 
 class Frame_field{
  private:
-  static std::map<MVertex*,Matrix> field;
-  static std::vector<std::pair<MVertex*,Matrix> > random;
+  static std::map<MVertex*,Matrix> temp;
+  static std::vector<std::pair<MVertex*,Matrix> > field;
   #if defined(HAVE_ANN)
   static ANNpointArray duplicate;
   static ANNkd_tree* kd_tree;
   #endif
   Frame_field();
  public:
-  static void init_model();
+  static void init_region(GRegion*);
   static void init_face(GFace*);
-  static bool inside_domain(MElementOctree*,double,double);
-  static double get_size(GFace*,double,double);
-  static bool translate(GFace*,MElementOctree*,MVertex*,SVector3&,SVector3&);
+  static bool translate(GFace*,MElementOctree*,MVertex*,SPoint2,SVector3&,SVector3&);
   static Matrix search(double,double,double);
-  static void print_segment(SPoint3,SPoint3,std::ofstream&);
+  static Matrix combine(double,double,double);
+  static bool inside_domain(MElementOctree*,double,double);
+  static double get_ratio(GFace*,SPoint2);
   static void print_field1();
-  static void print_field2();
+  static void print_field2(GRegion*);
+  static void print_segment(SPoint3,SPoint3,std::ofstream&);
+  static GRegion* test();
+  static void clear();
+};
+
+class Size_field{
+ private:
+  static std::map<MVertex*,double> boundary;
+  static MElementOctree* octree;
+  Size_field();
+ public:
+  static void init_region(GRegion*);
+  static void solve(GRegion*);
+  static double search(double,double,double);
+  static double get_ratio(GFace*,SPoint2);
+  static void print_field(GRegion*);
+  static GRegion* test();
+  static void clear();
+};
+
+class Nearest_point{
+ private:
+  static std::vector<SPoint3> field;
+  static std::vector<MElement*> vicinity;
+  #if defined(HAVE_ANN)
+  static ANNpointArray duplicate;
+  static ANNkd_tree* kd_tree;
+  #endif
+  Nearest_point();
+ public:
+  static void init_region(GRegion*);
+  static bool search(double,double,double,SVector3&);
+  static double T(double,double,double,double,double);
+  static SPoint3 closest(MElement*,SPoint3);
+  static double clamp(double,double,double);
+  static void print_field(GRegion*);
+  static void print_segment(SPoint3,SPoint3,std::ofstream&);
+  static GRegion* test();
   static void clear();
 };

@@ -1579,20 +1579,21 @@ static void SetSymmetryMatrix(double matrix[4][4], double A, double B, double C,
   matrix[3][3] = 1.0;
 }
 
-static void SetDilatationMatrix(double matrix[4][4], double T[3], double A)
+static void SetDilatationMatrix(double matrix[4][4], double T[3],
+                                double A, double B, double C)
 {
   matrix[0][0] = A;
   matrix[0][1] = 0.0;
   matrix[0][2] = 0.0;
   matrix[0][3] = T[0] * (1.0 - A);
   matrix[1][0] = 0.0;
-  matrix[1][1] = A;
+  matrix[1][1] = B;
   matrix[1][2] = 0.0;
-  matrix[1][3] = T[1] * (1.0 - A);
+  matrix[1][3] = T[1] * (1.0 - B);
   matrix[2][0] = 0.0;
   matrix[2][1] = 0.0;
-  matrix[2][2] = A;
-  matrix[2][3] = T[2] * (1.0 - A);
+  matrix[2][2] = C;
+  matrix[2][3] = T[2] * (1.0 - C);
   matrix[3][0] = 0.0;
   matrix[3][1] = 0.0;
   matrix[3][2] = 0.0;
@@ -1877,14 +1878,15 @@ void TranslateShapes(double X, double Y, double Z, List_T *shapes)
     ReplaceAllDuplicates();
 }
 
-void DilatShapes(double X, double Y, double Z, double A, List_T *shapes)
+void DilatShapes(double X, double Y, double Z, double A, double B, double C,
+                 List_T *shapes)
 {
   double T[3], matrix[4][4];
 
   T[0] = X;
   T[1] = Y;
   T[2] = Z;
-  SetDilatationMatrix(matrix, T, A);
+  SetDilatationMatrix(matrix, T, A, B, C);
   ApplicationOnShapes(matrix, shapes);
 
   if(CTX::instance()->geom.autoCoherence)
@@ -2489,7 +2491,7 @@ int Extrude_ProtudeSurface(int type, int is,
     return 0;
 
   Msg::Debug("Extrude Surface %d", is);
-    
+
   chapeau = DuplicateSurface(ps, false);
   chapeau->Extrude = new ExtrudeParams(COPIED_ENTITY);
   chapeau->Extrude->fill(type, T0, T1, T2, A0, A1, A2, X0, X1, X2, alpha);
@@ -2512,7 +2514,7 @@ int Extrude_ProtudeSurface(int type, int is,
     c->Extrude->geo.Source = c2->Num;
     if(e)
       c->Extrude->mesh = e->mesh;
-  }   
+  }
 
   // FIXME: this is a really ugly hack for backward compatibility, so
   // that we don't screw up the old .geo files too much. (Before
@@ -2685,7 +2687,7 @@ void ExtrudeShapes(int type, List_T *list_in,
                    ExtrudeParams *e,
                    List_T *list_out)
 {
- 
+
   for(int i = 0; i < List_Nbr(list_in); i++){
     Shape shape;
     List_Read(list_in, i, &shape);
@@ -2755,7 +2757,7 @@ void ExtrudeShapes(int type, List_T *list_in,
         Shape top;
         top.Num = Extrude_ProtudeSurface(type, shape.Num, T0, T1, T2,
                                          A0, A1, A2, X0, X1, X2, alpha,
-                                         &pv, e);	
+                                         &pv, e);
         Surface *ps = FindSurface(top.Num);
         top.Type = ps ? ps->Typ : 0;
 
@@ -2793,10 +2795,10 @@ void ExtrudeShapes(int type, List_T *list_in,
 
 static int compareTwoPoints(const void *a, const void *b)
 {
- 
+
   Vertex *q = *(Vertex **)a;
   Vertex *w = *(Vertex **)b;
-  
+
   if(q->Typ != w->Typ)
     return q->Typ - w->Typ;
 
@@ -2859,7 +2861,7 @@ static int compareTwoSurfaces(const void *a, const void *b)
   // checking types is the "right thing" to do (see e.g. compareTwoCurves)
   // but it would break backward compatibility (see e.g. tutorial/t2.geo),
   // so let's just do it for boundary layer surfaces for now:
-  if(s1->Typ == MSH_SURF_BND_LAYER || s2->Typ == MSH_SURF_BND_LAYER || 
+  if(s1->Typ == MSH_SURF_BND_LAYER || s2->Typ == MSH_SURF_BND_LAYER ||
      s1->Typ == MSH_SURF_COMPOUND || s2->Typ == MSH_SURF_COMPOUND ){
     if(s1->Typ != s2->Typ) return s1->Typ - s2->Typ;
   }
@@ -3004,12 +3006,28 @@ static void ReplaceDuplicatePoints()
   }
   List_Delete(All);
 
-  // TODO: replace old points in physical groups
+  // Replace old points in physical groups
+  for(int i = 0; i < List_Nbr(GModel::current()->getGEOInternals()->PhysicalGroups); i++){
+    PhysicalGroup *p = *(PhysicalGroup**)List_Pointer
+      (GModel::current()->getGEOInternals()->PhysicalGroups, i);
+    if(p->Typ == MSH_PHYSICAL_POINT){
+      for(int j = 0; j < List_Nbr(p->Entities); j++){
+        int num;
+        List_Read(p->Entities, j, &num);
+        v2 = FindPoint(std::abs(num), points2delete);
+        if(v2){
+          if(!(pv2 = (Vertex **)Tree_PQuery(allNonDuplicatedPoints, &v2)))
+            Msg::Error("Weird point %d in Coherence", v2->Num);
+          else
+            List_Write(p->Entities, j, &(*pv2)->Num);
+        }
+      }
+    }
+  }
 
   Tree_Action(points2delete, Free_Vertex);
   Tree_Delete(points2delete);
   Tree_Delete(allNonDuplicatedPoints);
- 
 }
 
 static void ReplaceDuplicateCurves()
@@ -3112,7 +3130,24 @@ static void ReplaceDuplicateCurves()
   }
   List_Delete(All);
 
-  // TODO: replace old curves in physical groups
+  // Replace old curves in physical groups
+  for(int i = 0; i < List_Nbr(GModel::current()->getGEOInternals()->PhysicalGroups); i++){
+    PhysicalGroup *p = *(PhysicalGroup**)List_Pointer
+      (GModel::current()->getGEOInternals()->PhysicalGroups, i);
+    if(p->Typ == MSH_PHYSICAL_LINE){
+      for(int j = 0; j < List_Nbr(p->Entities); j++){
+        int num;
+        List_Read(p->Entities, j, &num);
+        c2 = FindCurve(std::abs(num), curves2delete);
+        if(c2){
+          if(!(pc2 = (Curve **)Tree_PQuery(allNonDuplicatedCurves, &c2)))
+            Msg::Error("Weird curve %d in Coherence", c2->Num);
+          else
+            List_Write(p->Entities, j, &(*pc2)->Num);
+        }
+      }
+    }
+  }
 
   Tree_Action(curves2delete, Free_Curve);
   Tree_Delete(curves2delete);
@@ -3204,7 +3239,24 @@ static void ReplaceDuplicateSurfaces()
   }
   List_Delete(All);
 
-  // TODO: replace old surfaces in physical groups
+  // Replace old surfaces in physical groups
+  for(int i = 0; i < List_Nbr(GModel::current()->getGEOInternals()->PhysicalGroups); i++){
+    PhysicalGroup *p = *(PhysicalGroup**)List_Pointer
+      (GModel::current()->getGEOInternals()->PhysicalGroups, i);
+    if(p->Typ == MSH_PHYSICAL_SURFACE){
+      for(int j = 0; j < List_Nbr(p->Entities); j++){
+        int num;
+        List_Read(p->Entities, j, &num);
+        s2 = FindSurface(std::abs(num), surfaces2delete);
+        if(s2){
+          if(!(ps2 = (Surface **)Tree_PQuery(allNonDuplicatedSurfaces, &s2)))
+            Msg::Error("Weird surface %d in Coherence", s2->Num);
+          else
+            List_Write(p->Entities, j, &(*ps2)->Num);
+        }
+      }
+    }
+  }
 
   Tree_Action(surfaces2delete, Free_Surface);
   Tree_Delete(surfaces2delete);

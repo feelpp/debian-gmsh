@@ -39,20 +39,18 @@ inline double computeEdgeLinearLength(BDS_Point *p1, BDS_Point *p2, GFace *f,
                                       double SCALINGU, double SCALINGV)
 {
   // FIXME SUPER HACK
-
-  //  if (CTX::instance()->mesh.recombineAll || f->meshAttributes.recombine || 1){
-  //    double quadAngle  = backgroundMesh::current()->getAngle (0.5 * (p1->u + p2->u) * SCALINGU, 0.5 * (p1->v + p2->v) * SCALINGV,0);
-  //    const double a [2] = {p1->u,p1->v};
-  //    const double b [2] = {p2->u,p2->v};
-  //    return lengthInfniteNorm(a,b, quadAngle);
-  //  }
+   // if (CTX::instance()->mesh.recombineAll || f->meshAttributes.recombine || 1){
+   //   double quadAngle  = backgroundMesh::current()->getAngle (0.5 * (p1->u + p2->u) * SCALINGU, 0.5 * (p1->v + p2->v) * SCALINGV,0);
+   //   const double a [2] = {p1->u,p1->v};
+   //   const double b [2] = {p2->u,p2->v};
+   //   return lengthInfniteNorm(a,b, quadAngle);
+   // }
 
   GPoint GP = f->point(SPoint2(0.5 * (p1->u + p2->u) * SCALINGU,
                                0.5 * (p1->v + p2->v) * SCALINGV));
 
   if (!GP.succeeded())
     return computeEdgeLinearLength(p1,p2);
-
 
   const double dx1 = p1->X - GP.x();
   const double dy1 = p1->Y - GP.y();
@@ -138,6 +136,7 @@ inline double computeEdgeLinearLength(BDS_Edge *e, GFace *f,
 
 double NewGetLc(BDS_Point *p)
 {
+
   return Extend1dMeshIn2dSurfaces() ?
     std::min(p->lc(), p->lcBGM()) : p->lcBGM();
 }
@@ -167,6 +166,7 @@ double NewGetLc(BDS_Edge *e, GFace *f, double SCALINGU, double SCALINGV)
 {
   double linearLength = computeEdgeLinearLength(e, f, SCALINGU, SCALINGV);
   double l = correctLC_ (e->p1,e->p2,f, SCALINGU, SCALINGV);
+  //printf("BDS correct lc =%g lreal=%g \n", l,linearLength);
   return linearLength / l;
 }
 
@@ -180,8 +180,9 @@ double NewGetLc(BDS_Point *p1, BDS_Point *p2, GFace *f, double su, double sv)
 void computeMeshSizeFieldAccuracy(GFace *gf, BDS_Mesh &m, double &avg,
                                   double &max_e, double &min_e, int &nE, int &GS)
 {
+
   std::list<BDS_Edge*>::iterator it = m.edges.begin();
-  avg = 0;
+  avg = 0.0;
   min_e = 1.e22;
   max_e = 0;
   nE = 0;
@@ -199,6 +200,7 @@ void computeMeshSizeFieldAccuracy(GFace *gf, BDS_Mesh &m, double &avg,
     }
     ++it;
   }
+  avg = 100*exp(1./nE*avg);
 }
 
 // SWAP TESTS i.e. tell if swap should be done

@@ -307,6 +307,7 @@ static bool algoDelaunay2D(GFace *gf)
      gf->getMeshingAlgo() == ALGO_2D_BAMG ||
      gf->getMeshingAlgo() == ALGO_2D_FRONTAL ||
      gf->getMeshingAlgo() == ALGO_2D_FRONTAL_QUAD ||
+     gf->getMeshingAlgo() == ALGO_2D_PACK_PRLGRMS ||
      gf->getMeshingAlgo() == ALGO_2D_BAMG)
     return true;
 
@@ -1092,38 +1093,42 @@ bool meshGenerator(GFace *gf, int RECUR_ITER,
   Msg::Debug("Starting to add internal points");
   // start mesh generation
   if(!algoDelaunay2D(gf) && !onlyInitialMesh){
-    //    if(CTX::instance()->mesh.recombineAll || gf->meshAttributes.recombine || 1) {
-    //      printf("coucou here !!!\n");
-    //      backgroundMesh::unset();
-    //      buildBackGroundMesh (gf);
-    //    }
+       // if(CTX::instance()->mesh.recombineAll || gf->meshAttributes.recombine || 1) {
+       //   backgroundMesh::unset();
+       //   buildBackGroundMesh (gf);
+       // }
     refineMeshBDS(gf, *m, CTX::instance()->mesh.refineSteps, true,
                   &recoverMapInv);
     optimizeMeshBDS(gf, *m, 2);
     refineMeshBDS(gf, *m, CTX::instance()->mesh.refineSteps, false,
                 &recoverMapInv);
     optimizeMeshBDS(gf, *m, 2);
-    //    if(CTX::instance()->mesh.recombineAll || gf->meshAttributes.recombine || 1) {
-    //      backgroundMesh::unset();
-    //    }
+       // if(CTX::instance()->mesh.recombineAll || gf->meshAttributes.recombine || 1) {
+       //   backgroundMesh::unset();
+       // }
   }
+
   /*
   computeMeshSizeFieldAccuracy(gf, *m, gf->meshStatistics.efficiency_index,
-                               gf->meshStatistics.longest_edge_length,
-                               gf->meshStatistics.smallest_edge_length,
-                               gf->meshStatistics.nbEdge,
-                               gf->meshStatistics.nbGoodLength);
+			       gf->meshStatistics.longest_edge_length,
+			       gf->meshStatistics.smallest_edge_length,
+			       gf->meshStatistics.nbEdge,
+			       gf->meshStatistics.nbGoodLength);
   */
+  //printf("=== Efficiency index is tau=%g\n", gf->meshStatistics.efficiency_index);
+
   gf->meshStatistics.status = GFace::DONE;
 
   // fill the small gmsh structures
   BDS2GMSH(m, gf, recoverMap);
 
-  // BOUNDARY LAYER
+  bool infty = false;
+  if (gf->getMeshingAlgo() == ALGO_2D_FRONTAL_QUAD || gf->getMeshingAlgo() == ALGO_2D_PACK_PRLGRMS)
+    infty = true;
   if (!onlyInitialMesh) {
-    if (gf->getMeshingAlgo() == ALGO_2D_FRONTAL_QUAD) 
+    if (infty)
       buildBackGroundMesh (gf);
-      //      backgroundMesh::setCrossFieldsByDistance(gf);
+    // BOUNDARY LAYER
     modifyInitialMeshForTakingIntoAccountBoundaryLayers(gf);
   }
 
@@ -1136,6 +1141,9 @@ bool meshGenerator(GFace *gf, int RECUR_ITER,
     else if(gf->getMeshingAlgo() == ALGO_2D_FRONTAL_QUAD){
       bowyerWatsonFrontalLayers(gf,true);
     }
+    else if(gf->getMeshingAlgo() == ALGO_2D_PACK_PRLGRMS){
+      bowyerWatsonParallelograms(gf);
+    }
     else if(gf->getMeshingAlgo() == ALGO_2D_DELAUNAY ||
             gf->getMeshingAlgo() == ALGO_2D_AUTO)
       bowyerWatson(gf);
@@ -1143,7 +1151,8 @@ bool meshGenerator(GFace *gf, int RECUR_ITER,
       bowyerWatson(gf,15000);
       meshGFaceBamg(gf);
     }
-    laplaceSmoothing(gf, CTX::instance()->mesh.nbSmoothing);
+    if (!infty || !(CTX::instance()->mesh.recombineAll || gf->meshAttributes.recombine)) 
+      laplaceSmoothing(gf, CTX::instance()->mesh.nbSmoothing, infty);
   }
 
   if(debug){
@@ -1155,6 +1164,17 @@ bool meshGenerator(GFace *gf, int RECUR_ITER,
   }
   if(CTX::instance()->mesh.remove4triangles)
     removeFourTrianglesNodes(gf,false);
+
+  //Emi print efficiency index
+  /*
+  gf->computeMeshSizeFieldAccuracy(gf->meshStatistics.efficiency_index,
+  				   gf->meshStatistics.longest_edge_length,
+  				   gf->meshStatistics.smallest_edge_length,
+  				   gf->meshStatistics.nbEdge,
+  				   gf->meshStatistics.nbGoodLength);
+  */
+  //printf("----- Efficiency index is tau=%g\n", gf->meshStatistics.efficiency_index);
+
 
   // delete the mesh
   delete m;
@@ -1174,7 +1194,7 @@ bool meshGenerator(GFace *gf, int RECUR_ITER,
 			      gf->additionalVertices.end());
   gf->additionalVertices.clear();
 
-  return true;
+   return true;
 }
 
 // this function buils a list of vertices (BDS) that are consecutive
@@ -1439,7 +1459,7 @@ static bool meshGeneratorElliptic(GFace *gf, bool debug = true)
   int nbBoundaries = gf->edges().size();
 
   if (center && recombine && nbBoundaries == 2) {
-    printf("--> need for elliptic grid generator \n");
+    printf("--> regular periodic grid generator (elliptic smooth) \n");
     //bool success  = createRegularTwoCircleGrid(center, gf);
     bool success  = createRegularTwoCircleGridPeriodic(center, gf);
     return success;
@@ -1730,6 +1750,7 @@ static bool meshGeneratorPeriodic(GFace *gf, bool debug = true)
                                  gf->meshStatistics.nbEdge,
                                  gf->meshStatistics.nbGoodLength);*/
     gf->meshStatistics.status = GFace::DONE;
+
     //    if(CTX::instance()->mesh.recombineAll || gf->meshAttributes.recombine || 1) {
     //            backgroundMesh::unset();
     //    }
@@ -1870,6 +1891,7 @@ void meshGFace::operator() (GFace *gf, bool print)
   case ALGO_2D_DELAUNAY : algo = "Delaunay"; break;
   case ALGO_2D_MESHADAPT_OLD : algo = "MeshAdapt (old)"; break;
   case ALGO_2D_BAMG : algo = "Bamg"; break;
+  case ALGO_2D_PACK_PRLGRMS : algo = "Square Packing"; break;
   case ALGO_2D_AUTO :
     algo = (gf->geomType() == GEntity::Plane) ? "Delaunay" : "MeshAdapt";
     break;
@@ -1889,9 +1911,8 @@ void meshGFace::operator() (GFace *gf, bool print)
   Msg::Debug("Generating the mesh");
 
   if(meshGeneratorElliptic(gf)){
-    printf("--> elliptic grid generator for face %d done \n", gf->tag());
-    //gf->meshStatistics.status = GFace::DONE;
-    //return;
+    gf->meshStatistics.status = GFace::DONE;
+    return;
   }
 
   if ((gf->getNativeType() != GEntity::AcisModel ||
@@ -2077,6 +2098,16 @@ void partitionAndRemesh(GFaceCompound *gf)
       }
       gf->quadrangles.push_back(new MQuadrangle(v[0], v[1], v[2], v[3]));
     }
+
+    //update mesh statistics
+    gf->meshStatistics.efficiency_index += gfc->meshStatistics.efficiency_index;
+    gf->meshStatistics.longest_edge_length = std::max(gf->meshStatistics.longest_edge_length,
+						     gfc->meshStatistics.longest_edge_length);
+    gf->meshStatistics.smallest_edge_length= std::min(gf->meshStatistics.smallest_edge_length,
+						       gfc->meshStatistics.smallest_edge_length);
+    gf->meshStatistics.nbGoodLength  += gfc->meshStatistics.nbGoodLength;
+    gf->meshStatistics.nbGoodQuality += gfc->meshStatistics.nbGoodQuality;
+    gf->meshStatistics.nbEdge += gfc->meshStatistics.nbEdge;
 
   }
 

@@ -8,6 +8,7 @@
 
 #include <set>
 #include <fstream>
+#include <time.h>
 #include "meshGFaceLloyd.h"
 #include "DivideAndConquer.h"
 #include "GFace.h"
@@ -364,6 +365,49 @@ void callback(const alglib::real_1d_array& x,double& func,alglib::real_1d_array&
   }
 }
 
+void verification(alglib::real_1d_array& x,void* ptr){
+  int num;
+  int index;
+  int dimension;
+  double e;
+  double func;
+  double R,L,U,D;
+  wrapper* w;
+  DocRecord* pointer;
+	
+  w = static_cast<wrapper*>(ptr);
+  dimension = w->get_dimension();
+  pointer = w->get_triangulator();
+  num = pointer->numPoints;
+  srand(time(NULL));
+  index = rand()%num;
+  e = 0.0000001;
+	
+  alglib::real_1d_array grad;
+  grad.setlength(dimension);
+	
+  x[index] = x[index] + e;
+  callback(x,R,grad,ptr);
+  x[index] = x[index] - e;
+	
+  x[index] = x[index] - e;
+  callback(x,L,grad,ptr);
+  x[index] = x[index] + e;
+	
+  x[index + dimension/2] = x[index + dimension/2] + e;
+  callback(x,U,grad,ptr);
+  x[index + dimension/2] = x[index + dimension/2] - e;
+	
+  x[index + dimension/2] = x[index + dimension/2] - e;
+  callback(x,D,grad,ptr);
+  x[index + dimension/2] = x[index + dimension/2] + e;
+	
+  callback(x,func,grad,ptr);
+	
+  printf("%f %f\n",(R-L)/(2.0*e),(U-D)/(2.0*e));
+  printf("%f %f\n",grad[index],grad[index + dimension/2]);
+}
+
 /****************class smoothing****************/
 
 smoothing::smoothing(int param1,int param2){
@@ -483,6 +527,10 @@ void smoothing::optimize_face(GFace* gf){
   w.set_triangulator(&triangulator);
   w.set_octree(octree);
 
+  /*if(num_interior>1){
+    verification(x,&w);
+  }*/	
+
   if(num_interior>1){
     minlbfgscreate(2*num_interior,4,x,state);
 	minlbfgssetscale(state,scales);
@@ -524,24 +572,22 @@ void smoothing::optimize_face(GFace* gf){
     }
   }
 
-  // destroy the mesh
   deMeshGFace killer;
   killer(gf);
 
-  // put all additional vertices in the list of
-  // vertices
+  int option;
+  option = gf->getMeshingAlgo();
+  gf->setMeshingAlgo(ALGO_2D_MESHADAPT);
+	
   gf->additionalVertices = mesh_vertices;
-  // remesh the face with all those vertices in
-  Msg::Info("Lloyd remeshing of face %d ", gf->tag());
   meshGFace mesher;
   mesher(gf);
-  // assign those vertices to the face internal vertices
-  gf->mesh_vertices.insert(gf->mesh_vertices.begin(),
-                           gf->additionalVertices.begin(),
-                           gf->additionalVertices.end());
-  // clear the list of additional vertices
+  
+  gf->mesh_vertices.insert(gf->mesh_vertices.begin(),gf->additionalVertices.begin(),gf->additionalVertices.end()); //?
   gf->additionalVertices.clear();
 
+  gf->setMeshingAlgo(option);	
+	
   free(initial_conditions);
   free(variables_scales);
 }

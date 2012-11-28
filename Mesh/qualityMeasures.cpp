@@ -172,13 +172,43 @@ double qmTet(const double &x1, const double &y1, const double &z1,
       return 2. * sqrt(6.) * rhoin / l;
     }
     break;
+  case QMTET_COND:
+    {
+      /// condition number is defined as (see Knupp & Freitag in IJNME) 
+      double INVW[3][3] = {{1,-1./sqrt(3.),-1./sqrt(6.)},{0,2/sqrt(3.),-1./sqrt(6.)},{0,0,sqrt(1.5)}};
+      double A[3][3] = {{x2-x1,y2-y1,z2-z1},{x3-x1,y3-y1,z3-z1},{x4-x1,y4-y1,z4-z1}};
+      double S[3][3],INVS[3][3];
+      matmat(A,INVW,S);
+      *volume = inv3x3(S,INVS) * 0.70710678118654762;//2/sqrt(2);
+      double normS = norm2 (S);
+      double normINVS = norm2 (INVS);
+      return normS * normINVS;      
+    }
   default:
     Msg::Error("Unknown quality measure");
     return 0.;
   }
 }
 
-double mesh_functional_distorsion(MElement *t, double u, double v)
+/*
+double conditionNumberAndDerivativeOfTet(const double &x1, const double &y1, const double &z1,
+					 const double &x2, const double &y2, const double &z2,
+					 const double &x3, const double &y3, const double &z3,
+					 const double &x4, const double &y4, const double &z4){
+
+  double INVW[3][3] = {{1,-1./sqrt(3.),-1./sqrt(6.)},{0,2/sqrt(3.),-1./sqrt(6.)},{0,0,sqrt(1.5)}};
+      double A[3][3] = {{x2-x1,y2-y1,z2-z1},{x3-x1,y3-y1,z3-z1},{x4-x1,y4-y1,z4-z1}};
+      double S[3][3],INVS[3][3];
+      matmat(A,INVW,S);
+      double sigma = inv3x3(S,INVS);
+      double normS = norm2 (S);
+      double normINVS = norm2 (INVS);
+      conditionNumber = normS * normINVS;      
+  
+}
+*/
+
+double mesh_functional_distorsion_2D(MElement *t, double u, double v)
 {
   // compute uncurved element jacobian d_u x and d_v x
   double mat[3][3];
@@ -223,25 +253,25 @@ static double MINQ (double a, double b, double c){
 
 double mesh_functional_distorsion_p2_bezier_refined(MTriangle *t)
 {
-  double J1 =mesh_functional_distorsion(t,0.0,0.0);
-  double J2 =mesh_functional_distorsion(t,1.0,0.0);
-  double J3 =mesh_functional_distorsion(t,0.0,1.0);
-  double J4 =mesh_functional_distorsion(t,0.5,0.0);
-  double J5 =mesh_functional_distorsion(t,0.5,0.5);
-  double J6 =mesh_functional_distorsion(t,0.0,0.5);
+  double J1 =mesh_functional_distorsion_2D(t,0.0,0.0);
+  double J2 =mesh_functional_distorsion_2D(t,1.0,0.0);
+  double J3 =mesh_functional_distorsion_2D(t,0.0,1.0);
+  double J4 =mesh_functional_distorsion_2D(t,0.5,0.0);
+  double J5 =mesh_functional_distorsion_2D(t,0.5,0.5);
+  double J6 =mesh_functional_distorsion_2D(t,0.0,0.5);
 
-  double J36 =mesh_functional_distorsion(t,0.0,.75);
-  double J35 =mesh_functional_distorsion(t,0.25,.75);
-  double J56 =mesh_functional_distorsion(t,0.25,.5);
+  double J36 =mesh_functional_distorsion_2D(t,0.0,.75);
+  double J35 =mesh_functional_distorsion_2D(t,0.25,.75);
+  double J56 =mesh_functional_distorsion_2D(t,0.25,.5);
 
-  double J16 =mesh_functional_distorsion(t,0.0,.25);
-  double J14 =mesh_functional_distorsion(t,0.25,.0);
-  double J46 =mesh_functional_distorsion(t,0.25,.25);
+  double J16 =mesh_functional_distorsion_2D(t,0.0,.25);
+  double J14 =mesh_functional_distorsion_2D(t,0.25,.0);
+  double J46 =mesh_functional_distorsion_2D(t,0.25,.25);
 
 
-  double J45 =mesh_functional_distorsion(t,0.5,.25);
-  double J52 =mesh_functional_distorsion(t,0.75,.25);
-  double J24 =mesh_functional_distorsion(t,0.75,.0);
+  double J45 =mesh_functional_distorsion_2D(t,0.5,.25);
+  double J52 =mesh_functional_distorsion_2D(t,0.75,.25);
+  double J24 =mesh_functional_distorsion_2D(t,0.75,.0);
 
   double d[15] = {
     J1,J6,J4,2*J16-0.5*(J1+J6),2*J14-0.5*(J1+J4),2*J46-0.5*(J6+J4),
@@ -252,12 +282,12 @@ double mesh_functional_distorsion_p2_bezier_refined(MTriangle *t)
 
 double mesh_functional_distorsion_p2_exact(MTriangle *t)
 {
-  double J1 =mesh_functional_distorsion(t,0.0,0.0);
-  double J2 =mesh_functional_distorsion(t,1.0,0.0);
-  double J3 =mesh_functional_distorsion(t,0.0,1.0);
-  double J4 =mesh_functional_distorsion(t,0.5,0.0);
-  double J5 =mesh_functional_distorsion(t,0.5,0.5);
-  double J6 =mesh_functional_distorsion(t,0.0,0.5);
+  double J1 =mesh_functional_distorsion_2D(t,0.0,0.0);
+  double J2 =mesh_functional_distorsion_2D(t,1.0,0.0);
+  double J3 =mesh_functional_distorsion_2D(t,0.0,1.0);
+  double J4 =mesh_functional_distorsion_2D(t,0.5,0.0);
+  double J5 =mesh_functional_distorsion_2D(t,0.5,0.5);
+  double J6 =mesh_functional_distorsion_2D(t,0.0,0.5);
 
   const double a = J1;
   const double b = -3*J1-J2+4*J4;
@@ -317,7 +347,7 @@ double mesh_functional_distorsion_pN(MElement *t)
       v = -1 + 2*v;
     }
 
-    Ji(i) = mesh_functional_distorsion(t,u,v);
+    Ji(i) = mesh_functional_distorsion_2D(t,u,v);
   }
 
   fullVector<double> Bi( jac->matrixLag2Bez.size1() );
@@ -376,16 +406,16 @@ double qmDistorsionOfMapping (MQuadrangle *e)
 }
 
 
-static double mesh_functional_distorsion(MTetrahedron *t, double u, double v, double w)
+double mesh_functional_distorsion_3D(MElement *t, double u, double v, double w)
 {
   // compute uncurved element jacobian d_u x and d_v x
   double mat[3][3];
-  t->getPrimaryJacobian(u, v, w, mat);
-  const double det1 = det3x3(mat);
-  t->getJacobian(u, v, w, mat);
-  const double detN = det3x3(mat);
+  const double det1 = t->getPrimaryJacobian(u, v, w, mat);
+//  const double det1 = det3x3(mat);
+  const double detN = t->getJacobian(u, v, w, mat);
+//  const double detN = det3x3(mat);
   if (det1 == 0 || detN == 0) return 0;
-  double dist = det1 / detN;
+  double dist = detN / det1;
   return dist;
 }
 
@@ -397,7 +427,7 @@ double qmDistorsionOfMapping(MTetrahedron *t)
     const double u = jac->points(i,0);
     const double v = jac->points(i,1);
     const double w = jac->points(i,2);
-    Ji(i) = mesh_functional_distorsion(t,u,v,w);
+    Ji(i) = mesh_functional_distorsion_3D(t,u,v,w);
   }
 
   fullVector<double> Bi( jac->matrixLag2Bez.size1() );
@@ -429,7 +459,7 @@ double qmTriangleAngles (MTriangle *e) {
   rot[2][0]= 0; rot[2][1]=0; rot[2][2]=1;
   double tmp[3][3];
 
-  // double minAngle = 120.0;
+  //double minAngle = 120.0;
   for (int i = 0; i < e->getNumPrimaryVertices(); i++) {
     const double u = i == 1 ? 1 : 0;
     const double v = i == 2 ? 1 : 0;
@@ -468,13 +498,12 @@ double qmTriangleAngles (MTriangle *e) {
     double quality = (atan(a*(x+M_PI/9)) + atan(a*(M_PI/9-x)))/den;
     worst_quality = std::min(worst_quality, quality);
 
-    // minAngle = std::min(angle, minAngle);
-    // printf("Angle %g ", angle);
+    //minAngle = std::min(angle, minAngle);
+    //printf("Angle %g ", angle);
     // printf("Quality %g\n",quality);
   }
-  // printf("MinAngle %g ", minAngle);
-  // printf("\n");
-  // return minAngle;
+  //printf("MinAngle %g \n", minAngle);
+  //return minAngle;
 
   return worst_quality;
 }
@@ -489,10 +518,10 @@ double qmQuadrangleAngles (MQuadrangle *e) {
 
   // This matrix is used to "rotate" the triangle to get each vertex
   // as the "origin" of the mapping in turn
-  double rot[3][3];
-  rot[0][0]=-1; rot[0][1]=1; rot[0][2]=0;
-  rot[1][0]=-1; rot[1][1]=0; rot[1][2]=0;
-  rot[2][0]= 0; rot[2][1]=0; rot[2][2]=1;
+  //double rot[3][3];
+  //rot[0][0]=-1; rot[0][1]=1; rot[0][2]=0;
+  //rot[1][0]=-1; rot[1][1]=0; rot[1][2]=0;
+  //rot[2][0]= 0; rot[2][1]=0; rot[2][2]=1;
   //double tmp[3][3];
 
   const double u[9] = {-1,-1, 1, 1, 0,0,1,-1,0};
@@ -530,12 +559,13 @@ double qmQuadrangleAngles (MQuadrangle *e) {
 
     double c;
     prosca(v1,v2,&c);
-    //    printf("Youhou %g %g\n",c,acos(c)*180/M_PI);
     double x = fabs(acos(c))-M_PI/2;
+    //double angle = fabs(acos(c))*180/M_PI;
     double quality = (atan(a*(x+M_PI/4)) + atan(a*(2*M_PI/4 - (x+M_PI/4))))/den;
     worst_quality = std::min(worst_quality, quality);
   }
-
+  
   return worst_quality;
+
 }
 

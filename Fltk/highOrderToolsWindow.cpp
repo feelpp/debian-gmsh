@@ -35,7 +35,10 @@ typedef unsigned long intptr_t;
 #include "Options.h"
 #include "Context.h"
 #include "HighOrder.h"
+
+#if defined(HAVE_OPTHOM)
 #include "OptHomRun.h"
+#endif
 
 #if defined(HAVE_PARSER)
 #include "Parser.h"
@@ -46,11 +49,11 @@ static void change_completeness_cb(Fl_Widget *w, void *data)
   highOrderToolsWindow *o = FlGui::instance()->highordertools;
   bool onlyVisible = (bool)o->butt[1]->value();
   if (!o->complete){
-    SetHighOrderComplete (GModel::current(), onlyVisible);
+    SetHighOrderComplete(GModel::current(), onlyVisible);
     o->complete = 1;
   }
   else if (o->complete){
-    SetHighOrderInComplete (GModel::current(), onlyVisible);
+    SetHighOrderInComplete(GModel::current(), onlyVisible);
     o->complete = 0;
   }
   CTX::instance()->mesh.changed |= (ENT_LINE | ENT_SURFACE | ENT_VOLUME);
@@ -59,6 +62,7 @@ static void change_completeness_cb(Fl_Widget *w, void *data)
 
 static void highordertools_runp_cb(Fl_Widget *w, void *data)
 {
+#if defined(HAVE_OPTHOM)
   highOrderToolsWindow *o = FlGui::instance()->highordertools;
 
   int order = (int)o->value[0]->value();
@@ -73,22 +77,25 @@ static void highordertools_runp_cb(Fl_Widget *w, void *data)
 
   distanceFromMeshToGeometry_t dist;
   computeDistanceFromMeshToGeometry (GModel::current(), dist);
-  for (std::map<GEntity*, double> ::iterator it = dist.d2.begin(); it !=dist.d2.end();++it){
-    printf ("GEntity %d of dim %d : dist %12.5E\n",it->first->tag(),it->first->dim(),it->second);
+  for (std::map<GEntity*, double> ::iterator it = dist.d2.begin();
+       it !=dist.d2.end();++it){
+    printf ("GEntity %d of dim %d : dist %12.5E\n",
+            it->first->tag(), it->first->dim(), it->second);
   }
 
   CTX::instance()->mesh.changed |= (ENT_LINE | ENT_SURFACE | ENT_VOLUME);
   drawContext::global()->draw();
+#endif
 }
 
 static void chooseopti_cb(Fl_Widget *w, void *data)
 {
+#if defined(HAVE_OPTHOM)
   highOrderToolsWindow *o = FlGui::instance()->highordertools;
   int elastic = o->choice[2]->value();
 
   if (elastic == 1){
     o->choice[0]->deactivate();
-    o->choice[1]->deactivate();
     for (int i=3;i<=6;i++)
       o->value[i]->deactivate();
     //   o->push[1]->deactivate();
@@ -96,16 +103,16 @@ static void chooseopti_cb(Fl_Widget *w, void *data)
   else {
     o->push[0]->activate();
     o->choice[0]->activate();
-    o->choice[1]->activate();
     for (int i=3;i<=6;i++)
       o->value[i]->activate();
     //    o->push[1]->activate();
   }
-
+#endif
 }
 
 static void highordertools_runelas_cb(Fl_Widget *w, void *data)
 {
+#if defined(HAVE_OPTHOM)
   highOrderToolsWindow *o = FlGui::instance()->highordertools;
 
   bool elastic = o->choice[2]->value() == 1;
@@ -123,17 +130,18 @@ static void highordertools_runelas_cb(Fl_Widget *w, void *data)
     p.onlyVisible = onlyVisible;
     p.dim  = GModel::current()->getDim();//o->meshOrder;
     p.itMax = (int) o->value[3]->value();
+    p.optPassMax = (int) o->value[4]->value();
     p.weightFixed =  o->value[5]->value();
     p.weightFree =  o->value[6]->value();
     p.DistanceFactor =  o->value[7]->value();
     p.method =  o->CAD ? (int)o->choice[0]->value() : 2;
-    p.filter =  (int)o->choice[1]->value();
     HighOrderMeshOptimizer (GModel::current(),p);
     printf("CPU TIME = %4f seconds\n",p.CPU);
   }
 
   CTX::instance()->mesh.changed |= (ENT_LINE | ENT_SURFACE | ENT_VOLUME);
   drawContext::global()->draw();
+#endif
 }
 
 highOrderToolsWindow::highOrderToolsWindow(int deltaFontSize)
@@ -141,7 +149,7 @@ highOrderToolsWindow::highOrderToolsWindow(int deltaFontSize)
   FL_NORMAL_SIZE -= deltaFontSize;
 
   int width = 3 * IW + 4 * WB;
-  int height = 23 * BH;
+  int height = 25 * BH;
 
   win = new paletteWindow
     (width, height, CTX::instance()->nonModalWindows ? true : false, "High Order Tools");
@@ -150,9 +158,8 @@ highOrderToolsWindow::highOrderToolsWindow(int deltaFontSize)
   int y = WB;
   int x = 2 * WB;
 
-
   butt[1] = new Fl_Check_Button
-    (x,y, 1.5*IW-WB, BH, "Apply to visible entities only");
+    (x,y, 1.5*IW-WB, BH, "Visible entities only");
   butt[1]->type(FL_TOGGLE_BUTTON);
   butt[1]->value(1);
 
@@ -268,29 +275,16 @@ highOrderToolsWindow::highOrderToolsWindow(int deltaFontSize)
   choice[2]->callback(chooseopti_cb);
 
   static Fl_Menu_Item menu_objf[] = {
-    {"CAD + FIXBND", 0, 0, 0},
-    {"CAD + FREEBND", 0, 0, 0},
-    {"MESH ONLY", 0, 0, 0},
-    {0}
-  };
-
-  static Fl_Menu_Item menu_strategy[] = {
-    {"GLOBAL", 0, 0, 0},
-    {"BLOBS ", 0, 0, 0},
+    {"Fixed", 0, 0, 0},
+    {"Free", 0, 0, 0},
     {0}
   };
 
   y += BH;
   choice[0] = new Fl_Choice
-    (x,y, IW, BH, "Objective function");
+    (x,y, IW, BH, "Boundary nodes");
   choice[0]->menu(menu_objf);
   choice[0]->align(FL_ALIGN_RIGHT);
-
-  y += BH;
-  choice[1] = new Fl_Choice
-    (x,y, IW, BH, "Strategy");
-  choice[1]->menu(menu_strategy);
-  choice[1]->align(FL_ALIGN_RIGHT);
 
   y += BH;
   value[5] = new Fl_Value_Input
@@ -305,7 +299,7 @@ highOrderToolsWindow::highOrderToolsWindow(int deltaFontSize)
 
   y += BH;
   value[3] = new Fl_Value_Input
-    (x,y, IW, BH, "Maximum number of iterations");
+    (x,y, IW, BH, "Max. number of iterations");
   value[3]->minimum(1);
   value[3]->maximum(10000);
   value[3]->step(10);
@@ -314,15 +308,16 @@ highOrderToolsWindow::highOrderToolsWindow(int deltaFontSize)
 
   y += BH;
   value[4] = new Fl_Value_Input
-    (x,y, IW, BH, "Tolerance");
-  value[4]->minimum(1.e-12);
-  value[4]->maximum(0.1);
-  value[4]->step(1.e-5);
+    (x,y, IW, BH, "Max. number of optimization passes");
+  value[4]->minimum(1);
+  value[4]->maximum(100);
+  value[4]->step(1);
   value[4]->align(FL_ALIGN_RIGHT);
-  value[4]->value(1.e-4);
+  value[4]->value(50);
 
+  y += 1.5*BH;
   push[1] = new Fl_Button
-    (width - BB - 2 * WB, y, BB, BH, "Apply");
+    (x,y, IW, BH, "Apply");
   push[1]->callback(highordertools_runelas_cb);
 
   y += 1.5*BH;
@@ -341,17 +336,20 @@ highOrderToolsWindow::highOrderToolsWindow(int deltaFontSize)
 
 void highOrderToolsWindow::show(bool redrawOnly)
 {
-  getMeshInfoForHighOrder (GModel::current(),meshOrder,complete, CAD);
+  getMeshInfoForHighOrder(GModel::current(), meshOrder, complete, CAD);
 
   if(win->shown() && redrawOnly)
     win->redraw();
   else {
     value[0]->value(meshOrder);
     butt[0]->value(!complete);
-    if (CAD)output[0]->value("Available");
+    if (CAD) {
+      output[0]->value("Available");
+      choice[0]->value(1);
+    }
     else {
       output[0]->value("Not Available");
-      choice[0]->value(2);
+      choice[0]->deactivate();
     }
     win->show();
   }

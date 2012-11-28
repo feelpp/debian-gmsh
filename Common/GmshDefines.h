@@ -197,8 +197,12 @@
 #define MSH_PYR_245 131
 // Additional types
 #define MSH_PYR_1   132
+#define MSH_PNT_SUB 133
+#define MSH_LIN_SUB 134
+#define MSH_TRI_SUB 135
+#define MSH_TET_SUB 136
 
-#define MSH_NUM_TYPE 132
+#define MSH_NUM_TYPE 136
 
 // Geometric entities
 #define ENT_NONE     0
@@ -216,6 +220,7 @@
 #define ALGO_2D_FRONTAL        6
 #define ALGO_2D_BAMG           7
 #define ALGO_2D_FRONTAL_QUAD   8
+#define ALGO_2D_PACK_PRLGRMS   9
 
 // 3D meshing algorithms (numbers should not be changed)
 #define ALGO_3D_DELAUNAY       1

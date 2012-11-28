@@ -14,6 +14,31 @@
 #include "linalg.h"
 #include "optimization.h"
 
+static inline double compute_f(double v, double barrier)
+{
+  if ((v > barrier && barrier < 1) || (v < barrier && barrier > 1)) {
+    const double l = log((v - barrier) / (1 - barrier));
+    const double m = (v - 1);
+    return l * l + m * m;
+  }
+  else return 1.e300;
+//  if (v < 1.) return pow(1.-v,powM);
+//  if (v < 1.) return exp((long double)pow(1.-v,3));
+//  else return pow(v-1.,powP);
+}
+
+static inline double compute_f1(double v, double barrier)
+{
+  if ((v > barrier && barrier < 1) || (v < barrier && barrier > 1)) {
+    return 2 * (v - 1) + 2 * log((v - barrier) / (1 - barrier)) / (v - barrier);
+  }
+  else return barrier < 1 ? -1.e300 : 1e300;
+//  if (v < 1.) return -powM*pow(1.-v,powM-1.);
+//  if (v < 1.) return -3.*pow(1.-v,2)*exp((long double)pow(1.-v,3));
+//  else return powP*pow(v-1.,powP-1.);
+}
+
+
 
 
 // Constructor
@@ -38,12 +63,16 @@ bool OptHOM::addJacObjGrad(double &Obj, alglib::real_1d_array &gradObj)
     mesh.scaledJacAndGradients (iEl,sJ,gSJ);
     
     for (int l = 0; l < mesh.nBezEl(iEl); l++) {
-      Obj += compute_f(sJ[l]);
-      const double f1 = compute_f1(sJ[l]);
+      double f1 = compute_f1(sJ[l], jacBar);
+      Obj += compute_f(sJ[l], jacBar);
+      if (_optimizeBarrierMax) {
+        Obj += compute_f(sJ[l], barrier_min);
+        f1 += compute_f1(sJ[l], barrier_min);
+      }
       for (int iPC = 0; iPC < mesh.nPCEl(iEl); iPC++)
         gradObj[mesh.indPCEl(iEl,iPC)] += f1*gSJ[mesh.indGSJ(iEl,l,iPC)];
-      minJac = std::min(minJac,sJ[l]);
-      maxJac = std::max(maxJac,sJ[l]);
+      minJac = std::min(minJac, sJ[l]);
+      maxJac = std::max(maxJac, sJ[l]);
     }
   }
 
@@ -63,8 +92,8 @@ bool OptHOM::addMetricMinObjGrad(double &Obj, alglib::real_1d_array &gradObj)
     mesh.metricMinAndGradients (iEl,sJ,gSJ);
     
     for (int l = 0; l < mesh.nBezEl(iEl); l++) {
-      Obj += compute_f(sJ[l]);
-      const double f1 = compute_f1(sJ[l]);
+      Obj += compute_f(sJ[l], jacBar);
+      const double f1 = compute_f1(sJ[l], jacBar);
       for (int iPC = 0; iPC < mesh.nPCEl(iEl); iPC++)
         gradObj[mesh.indPCEl(iEl,iPC)] += f1*gSJ[mesh.indGSJ(iEl,l,iPC)];
       minJac = std::min(minJac, sJ[l]);
@@ -115,9 +144,7 @@ void OptHOM::evalObjGrad(const alglib::real_1d_array &x, double &Obj, alglib::re
   addDistObjGrad(lambda, lambda2, Obj, gradObj);
   if(_optimizeMetricMin)
     addMetricMinObjGrad(Obj, gradObj);
-  
-
-  if ((minJac > barrier_min) && (maxJac < barrier_max)) {
+  if ((minJac > barrier_min) && (maxJac < barrier_max || !_optimizeBarrierMax)) {
     printf("INFO: reached %s (%g %g) requirements, setting null gradient\n", _optimizeMetricMin ? "svd" : "jacobian", minJac, maxJac);
     Obj = 0.;
     for (int i = 0; i < gradObj.length(); i++) gradObj[i] = 0.;
@@ -264,7 +291,7 @@ void OptHOM::OptimPass(alglib::real_1d_array &x, const alglib::real_1d_array &in
 
 
 
-int OptHOM::optimize(double weightFixed, double weightFree, double b_min, double b_max, bool optimizeMetricMin, int pInt, int itMax)
+int OptHOM::optimize(double weightFixed, double weightFree, double b_min, double b_max, bool optimizeMetricMin, int pInt, int itMax, int optPassMax)
 {
 
   barrier_min = b_min;
@@ -296,6 +323,7 @@ int OptHOM::optimize(double weightFixed, double weightFree, double b_min, double
   jacBar = jacBarStart;
   setBarrierTerm(jacBarStart);
 
+  _optimizeBarrierMax = false;
   // Calculate initial objective function value and gradient
   initObj = 0.;
   alglib::real_1d_array gradObj;
@@ -309,18 +337,26 @@ int OptHOM::optimize(double weightFixed, double weightFree, double b_min, double
             << " and max. barrier = " << barrier_max << std::endl;
 
   int ITER = 0;
-  while (minJac < barrier_min || maxJac > barrier_max ) {
+  while (minJac < barrier_min) {
     OptimPass(x, gradObj, itMax);
     recalcJacDist();
     jacBar = (minJac > 0.) ? 0.9*minJac : 1.1*minJac;
     setBarrierTerm(jacBar);
-    if (ITER ++ > 50) break;
+    if (ITER ++ > optPassMax) break;
   }
 
-  //  for (int i = 0; i<3; i++) {
-  //    lambda *= 100;
-  //    OptimPass(x, gradObj, itMax);
-  //  }
+  if (!_optimizeMetricMin) {
+    _optimizeBarrierMax = true;
+    jacBar =  1.1 * maxJac;
+    setBarrierTerm(jacBar);
+    while (maxJac > barrier_max ) {
+      OptimPass(x, gradObj, itMax);
+      recalcJacDist();
+      jacBar =  1.1 * maxJac;
+      setBarrierTerm(jacBar);
+      if (ITER ++ > optPassMax) break;
+    }
+  }
 
   OptHomMessage("Optimization done Range (%g,%g)",minJac,maxJac);
 

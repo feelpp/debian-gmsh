@@ -17,8 +17,9 @@ typedef unsigned long intptr_t;
 #include "GmshMessage.h"
 #include "FlGui.h"
 #include "optionWindow.h"
+#include "graphicWindow.h"
+#include "openglWindow.h"
 #include "paletteWindow.h"
-#include "menuWindow.h"
 #include "extraDialogs.h"
 #include "drawContext.h"
 #include "Options.h"
@@ -29,8 +30,6 @@ typedef unsigned long intptr_t;
 #include "PViewOptions.h"
 #include "OS.h"
 #include "Context.h"
-#include "graphicWindow.h"
-#include "openglWindow.h"
 
 #if defined(HAVE_ONELAB)
 #include "onelab.h"
@@ -107,6 +106,7 @@ static Fl_Menu_Item menu_position[] = {
   {"Bottom",       0, 0, 0},
   {"Left",         0, 0, 0},
   {"Right",        0, 0, 0},
+  {"Top 1/3",      0, 0, 0},
   {0}
 };
 
@@ -173,8 +173,7 @@ static void options_restore_defaults_cb(Fl_Widget *w, void *data)
   UnlinkFile(CTX::instance()->homeDir + CTX::instance()->optionsFileName);
   ReInitOptions(0);
   InitOptionsGUI(0);
-  if(FlGui::instance()->menu->module->value() == 3) // hack to refresh the buttons
-    FlGui::instance()->menu->setContext(menu_post, 0);
+  FlGui::instance()->rebuildTree();
   drawContext::global()->draw();
 }
 
@@ -192,7 +191,7 @@ static void general_options_color_scheme_cb(Fl_Widget *w, void *data)
 
 static void general_options_rotation_center_select_cb(Fl_Widget *w, void *data)
 {
-  Msg::StatusBar(3, false, "Select entity or element\n[Press 'q' to abort]");
+  Msg::StatusGl("Select entity or element\n[Press 'q' to abort]");
 
   CTX::instance()->pickElements = 1;
   CTX::instance()->mesh.changed = ENT_ALL;
@@ -220,7 +219,7 @@ static void general_options_rotation_center_select_cb(Fl_Widget *w, void *data)
   CTX::instance()->mesh.changed = ENT_ALL;
   GModel::current()->setSelection(0);
   drawContext::global()->draw();
-  Msg::StatusBar(3, false, "");
+  Msg::StatusGl("");
 }
 
 static void general_options_ok_cb(Fl_Widget *w, void *data)
@@ -339,22 +338,9 @@ static void general_options_ok_cb(Fl_Widget *w, void *data)
   opt_general_camera_mode(0, GMSH_SET, o->general.butt[18]->value());
   if(opt_general_stereo_mode(0, GMSH_GET, 0) != o->general.butt[17]->value()) {
     opt_general_stereo_mode(0, GMSH_SET, o->general.butt[17]->value());
-    // beginning of test to re-allocate gl for stereo: inspired from
-    // "split" method
     if (CTX::instance()->stereo){
-      openglWindow::setLastHandled(0);
-      for(unsigned int i = 0; i < FlGui::instance()->graph.size(); i++){
-	graphicWindow * graph = FlGui::instance()->graph[i];
-	graph->tile->clear();
-	graph->gl.clear();
-	openglWindow* stereo_gl = new openglWindow(0, 0, graph->tile->w(), graph->tile->h());
-	stereo_gl->mode(FL_RGB | FL_DEPTH | FL_DOUBLE | FL_STEREO);
-	stereo_gl->end();
-	graph->gl.push_back(stereo_gl);
-	graph->tile->add(stereo_gl);
-	stereo_gl->show();
-        Msg::Info("new gl windows for stereo vision!");
-      }
+      for(unsigned int i = 0; i < FlGui::instance()->graph.size(); i++)
+	FlGui::instance()->graph[i]->setStereo();
     }
   }
 
@@ -435,6 +421,7 @@ static void geometry_options_ok_cb(Fl_Widget *w, void *data)
   opt_geometry_line_type(0, GMSH_SET, o->geo.choice[1]->value());
   opt_geometry_surface_type(0, GMSH_SET, o->geo.choice[2]->value());
   opt_geometry_transform(0, GMSH_SET, o->geo.choice[3]->value());
+  opt_geometry_label_type(0, GMSH_SET, o->geo.choice[4]->value() + 1);
 
   if(old_hide_compound != (int)opt_geometry_hide_compounds(0, GMSH_GET, 0)){
     GModel::current()->setCompoundVisibility();
@@ -511,6 +498,7 @@ static void mesh_options_ok_cb(Fl_Widget *w, void *data)
                   (o->mesh.choice[2]->value() == 2) ? ALGO_2D_DELAUNAY :
                   (o->mesh.choice[2]->value() == 3) ? ALGO_2D_FRONTAL :
                   (o->mesh.choice[2]->value() == 4) ? ALGO_2D_FRONTAL_QUAD :
+                  (o->mesh.choice[2]->value() == 5) ? ALGO_2D_PACK_PRLGRMS :
                   ALGO_2D_AUTO);
   opt_mesh_algo3d(0, GMSH_SET,
                   (o->mesh.choice[3]->value() == 0) ? ALGO_3D_DELAUNAY :
@@ -1302,7 +1290,8 @@ optionWindow::optionWindow(int deltaFontSize)
   win->label("Options - General");
 
   // Selection browser
-  browser = new Fl_Hold_Browser(WB, WB, L - WB, height - 2 * WB);
+  browser = new Fl_Hold_Browser(0, 0, L, height);
+  browser->box(FL_FLAT_BOX);
   browser->has_scrollbar(Fl_Browser_::VERTICAL);
   browser->add("General");
   browser->add("Geometry");
@@ -1741,6 +1730,7 @@ optionWindow::optionWindow(int deltaFontSize)
         {"Vertical", 0, 0, 0},
         {"Horizontal", 0, 0, 0},
         {"Radial", 0, 0, 0},
+        {"Image", 0, 0, 0},
         {0}
       };
 
@@ -1903,27 +1893,38 @@ optionWindow::optionWindow(int deltaFontSize)
       geo.butt[3]->callback(geometry_options_ok_cb);
 
       geo.butt[4] = new Fl_Check_Button
-        (L + width / 2, 2 * WB + 1 * BH, BW / 2 - WB, BH, "Point numbers");
+        (L + width / 2, 2 * WB + 1 * BH, BW / 2 - WB, BH, "Point labels");
       geo.butt[4]->type(FL_TOGGLE_BUTTON);
       geo.butt[4]->callback(geometry_options_ok_cb);
 
       geo.butt[5] = new Fl_Check_Button
-        (L + width / 2, 2 * WB + 2 * BH, BW / 2 - WB, BH, "Line numbers");
+        (L + width / 2, 2 * WB + 2 * BH, BW / 2 - WB, BH, "Line labels");
       geo.butt[5]->type(FL_TOGGLE_BUTTON);
       geo.butt[5]->callback(geometry_options_ok_cb);
 
       geo.butt[6] = new Fl_Check_Button
-        (L + width / 2, 2 * WB + 3 * BH, BW / 2 - WB, BH, "Surface numbers");
+        (L + width / 2, 2 * WB + 3 * BH, BW / 2 - WB, BH, "Surface labels");
       geo.butt[6]->type(FL_TOGGLE_BUTTON);
       geo.butt[6]->callback(geometry_options_ok_cb);
 
       geo.butt[7] = new Fl_Check_Button
-        (L + width / 2, 2 * WB + 4 * BH, BW / 2 - WB, BH, "Volume numbers");
+        (L + width / 2, 2 * WB + 4 * BH, BW / 2 - WB, BH, "Volume labels");
       geo.butt[7]->type(FL_TOGGLE_BUTTON);
       geo.butt[7]->callback(geometry_options_ok_cb);
 
+      static Fl_Menu_Item menu_label_type[] = {
+        {"Elementary tags", 0, 0, 0},
+        {"Physical tags", 0, 0, 0},
+        {0}
+      };
+      geo.choice[4] = new Fl_Choice
+        (L + 2 * WB, 2 * WB + 5 * BH, IW, BH, "Label type");
+      geo.choice[4]->menu(menu_label_type);
+      geo.choice[4]->align(FL_ALIGN_RIGHT);
+      geo.choice[4]->callback(geometry_options_ok_cb);
+
       geo.value[0] = new Fl_Value_Input
-        (L + 2 * WB, 2 * WB + 5 * BH, IW, BH, "Normals");
+        (L + 2 * WB, 2 * WB + 6 * BH, IW / 2, BH);
       geo.value[0]->minimum(0);
       geo.value[0]->maximum(500);
       geo.value[0]->step(1);
@@ -1932,7 +1933,7 @@ optionWindow::optionWindow(int deltaFontSize)
       geo.value[0]->callback(geometry_options_ok_cb);
 
       geo.value[1] = new Fl_Value_Input
-        (L + 2 * WB, 2 * WB + 6 * BH, IW, BH, "Tangents");
+        (L + 2 * WB + IW / 2, 2 * WB + 6 * BH, IW / 2, BH, "Normals and tangents");
       geo.value[1]->minimum(0);
       geo.value[1]->maximum(500);
       geo.value[1]->step(1);
@@ -2122,6 +2123,7 @@ optionWindow::optionWindow(int deltaFontSize)
         {"Delaunay", 0, 0, 0},
         {"Frontal", 0, 0, 0},
         {"Delaunay for quads", 0, 0, 0},
+        {"Packing Of Parallelograms", 0, 0, 0},
         {0}
       };
       static Fl_Menu_Item menu_3d_algo[] = {
@@ -2348,20 +2350,20 @@ optionWindow::optionWindow(int deltaFontSize)
 
       static Fl_Menu_Item menu_label_type[] = {
         {"Number", 0, 0, 0},
-        {"Elementary entity", 0, 0, 0},
-        {"Physical group", 0, 0, 0},
+        {"Elementary tag", 0, 0, 0},
+        {"Physical tag", 0, 0, 0},
         {"Mesh partition", 0, 0, 0},
         {"Coordinates", 0, 0, 0},
         {0}
       };
       mesh.choice[7] = new Fl_Choice
-        (L + width / 2, 2 * WB + 5 * BH, width / 4 - 2 * WB, BH, "Label type");
+        (L + 2 * WB, 2 * WB + 7 * BH, IW, BH, "Label type");
       mesh.choice[7]->menu(menu_label_type);
       mesh.choice[7]->align(FL_ALIGN_RIGHT);
       mesh.choice[7]->callback(mesh_options_ok_cb);
 
       mesh.value[12] = new Fl_Value_Input
-        (L + width / 2, 2 * WB + 6 * BH, width / 4 - 2 * WB, BH, "Sampling");
+        (L + 2 * width / 3 - 2 * WB, 2 * WB + 7 * BH, width / 8, BH, "Sampling");
       mesh.value[12]->minimum(1);
       mesh.value[12]->maximum(100);
       mesh.value[12]->step(1);
@@ -2380,12 +2382,12 @@ optionWindow::optionWindow(int deltaFontSize)
       };
 
       mesh.menu = new Fl_Menu_Button
-        (L + 2 * WB, 2 * WB + 7 * BH, IW, BH, "Elements");
+        (L + 2 * WB, 2 * WB + 8 * BH, IW, BH, "Elements");
       mesh.menu->menu(menu_mesh_element_types);
       mesh.menu->callback(mesh_options_ok_cb);
 
       mesh.value[4] = new Fl_Value_Input
-        (L + 2 * WB, 2 * WB + 8 * BH, IW / 4, BH);
+        (L + 2 * WB, 2 * WB + 9 * BH, IW / 4, BH);
       mesh.value[4]->minimum(0);
       mesh.value[4]->maximum(1);
       mesh.value[4]->step(0.01);
@@ -2394,7 +2396,7 @@ optionWindow::optionWindow(int deltaFontSize)
       mesh.value[4]->callback(mesh_options_ok_cb);
 
       mesh.value[5] = new Fl_Value_Input
-        (L + 2 * WB + IW / 4, 2 * WB + 8 * BH, IW / 2 - IW / 4, BH);
+        (L + 2 * WB + IW / 4, 2 * WB + 9 * BH, IW / 2 - IW / 4, BH);
       mesh.value[5]->minimum(0);
       mesh.value[5]->maximum(1);
       mesh.value[5]->step(0.01);
@@ -2410,25 +2412,25 @@ optionWindow::optionWindow(int deltaFontSize)
         {0}
       };
       mesh.choice[6] = new Fl_Choice
-        (L + 2 * WB + IW / 2, 2 * WB + 8 * BH, IW/2, BH, "Quality range");
+        (L + 2 * WB + IW / 2, 2 * WB + 9 * BH, IW/2, BH, "Quality range");
       mesh.choice[6]->menu(menu_quality_type);
       mesh.choice[6]->align(FL_ALIGN_RIGHT);
       mesh.choice[6]->callback(mesh_options_ok_cb);
 
       mesh.value[6] = new Fl_Value_Input
-        (L + 2 * WB, 2 * WB + 9 * BH, IW / 2, BH);
+        (L + 2 * WB, 2 * WB + 10 * BH, IW / 2, BH);
       mesh.value[6]->align(FL_ALIGN_RIGHT);
       mesh.value[6]->when(FL_WHEN_RELEASE);
       mesh.value[6]->callback(mesh_options_ok_cb);
 
       mesh.value[7] = new Fl_Value_Input
-        (L + 2 * WB + IW / 2, 2 * WB + 9 * BH, IW / 2, BH, "Size range");
+        (L + 2 * WB + IW / 2, 2 * WB + 10 * BH, IW / 2, BH, "Size range");
       mesh.value[7]->align(FL_ALIGN_RIGHT);
       mesh.value[7]->when(FL_WHEN_RELEASE);
       mesh.value[7]->callback(mesh_options_ok_cb);
 
       mesh.value[8] = new Fl_Value_Input
-        (L + 2 * WB, 2 * WB + 10 * BH, IW, BH, "Normals");
+        (L + 2 * WB, 2 * WB + 11 * BH, IW / 2, BH);
       mesh.value[8]->minimum(0);
       mesh.value[8]->maximum(500);
       mesh.value[8]->step(1);
@@ -2437,7 +2439,7 @@ optionWindow::optionWindow(int deltaFontSize)
       mesh.value[8]->callback(mesh_options_ok_cb);
 
       mesh.value[13] = new Fl_Value_Input
-        (L + 2 * WB, 2 * WB + 11 * BH, IW, BH, "Tangents");
+        (L + 2 * WB + IW / 2, 2 * WB + 11 * BH, IW / 2, BH, "Normals and tangents");
       mesh.value[13]->minimum(0);
       mesh.value[13]->maximum(200);
       mesh.value[13]->step(1.0);
@@ -2980,13 +2982,13 @@ optionWindow::optionWindow(int deltaFontSize)
       view.butt[5]->callback(view_options_ok_cb);
 
       view.butt[10] = new Fl_Check_Button
-        (L + 2 * WB, 2 * WB + 4 * BH, BW / 2, BH, "Draw element outlines");
+        (L + 2 * WB, 2 * WB + 4 * BH, BW, BH, "Draw element outlines");
       view.butt[10]->tooltip("(Alt+e)");
       view.butt[10]->type(FL_TOGGLE_BUTTON);
       view.butt[10]->callback(view_options_ok_cb);
 
       view.butt[2] = new Fl_Check_Button
-        (L + 2 * WB + BW / 2, 2 * WB + 4 * BH, BW / 2, BH, "Draw 3D skin only");
+        (L + 2 * WB, 2 * WB + 5 * BH, BW, BH, "Draw only skin of 3D views");
       view.butt[2]->type(FL_TOGGLE_BUTTON);
       view.butt[2]->callback(view_options_ok_cb);
 
@@ -3003,12 +3005,12 @@ optionWindow::optionWindow(int deltaFontSize)
       };
 
       view.menu[1] = new Fl_Menu_Button
-        (L + 2 * WB, 2 * WB + 5 * BH, IW, BH, "Elements");
+        (L + 2 * WB, 2 * WB + 6 * BH, IW, BH, "Elements");
       view.menu[1]->menu(menu_view_element_types);
       view.menu[1]->callback(view_options_ok_cb);
 
       view.value[6] = new Fl_Value_Input
-        (L + width / 2, 2 * WB + 5 * BH, width / 4 - 2 * WB, BH, "Sampling");
+        (L + width / 2, 2 * WB + 6 * BH, width / 4 - 2 * WB, BH, "Sampling");
       view.value[6]->minimum(1);
       view.value[6]->maximum(100);
       view.value[6]->step(1);
@@ -3024,13 +3026,13 @@ optionWindow::optionWindow(int deltaFontSize)
         {0}
       };
       view.choice[9] = new Fl_Choice
-        (L + 2 * WB, 2 * WB + 6 * BH, IW, BH, "Element boundary mode");
+        (L + 2 * WB, 2 * WB + 7 * BH, IW, BH, "Element boundary mode");
       view.choice[9]->menu(menu_boundary);
       view.choice[9]->align(FL_ALIGN_RIGHT);
       view.choice[9]->callback(view_options_ok_cb);
 
       view.value[0] = new Fl_Value_Input
-        (L + 2 * WB, 2 * WB + 7 * BH, IW, BH, "Normals");
+        (L + 2 * WB, 2 * WB + 8 * BH, IW / 2, BH);
       view.value[0]->minimum(0);
       view.value[0]->maximum(500);
       view.value[0]->step(1);
@@ -3039,7 +3041,7 @@ optionWindow::optionWindow(int deltaFontSize)
       view.value[0]->callback(view_options_ok_cb);
 
       view.value[1] = new Fl_Value_Input
-        (L + 2 * WB, 2 * WB + 8 * BH, IW, BH, "Tangents");
+        (L + 2 * WB + IW / 2, 2 * WB + 8 * BH, IW / 2, BH, "Normals and tangents");
       view.value[1]->minimum(0);
       view.value[1]->maximum(500);
       view.value[1]->step(1);
@@ -3671,13 +3673,13 @@ void optionWindow::activate(const char *what)
   if(!strcmp(what, "fast_redraw")){
     if(general.butt[2]->value()){
       browser->resize(browser->x(), browser->y(), browser->w(),
-                      win->h() - 3 * WB - BH);
+                      win->h() - 2 * WB - BH);
       redraw->show();
       win->redraw();
     }
     else{
       browser->resize(browser->x(), browser->y(), browser->w(),
-                      win->h() - 2 * WB);
+                      win->h());
       redraw->hide();
       win->redraw();
     }

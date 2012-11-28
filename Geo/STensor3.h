@@ -53,7 +53,7 @@ class SMetric3 {
            const SVector3 &t2,
            const SVector3 &t3)
   {
-    // M = e^1 * diag * e^1^t
+    // M = e^t * diag * e
     // where the elements of diag are l_i = h_i^-2
     // and the rows of e are the UNIT and ORTHOGONAL directions
 
@@ -305,6 +305,12 @@ class STensor3 {
     return prod;
   }
 
+  double determinant() const{
+    fullMatrix<double> m(3,3);
+    getMat(m);
+    double det = m.determinant();
+    return det;
+  };
   void print(const char *) const;
 };
 
@@ -332,7 +338,7 @@ inline SVector3 operator* (const STensor3& t, const SVector3& v){
     for (int j=0; j<3; j++)
       temp[i]+= t(i,j)*v[j];
   return temp;
-};
+}
 
 inline SVector3 operator* (const SVector3& v, const STensor3& t){
   SVector3 temp(0.,0.,0.);
@@ -340,7 +346,7 @@ inline SVector3 operator* (const SVector3& v, const STensor3& t){
     for (int j=0; j<3; j++)
       temp[j]+= v[i]*t(i,j);
   return temp;
-};
+}
 
 
 inline STensor3 operator*(const STensor3 &t, double m)

@@ -625,7 +625,9 @@ void Centerline::createSplitCompounds()
     int num_gec = NE+i+1;
     Msg::Info("Create Compound Line (%d) = %d discrete edge",
               num_gec, pe->tag());
-    current->addCompoundEdge(e_compound,num_gec);
+    /* GEdge *gec = */ current->addCompoundEdge(e_compound,num_gec);
+    //gec->meshAttributes.Method = MESH_TRANSFINITE;
+    //gec->meshAttributes.nbPointsTransfinite = nbPoints;
   }
 
   // Parametrize Compound surfaces
@@ -759,8 +761,8 @@ void Centerline::extrudeBoundaryLayerWall(GEdge* gin, std::vector<GEdge*> boundE
   if (dot(ne,nc) < 0) dir = 1;
   if (dir ==1 && hLayer > 0 ) hLayer *= -1.0;
 
-  int shift = 0;
-  if(is_cut) shift = NE;
+  //int shift = 0;
+  //if(is_cut) shift = NE;
   for (int i= 0; i< NF; i++){
     GFace *gfc ;
     if (is_cut) gfc = current->getFaceByTag(NF+i+1);
@@ -867,7 +869,7 @@ void Centerline::cutMesh()
     //for (int k= 0; k< edges[i].children.size() ; k++) printf("%d ", edges[i].children[k].tag);
     //printf("\n");
 
-    int nbSplit = (int)floor(AR/2 + 0.9);
+    int nbSplit = (int)floor(AR/2 + 0.9); //AR/2 + 0.9
     if( nbSplit > 1 ){
       printf("->> cut branch in %d parts \n",  nbSplit);
       double li  = L/nbSplit;
@@ -1027,6 +1029,7 @@ bool Centerline::cutByDisk(SVector3 &PT, SVector3 &NORM, double &maxRad)
 
 double Centerline::operator() (double x, double y, double z, GEntity *ge)
 {
+ 
   if (update_needed){
      std::ifstream input;
      input.open(fileName.c_str());
@@ -1132,7 +1135,7 @@ void  Centerline::operator() (double x, double y, double z, SMetric3 &metr, GEnt
    curvature.vertexNodalValues(vertices[index[0]], curv, 0);
 
    double sign = (curv > 0.0) ? -1.0: 1.0;
-   double beta = CTX::instance()->mesh.smoothRatio;
+   double beta = CTX::instance()->mesh.smoothRatio; //beta = 1.25 better !
    double ratio = 1.1;
 
    double thickness = radMax/3.;
@@ -1170,18 +1173,18 @@ void  Centerline::operator() (double x, double y, double z, SMetric3 &metr, GEnt
                                           beta, lc_n, lc_t, hwall_t);
    }
    else if (ds > thickness && onInOutlets){
-     metr = buildMetricTangentToCurve(dir_n,lc_n,lc_t); 
+     metr = buildMetricTangentToCurve(dir_n,lc_n,lc_t);
    }
    else if (ds > thickness && !onInOutlets){
-     //metr = buildMetricTangentToCurve(dir_n,lc_n,lc_t); 
+     //metr = buildMetricTangentToCurve(dir_n,lc_n,lc_t);
      //curvMetric = metricBasedOnSurfaceCurvature(dMin, dMax, cMin, cMax, radMax, beta, lc_n, lc_t, hwall_t);
      curvMetric1 = buildMetricTangentToCurve(dir_n,lc_n,lc_a); //lc_t
      curvMetric2 = buildMetricTangentToCurve(dir_cross,lc_t,lc_a); //lc_t
-     curvMetric = intersection(curvMetric1,curvMetric2); 
+     curvMetric = intersection(curvMetric1,curvMetric2);
      //metr = SMetric3(1./(lc_a*lc_a), 1./(hfar*hfar),1./(hfar*hfar), dir_a, dir_a1, dir_a2);
-     metr = SMetric3(1./(lc_a*lc_a), 1./(lc_n*lc_n), 1./(lc_t*lc_t), dir_a, dir_n, dir_cross); 
-     metr = intersection_conserveM1(metr,curvMetric);  
-     //metr = intersection(metr,curvMetric); 
+     metr = SMetric3(1./(lc_a*lc_a), 1./(lc_n*lc_n), 1./(lc_t*lc_t), dir_a, dir_n, dir_cross);
+     metr = intersection_conserveM1(metr,curvMetric);
+     //metr = intersection(metr,curvMetric);
    }
 
    return;

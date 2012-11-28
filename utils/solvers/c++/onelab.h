@@ -27,6 +27,8 @@
 #ifndef _ONELAB_H_
 #define _ONELAB_H_
 
+#include <time.h>
+#include <stdio.h>
 #include <string>
 #include <vector>
 #include <set>
@@ -53,8 +55,13 @@ namespace onelab{
     std::string _help;
     // clients that use this parameter
     std::set<std::string> _clients;
-    // flag to check if the parameter has been changed since the last run()
+    // flag to check if the value of the parameter has been changed since the
+    // last computation (normally this is reset after all the clients have been
+    // run)
     bool _changed;
+    // flag indicating that the _changed flag of this parameter will always be
+    // reset to false when the parameter is updated
+    bool _neverChanged;
     // should the parameter be visible in the interface?
     bool _visible;
     // sould the paramete be "read-only" (not settable by the user)
@@ -66,12 +73,13 @@ namespace onelab{
     parameter(const std::string &name="", const std::string &label="",
               const std::string &help="")
       : _name(name), _label(label), _help(help), _changed(true),
-        _visible(true), _readOnly(false) {}
+        _neverChanged(false), _visible(true), _readOnly(false) {}
     virtual ~parameter(){}
     void setName(const std::string &name){ _name = name; }
     void setLabel(const std::string &label){ _label = label; }
     void setHelp(const std::string &help){ _help = help; }
     void setChanged(bool changed){ _changed = changed; }
+    void setNeverChanged(bool never){ _neverChanged = never; }
     void setVisible(bool visible){ _visible = visible; }
     void setReadOnly(bool readOnly){ _readOnly = readOnly; }
     void setAttribute(const std::string &key, const std::string &value)
@@ -96,6 +104,11 @@ namespace onelab{
     const std::string &getName() const { return _name; }
     const std::string &getLabel() const { return _label; }
     const std::string &getHelp() const { return _help; }
+    std::string getPath() const
+    {
+      std::string::size_type last = _name.find_last_of('/');
+      return _name.substr(0, last);
+    }
     std::string getShortName() const
     {
       if(_label.size()) return _label;
@@ -110,6 +123,7 @@ namespace onelab{
       return s;
     }
     bool getChanged() const { return _changed; }
+    bool getNeverChanged() const { return _neverChanged; }
     bool getVisible() const { return _visible; }
     bool getReadOnly() const { return _readOnly; }
     std::string getAttribute(const std::string &key) const
@@ -125,7 +139,7 @@ namespace onelab{
     const std::set<std::string> &getClients() const { return _clients; }
     static char charSep() { return '\0'; }
     static double maxNumber() { return 1e200; }
-    static std::string version() { return "1.02"; }
+    static std::string version() { return "1.05"; }
     static std::string getNextToken(const std::string &msg,
                                     std::string::size_type &first,
                                     char separator=charSep())
@@ -159,6 +173,8 @@ namespace onelab{
               << sanitize(getName()) << charSep()
               << sanitize(getLabel()) << charSep()
               << sanitize(getHelp()) << charSep()
+              << (getNeverChanged() ? 1 : 0) << charSep()
+              << (getChanged() ? 1 : 0) << charSep()
               << (getVisible() ? 1 : 0) << charSep()
               << (getReadOnly() ? 1 : 0) << charSep()
               << _attributes.size() << charSep();
@@ -180,6 +196,8 @@ namespace onelab{
       setName(getNextToken(msg, pos));
       setLabel(getNextToken(msg, pos));
       setHelp(getNextToken(msg, pos));
+      setNeverChanged(atoi(getNextToken(msg, pos).c_str()));
+      setChanged(atoi(getNextToken(msg, pos).c_str()));
       setVisible(atoi(getNextToken(msg, pos).c_str()));
       setReadOnly(atoi(getNextToken(msg, pos).c_str()));
       int numAttributes = atoi(getNextToken(msg, pos).c_str());
@@ -202,6 +220,45 @@ namespace onelab{
       type = getNextToken(msg, first);
       name = getNextToken(msg, first);
     }
+    static bool fromFile(std::vector<std::string> &msg,
+                         const std::string &fileName)
+    {
+      msg.clear();
+      FILE *fp = fopen(fileName.c_str(), "rb");
+      if(!fp) return false;
+      char tmp[1000];
+      if(!fgets(tmp, sizeof(tmp), fp)) return false; // first line is comment
+      while(!feof(fp)){
+        int numc = 0;
+        if(!fscanf(fp, "%d ", &numc)) break; // space is important
+        if(!numc) break;
+        msg.push_back("");
+        for(int i = 0; i < numc; i++)
+          msg.back() += fgetc(fp);
+        if(!fgets(tmp, sizeof(tmp), fp)) break; // end of line
+      }
+      fclose(fp);
+      return true;
+    }
+    static bool toFile(const std::vector<std::string> &msg,
+                       const std::string &fileName,
+                       const std::string &creator)
+    {
+      FILE *fp = fopen(fileName.c_str(), "wb");
+      if(!fp) return false;
+      time_t now;
+      time(&now);
+      fprintf(fp, "OneLab database created by %s on %s",
+              creator.c_str(), ctime(&now));
+      for(unsigned int i = 0; i < msg.size(); i++){
+        fprintf(fp, "%d ", (int)msg[i].size());
+        for(unsigned int j = 0; j < msg[i].size(); j++)
+          fputc(msg[i][j], fp);
+        fputc('\n', fp);
+      }
+      fclose(fp);
+      return true;
+    }
   };
 
   class parameterLessThan{
@@ -218,17 +275,21 @@ namespace onelab{
   class number : public parameter{
   private:
     double _value, _min, _max, _step;
+    // when in a loop, indicates current index in the vector _choices; is -1
+    // when not in a loop
+    int _index;
     std::vector<double> _choices;
     std::map<double, std::string> _valueLabels;
   public:
     number(const std::string &name="", double value=0.,
            const std::string &label="", const std::string &help="")
       : parameter(name, label, help), _value(value),
-        _min(-maxNumber()), _max(maxNumber()), _step(0.) {}
+      _min(-maxNumber()), _max(maxNumber()), _step(0.), _index(0) {}
     void setValue(double value){ _value = value; }
     void setMin(double min){ _min = min; }
     void setMax(double max){ _max = max; }
     void setStep(double step){ _step = step; }
+    void setIndex(int index){ _index = index; }
     void setChoices(const std::vector<double> &choices){ _choices = choices; }
     void setChoiceLabels(const std::vector<std::string> &labels)
     {
@@ -249,6 +310,7 @@ namespace onelab{
     double getMin() const { return _min; }
     double getMax() const { return _max; }
     double getStep() const { return _step; }
+    int getIndex() const { return _index; }
     const std::vector<double> &getChoices() const { return _choices; }
     const std::map<double, std::string> &getValueLabels() const
     {
@@ -275,14 +337,17 @@ namespace onelab{
       setMin(p.getMin());
       setMax(p.getMax());
       setStep(p.getStep());
+      setIndex(p.getIndex());
       setChoices(p.getChoices());
       setValueLabels(p.getValueLabels());
+      if(getNeverChanged()) setChanged(false);
     }
     std::string toChar() const
     {
       std::ostringstream sstream;
       sstream << parameter::toChar() << _value << charSep()
               << _min << charSep() << _max << charSep() << _step << charSep()
+	      << _index << charSep()
               << _choices.size() << charSep();
       for(unsigned int i = 0; i < _choices.size(); i++)
         sstream << _choices[i] << charSep();
@@ -302,6 +367,7 @@ namespace onelab{
       setMin(atof(getNextToken(msg, pos).c_str()));
       setMax(atof(getNextToken(msg, pos).c_str()));
       setStep(atof(getNextToken(msg, pos).c_str()));
+      setIndex(atoi(getNextToken(msg, pos).c_str()));
       _choices.resize(atoi(getNextToken(msg, pos).c_str()));
       for(unsigned int i = 0; i < _choices.size(); i++)
         _choices[i] = atof(getNextToken(msg, pos).c_str());
@@ -352,6 +418,7 @@ namespace onelab{
         setChanged(true);
       }
       setChoices(p.getChoices());
+      if(getNeverChanged()) setChanged(false);
     }
     std::string toChar() const
     {
@@ -421,6 +488,7 @@ namespace onelab{
       }
       setDimension(p.getDimension());
       setChoices(p.getChoices());
+      if(getNeverChanged()) setChanged(false);
     }
     std::string toChar() const
     {
@@ -500,6 +568,7 @@ namespace onelab{
         setChanged(true);
       }
       setChoices(p.getChoices());
+      if(getNeverChanged()) setChanged(false);
     }
     std::string toChar() const
     {
@@ -647,8 +716,9 @@ namespace onelab{
       std::set<parameter*> ps;
       _getAllParameters(ps);
       for(std::set<parameter*>::iterator it = ps.begin(); it != ps.end(); it++){
-        if((client.empty() || (*it)->hasClient(client)) && (*it)->getChanged())
+        if((client.empty() || (*it)->hasClient(client)) && (*it)->getChanged()){
           return true;
+        }
       }
       return false;
     }
@@ -663,16 +733,41 @@ namespace onelab{
           (*it)->setChanged(changed);
       return true;
     }
-    // serialize the parameter space (optinally only serialize those parameters
+    // serialize the parameter space (optionally only serialize those parameters
     // that depend on the given client)
-    std::string toChar(const std::string &client="") const
+    std::vector<std::string> toChar(const std::string &client="") const
     {
-      std::string s;
+      std::vector<std::string> s;
       std::set<parameter*> ps;
       _getAllParameters(ps);
       for(std::set<parameter*>::const_iterator it = ps.begin(); it != ps.end(); it++)
-        if(client.empty() || (*it)->hasClient(client)) s += (*it)->toChar() + "\n";
+        if(client.empty() || (*it)->hasClient(client))
+          s.push_back((*it)->toChar());
       return s;
+    }
+    // unserialize the parameter space
+    bool fromChar(const std::vector<std::string> &msg, const std::string &client="")
+    {
+      for(unsigned int i = 0; i < msg.size(); i++){
+        std::string version, type, name;
+        onelab::parameter::getInfoFromChar(msg[i], version, type, name);
+        if(onelab::parameter::version() != version) return false;
+        if(type == "number"){
+          onelab::number p; p.fromChar(msg[i]); set(p, client);
+        }
+        else if(type == "string"){
+          onelab::string p; p.fromChar(msg[i]); set(p, client);
+        }
+        else if(type == "region"){
+          onelab::region p; p.fromChar(msg[i]); set(p, client);
+        }
+        else if(type == "function"){
+          onelab::function p; p.fromChar(msg[i]); set(p, client);
+        }
+        else
+          return false;
+      }
+      return true;
     }
   };
 
@@ -713,6 +808,52 @@ namespace onelab{
     virtual bool get(std::vector<string> &ps, const std::string &name="") = 0;
     virtual bool get(std::vector<region> &ps, const std::string &name="") = 0;
     virtual bool get(std::vector<function> &ps, const std::string &name="") = 0;
+    std::vector<std::string> toChar()
+    {
+      std::vector<std::string> out;
+      std::vector<number> n; get(n);
+      for(unsigned int i = 0; i < n.size(); i++) out.push_back(n[i].toChar());
+      std::vector<number> s; get(s);
+      for(unsigned int i = 0; i < s.size(); i++) out.push_back(s[i].toChar());
+      std::vector<region> r; get(r);
+      for(unsigned int i = 0; i < r.size(); i++) out.push_back(r[i].toChar());
+      std::vector<region> f; get(f);
+      for(unsigned int i = 0; i < f.size(); i++) out.push_back(f[i].toChar());
+      return out;
+    }
+    bool fromChar(const std::vector<std::string> &msg)
+    {
+      for(unsigned int i = 0; i < msg.size(); i++){
+        std::string version, type, name;
+        onelab::parameter::getInfoFromChar(msg[i], version, type, name);
+        if(onelab::parameter::version() != version) return false;
+        if(type == "number"){
+          onelab::number p; p.fromChar(msg[i]); set(p);
+        }
+        else if(type == "string"){
+          onelab::string p; p.fromChar(msg[i]); set(p);
+        }
+        else if(type == "region"){
+          onelab::region p; p.fromChar(msg[i]); set(p);
+        }
+        else if(type == "function"){
+          onelab::function p; p.fromChar(msg[i]); set(p);
+        }
+        else
+          return false;
+      }
+      return true;
+    }
+    bool toFile(const std::string &fileName)
+    {
+      return parameter::toFile(toChar(), fileName, getName());
+    }
+    bool fromFile(const std::string &fileName)
+    {
+      std::vector<std::string> msg;
+      if(parameter::fromFile(msg, fileName)) return fromChar(msg);
+      return false;
+    }
   };
 
   // The onelab server: a singleton that stores the parameter space and
@@ -764,11 +905,25 @@ namespace onelab{
     {
       return _parameterSpace.getChanged(client);
     }
-    std::string toChar(const std::string &client="")
+    unsigned int getNumParameters(){ return _parameterSpace.getNumParameters(); }
+    std::vector<std::string> toChar(const std::string &client="")
     {
       return _parameterSpace.toChar(client);
     }
-    unsigned int getNumParameters(){ return _parameterSpace.getNumParameters(); }
+    bool fromChar(const std::vector<std::string> &msg, const std::string &client="")
+    {
+      return _parameterSpace.fromChar(msg, client);
+    }
+    bool toFile(const std::string &fileName, const std::string &client="")
+    {
+      return parameter::toFile(toChar(client), fileName, "onelab server");
+    }
+    bool fromFile(const std::string &fileName, const std::string &client="")
+    {
+      std::vector<std::string> msg;
+      if(parameter::fromFile(msg, fileName)) return fromChar(msg, client);
+      return false;
+    }
   };
 
   class localClient : public client{

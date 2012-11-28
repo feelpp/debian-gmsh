@@ -44,6 +44,8 @@ class Msg {
   static GmshClient *_client;
   // communication with onelab server
   static onelab::client *_onelabClient;
+  // executable name
+  static std::string _execName;
  public:
   Msg() {}
   static void Init(int argc, char **argv);
@@ -67,11 +69,12 @@ class Msg {
   static void Info(const char *fmt, ...);
   static void Direct(const char *fmt, ...);
   static void Direct(int level, const char *fmt, ...);
-  static void StatusBar(int num, bool log, const char *fmt, ...);
+  static void StatusBar(bool log, const char *fmt, ...);
+  static void StatusGl(const char *fmt, ...);
   static void Debug(const char *fmt, ...);
-  static void ProgressMeter(int n, int N, const char *fmt, ...);
-  static void ProgressMeter(int n, int N){ ProgressMeter(n, N, ""); }
-  static void SetProgressMeterStep(int step){ _progressMeterStep = (step > 0) ? step : 1; }
+  static void ProgressMeter(int n, int N, bool log, const char *fmt, ...);
+  static void SetProgressMeterStep(int step){ _progressMeterStep = step; }
+  static int GetProgressMeterStep(){ return _progressMeterStep; }
   static void ResetProgressMeter(){ if(!_commRank) _progressMeterCurrent = 0; }
   static double &Timer(std::string str){ return _timers[str]; }
   static void PrintTimers();
@@ -83,11 +86,21 @@ class Msg {
   static int GetAnswer(const char *question, int defaultval, const char *zero,
                        const char *one, const char *two=0);
   static void InitializeOnelab(const std::string &name, const std::string &sockname="");
+  static void SetExecutableName(const std::string &name) { _execName.assign(name); }
+  static std::string GetExecutableName() { return _execName; }
+  static void LoadOnelabClient(const std::string &name, const std::string &sockName);
   static GmshClient *GetGmshClient(){ return _client; }
+  static onelab::client *GetOnelabClient(){ return _onelabClient; }
   static void FinalizeOnelab();
   static bool UseOnelab();
+  static void SetOnelabNumber(std::string name, double val, bool visible);
+  static void SetOnelabString(std::string name, std::string val, bool visible);
   static void ExchangeOnelabParameter(const std::string &key,
                                       std::vector<double> &val,
+                                      std::map<std::string, std::vector<double> > &fopt,
+                                      std::map<std::string, std::vector<std::string> > &copt);
+  static void ExchangeOnelabParameter(const std::string &key,
+                                      std::string &val,
                                       std::map<std::string, std::vector<double> > &fopt,
                                       std::map<std::string, std::vector<std::string> > &copt);
   static void ImportPhysicalsAsOnelabRegions();

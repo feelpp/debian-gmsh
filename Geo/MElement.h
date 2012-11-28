@@ -14,9 +14,12 @@
 #include "MVertex.h"
 #include "MEdge.h"
 #include "MFace.h"
+#include "nodalBasis.h"
 #include "polynomialBasis.h"
 #include "JacobianBasis.h"
 #include "GaussIntegration.h"
+
+class GModel;
 
 // A mesh element.
 class MElement
@@ -217,7 +220,7 @@ class MElement
   virtual std::string getInfoString();
 
   // get the function space for the element
-  virtual const polynomialBasis* getFunctionSpace(int order=-1) const { return 0; }
+  virtual const nodalBasis* getFunctionSpace(int order=-1) const { return 0; }
 
   // get the function space for the jacobian of the element
   virtual const JacobianBasis* getJacobianFuncSpace(int o=-1) const { return 0; }
@@ -243,6 +246,8 @@ class MElement
   // return the Jacobian of the element evaluated at point (u,v,w) in
   // parametric coordinates
   double getJacobian(const fullMatrix<double> &gsf, double jac[3][3]);
+  // To be compatible with _vgrads of functionSpace without having to put under fullMatrix form
+  double getJacobian(const std::vector<SVector3> &gsf, double jac[3][3]);
   double getJacobian(double u, double v, double w, double jac[3][3]);
   inline double getJacobian(double u, double v, double w, fullMatrix<double> &j){
     double JAC[3][3];
@@ -266,6 +271,7 @@ class MElement
   // get the point in cartesian coordinates corresponding to the point
   // (u,v,w) in parametric coordinates
   virtual void pnt(double u, double v, double w, SPoint3 &p);
+  virtual void pnt(const std::vector<double> &sf,SPoint3 &p); // To be compatible with functionSpace without changing form
   virtual void primaryPnt(double u, double v, double w, SPoint3 &p);
 
   // invert the parametrisation
@@ -303,11 +309,12 @@ class MElement
   double integrateFlux(double val[], int face, int pOrder, int order=-1);
 
   // IO routines
-  virtual void writeMSH(FILE *fp, double version=1.0, bool binary=false,
-                        int num=0, int elementary=1, int physical=1,
-                        int parentNum=0, int dom1Num = 0, int dom2Num = 0,
+  virtual void writeMSH(FILE *fp, bool binary=false, int elementary=1,
                         std::vector<short> *ghosts=0);
-
+  virtual void writeMSH2(FILE *fp, double version=1.0, bool binary=false,
+                         int num=0, int elementary=1, int physical=1,
+                         int parentNum=0, int dom1Num = 0, int dom2Num = 0,
+                         std::vector<short> *ghosts=0);
   virtual void writePOS(FILE *fp, bool printElementary, bool printElementNumber,
                         bool printGamma, bool printEta, bool printRho,
                         bool printDisto,double scalingFactor=1.0, int elementary=1);
@@ -347,12 +354,16 @@ class MElement
                          std::map<MElement*, MElement*> &newParents,
                          std::map<MElement*, MElement*> &newDomains);
 
+  static int ParentTypeFromTag(int tag);
+  static int OrderFromTag(int tag);
+
 };
 
 class MElementFactory{
  public:
   MElement *create(int type, std::vector<MVertex*> &v, int num=0, int part=0,
                    bool owner=false, MElement *parent=0, MElement *d1=0, MElement *d2=0);
+  MElement *create(int num, int type, const std::vector<int> &data, GModel *model);
 };
 
 // Traits of various elements based on the dimension.  These generally define

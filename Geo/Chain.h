@@ -17,6 +17,10 @@
 #include "PViewOptions.h"
 #endif
 
+#if defined(HAVE_FLTK)
+#include "FlGui.h"
+#endif
+
 #if defined(HAVE_KBIPACK)
 
 template <class TTypeA, class TTypeB>
@@ -235,7 +239,8 @@ public:
   // elementary chains are turned into mesh elements with
   // orientation and multiplicity given by elementary chain coefficient
   // (and create a post-processing view)
-  void addToModel(GModel* m, bool post=true) const;
+  // (and request a physical group number)
+  void addToModel(GModel* m, bool post=true, int physicalNumRequest=-1) const;
 };
 
 template <class C>
@@ -416,7 +421,7 @@ void Chain<C>::addElemChain(const ElemChain& c, C coeff)
 {
   if(coeff == 0) return;
   if(_dim != -1 && _dim != c.getDim()) {
-    Msg::Error("Cannot add elementrary d%-chain to %d-chain",
+    Msg::Error("Cannot add elementrary %d-chain to %d-chain",
                c.getDim(), _dim);
     return;
   }
@@ -449,7 +454,8 @@ Chain<C>& Chain<C>::operator*=(const C& coeff)
 }
 
 template <class C>
-void Chain<C>::addToModel(GModel* m, bool post) const
+void Chain<C>::addToModel(GModel* m, bool post,
+                          int physicalNumRequest) const
 {
   if(this->isZero()) {
     Msg::Info("A chain is zero element of C%d, not added to the model",
@@ -486,6 +492,10 @@ void Chain<C>::addToModel(GModel* m, bool post) const
   for(int i = 0; i < 4; i++)
     max[i] = m->getMaxPhysicalNumber(i);
   int physicalNum = *std::max_element(max,max+4) + 1;
+  if(physicalNumRequest > -1 && physicalNumRequest < physicalNum)
+    Msg::Warning("Requested chain physical group number already taken. Using next available.");
+  else if(physicalNumRequest > -1 && physicalNumRequest >= physicalNum)
+    physicalNum = physicalNumRequest;
 
   std::map<int, std::vector<MElement*> > entityMap;
   entityMap[entityNum] = elements;
@@ -509,6 +519,9 @@ void Chain<C>::addToModel(GModel* m, bool post) const
     if(opt->tangents == 0) opt->tangents = size;
     if(opt->normals == 0) opt->normals = size;
     view->setOptions(opt);
+#if defined(HAVE_FLTK)
+    FlGui::instance()->rebuildTree();
+#endif
   }
 #endif
 }

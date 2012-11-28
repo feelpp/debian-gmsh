@@ -25,6 +25,11 @@
 #include <windows.h>
 #include <process.h>
 #include <io.h>
+#include <direct.h>
+#include <fcntl.h>
+#include <io.h>
+#include <iostream>
+#include <fstream>
 #endif
 
 #if defined(__APPLE__)
@@ -154,11 +159,25 @@ int StatFile(const std::string &fileName)
 {
 #if !defined(WIN32) || defined(__CYGWIN__)
   struct stat buf;
-  return stat(fileName.c_str(), &buf);
+  int ret = stat(fileName.c_str(), &buf);
+  // could get file modification time from buf
 #else
   struct _stat buf;
-  return _stat(fileName.c_str(), &buf);
+  int ret = _stat(fileName.c_str(), &buf);
 #endif
+  return ret;
+}
+
+int CreateDirectory(const std::string &dirName)
+{
+#if !defined(WIN32) || defined(__CYGWIN__)
+  if(mkdir(dirName.c_str(), 0777))
+    return 0;
+#else
+  if(_mkdir(dirName.c_str()))
+    return 0;
+#endif
+  return 1;
 }
 
 int KillProcess(int pid)
@@ -211,5 +230,54 @@ int SystemCall(const std::string &command, bool blocking)
   if(!blocking) cmd += " &";
   Msg::Info("Calling '%s'", cmd.c_str());
   return system(cmd.c_str());
+#endif
+}
+
+std::string getCurrentWorkdir()
+{
+  char path[1024];
+#if defined(WIN32)
+  if(!_getcwd(path, sizeof(path))) return "";
+#else
+  if(!getcwd(path, sizeof(path))) return "";
+#endif
+  std::string str(path);
+  // match the convention of SplitFileName that delivers directory path 
+  // ending with a directory separator
+#if defined(WIN32)
+  str.append("\\");
+#else
+  str.append("/");
+#endif
+  return str;
+}
+
+void RedirectIOToConsole()
+{
+#if defined(WIN32) && !defined(__CYGWIN__)
+  // Win32 GUI apps do not write to the DOS console; make it work again by
+  // attaching to parent console, which allows to use the DOS shell to work 
+  // with Gmsh on the command line (without this hack, you need to either use
+  // a better shell (e.g. bash), or compile a /subsystem:console version
+  if(!AttachConsole(ATTACH_PARENT_PROCESS)) return;
+  // redirect unbuffered stdout, stdin and stderr to the console
+  intptr_t lStdHandle = (intptr_t)GetStdHandle(STD_OUTPUT_HANDLE);
+  int hConHandle = _open_osfhandle(lStdHandle, _O_TEXT);
+  FILE *fp = _fdopen(hConHandle, "w");
+  *stdout = *fp;
+  setvbuf(stdout, NULL, _IONBF, 0);
+  lStdHandle = (intptr_t)GetStdHandle(STD_INPUT_HANDLE);
+  hConHandle = _open_osfhandle(lStdHandle, _O_TEXT);
+  fp = _fdopen(hConHandle, "r");
+  *stdin = *fp;
+  setvbuf(stdin, NULL, _IONBF, 0);
+  lStdHandle = (intptr_t)GetStdHandle(STD_ERROR_HANDLE);
+  hConHandle = _open_osfhandle(lStdHandle, _O_TEXT);
+  fp = _fdopen(hConHandle, "w");
+  *stderr = *fp;
+  setvbuf(stderr, NULL, _IONBF, 0);
+  // make cout, wcout, cin, wcin, wcerr, cerr, wclog and clog point to 
+  // console as well
+  std::ios::sync_with_stdio();
 #endif
 }

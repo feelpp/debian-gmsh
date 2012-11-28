@@ -27,7 +27,10 @@
 #ifndef _GMSH_SOCKET_H_
 #define _GMSH_SOCKET_H_
 
+#if !defined(ONELAB_LOADER)
 #include "GmshConfig.h"
+#endif
+
 #include <string>
 #include <stdio.h>
 #include <stdlib.h>
@@ -363,7 +366,7 @@ class GmshServer : public GmshSocket{
 #if !defined(WIN32) || defined(__CYGWIN__)
       if(tmpsock < 0)
 #else
-      if(tmpsock == INVALID_SOCKET)
+	if(tmpsock == (int)INVALID_SOCKET)
 #endif
         throw "Couldn't create socket";
       // bind the socket to its name

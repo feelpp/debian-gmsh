@@ -466,8 +466,6 @@ class listBrowser : public Fl_Browser{
     : Fl_Browser(x, y, w, h, c){}
 };
 
-#if defined(HAVE_FL_TREE)
-
 static void _add_vertex(GVertex *gv, Fl_Tree *tree, std::string path)
 {
   std::ostringstream vertex;
@@ -730,8 +728,6 @@ class treeBrowser : public Fl_Tree{
     : Fl_Tree(x, y, w, h, c){}
 };
 
-#endif
-
 void visibility_cb(Fl_Widget *w, void *data)
 {
   // get the visibility info from the model, and update the browser
@@ -743,15 +739,13 @@ void visibility_cb(Fl_Widget *w, void *data)
     FlGui::instance()->visibility->show(false);
 
   _rebuild_list_browser();
-#if defined(HAVE_FL_TREE)
   _rebuild_tree_browser(false);
-#endif
   FlGui::instance()->visibility->updatePerWindow(true);
 }
 
 static void visibility_save_cb(Fl_Widget *w, void *data)
 {
-  Msg::StatusBar(2, true, "Appending visibility info to '%s'...",
+  Msg::StatusBar(true, "Appending visibility info to '%s'...",
                  GModel::current()->getFileName().c_str());
   // get the whole visibility information in geo format
   std::vector<int> state[4][2];
@@ -803,7 +797,7 @@ static void visibility_save_cb(Fl_Widget *w, void *data)
   }
   str += "}\n";
   add_infile(str, GModel::current()->getFileName());
-  Msg::StatusBar(2, true, "Done appending visibility info");
+  Msg::StatusBar(true, "Done appending visibility info");
 }
 
 static void _set_visibility_by_number(int what, int num, char val, bool recursive,
@@ -1063,8 +1057,8 @@ static void visibility_interactive_cb(Fl_Widget *w, void *data)
     if(what == ENT_ALL)
       CTX::instance()->mesh.changed = ENT_ALL;
     drawContext::global()->draw();
-    Msg::StatusBar(3, false, "Select %s\n[Press %s'q' to abort]",
-                   str.c_str(), mode ? "" : "'u' to undo or ");
+    Msg::StatusGl("Select %s\n[Press %s'q' to abort]",
+                  str.c_str(), mode ? "" : "'u' to undo or ");
 
     char ib = FlGui::instance()->selectEntity(what);
     if(ib == 'l') {
@@ -1087,7 +1081,7 @@ static void visibility_interactive_cb(Fl_Widget *w, void *data)
   CTX::instance()->mesh.changed = ENT_ALL;
   CTX::instance()->pickElements = 0;
   drawContext::global()->draw();
-  Msg::StatusBar(3, false, "");
+  Msg::StatusGl("");
 }
 
 static void visibility_per_window_cb(Fl_Widget *w, void *data)
@@ -1141,40 +1135,54 @@ visibilityWindow::visibilityWindow(int deltaFontSize)
     Fl_Group *g = new Fl_Group
       (WB, WB + BH, width - 2 * WB, height - 3 * WB - 2 * BH, "List browser");
 
-    Fl_Button *o0 = new Fl_Button
-      (2 * WB, 2 * WB + BH, cols[0], BH/2, "*");
-    o0->align(FL_ALIGN_TOP | FL_ALIGN_INSIDE);
-    o0->tooltip("Select/unselect all");
-    o0->callback(visibility_sort_cb, (void *)"*");
+    {
+      Fl_Group *gg = new Fl_Group
+        (2 * WB, WB + BH, cols[0] + cols[1] + cols[2] + cols[3] / 2, BH);
+      gg->resizable(NULL);
 
-    Fl_Button *o1 = new Fl_Button
-      (2 * WB, 2 * WB + BH + BH/2, cols[0], BH - BH/2, "-");
-    o1->tooltip("Invert selection");
-    o1->callback(visibility_sort_cb, (void *)"-");
+      Fl_Button *o0 = new Fl_Button
+        (2 * WB, 2 * WB + BH, cols[0], BH/2, "*");
+      o0->box(FL_THIN_UP_BOX);
+      o0->align(FL_ALIGN_TOP | FL_ALIGN_INSIDE);
+      o0->tooltip("Select/unselect all");
+      o0->callback(visibility_sort_cb, (void *)"*");
 
-    Fl_Button *o2 = new Fl_Button
-      (2 * WB + cols[0], 2 * WB + BH, cols[1], BH, "Type");
-    o2->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
-    o2->tooltip("Sort by type");
-    o2->callback(visibility_sort_cb, (void *)"type");
+      Fl_Button *o1 = new Fl_Button
+        (2 * WB, 2 * WB + BH + BH/2, cols[0], BH - BH/2, "-");
+      o1->box(FL_THIN_UP_BOX);
+      o1->tooltip("Invert selection");
+      o1->callback(visibility_sort_cb, (void *)"-");
 
-    Fl_Button *o3 = new Fl_Button
-      (2 * WB + cols[0] + cols[1], 2 * WB + BH, cols[2], BH, "Number");
-    o3->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
-    o3->tooltip("Sort by number");
-    o3->callback(visibility_sort_cb, (void *)"number");
+      Fl_Button *o2 = new Fl_Button
+        (2 * WB + cols[0], 2 * WB + BH, cols[1], BH, "Type");
+      o2->box(FL_THIN_UP_BOX);
+      o2->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
+      o2->tooltip("Sort by type");
+      o2->callback(visibility_sort_cb, (void *)"type");
 
-    Fl_Button *o4 = new Fl_Button
-      (2 * WB + cols[0] + cols[1] + cols[2], 2 * WB + BH, cols[3], BH, "Name");
-    o4->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
-    o4->tooltip("Sort by name");
-    o4->callback(visibility_sort_cb, (void *)"name");
+      Fl_Button *o3 = new Fl_Button
+        (2 * WB + cols[0] + cols[1], 2 * WB + BH, cols[2], BH, "Number");
+      o3->box(FL_THIN_UP_BOX);
+      o3->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
+      o3->tooltip("Sort by number");
+      o3->callback(visibility_sort_cb, (void *)"number");
 
-    Fl_Button *o5 = new Fl_Button
-      (width - 4 * WB, 2 * WB + BH, 2 * WB, BH, "+");
-    o5->tooltip("Add parameter name for first selected item");
-    o5->callback(visibility_sort_cb, (void *)"+");
+      Fl_Button *o4 = new Fl_Button
+        (2 * WB + cols[0] + cols[1] + cols[2], 2 * WB + BH, cols[3], BH, "Name");
+      o4->box(FL_THIN_UP_BOX);
+      o4->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
+      o4->tooltip("Sort by name");
+      o4->callback(visibility_sort_cb, (void *)"name");
 
+      gg->end();
+
+      Fl_Button *o5 = new Fl_Button
+        (width - 4 * WB, 2 * WB + BH, 2 * WB, BH, "+");
+      o5->box(FL_THIN_UP_BOX);
+      o5->tooltip("Add parameter name for first selected item");
+      o5->callback(visibility_sort_cb, (void *)"+");
+
+    }
     {
       Fl_Group *gg = new Fl_Group
         (2 * WB, 2 * WB + 2 * BH, brw, height - 6 * WB - 4 * BH);
@@ -1212,7 +1220,6 @@ visibilityWindow::visibilityWindow(int deltaFontSize)
     g->end();
     Fl_Group::current()->resizable(g);
   }
-#if defined(HAVE_FL_TREE)
   {
     Fl_Group *g = new Fl_Group
       (WB, WB + BH, width - 2 * WB, height - 3 * WB - 2 * BH, "Tree browser");
@@ -1237,7 +1244,6 @@ visibilityWindow::visibilityWindow(int deltaFontSize)
     g->resizable(tree);
     g->end();
   }
-#endif
   {
     Fl_Group *g = new Fl_Group
       (WB, WB + BH, width - 2 * WB, height - 3 * WB - 2 * BH, "Numeric");
@@ -1385,7 +1391,6 @@ visibilityWindow::visibilityWindow(int deltaFontSize)
   {
     Fl_Group *g = new Fl_Group
       (WB, WB + BH, width - 2 * WB, height - 3 * WB - 2 * BH, "Per window");
-    g->resizable(NULL);
 
     per_window = new Fl_Multi_Browser
       (2 * WB, 2 * WB + BH, brw, height - 6 * WB - 3 * BH);
@@ -1401,11 +1406,14 @@ visibilityWindow::visibilityWindow(int deltaFontSize)
   o->end();
 
   win->resizable(o);
-  win->size_range(width, 15 * BH + 5 * WB, width);
+  win->size_range(width, 15 * BH + 5 * WB);
 
   {
-    int aw = 5 * WB;
+    int aw = (int)(2.5 * FL_NORMAL_SIZE);
     int ww = (width - 5 * WB - aw) / 4;
+
+    Fl_Group *g = new Fl_Group(WB, height - BH - WB, width - 2 * WB - 2 * ww, BH);
+    g->resizable(NULL);
 
     Fl_Box *b = new Fl_Box(WB, height - BH - WB, aw, BH, "Apply");
     b->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
@@ -1420,9 +1428,12 @@ visibilityWindow::visibilityWindow(int deltaFontSize)
     butt[1]->type(FL_TOGGLE_BUTTON);
     butt[1]->value(1);
 
+    g->end();
+
     Fl_Button *o1 = new Fl_Button
       (width - 2 * ww - WB, height - BH - WB, 2 * ww, BH, "Save current visibility");
     o1->callback(visibility_save_cb);
+
   }
 
   win->position(CTX::instance()->visPosition[0], CTX::instance()->visPosition[1]);

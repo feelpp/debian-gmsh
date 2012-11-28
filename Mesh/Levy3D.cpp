@@ -869,7 +869,7 @@ void LpCVT::compute_parameters(){
 
 double LpCVT::get_size(double x,double y,double z){
   //if outside domain return 1.0 (or other value > 0.0)
-  return 0.25;
+  return Size_field::search(x,y,z);
 }
 
 Tensor LpCVT::get_tensor(double x,double y,double z){
@@ -1057,7 +1057,7 @@ SVector3 LpCVT::simple(VoronoiElement element,int p){
 
 SVector3 LpCVT::dF_dC1(VoronoiElement element,int p){
   int i;
-  double u,v,w;
+  double u;//,v,w;
   double comp_x,comp_y,comp_z;
   double weight;
   double rho;
@@ -1086,8 +1086,8 @@ SVector3 LpCVT::dF_dC1(VoronoiElement element,int p){
 
   for(i=0;i<gauss_num;i++){
     u = gauss_points(i,0);
-	v = gauss_points(i,1);
-	w = gauss_points(i,2);
+	//v = gauss_points(i,1);
+	//w = gauss_points(i,2);
 	weight = gauss_weights(i);
 	rho = rho_cache[i];
 	drho_dx = drho_dx_cache[i];
@@ -1109,7 +1109,7 @@ SVector3 LpCVT::dF_dC1(VoronoiElement element,int p){
 
 SVector3 LpCVT::dF_dC2(VoronoiElement element,int p){
   int i;
-  double u,v,w;
+  double v;//u,v,w;
   double comp_x,comp_y,comp_z;
   double weight;
   double rho;
@@ -1137,9 +1137,9 @@ SVector3 LpCVT::dF_dC2(VoronoiElement element,int p){
   gz = generator.z();
 
   for(i=0;i<gauss_num;i++){
-    u = gauss_points(i,0);
+    //u = gauss_points(i,0);
 	v = gauss_points(i,1);
-	w = gauss_points(i,2);
+	//w = gauss_points(i,2);
 	weight = gauss_weights(i);
 	rho = rho_cache[i];
 	drho_dx = drho_dx_cache[i];
@@ -1161,7 +1161,7 @@ SVector3 LpCVT::dF_dC2(VoronoiElement element,int p){
 
 SVector3 LpCVT::dF_dC3(VoronoiElement element,int p){
   int i;
-  double u,v,w;
+  double w;//u,v,w;
   double comp_x,comp_y,comp_z;
   double weight;
   double rho;
@@ -1189,8 +1189,8 @@ SVector3 LpCVT::dF_dC3(VoronoiElement element,int p){
   gz = generator.z();
 
   for(i=0;i<gauss_num;i++){
-    u = gauss_points(i,0);
-	v = gauss_points(i,1);
+    //u = gauss_points(i,0);
+	//v = gauss_points(i,1);
 	w = gauss_points(i,2);
 	weight = gauss_weights(i);
 	rho = rho_cache[i];
@@ -1452,8 +1452,6 @@ void LpSmoother::improve_model(){
   GModel* model = GModel::current();
   GModel::riter it;
 
-  Frame_field::init_model();
-
   for(it=model->firstRegion();it!=model->lastRegion();it++)
   {
     gr = *it;
@@ -1461,13 +1459,11 @@ void LpSmoother::improve_model(){
 	  improve_region(gr);
 	}
   }
-
-  Frame_field::clear();
 }
 
 void LpSmoother::improve_region(GRegion* gr)
 {
-#if defined(HAVE_BFGS)
+  #if defined(HAVE_BFGS)
   unsigned int i;
   int offset;
   double epsg;
@@ -1494,6 +1490,9 @@ void LpSmoother::improve_region(GRegion* gr)
   alglib::real_1d_array x;
   alglib::real_1d_array alglib_scales;
 
+  Frame_field::init_region(gr);
+  Size_field::init_region(gr);
+  Size_field::solve(gr);
   octree = new MElementOctree(gr->model());
 
   for(i=0;i<gr->getNumMeshElements();i++){
@@ -1623,7 +1622,9 @@ void LpSmoother::improve_region(GRegion* gr)
   delete octree;
   free(initial_conditions);
   free(scales);
-#endif
+  Size_field::clear();
+  Frame_field::clear();
+  #endif
 }
 
 int LpSmoother::get_nbr_interior_vertices(){

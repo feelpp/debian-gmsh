@@ -18,16 +18,21 @@
 #include "PViewOptions.h"
 #include "VertexArray.h"
 #include "gl2ps.h"
- 
+
 #if defined(HAVE_FLTK)
 #include <FL/Fl_JPEG_Image.H>
 #include <FL/Fl_PNG_Image.H>
 #include <FL/gl.h>
 #endif
-  
+
+#if defined(HAVE_POPPLER)
+#include "gmshPopplerWrapper.h"
+#endif
+
+
 drawContextGlobal *drawContext::_global = 0;
 
-drawContext::drawContext(drawTransform *transform) 
+drawContext::drawContext(drawTransform *transform)
   : _transform(transform)
 {
   // initialize from temp values in global context
@@ -51,19 +56,23 @@ drawContext::drawContext(drawTransform *transform)
 
   _quadric = 0; // cannot create it here: needs valid opengl context
   _displayLists = 0;
- 
 }
 
 drawContext::~drawContext()
 {
-  if(_quadric) gluDeleteQuadric(_quadric);
-  if(_displayLists) glDeleteLists(_displayLists, 3);
+  invalidateQuadricsAndDisplayLists();
 }
 
 drawContextGlobal *drawContext::global()
-{ 
+{
   if(!_global) _global = new drawContextGlobal(); // create dummy default
-  return _global; 
+  return _global;
+}
+
+void drawContext::invalidateQuadricsAndDisplayLists()
+{
+  if(_quadric){ gluDeleteQuadric(_quadric); _quadric = 0; }
+  if(_displayLists){ glDeleteLists(_displayLists, 3); _displayLists = 0; }
 }
 
 void drawContext::createQuadricsAndDisplayLists()
@@ -82,31 +91,31 @@ void drawContext::createQuadricsAndDisplayLists()
 
   // display list 0 (sphere)
   glNewList(_displayLists + 0, GL_COMPILE);
-  gluSphere(_quadric, 1., 
-            CTX::instance()->quadricSubdivisions, 
+  gluSphere(_quadric, 1.,
+            CTX::instance()->quadricSubdivisions,
             CTX::instance()->quadricSubdivisions);
   glEndList();
 
   // display list 1 (arrow)
   glNewList(_displayLists + 1, GL_COMPILE);
   glTranslated(0., 0., CTX::instance()->arrowRelStemLength);
-  if(CTX::instance()->arrowRelHeadRadius > 0 && 
+  if(CTX::instance()->arrowRelHeadRadius > 0 &&
      CTX::instance()->arrowRelStemLength < 1)
-    gluCylinder(_quadric, CTX::instance()->arrowRelHeadRadius, 0., 
-                (1. - CTX::instance()->arrowRelStemLength), 
+    gluCylinder(_quadric, CTX::instance()->arrowRelHeadRadius, 0.,
+                (1. - CTX::instance()->arrowRelStemLength),
                 CTX::instance()->quadricSubdivisions, 1);
   if(CTX::instance()->arrowRelHeadRadius > CTX::instance()->arrowRelStemRadius)
-    gluDisk(_quadric, CTX::instance()->arrowRelStemRadius, 
+    gluDisk(_quadric, CTX::instance()->arrowRelStemRadius,
             CTX::instance()->arrowRelHeadRadius,
             CTX::instance()->quadricSubdivisions, 1);
   else
-    gluDisk(_quadric, CTX::instance()->arrowRelHeadRadius, 
+    gluDisk(_quadric, CTX::instance()->arrowRelHeadRadius,
             CTX::instance()->arrowRelStemRadius,
             CTX::instance()->quadricSubdivisions, 1);
   glTranslated(0., 0., -CTX::instance()->arrowRelStemLength);
-  if(CTX::instance()->arrowRelStemRadius > 0 && 
+  if(CTX::instance()->arrowRelStemRadius > 0 &&
      CTX::instance()->arrowRelStemLength > 0){
-    gluCylinder(_quadric, CTX::instance()->arrowRelStemRadius, 
+    gluCylinder(_quadric, CTX::instance()->arrowRelStemRadius,
                 CTX::instance()->arrowRelStemRadius,
                 CTX::instance()->arrowRelStemLength,
                 CTX::instance()->quadricSubdivisions, 1);
@@ -152,7 +161,7 @@ void drawContext::addQuaternion(double p1x, double p1y, double p2x, double p2y)
   double quat[4];
   trackball(quat, p1x, p1y, p2x, p2y);
   add_quats(quat, quaternion, quaternion);
-  if (CTX::instance()->camera)   camera.rotate(quat); 
+  if (CTX::instance()->camera)   camera.rotate(quat);
 
 }
 
@@ -161,7 +170,7 @@ void drawContext::addQuaternionFromAxisAndAngle(double axis[3], double angle)
   double a = angle * M_PI / 180.;
   double quat[4];
   axis_to_quat(axis, a, quat);
-  add_quats(quat, quaternion, quaternion);  
+  add_quats(quat, quaternion, quaternion);
 }
 
 void drawContext::setQuaternion(double q0, double q1, double q2, double q3)
@@ -217,10 +226,10 @@ static int needPolygonOffset()
 {
   GModel *m = GModel::current();
   if(m->getMeshStatus() == 2 &&
-     (CTX::instance()->mesh.surfacesEdges || CTX::instance()->geom.lines || 
+     (CTX::instance()->mesh.surfacesEdges || CTX::instance()->geom.lines ||
       CTX::instance()->geom.surfaces))
     return 1;
-  if(m->getMeshStatus() == 3 && 
+  if(m->getMeshStatus() == 3 &&
      (CTX::instance()->mesh.surfacesEdges || CTX::instance()->mesh.volumesEdges))
     return 1;
   for(unsigned int i = 0; i < PView::list.size(); i++){
@@ -232,33 +241,30 @@ static int needPolygonOffset()
 
 void drawContext::draw3d()
 {
-  // We can only create this when a valid opengl context exists. (It's
-  // cheap to create so we just do it at each redraw: this makes it
-  // much simpler to deal with option changes, e.g. arrow shape
-  // changes)
+  // We can only create this when a valid opengl context exists. (It's cheap to
+  // create so we just do it at each redraw: this makes it much simpler to deal
+  // with option changes, e.g. arrow shape changes)
   createQuadricsAndDisplayLists();
 
-  // We should only enable the polygon offset when there is a mix of
-  // lines and polygons to be drawn; enabling it all the time can lead
-  // to very small but annoying artifacts in the picture. Since there
-  // are so many ways in Gmsh to combine polygons and lines
-  // (geometries + meshes + views...), we do our best here to
-  // automatically detect if we should enable it. Note: the formula
-  // for the offset is "offset = factor*DZ+r*units", where DZ is a
-  // measurement of the change in depth relative to the screen area of
-  // the polygon, and r is the smallest value that is guaranteed to
-  // produce a resolvable offset for a given implementation.
-  glPolygonOffset((float)CTX::instance()->polygonOffsetFactor, 
+  // We should only enable the polygon offset when there is a mix of lines and
+  // polygons to be drawn; enabling it all the time can lead to very small but
+  // annoying artifacts in the picture. Since there are so many ways in Gmsh to
+  // combine polygons and lines (geometries + meshes + views...), we do our best
+  // here to automatically detect if we should enable it. Note: the formula for
+  // the offset is "offset = factor*DZ+r*units", where DZ is a measurement of
+  // the change in depth relative to the screen area of the polygon, and r is
+  // the smallest value that is guaranteed to produce a resolvable offset for a
+  // given implementation.
+  glPolygonOffset((float)CTX::instance()->polygonOffsetFactor,
                   (float)CTX::instance()->polygonOffsetUnits);
   if(CTX::instance()->polygonOffsetFactor || CTX::instance()->polygonOffsetUnits)
-    CTX::instance()->polygonOffset = CTX::instance()->polygonOffsetAlways ? 1 : 
+    CTX::instance()->polygonOffset = CTX::instance()->polygonOffsetAlways ? 1 :
       needPolygonOffset();
   else
     CTX::instance()->polygonOffset = 0;
 
   // speedup drawing of textured fonts on cocoa mac version
 #if defined(HAVE_FLTK) && defined(__APPLE__) && defined(HAVE_64BIT_SIZE_T)
-#if (FL_MAJOR_VERSION == 1) && (FL_MINOR_VERSION == 3)
   int numStrings = GModel::current()->getNumVertices();
   if(CTX::instance()->mesh.pointsNum)
     numStrings = std::max(numStrings, GModel::current()->getNumMeshVertices());
@@ -268,7 +274,6 @@ void drawContext::draw3d()
   numStrings *= 2;
   if(gl_texture_pile_height() < numStrings)
     gl_texture_pile_height(numStrings);
-#endif
 #endif
 
   glDepthFunc(GL_LESS);
@@ -292,11 +297,11 @@ void drawContext::draw2d()
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
   glOrtho((double)viewport[0], (double)viewport[2],
-          (double)viewport[1], (double)viewport[3], 
+          (double)viewport[1], (double)viewport[3],
           -100., 100.); // in pixels, so we can draw some 3D glyphs
 
   // hack to make the 2D primitives appear "in front" in GL2PS
-  glTranslated(0., 0., CTX::instance()->clipFactor > 1. ? 
+  glTranslated(0., 0., CTX::instance()->clipFactor > 1. ?
                1. / CTX::instance()->clipFactor : CTX::instance()->clipFactor);
   glMatrixMode(GL_MODELVIEW);
 
@@ -347,10 +352,37 @@ void drawContext::drawBackgroundGradient()
     int ntheta = 36;
     for(int i = 1; i < ntheta + 1; i ++){
       double theta = i * 2 * M_PI / (double)ntheta;
-      glVertex2d(cx + r * cos(theta), cy + r * sin(theta));       
+      glVertex2d(cx + r * cos(theta), cy + r * sin(theta));
     }
     glEnd();
   }
+#if defined(HAVE_POPPLER)
+  else if(CTX::instance()->bgGradient == 4){ // PDF @ background
+    // FIXME: this should move to drawBackgroundImage below!
+    GLuint texture = gmshPopplerWrapper::getTextureForPage(800,600);
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D,texture);
+    glBegin(GL_QUADS);
+    glColor4ubv((GLubyte *) & CTX::instance()->color.bg);
+
+    int dw =viewport[2] - viewport[0];
+    int dh =viewport[3] - viewport[1];
+
+    int dw_im = gmshPopplerWrapper::width();
+    int dh_im = gmshPopplerWrapper::height();
+
+    // conserve aspect ratio : dw / dh = dw_im / dh_im
+    //    dw = dh * dw_im / dh_im;
+    dh = dw * dh_im / dw_im;
+
+    glTexCoord2f(1.0f,1.0f);glVertex2i(viewport[2],    viewport[3]-dh);
+    glTexCoord2f(1.0f,0.0f);glVertex2i(viewport[2],    viewport[3]);
+    glTexCoord2f(0.0f,0.0f);glVertex2i(viewport[2]-dw, viewport[3]);
+    glTexCoord2f(0.0f,1.0f);glVertex2i(viewport[2]-dw, viewport[3]-dh);
+    glEnd();
+  }
+#endif
+
 }
 
 void drawContext::drawBackgroundImage()
@@ -409,25 +441,25 @@ void drawContext::drawBackgroundImage()
 
 void drawContext::initProjection(int xpick, int ypick, int wpick, int hpick)
 {
-  double Va = 
+  double Va =
     (double) (viewport[3] - viewport[1]) /
     (double) (viewport[2] - viewport[0]);
-  double Wa = (CTX::instance()->max[1] - CTX::instance()->min[1]) / 
+  double Wa = (CTX::instance()->max[1] - CTX::instance()->min[1]) /
     (CTX::instance()->max[0] - CTX::instance()->min[0]);
 
   // compute the viewport in World coordinates (with margins)
   if(Va > Wa) {
     vxmin = CTX::instance()->min[0];
     vxmax = CTX::instance()->max[0];
-    vymin = 0.5 * (CTX::instance()->min[1] + CTX::instance()->max[1] - 
+    vymin = 0.5 * (CTX::instance()->min[1] + CTX::instance()->max[1] -
 		   Va * (CTX::instance()->max[0] - CTX::instance()->min[0]));
-    vymax = 0.5 * (CTX::instance()->min[1] + CTX::instance()->max[1] + 
+    vymax = 0.5 * (CTX::instance()->min[1] + CTX::instance()->max[1] +
 		   Va * (CTX::instance()->max[0] - CTX::instance()->min[0]));
   }
   else {
-    vxmin = 0.5 * (CTX::instance()->min[0] + CTX::instance()->max[0] - 
+    vxmin = 0.5 * (CTX::instance()->min[0] + CTX::instance()->max[0] -
 		   (CTX::instance()->max[1] - CTX::instance()->min[1]) / Va);
-    vxmax = 0.5 * (CTX::instance()->min[0] + CTX::instance()->max[0] + 
+    vxmax = 0.5 * (CTX::instance()->min[0] + CTX::instance()->max[0] +
 		   (CTX::instance()->max[1] - CTX::instance()->min[1]) / Va);
     vymin = CTX::instance()->min[1];
     vymax = CTX::instance()->max[1];
@@ -446,10 +478,9 @@ void drawContext::initProjection(int xpick, int ypick, int wpick, int hpick)
   // no initial translation of the model
   t_init[0] = t_init[1] = t_init[2] = 0.;
 
-  // set up the near and far clipping planes so that the box is large
-  // enough to manipulate the model and zoom, but not too big
-  // (otherwise the z-buffer resolution e.g. with Mesa can become
-  // insufficient)
+  // set up the near and far clipping planes so that the box is large enough to
+  // manipulate the model and zoom, but not too big (otherwise the z-buffer
+  // resolution e.g. with Mesa can become insufficient)
   double zmax = std::max(fabs(CTX::instance()->min[2]),
 			 fabs(CTX::instance()->max[2]));
   if(zmax < CTX::instance()->lc) zmax = CTX::instance()->lc;
@@ -460,7 +491,7 @@ void drawContext::initProjection(int xpick, int ypick, int wpick, int hpick)
     glLoadIdentity();
     double w = (double)viewport[2];
     double h = (double)viewport[3];
-    double ratio = w / h; 
+    double ratio = w / h;
     double dx = 1.5 * tan(camera.radians) * w * ratio;
     double dy = 1.5 * tan(camera.radians) * w;
     double dz = -w * 1.25;
@@ -474,9 +505,9 @@ void drawContext::initProjection(int xpick, int ypick, int wpick, int hpick)
     glEnd();
     glPopMatrix();
     glEnable(GL_DEPTH_TEST);
-  } 
+  }
   else if(!CTX::instance()->camera){ // if not in camera mode
-  
+
     double clip_near, clip_far;
     if(CTX::instance()->ortho) {
       clip_near = -zmax * s[2] * CTX::instance()->clipFactor;
@@ -496,18 +527,17 @@ void drawContext::initProjection(int xpick, int ypick, int wpick, int hpick)
 		    (GLdouble)wpick, (GLdouble)hpick, (GLint *)viewport);
 
     // draw background if not in selection mode
-    if(render_mode != GMSH_SELECT && 
+    if(render_mode != GMSH_SELECT &&
        (CTX::instance()->bgGradient || CTX::instance()->bgImageFileName.size()) &&
        (!CTX::instance()->printing || CTX::instance()->print.background)){
       glDisable(GL_DEPTH_TEST);
       glPushMatrix();
       glLoadIdentity();
-      // the z values and the translation are only needed for GL2PS,
-      // which does not understand "no depth test" (hence we must make
-      // sure that we draw the background behind the rest of the
-      // scene)
+      // the z values and the translation are only needed for GL2PS, which does
+      // not understand "no depth test" (hence we must make sure that we draw
+      // the background behind the rest of the scene)
       glOrtho((double)viewport[0], (double)viewport[2],
-	      (double)viewport[1], (double)viewport[3], 
+	      (double)viewport[1], (double)viewport[3],
 	      clip_near, clip_far);
       glTranslated(0., 0., -0.99 * clip_far);
       drawBackgroundGradient();
@@ -525,9 +555,9 @@ void drawContext::initProjection(int xpick, int ypick, int wpick, int hpick)
       glLoadIdentity();
     }
     else {
-      // recenter the model such that the perspective is always at the
-      // center of gravity (we should maybe add an option to choose
-      // this, as we do for the rotation center)
+      // recenter the model such that the perspective is always at the center of
+      // gravity (we should maybe add an option to choose this, as we do for the
+      // rotation center)
       t_init[0] = CTX::instance()->cg[0];
       t_init[1] = CTX::instance()->cg[1];
       vxmin -= t_init[0];
@@ -550,7 +580,7 @@ void drawContext::initRenderModel()
   glLoadIdentity();
   glScaled(s[0], s[1], s[2]);
   glTranslated(t[0], t[1], t[2]);
-  
+
   for(int i = 0; i < 6; i++) {
     if(CTX::instance()->light[i]) {
       GLfloat position[4] = {(GLfloat)CTX::instance()->lightPosition[i][0],
@@ -558,7 +588,7 @@ void drawContext::initRenderModel()
                              (GLfloat)CTX::instance()->lightPosition[i][2],
                              (GLfloat)CTX::instance()->lightPosition[i][3]};
       glLightfv((GLenum)(GL_LIGHT0 + i), GL_POSITION, position);
-      
+
       GLfloat r = (GLfloat)(CTX::instance()->unpackRed
                             (CTX::instance()->color.ambientLight[i]) / 255.);
       GLfloat g = (GLfloat)(CTX::instance()->unpackGreen
@@ -567,7 +597,7 @@ void drawContext::initRenderModel()
                             (CTX::instance()->color.ambientLight[i]) / 255.);
       GLfloat ambient[4] = {r, g, b, 1.0F};
       glLightfv((GLenum)(GL_LIGHT0 + i), GL_AMBIENT, ambient);
-      
+
       r = (GLfloat)(CTX::instance()->unpackRed
                     (CTX::instance()->color.diffuseLight[i]) / 255.);
       g = (GLfloat)(CTX::instance()->unpackGreen
@@ -576,7 +606,7 @@ void drawContext::initRenderModel()
                     (CTX::instance()->color.diffuseLight[i]) / 255.);
       GLfloat diffuse[4] = {r, g, b, 1.0F};
       glLightfv((GLenum)(GL_LIGHT0 + i), GL_DIFFUSE, diffuse);
-      
+
       r = (GLfloat)(CTX::instance()->unpackRed
                     (CTX::instance()->color.specularLight[i]) / 255.);
       g = (GLfloat)(CTX::instance()->unpackGreen
@@ -585,39 +615,38 @@ void drawContext::initRenderModel()
                     (CTX::instance()->color.specularLight[i]) / 255.);
       GLfloat specular[4] = {r, g, b, 1.0F};
       glLightfv((GLenum)(GL_LIGHT0 + i), GL_SPECULAR, specular);
-      
+
       glEnable((GLenum)(GL_LIGHT0 + i));
     }
     else{
       glDisable((GLenum)(GL_LIGHT0 + i));
     }
   }
-  
+
   glPopMatrix();
-  
+
   // ambient and diffuse material colors track glColor automatically
   glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
   glEnable(GL_COLOR_MATERIAL);
   // "white"-only specular material reflection color
-  GLfloat spec[4] = {(GLfloat)CTX::instance()->shine, 
-                     (GLfloat)CTX::instance()->shine, 
+  GLfloat spec[4] = {(GLfloat)CTX::instance()->shine,
+                     (GLfloat)CTX::instance()->shine,
                      (GLfloat)CTX::instance()->shine, 1.0F};
   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, spec);
   // specular exponent in [0,128] (larger means more "focused"
   // reflection)
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS,
               (GLfloat)CTX::instance()->shineExponent);
-  
+
   glShadeModel(GL_SMOOTH);
-  
-  // Normalize the normals automatically. We could use the more
-  // efficient glEnable(GL_RESCALE_NORMAL) instead (since we initially
-  // specify unit normals), but GL_RESCALE_NORMAL does only work with
-  // isotropic scalings (and we allow anistotropic scalings in
-  // myZoom). Note that GL_RESCALE_NORMAL is only available in
-  // GL_VERSION_1_2.
+
+  // Normalize the normals automatically. We could use the more efficient
+  // glEnable(GL_RESCALE_NORMAL) instead (since we initially specify unit
+  // normals), but GL_RESCALE_NORMAL does only work with isotropic scalings (and
+  // we allow anistotropic scalings in myZoom). Note that GL_RESCALE_NORMAL is
+  // only available in GL_VERSION_1_2.
   glEnable(GL_NORMALIZE);
-  
+
   // lighting is enabled/disabled for each particular primitive later
   glDisable(GL_LIGHTING);
 }
@@ -628,29 +657,29 @@ void drawContext::initPosition()
   glTranslated(t[0], t[1], t[2]);
 
   if(CTX::instance()->rotationCenterCg)
-    glTranslated(CTX::instance()->cg[0], 
-                 CTX::instance()->cg[1], 
+    glTranslated(CTX::instance()->cg[0],
+                 CTX::instance()->cg[1],
                  CTX::instance()->cg[2]);
   else
     glTranslated(CTX::instance()->rotationCenter[0],
                  CTX::instance()->rotationCenter[1],
                  CTX::instance()->rotationCenter[2]);
-  
+
   buildRotationMatrix();
   glMultMatrixd(rot);
 
   if(CTX::instance()->rotationCenterCg)
-    glTranslated(-CTX::instance()->cg[0], 
-                 -CTX::instance()->cg[1], 
+    glTranslated(-CTX::instance()->cg[0],
+                 -CTX::instance()->cg[1],
                  -CTX::instance()->cg[2]);
   else
     glTranslated(-CTX::instance()->rotationCenter[0],
                  -CTX::instance()->rotationCenter[1],
                  -CTX::instance()->rotationCenter[2]);
 
-  // store the projection and modelview matrices at this precise
-  // moment (so that we can use them at any later time, even if the
-  // context has changed, i.e., even if we are out of draw())
+  // store the projection and modelview matrices at this precise moment (so that
+  // we can use them at any later time, even if the context has changed, i.e.,
+  // even if we are out of draw())
   glGetDoublev(GL_PROJECTION_MATRIX, proj);
   glGetDoublev(GL_MODELVIEW_MATRIX, model);
 
@@ -658,9 +687,9 @@ void drawContext::initPosition()
     glClipPlane((GLenum)(GL_CLIP_PLANE0 + i), CTX::instance()->clipPlane[i]);
 }
 
-// Takes a cursor position in window coordinates and returns the line
-// (given by a point and a unit direction vector), in real space, that
-// corresponds to that cursor position
+// Takes a cursor position in window coordinates and returns the line (given by
+// a point and a unit direction vector), in real space, that corresponds to that
+// cursor position
 void drawContext::unproject(double x, double y, double p[3], double d[3])
 {
   GLint vp[4];
@@ -671,13 +700,13 @@ void drawContext::unproject(double x, double y, double p[3], double d[3])
   GLdouble x0, y0, z0, x1, y1, z1;
 
   // we use the stored model and proj matrices instead of directly
-  // getGetDouble'ing the matrices since unproject can be called in or
-  // after draw2d
+  // getGetDouble'ing the matrices since unproject can be called in or after
+  // draw2d
   if(!gluUnProject(x, y, 0.0, model, proj, vp, &x0, &y0, &z0))
     Msg::Warning("unproject1 failed");
   if(!gluUnProject(x, y, 1.0, model, proj, vp, &x1, &y1, &z1))
     Msg::Warning("unproject2 failed");
-  
+
   p[0] = x0;
   p[1] = y0;
   p[2] = z0;
@@ -713,7 +742,7 @@ void drawContext::world2Viewport(double xyz[3], double win[3])
 class hit{
  public:
   GLuint type, ient, depth, type2, ient2;
-  hit(GLuint t, GLuint i, GLuint d, GLuint t2=0, GLuint i2=0) 
+  hit(GLuint t, GLuint i, GLuint d, GLuint t2=0, GLuint i2=0)
     : type(t), ient(i), depth(d), type2(t2), ient2(i2) {}
 };
 
@@ -725,12 +754,12 @@ class hitDepthLessThan{
   }
 };
 
-// returns the element at a given position in a vertex array (element
-// pointers are not always stored: returning 0 is not an error)
+// returns the element at a given position in a vertex array (element pointers
+// are not always stored: returning 0 is not an error)
 static MElement *getElement(GEntity *e, int va_type, int index)
 {
   switch(va_type){
-  case 2: 
+  case 2:
     if(e->va_lines && index < e->va_lines->getNumElementPointers())
       return *e->va_lines->getElementPointerArray(index);
     break;
@@ -743,9 +772,9 @@ static MElement *getElement(GEntity *e, int va_type, int index)
 }
 
 bool drawContext::select(int type, bool multiple, bool mesh,
-                         int x, int y, int w, int h, 
+                         int x, int y, int w, int h,
                          std::vector<GVertex*> &vertices,
-                         std::vector<GEdge*> &edges, 
+                         std::vector<GEdge*> &edges,
                          std::vector<GFace*> &faces,
                          std::vector<GRegion*> &regions,
                          std::vector<MElement*> &elements)
@@ -756,11 +785,11 @@ bool drawContext::select(int type, bool multiple, bool mesh,
   regions.clear();
   elements.clear();
 
-  // in our case the selection buffer size is equal to between 5 and 7
-  // times the maximum number of possible hits
+  // in our case the selection buffer size is equal to between 5 and 7 times the
+  // maximum number of possible hits
   GModel *m = GModel::current();
   int eles = (mesh && CTX::instance()->pickElements) ? 4 * m->getNumMeshElements() : 0;
-  int size = 7 * (m->getNumVertices() + m->getNumEdges() + m->getNumFaces() + 
+  int size = 7 * (m->getNumVertices() + m->getNumEdges() + m->getNumFaces() +
                   m->getNumRegions() + eles);
 
   if(!size) return false; // the model is empty, don't bother!
@@ -799,35 +828,34 @@ bool drawContext::select(int type, bool multiple, bool mesh,
   for(int i = 0; i < numhits; i++) {
     // in Gmsh 'names' should always be 0, 2 or 4:
     // * names == 0 means that there is nothing on the stack
-    // * if names == 2, the first name is the type of the entity 
-    //   (0 for point, 1 for edge, 2 for face or 3 for volume) and
-    //   the second is the entity number;
-    // * if names == 4, the first name is the type of the entity,
-    //   the second is the entity number, the third is the type
-    //   of vertex array (2 for line, 3 for triangle, 4 for quad)
-    //   and the fourth is the index of the element in the vertex
-    //   array
-    GLuint names = *ptr++; 
+    // * if names == 2, the first name is the type of the entity (0 for point, 1
+    //   for edge, 2 for face or 3 for volume) and the second is the entity
+    //   number;
+    // * if names == 4, the first name is the type of the entity, the second is
+    //   the entity number, the third is the type of vertex array (2 for line, 3
+    //   for triangle, 4 for quad) and the fourth is the index of the element in
+    //   the vertex array
+    GLuint names = *ptr++;
     *ptr++; // mindepth
     GLuint maxdepth = *ptr++;
     if(names == 2){
       GLuint depth = maxdepth;
-      GLuint type = *ptr++; 
+      GLuint type = *ptr++;
       GLuint ient = *ptr++;
       hits.push_back(hit(type, ient, depth));
     }
     else if(names == 4){
       GLuint depth = maxdepth;
-      GLuint type = *ptr++; 
+      GLuint type = *ptr++;
       GLuint ient = *ptr++;
-      GLuint type2 = *ptr++; 
+      GLuint type2 = *ptr++;
       GLuint ient2 = *ptr++;
       hits.push_back(hit(type, ient, depth, type2, ient2));
     }
   }
 
   delete [] selectionBuffer;
-  
+
   if(!hits.size()){ // no entities
     return false;
   }
@@ -835,9 +863,9 @@ bool drawContext::select(int type, bool multiple, bool mesh,
   // sort hits to get closest entities first
   std::sort(hits.begin(), hits.end(), hitDepthLessThan());
 
-  // filter result: if type == ENT_NONE, return the closest entity of
-  // "lowest dimension" (point < line < surface < volume). Otherwise,
-  // return the closest entity of type "type"
+  // filter result: if type == ENT_NONE, return the closest entity of "lowest
+  // dimension" (point < line < surface < volume). Otherwise, return the closest
+  // entity of type "type"
   GLuint typmin = 10;
   for(unsigned int i = 0; i < hits.size(); i++)
     typmin = std::min(typmin, hits[i].type);
@@ -910,8 +938,8 @@ bool drawContext::select(int type, bool multiple, bool mesh,
     }
   }
 
-  if(vertices.size() || edges.size() || faces.size() || 
-     regions.size() || elements.size()) 
+  if(vertices.size() || edges.size() || faces.size() ||
+     regions.size() || elements.size())
     return true;
   return false;
 }

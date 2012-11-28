@@ -15,11 +15,9 @@ typedef unsigned long intptr_t;
 #include <FL/Fl_Tooltip.H>
 #include <FL/Fl_Shared_Image.H>
 #include <FL/Fl_File_Icon.H>
-#include <FL/x.H>
-#include <FL/gl.h>
 #include "FlGui.h"
+#include "drawContextFltk.h"
 #include "graphicWindow.h"
-#include "menuWindow.h"
 #include "optionWindow.h"
 #include "fieldWindow.h"
 #include "pluginWindow.h"
@@ -29,7 +27,7 @@ typedef unsigned long intptr_t;
 #include "clippingWindow.h"
 #include "manipWindow.h"
 #include "contextWindow.h"
-#include "onelabWindow.h"
+#include "onelabGroup.h"
 #include "aboutWindow.h"
 #include "colorbarWindow.h"
 #include "fileDialogs.h"
@@ -42,13 +40,14 @@ typedef unsigned long intptr_t;
 #include "Plugin.h"
 #include "PluginManager.h"
 #include "OpenFile.h"
-#include "Win32Icon.h"
+#include "WinIcon.h"
 #include "Options.h"
 #include "CommandLine.h"
 #include "Context.h"
 #include "StringUtils.h"
 #include "Generator.h"
 #include "gl2ps.h"
+#include "gmshPopplerWrapper.h"
 #if defined(HAVE_3M)
 #include "3M.h"
 #endif
@@ -62,153 +61,44 @@ void FlGui::wait(){ Fl::wait(); }
 // wait (at most time seconds) for any events, then process them
 void FlGui::wait(double time){ Fl::wait(time); }
 
-class drawContextFltk : public drawContextGlobal{
- public:
-  void draw()
-  {
-    if(!FlGui::available()) return;
-    for(unsigned int i = 0; i < FlGui::instance()->graph.size(); i++){
-      for(unsigned int j = 0; j < FlGui::instance()->graph[i]->gl.size(); j++){
-        FlGui::instance()->graph[i]->gl[j]->make_current();
-        FlGui::instance()->graph[i]->gl[j]->redraw();
-	// to initialize the camera distance from model
-	drawContext * ctx = FlGui::instance()->graph[i]->gl[j]->getDrawContext();
-	ctx->camera.update();
-      }
-    }
-    FlGui::instance()->check();
-  }
-  void drawCurrentOpenglWindow(bool make_current)
-  {
-    if(!FlGui::available()) return;
-    openglWindow *gl = FlGui::instance()->getCurrentOpenglWindow();
-    if(make_current) gl->make_current();
-    gl->redraw();
-    glFlush();
-    FlGui::instance()->check();
-  }
-  int getFontIndex(const char *fontname)
-  {
-    if(fontname){
-      for(int i = 0; i < NUM_FONTS; i++)
-        if(!strcmp(menu_font_names[i].label(), fontname))
-          return i;
-    }
-    Msg::Error("Unknown font \"%s\" (using \"Helvetica\" instead)", fontname);
-    Msg::Info("Available fonts:");
-    for(int i = 0; i < NUM_FONTS; i++)
-      Msg::Info("  \"%s\"", menu_font_names[i].label());
-    return 4;
-  }
-  int getFontEnum(int index)
-  {
-    if(index >= 0 && index < NUM_FONTS)
-      return (intptr_t)menu_font_names[index].user_data();
-    return FL_HELVETICA;
-  }
-  const char *getFontName(int index)
-  {
-    if(index >= 0 && index < NUM_FONTS)
-      return menu_font_names[index].label();
-    return "Helvetica";
-  }
-  int getFontAlign(const char *alignstr)
-  {
-    if(alignstr){
-      if(!strcmp(alignstr, "BottomLeft") || !strcmp(alignstr, "Left") ||
-         !strcmp(alignstr, "left"))
-        return 0;
-      else if(!strcmp(alignstr, "BottomCenter") || !strcmp(alignstr, "Center") ||
-              !strcmp(alignstr, "center"))
-        return 1;
-      else if(!strcmp(alignstr, "BottomRight") || !strcmp(alignstr, "Right") ||
-              !strcmp(alignstr, "right"))
-        return 2;
-      else if(!strcmp(alignstr, "TopLeft"))
-        return 3;
-      else if(!strcmp(alignstr, "TopCenter"))
-        return 4;
-      else if(!strcmp(alignstr, "TopRight"))
-        return 5;
-      else if(!strcmp(alignstr, "CenterLeft"))
-        return 6;
-      else if(!strcmp(alignstr, "CenterCenter"))
-        return 7;
-      else if(!strcmp(alignstr, "CenterRight"))
-        return 8;
-    }
-    Msg::Error("Unknown font alignment \"%s\" (using \"Left\" instead)", alignstr);
-    Msg::Info("Available font alignments:");
-    Msg::Info("  \"Left\" (or \"BottomLeft\")");
-    Msg::Info("  \"Center\" (or \"BottomCenter\")");
-    Msg::Info("  \"Right\" (or \"BottomRight\")");
-    Msg::Info("  \"TopLeft\"");
-    Msg::Info("  \"TopCenter\"");
-    Msg::Info("  \"TopRight\"");
-    Msg::Info("  \"CenterLeft\"");
-    Msg::Info("  \"CenterCenter\"");
-    Msg::Info("  \"CenterRight\"");
-    return 0;
-  }
-  int getFontSize()
-  {
-    if(CTX::instance()->fontSize > 0){
-      return CTX::instance()->fontSize;
-    }
-    else{
-      int w = Fl::w();
-      if(w <= 1024)      return 11;
-      else if(w <= 1280) return 12;
-      else if(w <= 1680) return 13;
-      else if(w <= 1920) return 14;
-      else               return 15;
-    }
-  }
-  void setFont(int fontid, int fontsize)
-  {
-    gl_font(fontid, fontsize);
-  }
-  double getStringWidth(const char *str)
-  {
-    return gl_width(str);
-  }
-  int getStringHeight()
-  {
-    return gl_height();
-  }
-  int getStringDescent()
-  {
-    return gl_descent();
-  }
-  void drawString(const char *str)
-  {
-    gl_draw(str);
-  }
-  void resetFontTextures()
-  {
-#if defined(__APPLE__) && (FL_MAJOR_VERSION == 1) && (FL_MINOR_VERSION == 3)
-    gl_texture_pile_height(1); // force font texture recomputation
-#endif
-  }
-};
-
 static int globalShortcut(int event)
 {
   if(!FlGui::available()) return 0;
   return FlGui::instance()->testGlobalShortcuts(event);
 }
 
-FlGui::FlGui(int argc, char **argv) : _openedThroughMacFinder(false)
+static void simple_right_box_draw(int x, int y, int w, int h, Fl_Color c)
+{
+  fl_color(c);
+  fl_rectf(x, y, w, h);
+  fl_color(FL_BACKGROUND_COLOR);
+  fl_line(x + w - 1, y, x + w - 1, y + h);
+}
+
+static void simple_top_box_draw(int x, int y, int w, int h, Fl_Color c)
+{
+  fl_color(c);
+  fl_rectf(x, y, w, h);
+  fl_color(FL_BACKGROUND_COLOR);
+  fl_line(x, y, x + w, y);
+}
+
+FlGui::FlGui(int argc, char **argv)
 {
   // set X display
   if(CTX::instance()->display.size())
     Fl::display(CTX::instance()->display.c_str());
 
 #if 0 // dark scheme... not bad, but needs work
-  Fl::background(60, 60, 60);
-  Fl::background2(120, 120, 120);
-  Fl::foreground(200, 200, 200);
+  Fl::background(110, 110, 110);
+  Fl::background2(140, 140, 140);
+  Fl::foreground(230, 230, 230);
+  //Fl::set_color(FL_SELECTION_COLOR, 50, 50, 0);
 #endif
+
+  // add new box types used in graphic window
+  Fl::set_boxtype(GMSH_SIMPLE_RIGHT_BOX, simple_right_box_draw, 1, 1, 2, 2);
+  Fl::set_boxtype(GMSH_SIMPLE_TOP_BOX, simple_top_box_draw, 1, 1, 2, 2);
 
   // add global shortcuts
   Fl::add_handler(globalShortcut);
@@ -232,22 +122,23 @@ FlGui::FlGui(int argc, char **argv) : _openedThroughMacFinder(false)
 
   // add callback to respond to Mac Finder
 #if defined(__APPLE__)
+  Fl_Mac_App_Menu::print = ""; // remove this: it crashes
   fl_open_callback(OpenProjectMacFinder);
-#if (FL_MAJOR_VERSION == 1) && (FL_MINOR_VERSION == 3)
   fl_mac_set_about(help_about_cb, 0);
 #endif
-#endif
 
-  // all the windows are contructed (even if some are not displayed)
-  // since the shortcuts should be valid even for hidden windows, and
-  // we don't want to test for widget existence every time
-  menu = new menuWindow();
-  graph.push_back(new graphicWindow(true, CTX::instance()->numTiles));
+  // all the windows are contructed (even if some are not displayed) since the
+  // shortcuts should be valid even for hidden windows, and we don't want to
+  // test for widget existence every time
+  graph.push_back(new graphicWindow(true, CTX::instance()->numTiles,
+                                    CTX::instance()->detachedMenu ? true : false));
+
+  // FIXME: make this cleaner ;-)
+  onelab = graph.back()->getMenu();
 
 #if defined(WIN32)
-  graph[0]->win->icon
-    ((const char*)LoadImage(fl_display, MAKEINTRESOURCE(IDI_ICON),
-                            IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR));
+  graph[0]->getWindow()->icon
+    ((const void*)LoadIcon(fl_display, MAKEINTRESOURCE(IDI_ICON)));
 #elif defined(__APPLE__)
   // nothing to do here
 #else
@@ -264,30 +155,27 @@ FlGui::FlGui(int argc, char **argv) : _openedThroughMacFinder(false)
     0x08, 0x00, 0xff, 0x1f, 0x08, 0x00, 0xff, 0x1f, 0x04, 0x40, 0xfd, 0x3f,
     0x04, 0xa8, 0xea, 0x3f, 0x02, 0x55, 0x55, 0x7f, 0xa2, 0xaa, 0xaa, 0x7a,
     0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00};
-  graph[0]->win->icon
-    ((const char*)XCreateBitmapFromData(fl_display, DefaultRootWindow(fl_display),
-                                        gmsh32x32, 32, 32));
-  menu->win->icon
+  graph[0]->getWindow()->icon
     ((const char*)XCreateBitmapFromData(fl_display, DefaultRootWindow(fl_display),
                                         gmsh32x32, 32, 32));
 #endif
 
-  // open graphic window first for correct non-modal behaviour on
-  // Win32
-  graph[0]->win->show(1, argv);
-  menu->win->show();
+  graph[0]->getWindow()->show(1, argv);
+  if(graph[0]->getMenuWindow()) graph[0]->getMenuWindow()->show();
 
-  // graphic window should have the initial focus (so we can
-  // e.g. directly loop through time steps with the keyboard)
+  // graphic window should have the initial focus (so we can e.g. directly loop
+  // through time steps with the keyboard)
   //graph[0]->gl[0]->take_focus();
   Fl::focus(graph[0]->gl[0]);
 
   // create additional graphic windows
   for(int i = 1; i < CTX::instance()->numWindows; i++){
     graphicWindow *g = new graphicWindow(false, CTX::instance()->numTiles);
-    g->win->resize(graph.back()->win->x() + 10, graph.back()->win->y() + 10,
-                   graph.back()->win->w(), graph.back()->win->h());
-    g->win->show();
+    g->getWindow()->resize(graph.back()->getWindow()->x() + 10,
+                           graph.back()->getWindow()->y() + 10,
+                           graph.back()->getWindow()->w(),
+                           graph.back()->getWindow()->h());
+    g->getWindow()->show();
     graph.push_back(g);
   }
 
@@ -302,9 +190,6 @@ FlGui::FlGui(int argc, char **argv) : _openedThroughMacFinder(false)
   geoContext = new geometryContextWindow(CTX::instance()->deltaFontSize);
   meshContext = new meshContextWindow(CTX::instance()->deltaFontSize);
   about = new aboutWindow();
-#if defined(HAVE_ONELAB) && (FL_MAJOR_VERSION == 1) && (FL_MINOR_VERSION == 3)
-  onelab = new onelabWindow(CTX::instance()->deltaFontSize);
-#endif
 
   // init solver plugin stuff
   callForSolverPlugin(-1);
@@ -313,11 +198,10 @@ FlGui::FlGui(int argc, char **argv) : _openedThroughMacFinder(false)
   for(unsigned int i = 0; i < graph.size(); i++)
     for(unsigned int j = 0; j < graph[i]->gl.size(); j++)
       graph[i]->gl[j]->redraw();
-
-  menu->setContext(menu_geometry, 0);
 }
 
 FlGui *FlGui::_instance = 0;
+std::string FlGui::_openedThroughMacFinder = "";
 
 FlGui *FlGui::instance(int argc, char **argv)
 {
@@ -326,8 +210,7 @@ FlGui *FlGui::instance(int argc, char **argv)
     // set all options in the new GUI
     InitOptionsGUI(0);
     // say welcome!
-    Msg::StatusBar(1, false, "Geometry");
-    Msg::StatusBar(2, false, "Gmsh %s", GetGmshVersion());
+    Msg::StatusBar(false, "Gmsh %s", GetGmshVersion());
     // log the following for bug reports
     Msg::Info("-------------------------------------------------------");
     Msg::Info("Gmsh version   : %s", GetGmshVersion());
@@ -346,9 +229,9 @@ FlGui *FlGui::instance(int argc, char **argv)
 
 int FlGui::run()
 {
-  // bounding box computation necessary if we run the gui without
-  // merging any files (e.g. if we build the geometry with python and
-  // create the gui from the python script)
+  // bounding box computation necessary if we run the gui without merging any
+  // files (e.g. if we build the geometry with python and create the gui from
+  // the python script)
   SetBoundingBox();
 
   // draw the scene
@@ -365,63 +248,44 @@ int FlGui::testGlobalShortcuts(int event)
   int status = 0;
 
   if(Fl::test_shortcut('0')) {
-    // FIXME: here we should also reset all onelab variables that depend on Gmsh
     geometry_reload_cb(0, 0);
-    mod_geometry_cb(0, 0);
     status = 1;
   }
   else if(Fl::test_shortcut('1') || Fl::test_shortcut(FL_F + 1)) {
     mesh_1d_cb(0, 0);
-    mod_mesh_cb(0, 0);
     status = 1;
   }
   else if(Fl::test_shortcut('2') || Fl::test_shortcut(FL_F + 2)) {
     mesh_2d_cb(0, 0);
-    mod_mesh_cb(0, 0);
     status = 1;
   }
   else if(Fl::test_shortcut('3') || Fl::test_shortcut(FL_F + 3)) {
     mesh_3d_cb(0, 0);
-    mod_mesh_cb(0, 0);
     status = 1;
   }
-  // FIXME TEST
-  //else if(Fl::test_shortcut('4') || Fl::test_shortcut(FL_F + 4)) {
-  //  RecombineMesh(GModel::current());
-  //  status = 2;
-  //}
   else if(Fl::test_shortcut(FL_CTRL + 'q') || Fl::test_shortcut(FL_META + 'q')){
-    // only necessary when using the system menu bar, but hey, it
-    // cannot hurt...
+    // only necessary when using the system menu bar, but hey, it cannot hurt...
     file_quit_cb(0, 0);
     status = 1;
   }
+  else if(Fl::test_shortcut(FL_CTRL + 't') || Fl::test_shortcut(FL_META + 't')){
+    show_hide_menu_cb(0, 0);
+    status = 1;
+  }
   else if(Fl::test_shortcut('g')) {
-    mod_geometry_cb(0, 0);
-    Fl::focus(menu->scroll);
+    FlGui::instance()->openModule("Geometry");
     status = 1;
   }
   else if(Fl::test_shortcut('m')) {
-    mod_mesh_cb(0, 0);
-    Fl::focus(menu->scroll);
+    FlGui::instance()->openModule("Mesh");
     status = 1;
   }
   else if(Fl::test_shortcut('s')) {
-    mod_solver_cb(0, 0);
-    Fl::focus(menu->scroll);
+    FlGui::instance()->openModule("Solver");
     status = 1;
   }
   else if(Fl::test_shortcut('p')) {
-    mod_post_cb(0, 0);
-    Fl::focus(menu->scroll);
-    status = 1;
-  }
-  else if(Fl::test_shortcut('<')) {
-    mod_back_cb(0, 0);
-    status = 1;
-  }
-  else if(Fl::test_shortcut('>')) {
-    mod_forward_cb(0, 0);
+    FlGui::instance()->openModule("Post-processing");
     status = 1;
   }
   else if(Fl::test_shortcut('w')) {
@@ -717,20 +581,30 @@ int FlGui::testArrowShortcuts()
     status_play_manual(0, CTX::instance()->post.animStep);
     return 1;
   }
+#if defined(HAVE_POPPLER)
+  else if(Fl::test_shortcut(FL_ALT + FL_Up)) {
+    gmshPopplerWrapper::setCurrentPageDown();
+    drawContext::global()->draw();
+    return 1;
+  }
+  else if(Fl::test_shortcut(FL_ALT + FL_Down)) {
+    gmshPopplerWrapper::setCurrentPageUp();
+    drawContext::global()->draw();
+    return 1;
+  }
+#endif
   return 0;
 }
 
 void FlGui::setGraphicTitle(std::string title)
 {
   for(unsigned int i = 0; i < graph.size(); i++){
-    if(!i){
-      graph[i]->setTitle(title);
-    }
-    else{
-      std::ostringstream sstream;
-      sstream << title << " [" << i << "]";
-      graph[i]->setTitle(sstream.str());
-    }
+    std::ostringstream sstream;
+    if(!i)
+      sstream << "Gmsh - " << title;
+    else
+      sstream << "Gmsh - " << title << " [" << i << "]";
+    graph[i]->setTitle(sstream.str());
   }
 }
 
@@ -739,8 +613,7 @@ void FlGui::updateViews(bool numberOfViewsHasChanged)
   for(unsigned int i = 0; i < graph.size(); i++)
     graph[i]->checkAnimButtons();
   if(numberOfViewsHasChanged){
-    if(menu->module->value() == 3)
-      menu->setContext(menu_post, 0);
+    onelab->rebuildTree();
     options->resetBrowser();
     options->resetExternalViewList();
     fields->loadFieldViewList();
@@ -772,10 +645,8 @@ void FlGui::splitCurrentOpenglWindow(char how)
 {
   openglWindow *g = getCurrentOpenglWindow();
   for(unsigned int i = 0; i < graph.size(); i++){
-    if(graph[i]->tile->find(g) != graph[i]->tile->children()){
-      graph[i]->split(g, how);
+    if(graph[i]->split(g, how))
       break;
-    }
   }
 }
 
@@ -786,18 +657,18 @@ char FlGui::selectEntity(int type)
      selectedElements);
 }
 
-void FlGui::setStatus(const char *msg, int num)
+void FlGui::setStatus(const char *msg, bool opengl)
 {
-  if(num == 0 || num == 1){
-    static char buff[2][1024];
-    strncpy(buff[num], msg, sizeof(buff[num]) - 1);
-    buff[num][sizeof(buff[num]) - 1] = '\0';
+  if(!opengl){
+    static char buff[1024];
+    strncpy(buff, msg, sizeof(buff) - 1);
+    buff[sizeof(buff) - 1] = '\0';
     for(unsigned int i = 0; i < graph.size(); i++){
-      graph[i]->label[num]->label(buff[num]);
-      graph[i]->label[num]->redraw();
+      graph[i]->getProgress()->label(buff);
+      graph[i]->getProgress()->redraw();
     }
   }
-  else if(num == 2){
+  else{
     openglWindow *gl = getCurrentOpenglWindow();
     int n = strlen(msg);
     int i = 0;
@@ -816,25 +687,32 @@ void FlGui::setStatus(const char *msg, int num)
 void FlGui::setProgress(const char *msg, double val, double min, double max)
 {
   for(unsigned int i = 0; i < FlGui::instance()->graph.size(); i++){
-    if(FlGui::instance()->graph[i]->label[1]->value() != val)
-      FlGui::instance()->graph[i]->label[1]->value(val);
-    if(FlGui::instance()->graph[i]->label[1]->minimum() != min)
-      FlGui::instance()->graph[i]->label[1]->minimum(min);
-    if(FlGui::instance()->graph[i]->label[1]->maximum() != max)
-      FlGui::instance()->graph[i]->label[1]->maximum(max);
+    if(FlGui::instance()->graph[i]->getProgress()->value() != val)
+      FlGui::instance()->graph[i]->getProgress()->value(val);
+    if(FlGui::instance()->graph[i]->getProgress()->minimum() != min)
+      FlGui::instance()->graph[i]->getProgress()->minimum(min);
+    if(FlGui::instance()->graph[i]->getProgress()->maximum() != max)
+      FlGui::instance()->graph[i]->getProgress()->maximum(max);
   }
-  setStatus(msg, 1);
+  setStatus(msg);
 }
 
 void FlGui::storeCurrentWindowsInfo()
 {
-  CTX::instance()->menuPosition[0] = menu->win->x();
-  CTX::instance()->menuPosition[1] = menu->win->y();
-  CTX::instance()->glPosition[0] = graph[0]->win->x();
-  CTX::instance()->glPosition[1] = graph[0]->win->y();
-  CTX::instance()->glSize[0] = graph[0]->win->w();
-  CTX::instance()->glSize[1] = (graph[0]->win->h() - graph[0]->bottom->h());
+  CTX::instance()->glPosition[0] = graph[0]->getWindow()->x();
+  CTX::instance()->glPosition[1] = graph[0]->getWindow()->y();
+  CTX::instance()->glSize[0] = graph[0]->getGlWidth();
+  CTX::instance()->glSize[1] = graph[0]->getGlHeight();
   CTX::instance()->msgSize = graph[0]->getMessageHeight();
+  CTX::instance()->menuSize[0] = graph[0]->getMenuWidth();
+  if(graph[0]->isMenuDetached()){
+    CTX::instance()->detachedMenu = 1;
+    CTX::instance()->menuSize[1] = graph[0]->getMenuHeight();
+    CTX::instance()->menuPosition[0] = graph[0]->getMenuPositionX();
+    CTX::instance()->menuPosition[1] = graph[0]->getMenuPositionY();
+  }
+  else
+    CTX::instance()->detachedMenu = 0;
   CTX::instance()->optPosition[0] = options->win->x();
   CTX::instance()->optPosition[1] = options->win->y();
   CTX::instance()->pluginPosition[0] = plugins->win->x();
@@ -857,12 +735,6 @@ void FlGui::storeCurrentWindowsInfo()
   CTX::instance()->manipPosition[1] = manip->win->y();
   CTX::instance()->ctxPosition[0] = geoContext->win->x();
   CTX::instance()->ctxPosition[1] = meshContext->win->y();
-#if defined(HAVE_ONELAB) && (FL_MAJOR_VERSION == 1) && (FL_MINOR_VERSION == 3)
-  CTX::instance()->solverPosition[0] = onelab->x();
-  CTX::instance()->solverPosition[1] = onelab->y();
-  CTX::instance()->solverSize[0] = onelab->w();
-  CTX::instance()->solverSize[1] = onelab->h();
-#endif
 #if defined(HAVE_3M)
   storeWindowPosition3M();
 #endif
@@ -891,8 +763,8 @@ void window_cb(Fl_Widget *w, void *data)
 
   if(str == "minimize"){
     for(unsigned int i = 0; i < FlGui::instance()->graph.size(); i++)
-      if(FlGui::instance()->graph[i]->win->shown())
-        FlGui::instance()->graph[i]->win->iconize();
+      if(FlGui::instance()->graph[i]->getWindow()->shown())
+        FlGui::instance()->graph[i]->getWindow()->iconize();
     if(FlGui::instance()->options->win->shown())
       FlGui::instance()->options->win->iconize();
     if(FlGui::instance()->plugins->win->shown())
@@ -909,39 +781,37 @@ void window_cb(Fl_Widget *w, void *data)
       FlGui::instance()->manip->win->iconize();
     if(FlGui::instance()->stats->win->shown())
       FlGui::instance()->stats->win->iconize();
-    if(FlGui::instance()->menu->win->shown())
-      FlGui::instance()->menu->win->iconize();
   }
   else if(str == "zoom"){
     if(zoom){
-      oldx = FlGui::instance()->graph[0]->win->x();
-      oldy = FlGui::instance()->graph[0]->win->y();
-      oldw = FlGui::instance()->graph[0]->win->w();
-      oldh = FlGui::instance()->graph[0]->win->h();
+      oldx = FlGui::instance()->graph[0]->getWindow()->x();
+      oldy = FlGui::instance()->graph[0]->getWindow()->y();
+      oldw = FlGui::instance()->graph[0]->getWindow()->w();
+      oldh = FlGui::instance()->graph[0]->getWindow()->h();
 //#define FS
 #ifndef FS
-      FlGui::instance()->graph[0]->win->resize(Fl::x(), Fl::y(), Fl::w(), Fl::h());
+      FlGui::instance()->graph[0]->getWindow()->resize(Fl::x(), Fl::y(), Fl::w(), Fl::h());
       FlGui::instance()->graph[0]->hideMessages();
-      FlGui::check();
+      FlGui::instance()->check();
 #else
-      FlGui::instance()->graph[0]->win->fullscreen();
+      FlGui::instance()->graph[0]->getWindow()->fullscreen();
 #endif
       zoom = 0;
     }
     else{
 #ifndef FS
-      FlGui::instance()->graph[0]->win->resize(oldx, oldy, oldw, oldh);
+      FlGui::instance()->graph[0]->getWindow()->resize(oldx, oldy, oldw, oldh);
+      FlGui::instance()->check();
 #else
-      FlGui::instance()->graph[0]->win->fullscreen_off();
+      FlGui::instance()->graph[0]->getWindow()->fullscreen_off();
 #endif
       zoom = 1;
     }
-    FlGui::instance()->menu->win->show();
   }
   else if(str == "front"){
     // the order is important!
     for(unsigned int i = 0; i < FlGui::instance()->graph.size(); i++)
-      FlGui::instance()->graph[i]->win->show();
+      FlGui::instance()->graph[i]->getWindow()->show();
     if(FlGui::instance()->options->win->shown())
       FlGui::instance()->options->win->show();
     if(FlGui::instance()->plugins->win->shown())
@@ -952,10 +822,6 @@ void window_cb(Fl_Widget *w, void *data)
       FlGui::instance()->geoContext->win->show();
     if(FlGui::instance()->meshContext->win->shown())
       FlGui::instance()->meshContext->win->show();
-#if defined(HAVE_ONELAB) && (FL_MAJOR_VERSION == 1) && (FL_MINOR_VERSION == 3)
-    if(FlGui::instance()->onelab->shown())
-      FlGui::instance()->onelab->show();
-#endif
     if(FlGui::instance()->visibility->win->shown())
       FlGui::instance()->visibility->win->show();
     if(FlGui::instance()->highordertools->win->shown())
@@ -966,7 +832,6 @@ void window_cb(Fl_Widget *w, void *data)
       FlGui::instance()->manip->win->show();
     if(FlGui::instance()->stats->win->shown())
       FlGui::instance()->stats->win->show();
-    FlGui::instance()->menu->win->show();
   }
 }
 
@@ -985,4 +850,15 @@ void FlGui::showMessages()
 void FlGui::saveMessages(const char *fileName)
 {
   FlGui::instance()->graph[0]->saveMessages(fileName);
+}
+
+void FlGui::rebuildTree()
+{
+  onelab->rebuildTree();
+}
+
+void FlGui::openModule(const std::string &name)
+{
+  if(!onelab->isManuallyClosed("0Gmsh modules/" + name))
+    onelab->openTreeItem("0Gmsh modules/" + name);
 }

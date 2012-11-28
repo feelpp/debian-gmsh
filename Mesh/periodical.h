@@ -17,6 +17,7 @@ class voroMetal3D{
   void execute();
   void execute(GRegion*);
   void execute(std::vector<SPoint3>&);
+  void execute(std::vector<double>&);
   void print_segment(SPoint3,SPoint3,std::ofstream&);
   void initialize_counter();
   void increase_counter();
@@ -27,4 +28,6 @@ class voroMetal3D{
   void print_geo_volume(int,int,std::ofstream&);
   void print_geo_line_loop(int,std::vector<int>&,std::vector<int>&,std::ofstream&);
   void print_geo_face_loop(int,std::vector<int>&,std::ofstream&);
+  void correspondance(double);
+  bool equal(double,double,double);
 };

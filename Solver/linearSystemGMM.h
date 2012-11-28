@@ -20,13 +20,13 @@ class linearSystemGmm : public linearSystem<scalar> {
  protected:
   std::vector<scalar> *_x; // the nonLinearSystemGmm has to access to this vector
   std::vector<scalar> *_b; // idem
- private:
   gmm::row_matrix<gmm::wsvector<scalar> > *_a;
+ private:
   double _prec;
   int _noisy, _gmres;
  public:
   linearSystemGmm()
-    : _a(0), _b(0), _x(0), _prec(1.e-8), _noisy(0), _gmres(0) {}
+    : _x(0), _b(0), _a(0), _prec(1.e-8), _noisy(0), _gmres(0) {}
   virtual bool isAllocated() const { return _a != 0; }
   virtual void allocate(int nbRows)
   {

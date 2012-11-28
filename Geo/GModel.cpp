@@ -3,6 +3,7 @@
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to <gmsh@geuz.org>.
 
+#include <limits>
 #include <stdlib.h>
 #include <sstream>
 #include <stack>
@@ -97,7 +98,7 @@ GModel::~GModel()
   delete _fields;
 #endif
 
-  if(_factory) 
+  if(_factory)
     delete _factory;
 }
 
@@ -470,7 +471,7 @@ int GModel::getPhysicalNumber(const int &dim, const std::string &name)
   return -1;
 }
 
-int GModel::getDim()
+int GModel::getDim() const
 {
   if(getNumRegions() > 0) return 3;
   if(getNumFaces() > 0) return 2;
@@ -539,6 +540,10 @@ int GModel::adaptMesh(std::vector<int> technique,
                       int niter, bool meshAll)
 {
 #if defined(HAVE_MESH)
+
+  // copy context (in order to allow multiple calls)
+  CTX _backup = *(CTX::instance());
+
   if (getNumMeshElements() == 0) mesh(getDim());
   int nbElemsOld = getNumMeshElements();
   int nbElems;
@@ -574,7 +579,7 @@ int GModel::adaptMesh(std::vector<int> technique,
       char name[256];
       sprintf(name, "meshAdapt-%d.msh", ITER);
       writeMSH(name);
-      //metric->exportInfo(name);
+      metric->exportInfo(name);
 
       if (ITER++ >= niter)  break;
       if (ITER > 3 && fabs((double)(nbElems - nbElemsOld)) < 0.01 * nbElemsOld) break;
@@ -642,6 +647,9 @@ int GModel::adaptMesh(std::vector<int> technique,
   }
 
   fields->reset();
+  // copy context (in order to allow multiple calls)
+  *(CTX::instance()) = _backup ;
+
 
   return 0;
 #else
@@ -1074,7 +1082,8 @@ void GModel::_storeElementsInEntities(std::map< int, std::vector<MElement* > >& 
 }
 
 template<class T>
-static void _associateEntityWithElementVertices(GEntity *ge, std::vector<T*> &elements, bool force=false)
+static void _associateEntityWithElementVertices(GEntity *ge, std::vector<T*> &elements,
+                                                bool force=false)
 {
   for(unsigned int i = 0; i < elements.size(); i++){
     for(int j = 0; j < elements[i]->getNumVertices(); j++){
@@ -1176,12 +1185,238 @@ void GModel::_pruneMeshVertexAssociations()
   _storeVerticesInEntities(vertices);
 }
 
+void GModel::_storePhysicalTagsInEntities(int dim,
+                                          std::map<int, std::map<int, std::string> > &map)
+{
+  std::map<int, std::map<int, std::string> >::const_iterator it = map.begin();
+  for(; it != map.end(); ++it){
+    GEntity *ge = 0;
+    switch(dim){
+    case 0: ge = getVertexByTag(it->first); break;
+    case 1: ge = getEdgeByTag(it->first); break;
+    case 2: ge = getFaceByTag(it->first); break;
+    case 3: ge = getRegionByTag(it->first); break;
+    }
+    if(ge){
+      std::map<int, std::string>::const_iterator it2 = it->second.begin();
+      for(; it2 != it->second.end(); ++it2){
+        if(std::find(ge->physicals.begin(), ge->physicals.end(), it2->first) ==
+           ge->physicals.end()){
+          ge->physicals.push_back(it2->first);
+	}
+      }
+    }
+  }
+}
+
+static bool getVertices(int num, int *indices, std::map<int, MVertex*> &map,
+                        std::vector<MVertex*> &vertices)
+{
+  for(int i = 0; i < num; i++){
+    if(!map.count(indices[i])){
+      Msg::Error("Wrong vertex index %d", indices[i]);
+      return false;
+    }
+    else
+      vertices.push_back(map[indices[i]]);
+  }
+  return true;
+}
+
+static bool getVertices(int num, int *indices, std::vector<MVertex*> &vec,
+                        std::vector<MVertex*> &vertices, int minVertex = 0)
+{
+  for(int i = 0; i < num; i++){
+    if(indices[i] < minVertex || indices[i] > (int)(vec.size() - 1 + minVertex)){
+      Msg::Error("Wrong vertex index %d", indices[i]);
+      return false;
+    }
+    else
+      vertices.push_back(vec[indices[i]]);
+  }
+  return true;
+}
+
+GModel *GModel::createGModel(std::map<int, MVertex*> &vertexMap,
+                             std::vector<int> &elementNum,
+                             std::vector<std::vector<int> > &vertexIndices,
+                             std::vector<int> &elementType,
+                             std::vector<int> &physical,
+                             std::vector<int> &elementary,
+                             std::vector<int> &partition)
+{
+  int numVertices = (int)vertexMap.size();
+  int numElement = (int)elementNum.size();
+
+  if(numElement != (int)vertexIndices.size()){
+    Msg::Error("Dimension in vertices numbers");
+    return 0;
+  }
+  if(numElement != (int)elementType.size()){
+    Msg::Error("Dimension in elementType numbers");
+    return 0;
+  }
+  if(numElement != (int)physical.size()){
+    Msg::Error("Dimension in physical numbers");
+    return 0;
+  }
+  if(numElement != (int)elementary.size()){
+    Msg::Error("Dimension in elementary numbers");
+    return 0;
+  }
+  if(numElement != (int)partition.size()){
+    Msg::Error("Dimension in partition numbers");
+    return 0;
+  }
+
+  GModel *gm = new GModel();
+  std::map<int, std::vector<MElement*> > elements[10];
+  std::map<int, std::map<int, std::string> > physicals[4];
+  std::vector<MVertex*> vertexVector;
+
+  std::map<int, MVertex*>::const_iterator it = vertexMap.begin();
+  std::map<int, MVertex*>::const_iterator end = vertexMap.end();
+
+  int maxVertex = std::numeric_limits<int>::min();
+  int minVertex = std::numeric_limits<int>::max();
+  int num;
+
+  for(; it != end; ++it){
+    num = it->first;
+    minVertex = std::min(minVertex, num);
+    maxVertex = std::max(maxVertex, num);
+  }
+  if(minVertex == std::numeric_limits<int>::max())
+    Msg::Error("Could not determine the min index of vertices");
+
+  // if the vertex numbering is dense, transfer the map into a vector to speed
+  // up element creation
+  if((minVertex == 1 && maxVertex == numVertices) ||
+     (minVertex == 0 && maxVertex == numVertices - 1)){
+    Msg::Info("Vertex numbering is dense");
+    vertexVector.resize(vertexMap.size() + 1);
+    if(minVertex == 1)
+      vertexVector[0] = 0;
+    else
+      vertexVector[numVertices] = 0;
+    std::map<int, MVertex*>::const_iterator it = vertexMap.begin();
+    for(; it != vertexMap.end(); ++it)
+      vertexVector[it->first] = it->second;
+    vertexMap.clear();
+  }
+
+  int *indices;
+  int nbVertices;
+  for(int i = 0; i < numElement; ++i){
+    num = elementNum[i];
+    std::vector<MVertex*> vertices;
+    nbVertices = (int)vertexIndices[i].size();
+    indices = &vertexIndices[i][0];
+    if(vertexVector.size()){
+      if(!getVertices(nbVertices, indices, vertexVector, vertices)){
+        Msg::Error("Vertex not found aborting");
+        delete gm;
+        return 0;
+      }
+    }
+    else{
+      if(!getVertices(nbVertices, indices, vertexMap, vertices)){
+        Msg::Error("Vertex not found aborting");
+        delete gm;
+        return 0;
+      }
+    }
+
+    MElementFactory f;
+    MElement *e = f.create(elementType[i], vertices, num, partition[i]);
+    if(!e){
+      Msg::Error("Unknown type of element %d", elementType[i]);
+      delete gm;
+      return 0;
+    }
+    switch(e->getType()){
+    case TYPE_PNT : elements[0][elementary[i]].push_back(e); break;
+    case TYPE_LIN : elements[1][elementary[i]].push_back(e); break;
+    case TYPE_TRI : elements[2][elementary[i]].push_back(e); break;
+    case TYPE_QUA : elements[3][elementary[i]].push_back(e); break;
+    case TYPE_TET : elements[4][elementary[i]].push_back(e); break;
+    case TYPE_HEX : elements[5][elementary[i]].push_back(e); break;
+    case TYPE_PRI : elements[6][elementary[i]].push_back(e); break;
+    case TYPE_PYR : elements[7][elementary[i]].push_back(e); break;
+    case TYPE_POLYG: elements[8][elementary[i]].push_back(e); break;
+    case TYPE_POLYH: elements[9][elementary[i]].push_back(e); break;
+    default : Msg::Error("Wrong type of element"); delete gm; return 0;
+    }
+    int dim = e->getDim();
+    if(physical[i] && (!physicals[dim].count(elementary[i]) ||
+                       !physicals[dim][elementary[i]].count(physical[i])))
+      physicals[dim][elementary[i]][physical[i]] = "unnamed";
+    if(partition[i]) gm->getMeshPartitions().insert(partition[i]);
+  }
+
+  // store the elements in their associated elementary entity. If the
+  // entity does not exist, create a new (discrete) one.
+  for(int i = 0; i < (int)(sizeof(elements) / sizeof(elements[0])); i++)
+    gm->_storeElementsInEntities(elements[i]);
+
+  // associate the correct geometrical entity with each mesh vertex
+  gm->_associateEntityWithMeshVertices();
+
+  // store the vertices in their associated geometrical entity
+  if(vertexVector.size())
+    gm->_storeVerticesInEntities(vertexVector);
+  else
+    gm->_storeVerticesInEntities(vertexMap);
+
+  // store the physical tags
+  for(int i = 0; i < 4; i++)
+    gm->_storePhysicalTagsInEntities(i, physicals[i]);
+
+  return gm;
+}
+
+GModel *GModel::createGModel
+(std::map<int, std::vector<MElement*> > &entityToElementsMap,
+ std::map<int, std::vector<int> > &entityToPhysicalsMap)
+{
+  GModel* gm = new GModel();
+
+  std::map<int, MVertex*> vertexMap;
+  std::map<int, std::map<int, std::string> > physicals[4];
+  for(std::map<int, std::vector<MElement*> >::iterator it =
+        entityToElementsMap.begin(); it != entityToElementsMap.end();
+      it++) {
+    int entity = it->first;
+    for(unsigned int iE = 0; iE < it->second.size(); iE++) {
+      MElement* me = it->second[iE];
+      for(int iV = 0; iV < me->getNumVertices(); iV++) {
+        vertexMap[me->getVertex(iV)->getNum()] = me->getVertex(iV);
+      }
+      if(me->getPartition()) {
+        gm->getMeshPartitions().insert(me->getPartition());
+      }
+      std::vector<int> entityPhysicals = entityToPhysicalsMap[entity];
+      for(unsigned int i = 0; i < entityPhysicals.size(); i++) {
+        physicals[me->getDim()][entity][entityPhysicals[i]] = "unnamed";
+      }
+    }
+  }
+
+  gm->_storeElementsInEntities(entityToElementsMap);
+  gm->_associateEntityWithMeshVertices();
+  gm->_storeVerticesInEntities(vertexMap);
+  for(int i = 0; i < 4; i++)
+    gm->_storePhysicalTagsInEntities(i, physicals[i]);
+
+  return gm;
+}
+
 void GModel::checkMeshCoherence(double tolerance)
 {
   int numEle = getNumMeshElements();
   if(!numEle) return;
 
-  Msg::StatusBar(2, true, "Checking mesh coherence (%d elements)...", numEle);
+  Msg::StatusBar(true, "Checking mesh coherence (%d elements)...", numEle);
 
   SBoundingBox3d bbox = bounds();
   double lc = bbox.empty() ? 1. : norm(SVector3(bbox.max(), bbox.min()));
@@ -1234,12 +1469,12 @@ void GModel::checkMeshCoherence(double tolerance)
     if(num) Msg::Error("%d duplicate element%s", num, num > 1 ? "s" : "");
   }
 
-  Msg::StatusBar(2, true, "Done checking mesh coherence");
+  Msg::StatusBar(true, "Done checking mesh coherence");
 }
 
 int GModel::removeDuplicateMeshVertices(double tolerance)
 {
-  Msg::StatusBar(2, true, "Removing duplicate mesh vertices...");
+  Msg::StatusBar(true, "Removing duplicate mesh vertices...");
 
   SBoundingBox3d bbox = bounds();
   double lc = bbox.empty() ? 1. : norm(SVector3(bbox.max(), bbox.min()));
@@ -1311,7 +1546,7 @@ int GModel::removeDuplicateMeshVertices(double tolerance)
   if(num)
     Msg::Info("Removed %d duplicate mesh %s", num, num > 1 ? "vertices" : "vertex");
 
-  Msg::StatusBar(2, true, "Done removing duplicate mesh vertices");
+  Msg::StatusBar(true, "Done removing duplicate mesh vertices");
   return num;
 }
 
@@ -1582,7 +1817,7 @@ void GModel::makeDiscreteFacesSimplyConnected()
 
 void GModel::createTopologyFromMesh(int ignoreHoles)
 {
-  Msg::StatusBar(2, true, "Creating topology from mesh...");
+  Msg::StatusBar(true, "Creating topology from mesh...");
   double t1 = Cpu();
 
   removeDuplicateMeshVertices(CTX::instance()->geom.tolerance);
@@ -1607,7 +1842,7 @@ void GModel::createTopologyFromMesh(int ignoreHoles)
   exportDiscreteGEOInternals();
 
   double t2 = Cpu();
-  Msg::StatusBar(2, true, "Done creating topology from mesh (%g s)", t2 - t1);
+  Msg::StatusBar(true, "Done creating topology from mesh (%g s)", t2 - t1);
 }
 
 void GModel::createTopologyFromRegions(std::vector<discreteRegion*> &discRegions)
@@ -2078,6 +2313,7 @@ void GModel::save(std::string fileName)
   CreateOutputFile(fileName, guess);
   GModel::setCurrent(temp);
 }
+
 GEdge* GModel::addCompoundEdge(std::vector<GEdge*> edges, int num){
 
   if (num ==-1) num =  getMaxElementaryNumber(1) + 1;
@@ -2121,6 +2357,7 @@ GEdge* GModel::addCompoundEdge(std::vector<GEdge*> edges, int num){
 
   return gec;
 }
+
 GFace* GModel::addCompoundFace(std::vector<GFace*> faces, int param, int split, int num)
 {
 #if defined(HAVE_SOLVER)
@@ -2260,7 +2497,6 @@ GFace* GModel::addFace (std::vector<GEdge *> edges,
   return 0;
 }
 
-
 GFace* GModel::addPlanarFace (std::vector<std::vector<GEdge *> > edges){
   if(_factory)
     return _factory->addPlanarFace(this, edges);
@@ -2362,8 +2598,9 @@ static void computeDuplicates(GModel *model,
                               std::map<GVertex*, GVertex*> &Duplicates2Unique,
                               const double &eps)
 {
-  // FIXME: currently we use a greedy algorithm in n^2 (using a
-  // kd-tree: cf. MVertexPositionSet)
+  // FIXME: currently we use a greedy algorithm in n^2 (using a kd-tree:
+  // cf. MVertexPositionSet)
+
   // FIXME: add option to remove orphaned entities after duplicate check
   std::list<GVertex*> v;
   v.insert(v.begin(), model->firstVertex(), model->lastVertex());
@@ -2927,12 +3164,16 @@ void GModel::createPartitionBoundaries(int createGhostCells, int createAllDims)
 #endif
 }
 
-void GModel::addHomologyRequest(const std::string &type, std::vector<int> &domain,
-                                std::vector<int> &subdomain)
+void GModel::addHomologyRequest(const std::string &type,
+                                std::vector<int> &domain,
+                                std::vector<int> &subdomain,
+                                std::vector<int> &dim)
 {
-  std::pair<std::vector<int>, std::vector<int> > p(domain, subdomain);
-  _homologyRequests.insert
-    (std::pair<std::pair<std::vector<int>, std::vector<int> >, std::string>(p, type));
+  typedef std::pair<std::vector<int>, std::vector<int> > dpair;
+  typedef std::pair<std::string, std::vector<int> > tpair;
+  dpair p(domain, subdomain);
+  tpair p2(type, dim);
+  _homologyRequests.insert(std::pair<dpair, tpair>(p, p2));
 }
 
 void GModel::computeHomology()
@@ -2942,36 +3183,63 @@ void GModel::computeHomology()
 #if defined(HAVE_KBIPACK)
   // find unique domain/subdomain requests
   typedef std::pair<std::vector<int>, std::vector<int> > dpair;
+  typedef std::pair<std::string, std::vector<int> > tpair;
   std::set<dpair> domains;
-  for(std::map<dpair, std::string>::iterator it = _homologyRequests.begin();
+  for(std::map<dpair, tpair>::iterator it = _homologyRequests.begin();
       it != _homologyRequests.end(); it++)
     domains.insert(it->first);
   Msg::Info("Number of cell complexes to construct: %d", domains.size());
 
   for(std::set<dpair>::iterator it = domains.begin(); it != domains.end(); it++){
-    std::pair<std::multimap<dpair, std::string>::iterator,
-              std::multimap<dpair, std::string>::iterator> itp =
+    std::pair<std::multimap<dpair, tpair>::iterator,
+              std::multimap<dpair, tpair>::iterator> itp =
       _homologyRequests.equal_range(*it);
     bool prepareToRestore = (itp.first != --itp.second);
     itp.second++;
+    std::vector<int> imdomain;
     Homology* homology = new Homology(this, itp.first->first.first,
-                                      itp.first->first.second,
+                                      itp.first->first.second, imdomain,
                                       prepareToRestore);
 
-    // do not save 0-, and n-chains, where n is the dimension of the model
-    // (usually not needed for anything, available through the plugin)
-    for(std::multimap<dpair, std::string>::iterator itt = itp.first;
+    for(std::multimap<dpair, tpair>::iterator itt = itp.first;
         itt != itp.second; itt++){
-      std::string type = itt->second;
-      if(type == "Homology") {
-        homology->findHomologyBasis();
-        if(this->getDim() != 1) homology->addChainsToModel(1);
-        if(this->getDim() != 2) homology->addChainsToModel(2);
+      std::string type = itt->second.first;
+      std::vector<int> dim = itt->second.second;
+      if(dim.empty()) for(int i = 0; i < 4; i++) dim.push_back(i);
+
+      std::stringstream ss;
+      for(unsigned int i = 0; i < dim.size(); i++) {
+        int d = dim.at(i);
+        if(d >= 0 && d <= getDim()) {
+          ss << "H";
+          if(type == "Homology") ss << "_";
+          if(type == "Cohomology") ss << "^";
+          ss << d;
+          if(i < dim.size()-1 && dim.at(i+1) >=0 && dim.at(i+1) <= getDim())
+            ss << ", ";
+        }
       }
-      else if(type == "Cohomology") {
-        homology->findCohomologyBasis();
-        if(this->getDim() != 1) homology->addCochainsToModel(1);
-        if(this->getDim() != 2) homology->addCochainsToModel(2);
+      std::string dims = ss.str();
+
+      if(type == "Homology" && !homology->isHomologyComputed(dim)) {
+
+        homology->findHomologyBasis(dim);
+
+        Msg::Info("Homology space basis chains to save: %s.", dims.c_str());
+        for(unsigned int i = 0; i < dim.size(); i++)
+          if(dim.at(i) >= 0 && dim.at(i) <= getDim())
+            homology->addChainsToModel(dim.at(i));
+
+      }
+      else if(type == "Cohomology" && !homology->isCohomologyComputed(dim)) {
+
+        homology->findCohomologyBasis(dim);
+
+        Msg::Info("Cohomology space basis cochains to save: %s.", dims.c_str());
+        for(unsigned int i = 0; i < dim.size(); i++)
+          if(dim.at(i) >= 0 && dim.at(i) <= getDim())
+            homology->addCochainsToModel(dim.at(i));
+
       }
       else
         Msg::Error("Unknown type of homology computation: %s", type.c_str());

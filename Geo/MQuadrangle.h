@@ -52,6 +52,7 @@ class MQuadrangle : public MElement {
   }
   ~MQuadrangle(){}
   virtual double etaShapeMeasure();
+  virtual double gammaShapeMeasure();
   virtual int getDim() const { return 2; }
   virtual int getNumVertices() const { return 4; }
   virtual MVertex *getVertex(int num){ return _v[num]; }
@@ -115,7 +116,7 @@ class MQuadrangle : public MElement {
   virtual const char *getStringForBDF() const { return "CQUAD4"; }
   virtual const char *getStringForDIFF() const { return "ElmB4n2D"; }
   virtual const char *getStringForINP() const { return "C2D4"; }
-  virtual const polynomialBasis* getFunctionSpace(int o=-1) const;
+  virtual const nodalBasis* getFunctionSpace(int o=-1) const;
   virtual const JacobianBasis* getJacobianFuncSpace(int o=-1) const;
   virtual void getNode(int num, double &u, double &v, double &w)
   {
@@ -140,7 +141,8 @@ class MQuadrangle : public MElement {
   virtual bool isInside(double u, double v, double w)
   {
     double tol = _isInsideTolerance;
-    if(u < -(1. + tol) || v < -(1. + tol) || u > (1. + tol) || v > (1. + tol))
+    if(u < -(1. + tol) || v < -(1. + tol) || u > (1. + tol) || v > (1. + tol) ||
+       fabs(w) > tol)
       return false;
     return true;
   }

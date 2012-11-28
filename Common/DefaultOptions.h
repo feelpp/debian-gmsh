@@ -163,6 +163,9 @@ StringXString PostProcessingOptions_String[] = {
 } ;
 
 StringXString ViewOptions_String[] = {
+  { F|O, "Attributes" , opt_view_attributes , "" ,
+    "Optional string attributes" },
+
   { F|O, "AxesFormatX" , opt_view_axes_format0 , "%.3g" ,
     "Number format for X-axis (in standard C form)" },
   { F|O, "AxesFormatY" , opt_view_axes_format1 , "%.3g" ,
@@ -238,6 +241,8 @@ StringXNumber GeneralOptions_Number[] = {
     "Mikado axes style" },
   { F|O, "AxesAutoPosition" , opt_general_axes_auto_position , 1. ,
     "Position the axes automatically" },
+  { F|O, "AxesForceValue" , opt_general_axes_force_value , 0. ,
+    "Force values on axes (otherwise use natural coordinates)" },
   { F|O, "AxesMaxX" , opt_general_axes_xmax , 1. ,
     "Maximum X-axis coordinate" },
   { F|O, "AxesMaxY" , opt_general_axes_ymax , 1. ,
@@ -256,6 +261,18 @@ StringXNumber GeneralOptions_Number[] = {
     "Number of tics on the Y-axis" },
   { F|O, "AxesTicsZ" , opt_general_axes_tics2 , 5. ,
     "Number of tics on the Z-axis" },
+  { F|O, "AxesValueMaxX" , opt_general_axes_value_xmax , 1. ,
+    "Maximum X-axis forced value" },
+  { F|O, "AxesValueMaxY" , opt_general_axes_value_ymax , 1. ,
+    "Maximum Y-axis forced value" },
+  { F|O, "AxesValueMaxZ" , opt_general_axes_value_zmax , 1. ,
+    "Maximum Z-axis forced value" },
+  { F|O, "AxesValueMinX" , opt_general_axes_value_xmin , 0. ,
+    "Minimum X-axis forced value" },
+  { F|O, "AxesValueMinY" , opt_general_axes_value_ymin , 0. ,
+    "Minimum Y-axis forced value" },
+  { F|O, "AxesValueMinZ" , opt_general_axes_value_zmin , 0. ,
+    "Minimum Z-axis forced value" },
 
   { F|O, "BackgroundGradient" , opt_general_background_gradient , 1. ,
     "Draw background gradient (0=none, 1=vertical, 2=horizontal, 3=radial)" },
@@ -349,6 +366,8 @@ StringXNumber GeneralOptions_Number[] = {
     "Vertical position (in pixels) of the upper left corner of the contextual "
     "windows" },
 
+  { F|S, "DetachedMenu" , opt_general_detached_menu , 0. ,
+    "Should the menu window be detached from the graphic window?" },
   { F|O, "DisplayBorderFactor" , opt_general_display_border_factor , 0.2 ,
     "Border factor for model display (0: model fits window size exactly)" },
   { F|O, "DoubleBuffer" , opt_general_double_buffer , 1. ,
@@ -400,7 +419,7 @@ StringXNumber GeneralOptions_Number[] = {
   { F|S, "GraphicsPositionY" , opt_general_graphics_position1 , 50. ,
     "Vertical position (in pixels) of the upper left corner of the graphic "
     "window" },
-  { F|S, "GraphicsWidth" , opt_general_graphics_size0 , 600. ,
+  { F|S, "GraphicsWidth" , opt_general_graphics_size0 , 800. ,
     "Width (in pixels) of the graphic window" },
 
   { F|O, "InitialModule", opt_general_initial_context, 0. ,
@@ -488,10 +507,14 @@ StringXNumber GeneralOptions_Number[] = {
     "Maximum model coordinate along the Y-axis (read-only)" },
   { F,   "MaxZ" , opt_general_zmax , 0. ,
     "Maximum model coordinate along the Z-axis (read-only)" },
-  { F|S, "MenuPositionX" , opt_general_menu_position0 , 800. ,
-    "Horizontal position (in pixels) of the upper left corner of the menu window" },
-  { F|S, "MenuPositionY" , opt_general_menu_position1 , 50. ,
-    "Vertical position (in pixels) of the upper left corner of the menu window" },
+  { F|S, "MenuWidth" , opt_general_menu_size0 , 200. ,
+    "Width (in pixels) of the menu tree" },
+  { F|S, "MenuHeight" , opt_general_menu_size1 , 200. ,
+    "Height (in pixels) of the (detached) menu tree" },
+  { F|S, "MenuPositionX" , opt_general_menu_position0 , 400. ,
+    "Horizontal position (in pixels) of the (detached) menu tree" },
+  { F|S, "MenuPositionY" , opt_general_menu_position1 , 400. ,
+    "Vertical position (in pixels) of the (detached) menu tree" },
   { F|S, "MessageHeight" , opt_general_message_size , 300. ,
     "Height (in pixels) of the message console" },
   { F,   "MinX" , opt_general_xmin , 0. ,
@@ -542,6 +565,8 @@ StringXNumber GeneralOptions_Number[] = {
     "Polygon offset factor (offset = factor * DZ + r * units)" },
   { F|O, "PolygonOffsetUnits" , opt_general_polygon_offset_units , 1. ,
     "Polygon offset units (offset = factor * DZ + r * units)" },
+  { F|O, "ProgressMeterStep" , opt_general_progress_meter_step , 20. ,
+    "Increment (in percent) of the progress meter bar" },
 
   { F|O, "QuadricSubdivisions" , opt_general_quadric_subdivisions, 6. ,
     "Number of subdivisions used to draw points or lines as spheres or cylinders" },
@@ -588,15 +613,6 @@ StringXNumber GeneralOptions_Number[] = {
     " centered)" },
   { F|O, "SmallAxesSize" , opt_general_small_axes_size , 30. ,
     "Size (in pixels) of small axes" },
-  { F|S, "SolverPositionX" , opt_general_solver_position0 , 650. ,
-    "Horizontal position (in pixels) of the upper left corner of the solver "
-    "window" },
-  { F|S, "SolverPositionY" , opt_general_solver_position1 , 150. ,
-    "Vertical position (in pixels) of the upper left corner of the solver window" },
-  { F|S, "SolverHeight" , opt_general_solver_size1 , 400. ,
-    "Height (in pixels) of the solver window" },
-  { F|S, "SolverWidth" , opt_general_solver_size0 , 300. ,
-    "Width (in pixels) of the solver window" },
   { F|S, "StatisticsPositionX" , opt_general_statistics_position0 , 650. ,
     "Horizontal position (in pixels) of the upper left corner of the statistic "
     "window" },
@@ -670,6 +686,8 @@ StringXNumber GeometryOptions_Number[] = {
   { F|O, "HighlightOrphans" , opt_geometry_highlight_orphans, 0. ,
     "Highlight orphan entities (lines connected to a single surface, etc.)?" },
 
+  { F|O, "LabelType" , opt_geometry_label_type , 1. ,
+    "Type of entity label (1=elementary number, 2=physical number)" },
   { F|O, "Light" , opt_geometry_light , 1. ,
     "Enable lighting for the geometry" },
   { F|O, "LightTwoSide" , opt_geometry_light_two_side , 1. ,
@@ -1090,12 +1108,26 @@ StringXNumber MeshOptions_Number[] = {
 StringXNumber SolverOptions_Number[] = {
   { F|O, "AlwaysListen" , opt_solver_listen , 0. ,
     "Always listen to incoming connection requests?" },
+  { F|O, "AutoArchiveOutputFiles" , opt_solver_auto_archive_output_files , 0. ,
+    "Automatically archive output files after each computation" },
+  { F|O, "AutoCheck" , opt_solver_auto_check , 1. ,
+    "Automatically check model every time a parameter is changed" },
+  { F|O, "AutoSaveDatabase" , opt_solver_auto_save_database , 1. ,
+    "Automatically save database after each computation" },
+  { F|O, "AutoMesh" , opt_solver_auto_mesh , 1. ,
+    "Automatically mesh if necesssary" },
+  { F|O, "AutoMergeFile" , opt_solver_auto_merge_file , 1. ,
+    "Automatically merge result files" },
+  { F|O, "AutoHideNewViews" , opt_solver_auto_hide_new_views , 0. ,
+    "Automcatically hide newly merged results" },
+  { F|O, "AutoShowLastStep" , opt_solver_auto_show_last_step , 1. ,
+    "Automatically show the last time step in newly merged results" },
 
   { F|O, "Plugins" , opt_solver_plugins , 0. ,
     "Enable default solver plugins?" },
 
   { F|O, "Timeout" , opt_solver_timeout , 5. ,
-    "Time (in seconds) before closing the socket if no connection is happening." },
+    "Time (in seconds) before closing the socket if no connection is happening" },
 
   { 0, 0 , 0 , 0. , 0 }
 } ;
@@ -1136,6 +1168,8 @@ StringXNumber PostProcessingOptions_Number[] = {
 } ;
 
 StringXNumber ViewOptions_Number[] = {
+  { F|O, "AbscissaRangeType" , opt_view_abscissa_range_type , 1 ,
+    "Ascissa scale range type (1=default, 2=custom)" },
   { F|O, "AdaptVisualizationGrid" , opt_view_adapt_visualization_grid , 0. ,
     "Use adaptive visualization grid (for high-order elements)?" },
   { F|O, "AngleSmoothNormals" , opt_view_angle_smooth_normals , 30.0 ,
@@ -1146,7 +1180,8 @@ StringXNumber ViewOptions_Number[] = {
     "Minimum display size of arrows (in pixels)" },
   { F|O, "AutoPosition" , opt_view_auto_position , 1. ,
     "Position the scale or 2D plot automatically (0: manual, 1: automatic, 2: top left, "
-    "3: top right, 4: bottom left, 5: bottom right, 6: top, 7: bottom, 8: left, 9: right)" },
+    "3: top right, 4: bottom left, 5: bottom right, 6: top, 7: bottom, 8: left, 9: right, "
+    "10: top 1/3)" },
   { F|O, "Axes" , opt_view_axes , 0 ,
     "Axes (0=none, 1=simple axes, 2=box, 3=full grid, 4=open grid, 5=ruler)" },
   { F|O, "AxesMikado" , opt_view_axes_mikado , 0. ,
@@ -1216,6 +1251,10 @@ StringXNumber ViewOptions_Number[] = {
     "Forced component 7 (if View.ForceComponents > 0)" },
   { F|O, "ComponentMap8" , opt_view_component_map8 , 8,
     "Forced component 8 (if View.ForceComponents > 0)" },
+  { F,   "CustomAbscissaMax" , opt_view_custom_abscissa_max , 0. ,
+    "User-defined maximum abscissa value" },
+  { F,   "CustomAbscissaMin" , opt_view_custom_abscissa_min , 0. ,
+    "User-defined minimum abscissa value" },
   { F,   "CustomMax" , opt_view_custom_max , 0. ,
     "User-defined maximum value to be displayed" },
   { F,   "CustomMin" , opt_view_custom_min , 0. ,
@@ -1444,6 +1483,9 @@ StringXNumber PrintOptions_Number[] = {
   { F|O, "GifTransparent" , opt_print_gif_transparent , 0. ,
     "Output transparent GIF image" },
 
+  { F|O, "Height" , opt_print_height , -1. ,
+    "Height of printed image; use (possibly scaled) current height if < 0" },
+
   { F|O, "JpegQuality" , opt_print_jpeg_quality , 100. ,
     "JPEG quality (between 1 and 100)" },
   { F|O, "JpegSmoothing" , opt_print_jpeg_smoothing , 0. ,
@@ -1471,6 +1513,9 @@ StringXNumber PrintOptions_Number[] = {
     "Print all TeX strings as equations" },
   { F|O, "Text" , opt_print_text , 1. ,
     "Print text strings?" },
+
+  { F|O, "Width" , opt_print_width , -1. ,
+    "Width of printed image; use (possibly scaled) current width if < 0)" },
 
   { 0, 0 , 0 , 0. }
 } ;

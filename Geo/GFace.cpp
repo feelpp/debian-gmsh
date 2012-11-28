@@ -17,8 +17,12 @@
 #include "Numeric.h"
 #include "GaussLegendre1D.h"
 #include "Context.h"
+
+#if defined(HAVE_MESH)
 #include "meshGFaceOptimize.h"
 #include "meshGFaceLloyd.h"
+#include "BackgroundMesh.h"
+#endif
 
 #if defined(HAVE_BFGS)
 #include "stdafx.h"
@@ -26,20 +30,6 @@
 #endif
 
 #define SQU(a)      ((a)*(a))
-
-class data_wrapper{
- private:
-  const GFace* gf;
-  SPoint3 point;
- public:
-  data_wrapper() {gf = NULL; point = SPoint3();}
-  ~data_wrapper() {}
-  const GFace* get_face() {return gf;}
-  void set_face(const GFace* face) {gf = face;}
-  SPoint3 get_point() {return point;}
-  void set_point(SPoint3 _point) {point = SPoint3(_point);}
-};
-
 
 GFace::GFace(GModel *model, int tag)
   : GEntity(model, tag), r1(0), r2(0), compound(0), va_geom_triangles(0)
@@ -558,9 +548,9 @@ end:
         meanPlane.c * v->z() - meanPlane.d;
       if(fabs(d) > lc * 1.e-3) {
         Msg::Debug("Plane surface %d (%gx+%gy+%gz=%g) is not plane!",
-                     tag(), meanPlane.a, meanPlane.b, meanPlane.c, meanPlane.d);
+                   tag(), meanPlane.a, meanPlane.b, meanPlane.c, meanPlane.d);
         Msg::Debug("Control point %d = (%g,%g,%g), val=%g",
-                     v->tag(), v->x(), v->y(), v->z(), d);
+                   v->tag(), v->x(), v->y(), v->z(), d);
         break;
       }
     }
@@ -586,6 +576,46 @@ void GFace::getMeanPlaneData(double plan[3][3]) const
   for(int i = 0; i < 3; i++)
     for(int j = 0; j < 3; j++)
       plan[i][j] = meanPlane.plan[i][j];
+}
+
+void GFace::computeMeshSizeFieldAccuracy(double &avg,double &max_e, double &min_e,
+					 int &nE, int &GS)
+{
+#if defined(HAVE_MESH)
+  std::set<MEdge, Less_Edge> es;
+  for(unsigned int i = 0; i < getNumMeshElements(); i++){
+    MElement *e = getMeshElement(i);
+    for(int j = 0; j < e->getNumEdges(); j++) es.insert(e->getEdge(j));
+  }
+
+  avg = 0;
+  min_e = 1.e22;
+  max_e = 0;
+  nE = es.size();
+  GS = 0;
+  double oneoversqr2 = 1. / sqrt(2.);
+  double sqr2 = sqrt(2.);
+  for (std::set<MEdge, Less_Edge>::const_iterator it = es.begin();
+       it != es.end();++it){
+    double u1,v1,u2,v2;
+    MVertex *vert1 =  it->getVertex(0);
+    vert1->getParameter(0, u1);
+    vert1->getParameter(1, v1);
+    MVertex *vert2 =  it->getVertex(1);
+    vert2->getParameter(0, u2);
+    vert2->getParameter(1, v2);
+    double l1 = BGM_MeshSize(this, u1, v1, vert1->x(), vert1->y(), vert1->z());
+    double l2 = BGM_MeshSize(this, u2, v2, vert2->x(), vert2->y(), vert2->z());
+    double correctLC = 0.5*(l1+l2);
+    double lone = it->length()/correctLC;
+    if (lone > oneoversqr2 && lone < sqr2) GS++;
+    avg += lone >1 ? (1. / lone) - 1. : lone - 1.;
+    max_e = std::max(max_e, lone);
+    min_e = std::min(min_e, lone);
+  }
+#endif
+  //printf("Emi efficiency tau (%g) =%g nE=%d nT=%d \n", avg, 100*exp(avg/(double)nE), nE, getNumMeshElements());
+
 }
 
 double GFace::curvatureDiv(const SPoint2 &param) const
@@ -851,8 +881,23 @@ SPoint2 GFace::parFromPoint(const SPoint3 &p, bool onSurface) const
 }
 
 #if defined(HAVE_BFGS)
+
+class data_wrapper{
+ private:
+  const GFace* gf;
+  SPoint3 point;
+ public:
+  data_wrapper() { gf = NULL; point = SPoint3(); }
+  ~data_wrapper() {}
+  const GFace* get_face() { return gf; }
+  void set_face(const GFace* face) { gf = face; }
+  SPoint3 get_point() { return point; }
+  void set_point(SPoint3 _point) { point = SPoint3(_point); }
+};
+
 // Callback function for BFGS
-void bfgs_callback(const alglib::real_1d_array& x, double& func, alglib::real_1d_array& grad, void* ptr) {
+void bfgs_callback(const alglib::real_1d_array& x, double& func, alglib::real_1d_array& grad, void* ptr)
+{
   data_wrapper* w = static_cast<data_wrapper*>(ptr);
   SPoint3 p = w->get_point();
   const GFace* gf = w->get_face();
@@ -867,19 +912,19 @@ void bfgs_callback(const alglib::real_1d_array& x, double& func, alglib::real_1d
 
   // Value of the gradient
   Pair<SVector3, SVector3> der = gf->firstDer(SPoint2(x[0], x[1]));
-  grad[0] = -(p.x() - pnt.x()) * der.left().x()  - (p.y() - pnt.y()) * der.left().y()  - (p.z() - pnt.z()) * der.left().z();
-  grad[1] = -(p.x() - pnt.x()) * der.right().x() - (p.y() - pnt.y()) * der.right().y() - (p.z() - pnt.z()) * der.right().z();
-  //  printf("func %22.15E Gradients %22.15E %22.15E der %g %g %g\n",func, grad[0], grad[1],der.left().x(),der.left().y(),der.left().z());
+  grad[0] = -(p.x() - pnt.x()) * der.left().x()  - (p.y() - pnt.y()) * der.left().y()
+    - (p.z() - pnt.z()) * der.left().z();
+  grad[1] = -(p.x() - pnt.x()) * der.right().x() - (p.y() - pnt.y()) * der.right().y()
+    - (p.z() - pnt.z()) * der.right().z();
+  //  printf("func %22.15E Gradients %22.15E %22.15E der %g %g %g\n",
+  //         func, grad[0], grad[1],der.left().x(),der.left().y(),der.left().z());
 }
 #endif
 
 GPoint GFace::closestPoint(const SPoint3 &queryPoint, const double initialGuess[2]) const
 {
 #if defined(HAVE_BFGS)
-  //
   // Creating the optimisation problem
-  //
-
   //  printf("STARTING OPTIMIZATION\n");
 
   alglib::ae_int_t dim = 2;
@@ -906,14 +951,16 @@ GPoint GFace::closestPoint(const SPoint3 &queryPoint, const double initialGuess[
       SPoint3 spnt(pnt.x(), pnt.y(), pnt.z());
       double dist = queryPoint.distance(spnt);
       //      fprintf(F,"SP(%g,%g,%g) {%g};\n",pnt.x(), pnt.y(), pnt.z(),dist);
-      //      printf("lmocal (%12.5E %12.5E) (point) : %12.5E %12.5E %12.5E (query) : %12.5E %12.5E %12.5E DSIT %12.5E\n",u,v, pnt.x(), pnt.y(), pnt.z(),queryPoint.x(),queryPoint.y(),queryPoint.z(),
+      //      printf("lmocal (%12.5E %12.5E) (point) : %12.5E %12.5E %12.5E (query) : "
+      //             "%12.5E %12.5E %12.5E DSIT %12.5E\n",u,v, pnt.x(), pnt.y(), pnt.z(),
+      //              queryPoint.x(),queryPoint.y(),queryPoint.z(),
       //	     dist);
       if (dist < min_dist) {
 	//	printf("min_dist %f\n", dist);
 	min_dist = dist;
 	min_u = u;
 	min_v = v;
-	GPoint pnt = point(min_u, min_v);
+	//GPoint pnt = point(min_u, min_v);
       }
     }
   }
@@ -924,7 +971,7 @@ GPoint GFace::closestPoint(const SPoint3 &queryPoint, const double initialGuess[
   initial_conditions[1] = min_v;
 
   //  printf("Initial conditions : %f %f %12.5E\n", min_u, min_v,min_dist);
-  GPoint pnt = point(min_u, min_v);
+  // GPoint pnt = point(min_u, min_v);
   //    printf("Initial conditions (point) : %f %f %f local (%g %g) Looking for %f %f %f DIST = %12.5E\n",
   //  	 pnt.x(), pnt.y(), pnt.z(),min_u,min_v,
   //  	 queryPoint.x(),queryPoint.y(),queryPoint.z(),
@@ -934,9 +981,7 @@ GPoint GFace::closestPoint(const SPoint3 &queryPoint, const double initialGuess[
 
   minlbfgscreate(2, corr, x, state);
 
-  //
   // Defining the stopping criterion
-  //
   double epsg = 1.e-12;
   double epsf = 0.0;
   double epsx = 0.0;
@@ -944,26 +989,22 @@ GPoint GFace::closestPoint(const SPoint3 &queryPoint, const double initialGuess[
 
   minlbfgssetcond(state,epsg,epsf,epsx,maxits);
 
-  //
   // Solving the problem
-  //
-
   data_wrapper w;
   w.set_point(queryPoint);
   w.set_face(this);
 
   minlbfgsoptimize(state,bfgs_callback,NULL,&w);
 
-  //
   // Getting the results
-  //
   alglib::minlbfgsreport rep;
 
   minlbfgsresults(state,x,rep);
 
   GPoint pntF = point(x[0], x[1]);
   if (rep.terminationtype != 4){
-    //    printf("Initial conditions (point) : %f %f %f local (%g %g) Looking for %f %f %f DIST = %12.5E at the end (%f %f) %f %f %f\n",
+    //    printf("Initial conditions (point) : %f %f %f local (%g %g) "
+    //            "Looking for %f %f %f DIST = %12.5E at the end (%f %f) %f %f %f\n",
     //  	 pnt.x(), pnt.y(), pnt.z(),min_u,min_v,
     //  	 queryPoint.x(),queryPoint.y(),queryPoint.z(),
     //  	 min_dist,x[0],x[1],pntF.x(), pntF.y(), pntF.z());
@@ -973,7 +1014,8 @@ GPoint GFace::closestPoint(const SPoint3 &queryPoint, const double initialGuess[
     //      ( queryPoint.z() - pntF.z()) * ( queryPoint.z() - pntF.z());
     //    if (sqrt(DDD) > 1.e-4)
       /*
-      printf("Initial conditions (point) : %f %f %f local (%g %g) Looking for %f %f %f DIST = %12.5E at the end (%f %f) %f %f %f termination %d\n",
+      printf("Initial conditions (point) : %f %f %f local (%g %g) Looking for %f %f %f "
+             "DIST = %12.5E at the end (%f %f) %f %f %f termination %d\n",
 	     pnt.x(), pnt.y(), pnt.z(),min_u,min_v,
 	     queryPoint.x(),queryPoint.y(),queryPoint.z(),
 	     min_dist,x[0],x[1],pntF.x(), pntF.y(), pntF.z(),rep.terminationtype);
@@ -1233,7 +1275,7 @@ int GFace::genusGeom() const
   return nSeams - single_seams.size();
 }
 
-bool GFace::fillPointCloud(double maxDist, 
+bool GFace::fillPointCloud(double maxDist,
 			   std::vector<SPoint3> *points,
 			   std::vector<SPoint2> *uvpoints,
                            std::vector<SVector3> *normals)
@@ -1246,7 +1288,7 @@ bool GFace::fillPointCloud(double maxDist,
       SPoint2 &p0(stl_vertices[stl_triangles[i]]);
       SPoint2 &p1(stl_vertices[stl_triangles[i + 1]]);
       SPoint2 &p2(stl_vertices[stl_triangles[i + 2]]);
-      
+
       GPoint gp0 = point(p0);
       GPoint gp1 = point(p1);
       GPoint gp2 = point(p2);
@@ -1278,7 +1320,7 @@ bool GFace::fillPointCloud(double maxDist,
 	points->push_back(SPoint3(gp.x(), gp.y(), gp.z()));
 	if (uvpoints)uvpoints->push_back(SPoint2(t1,t2));
 	if(normals) normals->push_back(normal(SPoint2(t1,t2)));
-      }	
+      }
     }
   }
   return true;

@@ -106,7 +106,7 @@ struct doubleXstring{
 %token tExp tLog tLog10 tSqrt tSin tAsin tCos tAcos tTan tRand
 %token tAtan tAtan2 tSinh tCosh tTanh tFabs tFloor tCeil
 %token tFmod tModulo tHypot tList
-%token tPrintf tSprintf tStrCat tStrPrefix tStrRelative
+%token tPrintf tError tSprintf tStrCat tStrPrefix tStrRelative tStrFind
 %token tBoundingBox tDraw tToday tSyncModel tCreateTopology tCreateTopologyNoHoles
 %token tDistanceFunction tDefineConstant
 %token tPoint tCircle tEllipse tLine tSphere tPolarSphere tSurface tSpline tVolume
@@ -119,7 +119,7 @@ struct doubleXstring{
 %token tQuadTriDbl tQuadTriSngl tRecombLaterals tTransfQuadTri
 %token tText2D tText3D tInterpolationScheme  tTime tCombine
 %token tBSpline tBezier tNurbs tNurbsOrder tNurbsKnots
-%token tColor tColorTable tFor tIn tEndFor tIf tEndIf tExit
+%token tColor tColorTable tFor tIn tEndFor tIf tEndIf tExit tAbort
 %token tField tReturn tCall tFunction tShow tHide tGetValue tGetEnv tGetString
 %token tHomology tCohomology
 %token tGMSH_MAJOR_VERSION tGMSH_MINOR_VERSION tGMSH_PATCH_VERSION
@@ -130,6 +130,7 @@ struct doubleXstring{
 %type <i> TransfiniteArrangement RecombineAngle
 %type <u> ColorExpr
 %type <c> StringExpr StringExprVar SendToFile HomologyCommand
+%type <l> RecursiveListOfStringExprVar
 %type <l> FExpr_Multi ListOfDouble ListOfDoubleOrAll RecursiveListOfDouble
 %type <l> RecursiveListOfListOfDouble Enumeration
 %type <l> ListOfColor RecursiveListOfColor
@@ -208,6 +209,11 @@ Printf :
       Msg::Direct($3);
       Free($3);
     }
+  | tError '(' tBIGSTR ')' tEND
+    {
+      Msg::Error($3);
+      Free($3);
+    }
   | tPrintf '(' tBIGSTR ')' SendToFile StringExprVar tEND
     {
       std::string tmp = FixRelativePath(gmsh_yyname, $6);
@@ -224,7 +230,7 @@ Printf :
     }
   | tPrintf '(' tBIGSTR ',' RecursiveListOfDouble ')' tEND
     {
-      char tmpstring[1024];
+      char tmpstring[5000];
       int i = PrintListOfDouble($3, $5, tmpstring);
       if(i < 0)
 	yymsg(0, "Too few arguments in Printf");
@@ -235,9 +241,22 @@ Printf :
       Free($3);
       List_Delete($5);
     }
+  | tError '(' tBIGSTR ',' RecursiveListOfDouble ')' tEND
+    {
+      char tmpstring[5000];
+      int i = PrintListOfDouble($3, $5, tmpstring);
+      if(i < 0)
+	yymsg(0, "Too few arguments in Error");
+      else if(i > 0)
+	yymsg(0, "%d extra argument%s in Error", i, (i > 1) ? "s" : "");
+      else
+	Msg::Error(tmpstring);
+      Free($3);
+      List_Delete($5);
+    }
   | tPrintf '(' tBIGSTR ',' RecursiveListOfDouble ')' SendToFile StringExprVar tEND
     {
-      char tmpstring[1024];
+      char tmpstring[5000];
       int i = PrintListOfDouble($3, $5, tmpstring);
       if(i < 0)
 	yymsg(0, "Too few arguments in Printf");
@@ -1010,7 +1029,7 @@ Affectation :
 	    List_Read($9, i, &id);
 	    vl.push_back((int)id);
 	  }
-    option->list(vl);
+          option->list(vl);
 	}
 	else
 	  yymsg(0, "Unknown option '%s' in field %i of type '%s'",
@@ -1105,6 +1124,30 @@ DefineConstants :
         Msg::ExchangeOnelabParameter(key, val, floatOptions, charOptions);
         gmsh_yysymbols[key].value = val;
       }
+      Free($3);
+    }
+  | DefineConstants Comma tSTRING tAFFECT StringExpr
+    {
+      std::string key($3), val($5);
+      floatOptions.clear(); charOptions.clear();
+      if(!gmsh_yystringsymbols.count(key)){
+        Msg::ExchangeOnelabParameter(key, val, floatOptions, charOptions);
+        gmsh_yystringsymbols[key] = val;
+      }
+      Free($3);
+      Free($5);
+    }
+  | DefineConstants Comma tSTRING tAFFECT '{' StringExpr
+    { floatOptions.clear(); charOptions.clear(); }
+      CharParameterOptions '}'
+    {
+      std::string key($3), val($6);
+      if(!gmsh_yysymbols.count(key)){
+        Msg::ExchangeOnelabParameter(key, val, floatOptions, charOptions);
+        gmsh_yystringsymbols[key] = val;
+      }
+      Free($3);
+      Free($6);
     }
  ;
 
@@ -1162,6 +1205,45 @@ FloatParameterOption :
       Free($3);
     }
  ;
+
+CharParameterOptions :
+  | CharParameterOptions CharParameterOption
+ ;
+
+CharParameterOption :
+
+    ',' tSTRING FExpr
+    {
+      std::string key($2);
+      double val = $3;
+      floatOptions[key].push_back(val);
+      Free($2);
+    }
+
+  | ',' tSTRING tBIGSTR
+    {
+      std::string key($2);
+      std::string val($3);
+      charOptions[key].push_back(val);
+      Free($2);
+      Free($3);
+    }
+
+  | ',' tSTRING '{' RecursiveListOfStringExprVar '}'
+    {
+      std::string key($2);
+      for(int i = 0; i < List_Nbr($4); i++){
+        char *s;
+        List_Read($4, i, &s);
+        std::string val(s);
+        Free(s);
+        charOptions[key].push_back(val);
+      }
+      Free($2);
+      List_Delete($4);
+    }
+ ;
+
 
 //  S H A P E
 
@@ -1822,7 +1904,12 @@ Transform :
     }
   | tDilate '{' VExpr ',' FExpr '}' '{' MultipleShape '}'
     {
-      DilatShapes($3[0], $3[1], $3[2], $5, $8);
+      DilatShapes($3[0], $3[1], $3[2], $5, $5, $5, $8);
+      $$ = $8;
+    }
+  | tDilate '{' VExpr ',' VExpr '}' '{' MultipleShape '}'
+    {
+      DilatShapes($3[0], $3[1], $3[2], $5[0], $5[1], $5[2], $8);
       $$ = $8;
     }
   | tSTRING '{' MultipleShape '}'
@@ -2488,7 +2575,7 @@ Command :
     {
       if(!strcmp($1, "Include")){
         std::string tmp = FixRelativePath(gmsh_yyname, $2);
-	Msg::StatusBar(2, true, "Reading '%s'...", tmp.c_str());
+	Msg::StatusBar(true, "Reading '%s'...", tmp.c_str());
 	// Warning: we explicitly ask ParseFile not to fclose() the included
         // file, in order to allow user functions definitions in these files.
         // The files will be closed in the next time OpenFile terminates. If
@@ -2499,7 +2586,7 @@ Command :
         // instead of using the FILE pointer...)
 	ParseFile(tmp, false, true);
 	SetBoundingBox();
-	Msg::StatusBar(2, true, "Done reading '%s'", tmp.c_str());
+	Msg::StatusBar(true, "Done reading '%s'", tmp.c_str());
       }
       else if(!strcmp($1, "Print")){
 	// make sure we have the latest data from GEO_Internals in GModel
@@ -2618,7 +2705,12 @@ Command :
     }
    | tExit tEND
     {
-      exit(0);
+      Msg::Exit(0);
+    }
+   | tAbort tEND
+    {
+      gmsh_yyerrorstate = 999; // this will be checked when yyparse returns
+      YYABORT;
     }
    | tSyncModel tEND
     {
@@ -3721,23 +3813,23 @@ HomologyCommand :
 Homology :
     HomologyCommand tEND
     {
-      std::vector<int> domain, subdomain;
-      GModel::current()->addHomologyRequest($1, domain, subdomain);
+      std::vector<int> domain, subdomain, dim;
+      GModel::current()->addHomologyRequest($1, domain, subdomain, dim);
     }
   | HomologyCommand '{' ListOfDouble '}' tEND
     {
-      std::vector<int> domain, subdomain;
+      std::vector<int> domain, subdomain, dim;
       for(int i = 0; i < List_Nbr($3); i++){
         double d;
         List_Read($3, i, &d);
         domain.push_back((int)d);
       }
-      GModel::current()->addHomologyRequest($1, domain, subdomain);
+      GModel::current()->addHomologyRequest($1, domain, subdomain, dim);
       List_Delete($3);
     }
   | HomologyCommand '{' ListOfDouble ',' ListOfDouble '}' tEND
     {
-      std::vector<int> domain, subdomain;
+      std::vector<int> domain, subdomain, dim;
       for(int i = 0; i < List_Nbr($3); i++){
         double d;
         List_Read($3, i, &d);
@@ -3748,9 +3840,32 @@ Homology :
         List_Read($5, i, &d);
         subdomain.push_back((int)d);
       }
-      GModel::current()->addHomologyRequest($1, domain, subdomain);
+      GModel::current()->addHomologyRequest($1, domain, subdomain, dim);
       List_Delete($3);
       List_Delete($5);
+    }
+  | HomologyCommand '(' ListOfDouble ')' '{' ListOfDouble ',' ListOfDouble '}' tEND
+    {
+      std::vector<int> domain, subdomain, dim;
+      for(int i = 0; i < List_Nbr($6); i++){
+        double d;
+        List_Read($6, i, &d);
+        domain.push_back((int)d);
+      }
+      for(int i = 0; i < List_Nbr($8); i++){
+        double d;
+        List_Read($8, i, &d);
+        subdomain.push_back((int)d);
+      }
+      for(int i = 0; i < List_Nbr($3); i++){
+        double d;
+        List_Read($3, i, &d);
+        dim.push_back((int)d);
+      }
+      GModel::current()->addHomologyRequest($1, domain, subdomain, dim);
+      List_Delete($6);
+      List_Delete($8);
+      List_Delete($3);
     }
  ;
 
@@ -3986,6 +4101,15 @@ FExpr_Single :
       $$ = Msg::GetValue($3, $5);
       Free($3);
     }
+  | tStrFind '(' StringExprVar ',' StringExprVar ')'
+    {
+      std::string s($3), substr($5);
+      if(s.find(substr) != std::string::npos)
+        $$ = 1.;
+      else
+        $$ = 0.;
+      Free($3); Free($5);
+    }
 ;
 
 VExpr :
@@ -4165,6 +4289,78 @@ FExpr_Multi :
   | tVolume tBIGSTR
     {
       $$ = GetAllEntityNumbers(3);
+    }
+  | tPhysical tPoint '{' RecursiveListOfDouble '}'
+    {
+      $$ = List_Create(10, 1, sizeof(double));
+      for(int i = 0; i < List_Nbr($4); i++){
+        double num;
+        List_Read($4, i, &num);
+        PhysicalGroup *p = FindPhysicalGroup((int)num, MSH_PHYSICAL_POINT);
+        if(p){
+          for(int j = 0; j < List_Nbr(p->Entities); j++){
+            int nume;
+            List_Read(p->Entities, j, &nume);
+            double d = nume;
+            List_Add($$, &d);
+          }
+        }
+      }
+      List_Delete($4);
+    }
+  | tPhysical tLine '{' RecursiveListOfDouble '}'
+    {
+      $$ = List_Create(10, 1, sizeof(double));
+      for(int i = 0; i < List_Nbr($4); i++){
+        double num;
+        List_Read($4, i, &num);
+        PhysicalGroup *p = FindPhysicalGroup((int)num, MSH_PHYSICAL_LINE);
+        if(p){
+          for(int j = 0; j < List_Nbr(p->Entities); j++){
+            int nume;
+            List_Read(p->Entities, j, &nume);
+            double d = nume;
+            List_Add($$, &d);
+          }
+        }
+      }
+      List_Delete($4);
+    }
+  | tPhysical tSurface '{' RecursiveListOfDouble '}'
+    {
+      $$ = List_Create(10, 1, sizeof(double));
+      for(int i = 0; i < List_Nbr($4); i++){
+        double num;
+        List_Read($4, i, &num);
+        PhysicalGroup *p = FindPhysicalGroup((int)num, MSH_PHYSICAL_SURFACE);
+        if(p){
+          for(int j = 0; j < List_Nbr(p->Entities); j++){
+            int nume;
+            List_Read(p->Entities, j, &nume);
+            double d = nume;
+            List_Add($$, &d);
+          }
+        }
+      }
+      List_Delete($4);
+    }
+  | tPhysical tVolume '{' RecursiveListOfDouble '}'
+    {
+      $$ = List_Create(10, 1, sizeof(double));
+      for(int i = 0; i < List_Nbr($4); i++){
+        double num;
+        List_Read($4, i, &num);
+        PhysicalGroup *p = FindPhysicalGroup((int)num, MSH_PHYSICAL_VOLUME);
+        if(p){
+          for(int j = 0; j < List_Nbr(p->Entities); j++){
+            int nume;
+            List_Read(p->Entities, j, &nume);
+            double d = nume;
+            List_Add($$, &d);
+          }
+        }
+      }
+      List_Delete($4);
     }
   | Transform
     {
@@ -4426,7 +4622,7 @@ StringExpr :
     }
   | tSprintf '(' StringExprVar ',' RecursiveListOfDouble ')'
     {
-      char tmpstring[1024];
+      char tmpstring[5000];
       int i = PrintListOfDouble($3, $5, tmpstring);
       if(i < 0){
 	yymsg(0, "Too few arguments in Sprintf");
@@ -4445,19 +4641,44 @@ StringExpr :
     }
 ;
 
+RecursiveListOfStringExprVar :
+    StringExprVar
+    {
+      $$ = List_Create(20,20,sizeof(char*));
+      List_Add($$, &($1));
+    }
+  | RecursiveListOfStringExprVar ',' StringExprVar
+    { List_Add($$, &($3)); }
+ ;
+
 %%
 
 int PrintListOfDouble(char *format, List_T *list, char *buffer)
 {
-  int j, k;
-  char tmp1[256], tmp2[256];
+  // if format does not contain formatting characters, dump the list (useful for
+  // quick debugging of lists)
+  int numFormats = 0;
+  for(unsigned int i = 0; i < strlen(format); i++)
+    if(format[i] == '%') numFormats++;
+  if(!numFormats){
+    strcpy(buffer, format);
+    for(int i = 0; i < List_Nbr(list); i++){
+      double d;
+      List_Read(list, i, &d);
+      char tmp[256];
+      sprintf(tmp, " [%d]%g", i, d);
+      strcat(buffer, tmp);
+    }
+    return 0;
+  }
 
-  j = 0;
+  char tmp1[256], tmp2[256];
+  int j = 0, k = 0;
   buffer[j] = '\0';
 
   while(j < (int)strlen(format) && format[j] != '%') j++;
   strncpy(buffer, format, j);
-  buffer[j]='\0';
+  buffer[j] = '\0';
   for(int i = 0; i < List_Nbr(list); i++){
     k = j;
     j++;
@@ -4475,7 +4696,7 @@ int PrintListOfDouble(char *format, List_T *list, char *buffer)
       }
     }
     else
-      return List_Nbr(list)-i;
+      return List_Nbr(list) - i;
   }
   if(j != (int)strlen(format))
     return -1;
