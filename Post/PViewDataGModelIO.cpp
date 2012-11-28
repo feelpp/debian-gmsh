@@ -25,7 +25,8 @@ bool PViewDataGModel::addData(GModel *model, std::map<int, std::vector<double> >
 
   while(step >= (int)_steps.size())
     _steps.push_back(new stepData<double>(model, numComp));
-
+  _steps[step]->fillEntities();
+  _steps[step]->computeBoundingBox();
   _steps[step]->setTime(time);
 
   int numEnt = (_type == NodeData) ? model->getNumMeshVertices() :
@@ -45,21 +46,26 @@ bool PViewDataGModel::addData(GModel *model, std::map<int, std::vector<double> >
   return true;
 }
 
-bool PViewDataGModel::readMSH(const std::string &fileName, int fileIndex, FILE *fp,
-                              bool binary, bool swap, int step, double time,
-                              int partition, int numComp, int numEnt,
-                              const std::string &interpolationScheme)
+void PViewDataGModel::destroyData()
 {
-  Msg::Info("Reading step %d (time %g) partition %d: %d records",
-            step, time, partition, numEnt);
-
-  while(step >= (int)_steps.size()){
-    if(_steps.empty() || _steps.back()->getNumData())
-      _steps.push_back(new stepData<double>(GModel::current(), numComp));
-    else // faster since we avoid computing model bounds
-      _steps.push_back(new stepData<double>(*_steps.back()));
+  for(unsigned int i=0;i<_steps.size();i++)
+  {
+    _steps[i]->destroyData();
   }
+}
 
+bool PViewDataGModel::readMSH(const std::string &viewName, const std::string &fileName,
+                              int fileIndex, FILE *fp, bool binary, bool swap,
+                              int step, double time, int partition, int numComp,
+                              int numEnt, const std::string &interpolationScheme)
+{
+  Msg::Info("Reading view `%s' step %d (time %g) partition %d: %d records",
+            viewName.c_str(), step, time, partition, numEnt);
+
+  while(step >= (int)_steps.size())
+    _steps.push_back(new stepData<double>(GModel::current(), numComp));
+  _steps[step]->fillEntities();
+  _steps[step]->computeBoundingBox();
   _steps[step]->setFileName(fileName);
   _steps[step]->setFileIndex(fileIndex);
   _steps[step]->setTime(time);
@@ -117,7 +123,7 @@ bool PViewDataGModel::readMSH(const std::string &fileName, int fileIndex, FILE *
       _max = std::max(_max, val);
     }
     if(numEnt > 100000)
-      Msg::ProgressMeter(i + 1, numEnt, "Reading data");
+      Msg::ProgressMeter(i + 1, numEnt, true, "Reading data");
   }
 
   if(partition >= 0)
@@ -127,7 +133,8 @@ bool PViewDataGModel::readMSH(const std::string &fileName, int fileIndex, FILE *
   return true;
 }
 
-bool PViewDataGModel::writeMSH(const std::string &fileName, bool binary, bool savemesh)
+bool PViewDataGModel::writeMSH(const std::string &fileName, double version, bool binary, bool savemesh,
+                               bool multipleView)
 {
   if(_steps.empty()) return true;
 
@@ -141,7 +148,7 @@ bool PViewDataGModel::writeMSH(const std::string &fileName, bool binary, bool sa
   bool writeNodesAndElements = savemesh;
   FILE *fp;
   if(writeNodesAndElements){
-    if(!model->writeMSH(fileName, 2.0, binary)) return false;
+    if(!model->writeMSH(fileName, version, binary,false,false,1.0,0,0,multipleView)) return false;
     // append data
     fp = fopen(fileName.c_str(), binary ? "ab" : "a");
     if(!fp){
@@ -150,19 +157,28 @@ bool PViewDataGModel::writeMSH(const std::string &fileName, bool binary, bool sa
     }
   }
   else{
-    fp = fopen(fileName.c_str(), binary ? "wb" : "w");
-    if(!fp){
-      Msg::Error("Unable to open file '%s'", fileName.c_str());
-      return false;
+    if(multipleView){
+      fp = fopen(fileName.c_str(), binary ? "ab" : "a");
+      if(!fp){
+        Msg::Error("Unable to open file '%s'", fileName.c_str());
+        return false;
+      }
     }
-    fprintf(fp, "$MeshFormat\n");
-    fprintf(fp, "%g %d %d\n", 2.2, binary ? 1 : 0, (int)sizeof(double));
-    if(binary){
-      int one = 1;
-      fwrite(&one, sizeof(int), 1, fp);
-      fprintf(fp, "\n");
+    else{
+      fp = fopen(fileName.c_str(), binary ? "wb" : "w");
+      if(!fp){
+        Msg::Error("Unable to open file '%s'", fileName.c_str());
+        return false;
+      }
+      fprintf(fp, "$MeshFormat\n");
+      fprintf(fp, "%g %d %d\n", 2.2, binary ? 1 : 0, (int)sizeof(double));
+      if(binary){
+        int one = 1;
+        fwrite(&one, sizeof(int), 1, fp);
+        fprintf(fp, "\n");
+      }
+      fprintf(fp, "$EndMeshFormat\n");
     }
-    fprintf(fp, "$EndMeshFormat\n");
   }
 
   if(haveInterpolationMatrices()){
@@ -423,6 +439,8 @@ bool PViewDataGModel::readMED(const std::string &fileName, int fileIndex)
         }
         while(step >= (int)_steps.size())
           _steps.push_back(new stepData<double>(m, numCompMsh));
+        _steps[step]->fillEntities();
+        _steps[step]->computeBoundingBox();
         _steps[step]->setFileName(fileName);
         _steps[step]->setFileIndex(fileIndex);
         _steps[step]->setTime(dt);

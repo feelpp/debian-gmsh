@@ -6,6 +6,7 @@
 #include <string>
 #include <time.h>
 #include "GmshConfig.h"
+#include "GmshVersion.h"
 #include "GmshMessage.h"
 #include "GmshDefines.h"
 #include "GmshRemote.h"
@@ -37,12 +38,17 @@
 
 #if defined(HAVE_FLTK)
 #include "FlGui.h"
-#include "menuWindow.h"
+#include "graphicWindow.h"
 #include "drawContext.h"
+#include "onelabGroup.h"
 #endif
 
 int GmshInitialize(int argc, char **argv)
 {
+#if defined(HAVE_FLTK)
+  RedirectIOToConsole();
+#endif
+
   // we need at least one model during option parsing
   GModel *dummy = 0;
   if(GModel::list.empty()) dummy = new GModel();
@@ -87,17 +93,17 @@ int GmshSetBoundingBox(double xmin, double xmax,
 
 int GmshSetOption(std::string category, std::string name, std::string value, int index)
 {
-  return StringOption(GMSH_SET, category.c_str(), index, name.c_str(), value);
+  return StringOption(GMSH_SET|GMSH_GUI, category.c_str(), index, name.c_str(), value);
 }
 
 int GmshSetOption(std::string category, std::string name, double value, int index)
 {
-  return NumberOption(GMSH_SET, category.c_str(), index, name.c_str(), value);
+  return NumberOption(GMSH_SET|GMSH_GUI, category.c_str(), index, name.c_str(), value);
 }
 
 int GmshSetOption(std::string category, std::string name, unsigned int value, int index)
 {
-  return ColorOption(GMSH_SET, category.c_str(), index, name.c_str(), value);
+  return ColorOption(GMSH_SET|GMSH_GUI, category.c_str(), index, name.c_str(), value);
 }
 
 int GmshGetOption(std::string category, std::string name, std::string &value, int index)
@@ -133,9 +139,10 @@ int GmshFinalize()
 
 int GmshBatch()
 {
-  Msg::Info("Running '%s' [%d node(s), max. %d thread(s)]",
-            Msg::GetCommandLineArgs().c_str(),
-            Msg::GetCommSize(), Msg::GetMaxThreads());
+  Msg::Info("Running '%s' [Gmsh %s, %d node%s, max. %d thread%s]",
+            Msg::GetCommandLineArgs().c_str(), GMSH_VERSION,
+            Msg::GetCommSize(), Msg::GetCommSize() > 1 ? "s" : "",
+            Msg::GetMaxThreads(), Msg::GetMaxThreads() > 1 ? "s" : "");
   Msg::Info("Started on %s", Msg::GetLaunchDate().c_str());
 
   OpenProject(GModel::current()->getFileName());
@@ -194,6 +201,11 @@ int GmshBatch()
     CreateOutputFile(name, CTX::instance()->mesh.fileFormat);
   }
 
+#if defined(HAVE_FLTK) // FIXME this actually does not require the GUI
+  // launch solver (if requested)
+  solver_batch_cb(0, (void*)CTX::instance()->launchSolverAtStartup);
+#endif
+
   time_t now;
   time(&now);
   std::string currtime = ctime(&now);
@@ -213,7 +225,7 @@ int GmshFLTK(int argc, char **argv)
   FlGui::instance()->check();
 
   // open project file and merge all other input files
-  if(!FlGui::instance()->getOpenedThroughMacFinder()){
+  if(FlGui::getOpenedThroughMacFinder().empty()){
     OpenProject(GModel::current()->getFileName());
     for(unsigned int i = 1; i < CTX::instance()->files.size(); i++){
       if(CTX::instance()->files[i] == "-new"){
@@ -224,6 +236,9 @@ int GmshFLTK(int argc, char **argv)
         MergeFile(CTX::instance()->files[i]);
     }
   }
+  else{
+    OpenProject(FlGui::getOpenedThroughMacFinder());
+  }
 
   if(CTX::instance()->post.combineTime){
     PView::combine(true, 2, CTX::instance()->post.combineRemoveOrig);
@@ -232,15 +247,12 @@ int GmshFLTK(int argc, char **argv)
 
   // init first context
   switch (CTX::instance()->initialContext) {
-  case 1: FlGui::instance()->menu->setContext(menu_geometry, 0); break;
-  case 2: FlGui::instance()->menu->setContext(menu_mesh, 0); break;
-  case 3: FlGui::instance()->menu->setContext(menu_solver, 0); break;
-  case 4: FlGui::instance()->menu->setContext(menu_post, 0); break;
+  case 1: FlGui::instance()->openModule("Geometry"); break;
+  case 2: FlGui::instance()->openModule("Mesh"); break;
+  case 3: FlGui::instance()->openModule("Solver"); break;
+  case 4: FlGui::instance()->openModule("Post-processing"); break;
   default: // automatic
-    if(PView::list.size())
-      FlGui::instance()->menu->setContext(menu_post, 0);
-    else
-      FlGui::instance()->menu->setContext(menu_geometry, 0);
+    if(PView::list.size()) FlGui::instance()->openModule("Post-processing");
     break;
   }
 
@@ -254,12 +266,13 @@ int GmshFLTK(int argc, char **argv)
   }
 
   // listen to external solvers
-#if defined(HAVE_ONELAB)
   if(CTX::instance()->solver.listen){
     onelab::localNetworkClient *c = new onelab::localNetworkClient("Listen", "");
     c->run();
   }
-#endif
+
+  // launch solver (if requested) and fill onelab tree
+  solver_cb(0, (void*)CTX::instance()->launchSolverAtStartup);
 
   // loop
   return FlGui::instance()->run();

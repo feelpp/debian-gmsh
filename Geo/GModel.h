@@ -37,11 +37,19 @@ class GModel
 {
  private:
   friend class OCCFactory;
-  std::multimap<std::pair<std::vector<int>, std::vector<int> >, std::string> _homologyRequests;
+  std::multimap<std::pair<std::vector<int>, std::vector<int> >,
+                std::pair<std::string, std::vector<int> > > _homologyRequests;
   std::set<GRegion*, GEntityLessThan> _chainRegions;
   std::set<GFace*, GEntityLessThan> _chainFaces;
   std::set<GEdge*, GEntityLessThan> _chainEdges;
   std::set<GVertex*, GEntityLessThan> _chainVertices;
+
+  int _readMSH2(const std::string &name);
+  int _writeMSH2(const std::string &name, double version=2.2, bool binary=false,
+                 bool saveAll=false, bool saveParametric=false,
+                 double scalingFactor=1.0, int elementStartNum=0,
+                 int saveSinglePartition=0,
+                 bool multipleView=false);
 
  protected:
   // the name of the model
@@ -292,7 +300,7 @@ class GModel
   std::string getElementaryName(int dim, int num);
 
   //get the highest dimension of the GModel
-  int getDim();
+  int getDim() const;
 
   // set the selection flag on all entities
   void setSelection(int val);
@@ -406,9 +414,9 @@ class GModel
   // In this first attempt, only the highest dimensional mesh is adapted, which is ok if
   // we assume that boundaries are already adapted.
   // This should be fixed.
-  int adaptMesh(std::vector<int> technique, 
-		std::vector<simpleFunction<double>*> f, 
-		std::vector<std::vector<double> > parameters, 
+  int adaptMesh(std::vector<int> technique,
+		std::vector<simpleFunction<double>*> f,
+		std::vector<std::vector<double> > parameters,
 		int niter, bool meshAll=false);
 
   // make the mesh a high order mesh at order N
@@ -481,9 +489,9 @@ class GModel
   // if cutElem is set to false, split the model without cutting the elements
   GModel *buildCutGModel(gLevelset *ls, bool cutElem=true, bool saveTri=false);
 
-  // create a GModel by importing a mesh (vertexMap has a dim equal to
-  // the number of vertices and all the other vectors have a dim equal
-  // to the number of elements)
+  // create a GModel by importing a mesh (vertexMap has a dim equal to the
+  // number of vertices and all the other vectors have a dim equal to the number
+  // of elements)
   static GModel *createGModel(std::map<int, MVertex*> &vertexMap,
                               std::vector<int> &numElement,
                               std::vector<std::vector<int> > &vertexIndices,
@@ -492,9 +500,9 @@ class GModel
                               std::vector<int> &elementary,
                               std::vector<int> &partition);
 
-  // create a GModel from newly created mesh elements
-  // (with their own newly created mesh vertices),
-  // and let element entities have given physical group tags
+  // create a GModel from newly created mesh elements (with their own newly
+  // created mesh vertices), and let element entities have given physical group
+  // tags
   static GModel *createGModel
     (std::map<int, std::vector<MElement*> > &entityToElementsMap,
      std::map<int, std::vector<int> > &entityToPhysicalsMap);
@@ -511,7 +519,7 @@ class GModel
 
   // request homology computation
   void addHomologyRequest(const std::string &type, std::vector<int> &domain,
-                          std::vector<int> &subdomain);
+                          std::vector<int> &subdomain, std::vector<int> &dim);
   void computeHomology();
 
   // "automatic" IO based on Gmsh global functions
@@ -547,7 +555,7 @@ class GModel
   int writeMSH(const std::string &name, double version=2.2, bool binary=false,
                bool saveAll=false, bool saveParametric=false,
                double scalingFactor=1.0, int elementStartNum=0,
-               int saveSinglePartition=0);
+               int saveSinglePartition=0, bool multipleView=false);
   int writePartitionedMSH(const std::string &baseName, bool binary=false,
                           bool saveAll=false, bool saveParametric=false,
                           double scalingFactor=1.0);
@@ -628,6 +636,7 @@ class GModel
 
   // CEA triangulation
   int writeMAIL(const std::string &name, bool saveAll, double scalingFactor);
+
 };
 
 #endif

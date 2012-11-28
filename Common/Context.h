@@ -49,7 +49,7 @@ struct contextMeshOptions {
 
 struct contextGeometryOptions {
   int draw, light, lightTwoSide, points, lines, surfaces, volumes;
-  int pointsNum, linesNum, surfacesNum, volumesNum;
+  int pointsNum, linesNum, surfacesNum, volumesNum, labelType;
   double pointSize, lineWidth, selectedPointSize, selectedLineWidth;
   int pointType, lineType, surfaceType, numSubEdges;
   int oldCircle, extrudeSplinePoints, extrudeReturnLateral, oldNewreg;
@@ -82,6 +82,8 @@ class CTX {
   std::vector<std::string> recentFiles;
   // create mesh statistics report (0: do nothing, 1: create, 2: append)
   int createAppendMeshStatReport;
+  // should we launch a solver at startup?
+  int launchSolverAtStartup ;
   // save session/option file on exit?
   int sessionSave, optionsSave;
   // ask confirmation when overwriting files?
@@ -101,9 +103,9 @@ class CTX {
   // show tootips in the GUI?
   int tooltips;
   // position and size of various windows in the GUI
-  int menuPosition[2], glPosition[2], glSize[2], msgSize;
+  int glPosition[2], glSize[2], msgSize, menuPosition[2], menuSize[2], detachedMenu;
   int optPosition[2], visPosition[2], hotPosition[2], clipPosition[2], manipPosition[2];
-  int statPosition[2], ctxPosition[2], solverPosition[2], solverSize[2];
+  int statPosition[2], ctxPosition[2];
   int pluginPosition[2], pluginSize[2], fieldPosition[2], fieldSize[2];
   int fileChooserPosition[2], extraPosition[2], extraSize[2];
   // use the system menu bar on Mac OS X?
@@ -149,8 +151,8 @@ class CTX {
   // small axes options
   int smallAxes, smallAxesSize, smallAxesPos[2];
   // large axes options
-  int axes, axesAutoPosition, axesTics[3], axesMikado;
-  double axesPosition[6];
+  int axes, axesAutoPosition, axesMikado, axesForceValue;
+  double axesPosition[6], axesValue[6], axesTics[3];
   std::string axesLabel[3], axesFormat[3];
   // simple dynamic lock (should be a mutex)
   int lock;
@@ -222,6 +224,8 @@ class CTX {
     double timeout;
     std::string socketName;
     std::string name[5], executable[5], remoteLogin[5];
+    int autoSaveDatabase, autoArchiveOutputFiles, autoMesh, autoMergeFile;
+    int autoHideNewViews, autoShowLastStep, autoCheck;
   }solver;
   // print options
   struct{
@@ -233,6 +237,7 @@ class CTX {
     int gifDither, gifSort, gifInterlace, gifTransparent;
     int posElementary, posElement, posGamma, posEta, posRho, posDisto;
     int compositeWindows, deleteTmpFiles, background;
+    int width, height;
   } print;
   // color options
   struct{
@@ -252,15 +257,13 @@ class CTX {
   } color;
   // is the machine big-endian?
   int bigEndian;
-  // how RGBA values are packed and unpacked into/from an unsigned
-  // integer to be fed to glColor4ubv (depends on machine byte
-  // ordering!):
+  // how RGBA values are packed and unpacked into/from an unsigned integer to be
+  // fed to glColor4ubv (depends on machine byte ordering!):
   unsigned int packColor(int R, int G, int B, int A);
   int unpackRed(unsigned int X);
   int unpackGreen(unsigned int X);
   int unpackBlue(unsigned int X);
   int unpackAlpha(unsigned int X);
-
 };
 
 #endif

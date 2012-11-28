@@ -7,6 +7,7 @@
 #include "MTetrahedron.h"
 #include "Numeric.h"
 #include "Context.h"
+#include "BasisFactory.h"
 
 #if defined(HAVE_MESH)
 #include "qualityMeasures.h"
@@ -44,19 +45,19 @@ double MTetrahedron::getCircumRadius()
 
 void MTetrahedron10::scaledJacRange(double &jmin, double &jmax){
 
-  // the fastest available algo for computing scaled jacobians for 
-  // quadratic tetrahedron 
+  // the fastest available algo for computing scaled jacobians for
+  // quadratic tetrahedron
   const int nbNodT = 10;
   const int nbBezT = 20;
   static int done = 0;
   static fullMatrix<double> gsf[nbBezT];
-  const bezierBasis *jac_basis = getJacobianFuncSpace()->bezier;  
-  if (!done){    
+  const bezierBasis *jac_basis = getJacobianFuncSpace()->bezier;
+  if (!done){
     double gs[nbNodT][3];
     for (int i=0;i<jac_basis->points.size1();i++){
       const double u = jac_basis->points(i,0);
       const double v = jac_basis->points(i,1);
-      const double w = jac_basis->points(i,2);      
+      const double w = jac_basis->points(i,2);
       getGradShapeFunctions(u,v,w,gs);
       fullMatrix<double> a (nbNodT,3);
       for (int j=0;j < nbNodT;j++){
@@ -66,9 +67,9 @@ void MTetrahedron10::scaledJacRange(double &jmin, double &jmax){
       }
       gsf[i]= a;
     }
-    done=1; 
+    done=1;
   }
-  
+
   double x[nbNodT];for (int i=0;i<nbNodT;i++)x[i] = getVertex(i)->x();
   double y[nbNodT];for (int i=0;i<nbNodT;i++)y[i] = getVertex(i)->y();
   double z[nbNodT];for (int i=0;i<nbNodT;i++)z[i] = getVertex(i)->z();
@@ -81,14 +82,14 @@ void MTetrahedron10::scaledJacRange(double &jmin, double &jmax){
   // straight sided element may be WRONG while curved
   // one is OK
   const double ss = fabs(1./dot(crossprod(v1,v2),v3));
-  
+
   double jac[3][3];
   static fullVector<double>Ji(nbBezT);
   for (int i=0;i < nbBezT;i++){
     jac[0][0] = jac[0][1] = jac[0][2] = 0.;
     jac[1][0] = jac[1][1] = jac[1][2] = 0.;
     jac[2][0] = jac[2][1] = jac[2][2] = 0.;
-    fullMatrix<double> &g = gsf[i]; 
+    fullMatrix<double> &g = gsf[i];
     for (int j = 0; j < nbNodT; j++) {
       for (int k = 0; k < 3; k++) {
 	const double gg = g(j, k);
@@ -100,8 +101,8 @@ void MTetrahedron10::scaledJacRange(double &jmin, double &jmax){
     const double dJ = jac[0][0] * jac[1][1] * jac[2][2] + jac[0][2] * jac[1][0] * jac[2][1] +
       jac[0][1] * jac[1][2] * jac[2][0] - jac[0][2] * jac[1][1] * jac[2][0] -
       jac[0][0] * jac[1][2] * jac[2][1] - jac[0][1] * jac[1][0] * jac[2][2];
-    Ji(i) = dJ * ss;    
-  }    
+    Ji(i) = dJ * ss;
+  }
   static fullVector<double> Bi( nbBezT );
   jac_basis->matrixLag2Bez.mult(Ji,Bi);
   //  printf("%22.15E\n",*std::min_element(Bi.getDataPtr(),Bi.getDataPtr()+Bi.size()));
@@ -184,7 +185,7 @@ void MTetrahedron::xyz2uvw(double xyz[3], double uvw[3])
   sys3x3(mat, b, uvw, &det);
 }
 
-const polynomialBasis* MTetrahedron::getFunctionSpace(int o) const
+const nodalBasis* MTetrahedron::getFunctionSpace(int o) const
 {
   int order = (o == -1) ? getPolynomialOrder() : o;
 
@@ -192,33 +193,33 @@ const polynomialBasis* MTetrahedron::getFunctionSpace(int o) const
 
   if ((nv == 0) && (o == -1)) {
     switch (order) {
-    case 0: return polynomialBases::find(MSH_TET_1);
-    case 1: return polynomialBases::find(MSH_TET_4);
-    case 2: return polynomialBases::find(MSH_TET_10);
-    case 3: return polynomialBases::find(MSH_TET_20);
-    case 4: return polynomialBases::find(MSH_TET_34);
-    case 5: return polynomialBases::find(MSH_TET_52);
-    case 6: return polynomialBases::find(MSH_TET_74);
-    case 7: return polynomialBases::find(MSH_TET_100);
-    case 8: return polynomialBases::find(MSH_TET_130);
-    case 9: return polynomialBases::find(MSH_TET_164);
-    case 10: return polynomialBases::find(MSH_TET_202);
+    case 0: return BasisFactory::create(MSH_TET_1);
+    case 1: return BasisFactory::create(MSH_TET_4);
+    case 2: return BasisFactory::create(MSH_TET_10);
+    case 3: return BasisFactory::create(MSH_TET_20);
+    case 4: return BasisFactory::create(MSH_TET_34);
+    case 5: return BasisFactory::create(MSH_TET_52);
+    case 6: return BasisFactory::create(MSH_TET_74);
+    case 7: return BasisFactory::create(MSH_TET_100);
+    case 8: return BasisFactory::create(MSH_TET_130);
+    case 9: return BasisFactory::create(MSH_TET_164);
+    case 10: return BasisFactory::create(MSH_TET_202);
     default: Msg::Error("Order %d tetrahedron function space not implemented", order);
     }
   }
   else {
     switch (order) {
-    case 0: return polynomialBases::find(MSH_TET_1);
-    case 1: return polynomialBases::find(MSH_TET_4);
-    case 2: return polynomialBases::find(MSH_TET_10);
-    case 3: return polynomialBases::find(MSH_TET_20);
-    case 4: return polynomialBases::find(MSH_TET_35);
-    case 5: return polynomialBases::find(MSH_TET_56);
-    case 6: return polynomialBases::find(MSH_TET_84);
-    case 7: return polynomialBases::find(MSH_TET_120);
-    case 8: return polynomialBases::find(MSH_TET_165);
-    case 9: return polynomialBases::find(MSH_TET_220);
-    case 10: return polynomialBases::find(MSH_TET_286);
+    case 0: return BasisFactory::create(MSH_TET_1);
+    case 1: return BasisFactory::create(MSH_TET_4);
+    case 2: return BasisFactory::create(MSH_TET_10);
+    case 3: return BasisFactory::create(MSH_TET_20);
+    case 4: return BasisFactory::create(MSH_TET_35);
+    case 5: return BasisFactory::create(MSH_TET_56);
+    case 6: return BasisFactory::create(MSH_TET_84);
+    case 7: return BasisFactory::create(MSH_TET_120);
+    case 8: return BasisFactory::create(MSH_TET_165);
+    case 9: return BasisFactory::create(MSH_TET_220);
+    case 10: return BasisFactory::create(MSH_TET_286);
     default: Msg::Error("Order %d tetrahedron function space not implemented", order);
     }
   }

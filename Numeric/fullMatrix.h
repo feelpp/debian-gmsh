@@ -31,7 +31,7 @@ class fullVector
     _data = new scalar[_r];
     setAll(scalar(0.));
   }
-  
+
   fullVector(scalar *original, int r)
   {
     _r = r;
@@ -164,7 +164,7 @@ class fullVector
   }
   void binaryLoad (FILE *f)
   {
-    if(fread (_data, sizeof(scalar), _r, f) != _r) return;
+    if(fread (_data, sizeof(scalar), _r, f) != (size_t)_r) return;
   }
 };
 
@@ -541,8 +541,10 @@ class fullMatrix
     printf("};\n");
   }
 
-// specific functions for dgshell
-  void mult_naiveBlock(const fullMatrix<scalar> &b, const int ncol, const int fcol, const int alpha, const int beta, fullVector<scalar> &c, const int row=0) const
+  // specific functions for dgshell
+  void mult_naiveBlock(const fullMatrix<scalar> &b, const int ncol, const int fcol,
+                       const int alpha, const int beta, fullVector<scalar> &c,
+                       const int row=0) const
   {
     if(beta != 1)
       c.scale(beta);
@@ -550,7 +552,8 @@ class fullMatrix
       for(int k = 0; k < _c ; k++)
           c._data[j] += alpha*(*this)(row, k) * b(k, j);
   }
-  void multOnBlock(const fullMatrix<scalar> &b, const int ncol, const int fcol, const int alpha, const int beta, fullVector<scalar> &c) const
+  void multOnBlock(const fullMatrix<scalar> &b, const int ncol, const int fcol,
+                   const int alpha, const int beta, fullVector<scalar> &c) const
 #if !defined(HAVE_BLAS)
   {
     mult_naiveBlock(b,ncol,fcol,alpha,beta,c);
@@ -558,7 +561,8 @@ class fullMatrix
 #endif
   ;
 
-  void multWithATranspose(const fullVector<scalar> &x, scalar alpha, scalar beta, fullVector<scalar> &y) const
+  void multWithATranspose(const fullVector<scalar> &x, scalar alpha, scalar beta,
+                          fullVector<scalar> &y) const
 #if !defined(HAVE_BLAS)
   {
     y.scale(beta);
@@ -580,7 +584,8 @@ class fullMatrix
             scalar alpha=1., scalar beta=1.)
 #if !defined(HAVE_BLAS)
   {
-    Msg::Error("gemmWithAtranspose is only available with blas. If blas is not installed please transpose a before used gemm_naive");
+    Msg::Error("gemmWithAtranspose is only available with blas. If blas is not "
+               "installed please transpose a before used gemm_naive");
   }
 #endif
   ;

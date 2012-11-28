@@ -6,11 +6,15 @@
 set(SRC
   Numeric.cpp
     fullMatrix.cpp
+  BasisFactory.cpp
+    nodalBasis.cpp
     polynomialBasis.cpp
     JacobianBasis.cpp
     BergotBasis.cpp
+    pyramidalBasis.cpp
     jacobiPolynomials.cpp
     legendrePolynomials.cpp
+  pointsGenerators.cpp
   GaussIntegration.cpp
     GaussQuadratureLin.cpp
     GaussQuadratureTri.cpp

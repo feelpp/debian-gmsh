@@ -277,8 +277,8 @@ Frequently asked questions
 @cindex Internet address
 @cindex Download
 
-The source code and various pre-compiled versions of Gmsh (for Unix,
-Windows and Mac OS) can be downloaded from @uref{http://geuz.org/gmsh/}.
+The source code and various pre-compiled versions of Gmsh (for Windows,
+Mac and Unix) can be downloaded from @uref{http://geuz.org/gmsh/}.
 Gmsh is also directly available in pre-packaged form in various Linux
 and BSD distributions (Debian, Ubuntu, FreeBSD, ...).
 
@@ -970,7 +970,6 @@ In the following, for a 2 button mouse, @kbd{Middle button} =
 @itemize @bullet
 @item
 Highlight the entity under the mouse pointer and display its properties
-in the status bar
 @item
 Resize a lasso zoom or a lasso selection/unselection started with
 @kbd{Ctrl+Left button}
@@ -1040,10 +1039,6 @@ Make next view visible
 
 @sp 1 @c ----------------------------------------------
 
-@item <
-Go back to previous context
-@item >
-Go forward to next context
 @item 0
 Reload project file
 @item 1 or F1
@@ -1089,6 +1084,8 @@ Show post-processing view options
 
 @item Ctrl+i
 Show statistics window 
+@item Ctrl+d
+Attach/detach menu
 @item Ctrl+l
 Show message console
 @item Ctrl+n
@@ -1292,6 +1289,7 @@ parsing of the script file:
   @var{expression} @var{operator-ternary-left} @var{expression} @var{operator-ternary-right} @var{expression} |
   @var{built-in-function} |
   @var{real-option} |
+  StrFind(@var{char-expression}, @var{char-expression}) |
   GetValue("@var{string}", @var{expression})
 @end example
 
@@ -1303,7 +1301,9 @@ respectively. The operators @var{operator-unary-left},
 @var{operator-ternary-left} and @var{operator-ternary-right} are defined
 in @ref{Operators}. For the definition of @w{@var{built-in-function}s},
 see @ref{Built-in functions}. The various @w{@var{real-option}s} are
-listed in @ref{Options}.
+listed in @ref{Options}. @code{StrFind} searches the first
+@var{char-expression} for any occurrence of the second
+@var{char-expression}.
 
 The last case in the definition allows to ask the user for a value
 interactively. For example, inserting @code{GetValue("Value of parameter
@@ -1336,6 +1336,7 @@ List of expressions are also widely used, and are defined as:
   @var{extrude}
   Point @{ @var{expression} @} |
   Point|Line|Surface|Volume "*" |
+  Physical Point|Line|Surface|Volume @{ @var{expression-list} @}
 @c  @var{duplicata} - already implemented: should we explain this?
 @end example
 
@@ -1350,10 +1351,11 @@ permits to reference an expression sublist (whose elements are those
 corresponding to the indices provided by the @var{expression-list}).
 The next two cases permit to retrieve the indices of entities created
 through geometrical transformations and extrusions (see
-@ref{Transformations}, and @ref{Extrusions}). The last two cases permit
-to retrieve the coordinates of a given geometry point (@pxref{Points}),
-or to retrieve the id numbers of all points, lines, surfaces or volumes
-in the model.
+@ref{Transformations}, and @ref{Extrusions}). The last three cases
+permit to retrieve the coordinates of a given geometry point
+(@pxref{Points}), to retrieve the id numbers of all points, lines,
+surfaces or volumes in the model, or to retrieve the elementary entities
+making up physical groups.
 
 To see the practical use of such expressions, have a look at the first
 couple of examples in @ref{Tutorial}. Note that, in order to lighten the
@@ -1893,10 +1895,13 @@ Multiplies and affects @var{expression} to a real option.
 @item @var{real-option} /= @var{expression};
 Divides and affects @var{expression} to a real option.
 
-@item Exit;
+@item Abort;
 Aborts the current script.
 
-@item Printf ( @var{char-expression} , @var{expression-list} );
+@item Exit;
+Exits Gmsh.
+
+@item Printf ( @var{char-expression} <, @var{expression-list}> );
 Prints a character expression in the information window and/or on the
 terminal. @code{Printf} is equivalent to the @code{printf} C function:
 @var{char-expression} is a format string that can contain formatting
@@ -1912,6 +1917,9 @@ Same as @code{Printf} above, but output the expression in a file.
 @item Printf ( @var{char-expression} , @var{expression-list} ) >> @var{char-expression};
 Same as @code{Printf} above, but appends the expression at the end of
 the file.
+
+@item Error ( @var{char-expression} <, @var{expression-list}> );
+Same as @code{Printf}, but raises an error.
 
 @item Merge @var{char-expression};
 Merges a file named @var{char-expression}. This command is equivalent to
@@ -3025,16 +3033,18 @@ Sets number of elliptic smoothing steps for the surfaces listed in
 @var{expression-list} (smoothing only applies to transfinite meshes at
 the moment).
 
-@item Homology @{ @{ @var{expression-list} @}, @{ @var{expression-list} @} @};
+@item Homology ( @{ @var{expression-list} @} ) @{ @{ @var{expression-list} @} , @{ @var{expression-list} @} @};
 Compute a basis representation for homology spaces after a mesh has
-been generated. The first @var{expression-list} is a list of physical
-groups that constitute the computation domain. The second
-@var{expression-list} is a list of physical groups that constitute the
-relative subdomain of relative homology computation; if empty,
-absolute homology is computed. Resulting basis representation chains
-are stored as physical groups in the mesh.
+been generated. The first @var{expression-list} is a list of
+dimensions whose homology bases are computed; if empty, all bases are
+computed. The second @var{expression-list} is a list physical groups
+that constitute the computation domain; if empty, the whole mesh is
+the domain. The third @var{expression-list} is a list of physical
+groups that constitute the relative subdomain of relative homology
+computation; if empty, absolute homology is computed. Resulting basis
+representation chains are stored as physical groups in the mesh.
 
-@item Cohomology @{ @{ @var{expression-list} @}, @{ @var{expression-list} @} @};
+@item Cohomology ( @{ @var{expression-list} @} ) @{ @{ @var{expression-list} @} , @{ @var{expression-list} @} @};
 Similar to command @code{Homology}, but computes a basis representation
 for cohomology spaces instead.
 
@@ -3064,7 +3074,7 @@ as well as the way meshes are displayed in the GUI, is given in
 @cindex Solver, module
 @cindex Module, Solver
 
-External solvers can driven by Gmsh through the ONELAB
+External solvers can be driven by Gmsh through the ONELAB
 @url{http://www.onelab.info} interface. To add a new solver in the
 solver module, you need to specify its name (@code{Solver.Name0},
 @code{Solver.Name1}, etc.) and the path to the executable
@@ -3120,9 +3130,11 @@ in standard third-party formats (like MED:
 Once loaded into Gmsh, scalar fields can be displayed as iso-value lines
 and surfaces or color maps, whereas vector fields can be represented
 either by three-dimensional arrows or by displacement maps. (Tensor
-fields are currently displayed as Von-Mises effective stresses. To
-display other (combinations of) components, use @code{Plugin(Extract)}:
-see @ref{Post-processing plugins}.)
+fields are currently displayed as Von-Mises effective stresses, min/max
+eigenvalues, eigenvectors, ellipsis or ellipsoid. To display other
+(combinations of) components, you can use the @code{Force scalar} or
+@code{Force vector} options, or use @code{Plugin(MathEval)}: see
+@ref{Post-processing plugins}.)
 
 In Gmsh's jargon, each dataset is called a ``view''. Each view is given
 a name, and can be manipulated either individually (each view has its
@@ -3515,14 +3527,15 @@ information about the file (@code{$MeshFormat}), followed by several
 optional sections defining the nodes (@code{$Nodes}), elements
 (@code{$Elements}), region names (@code{$PhysicalName}) and
 post-processing datasets (@code{$NodeData}, @code{$ElementData},
-@code{$ElementNodeData}). 
+@code{$ElementNodeData}).
 
 Any section with an unrecognized header is simply ignored: you can thus
 add comments in a @file{.msh} file by putting them e.g. inside a
 @code{$Comments}/@code{$EndComments} section.
 
 Sections can be repeated in the same file, and post-processing sections
-can be put into separate files (e.g. one file per time step).
+can be put into separate files (e.g. one file per time step).  Nodes are
+assumed to be defined before elements.
 
 The format is defined as follows:
 
@@ -5089,7 +5102,7 @@ mailing list (@email{gmsh@@geuz.org}).
 @enumerate
 @item Which OSes does Gmsh run on?
 
-Gmsh runs on Windows XP/Vista, Mac OS X, Linux and most Unix variants.
+Gmsh runs on Windows, Mac OS X, Linux and most Unix variants.
 
 @item Are there additional requirements to run Gmsh?
 
@@ -5471,7 +5484,7 @@ Yes, using scripts. Have a look at @file{tutorial/t8.geo} or
 
 Yes, by using either the ``Force field'' options in
 `Tools->Options->View->Visibility', or by using
-`Tools->Plugins->Extract'.
+`Tools->Plugins->MathEval'.
 
 @item Can I do arithmetic operations on a view? Can I perform operations involving different views?
 

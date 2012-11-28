@@ -75,19 +75,28 @@ struct faceXtet{
     if (v[2] < other.v[2]) return true;
     return false;
   }
+  inline bool operator == (const faceXtet & other) const
+  {
+    return (v[0] == other.v[0] &&
+	    v[1] == other.v[1] &&
+	    v[2] == other.v[2] );
+  }
 };
 
 template <class ITER>
-void connectTets(ITER beg, ITER end)
+void connectTets_vector(ITER beg, ITER end)
 {
-  std::set<faceXtet> conn;
+  //  std::set<faceXtet> conn;
+  std::vector<faceXtet> conn;
   while (beg != end){
     if (!(*beg)->isDeleted()){
       for (int i = 0; i < 4; i++){
         faceXtet fxt(*beg, i);
-        std::set<faceXtet>::iterator found = conn.find(fxt);
+	std::vector<faceXtet>::iterator found  = std::find(conn.begin(), conn.end(), fxt); 
+	//        std::set<faceXtet>::iterator found = conn.find(fxt);
         if (found == conn.end())
-          conn.insert(fxt);
+	  conn.push_back(fxt);
+	// conn.insert(fxt);
         else if (found->t1 != *beg){
           found->t1->setNeigh(found->i1, *beg);
           (*beg)->setNeigh(i, found->t1);
@@ -97,6 +106,28 @@ void connectTets(ITER beg, ITER end)
     ++beg;
   }
 }
+
+template <class ITER>
+void connectTets(ITER beg, ITER end)
+{
+  std::set<faceXtet> conn;
+  while (beg != end){
+    if (!(*beg)->isDeleted()){
+      for (int i = 0; i < 4; i++){
+        faceXtet fxt(*beg, i);
+	std::set<faceXtet>::iterator found = conn.find(fxt);
+        if (found == conn.end())
+	  conn.insert(fxt);
+        else if (found->t1 != *beg){
+          found->t1->setNeigh(found->i1, *beg);
+          (*beg)->setNeigh(i, found->t1);
+        }
+      }
+    }
+    ++beg;
+  }
+}
+
 
 static void updateActiveFaces(MTet4 *t, double limit_, std::set<MFace,Less_Face> &front)
 {
@@ -160,22 +191,61 @@ void recurFindCavity(std::list<faceXtet> & shell,
         shell.push_back(faceXtet(t, i));
     }
   }
+  //  printf("cavity size %d\n",cavity.size());
 }
 
-bool insertVertex(MVertex *v,
-                  MTet4 *t,
-                  MTet4Factory &myFactory,
-                  std::set<MTet4*,compareTet4Ptr> &allTets,
-		  std::vector<double> & vSizes,
-                  std::vector<double> & vSizesBGM,
-		  std::set<MTet4*,compareTet4Ptr> *activeTets = 0 )
+void nonrecurFindCavity(std::list<faceXtet> & shell,
+                     std::list<MTet4*> & cavity,
+                     MVertex *v ,
+                     MTet4 *t)
 {
-  std::list<faceXtet> shell;
-  std::list<MTet4*> cavity;
+  // Msg::Info("tet %d %d %d %d",t->tet()->getVertex(0)->getNum(),
+  //     t->tet()->getVertex(1)->getNum(),
+  //     t->tet()->getVertex(2)->getNum(),
+  //     t->tet()->getVertex(3)->getNum());
+
+  // invariant : this one has to be inserted in the cavity
+  // consider this tet deleted
+  // remove its reference to its neighbors
+
+  std::stack<MTet4*> _stack;
+  _stack.push(t);
+  while(!_stack.empty()){
+    t = _stack.top();
+    _stack.pop();
+    t->setDeleted(true);
+    // the cavity that has to be removed
+    // because it violates delaunay criterion
+    cavity.push_back(t);
+    
+    for (int i = 0; i < 4; i++){
+      MTet4 *neigh = t->getNeigh(i) ;
+      if (!neigh)
+	shell.push_back(faceXtet(t, i));
+      else  if (!neigh->isDeleted()){
+	int circ = neigh->inCircumSphere(v);
+	if (circ && (neigh->onWhat() == t->onWhat()))
+	  _stack.push(neigh);
+	else
+	  shell.push_back(faceXtet(t, i));
+      }
+    }
+  }
+  //  printf("cavity size %d\n",cavity.size());
+}
+
+
+bool insertVertexB(std::list<faceXtet> &shell,
+		   std::list<MTet4*> &cavity,
+		   MVertex *v,
+		   MTet4 *t,
+		   MTet4Factory &myFactory,
+		   std::set<MTet4*,compareTet4Ptr> &allTets,
+		   std::vector<double> & vSizes,
+		   std::vector<double> & vSizesBGM,
+		   std::set<MTet4*,compareTet4Ptr> *activeTets = 0 )
+{
   std::list<MTet4*> new_cavity;
-
-  recurFindCavity(shell, cavity, v, t);
-
   // check that volume is conserved
   double newVolume = 0;
   double oldVolume = 0;
@@ -237,7 +307,7 @@ bool insertVertex(MVertex *v,
   // OK, the cavity is star shaped
   if (fabs(oldVolume - newVolume) < 1.e-10 * oldVolume &&
       !onePointIsTooClose){
-    connectTets(new_cavity.begin(), new_cavity.end());
+    connectTets_vector(new_cavity.begin(), new_cavity.end());
     allTets.insert(newTets, newTets + shell.size());
 
     if (activeTets){
@@ -267,6 +337,24 @@ bool insertVertex(MVertex *v,
     return false;
   }
 }
+
+bool insertVertex(MVertex *v,
+                  MTet4 *t,
+                  MTet4Factory &myFactory,
+                  std::set<MTet4*,compareTet4Ptr> &allTets,
+		  std::vector<double> & vSizes,
+                  std::vector<double> & vSizesBGM,
+		  std::set<MTet4*,compareTet4Ptr> *activeTets = 0 )
+{
+  std::list<faceXtet> shell;
+  std::list<MTet4*> cavity;
+
+  recurFindCavity(shell, cavity, v, t);
+
+  return insertVertexB(shell,cavity,v,t,myFactory,allTets,vSizes,vSizesBGM,activeTets);
+  
+}
+
 
 static void setLcs(MTetrahedron *t, std::map<MVertex*, double> &vSizes)
 {
@@ -344,45 +432,75 @@ GRegion *getRegionFromBoundingFaces(GModel *model,
   return 0;
 }
 
-void recur_classify(MTet4 *t, std::list<MTet4*> &theRegion,
-                    std::set<GFace*> &faces_bound, GRegion *bidon,
-                    GModel *model, const fs_cont &search)
+// void recur_classify(MTet4 *t, std::list<MTet4*> &theRegion,
+//                     std::set<GFace*> &faces_bound, GRegion *bidon,
+//                     GModel *model, const fs_cont &search)
+// {
+//   if (!t) Msg::Error("a tet is not connected by a boundary face");
+//   if (t->onWhat()) {
+//     return; // should never return here...
+//   }
+//   theRegion.push_back(t);
+//   t->setOnWhat(bidon);
+
+//   bool FF[4] = {0,0,0,0};
+
+//   for (int i = 0; i < 4; i++){
+//     //      if (!t->getNeigh(i) || !t->getNeigh(i)->onWhat())
+//     {
+//       GFace* gfound = findInFaceSearchStructure (t->tet()->getVertex(faces[i][0]),
+//                                                  t->tet()->getVertex(faces[i][1]),
+//                                                  t->tet()->getVertex(faces[i][2]),
+//                                                  search);
+//       if (gfound){
+//         FF[i] = true;
+//         if (faces_bound.find(gfound) == faces_bound.end())
+//           faces_bound.insert(gfound);
+//       }
+//     }
+//   }
+//   for (int i = 0; i < 4; i++){
+//     if (!FF[i])
+//       recur_classify(t->getNeigh(i), theRegion, faces_bound, bidon, model, search );
+//   }
+// }
+
+void non_recursive_classify(MTet4 *t, std::list<MTet4*> &theRegion,
+			    std::set<GFace*> &faces_bound, GRegion *bidon,
+			    GModel *model, const fs_cont &search)
 {
-  if (!t) Msg::Error("a tet is not connected by a boundary face");
-  if (t->onWhat()) return; // should never return here...
-  theRegion.push_back(t);
-  t->setOnWhat(bidon);
 
-  bool FF[4] = {0,0,0,0};
+  std::stack<MTet4*> _stackounette;
+  _stackounette.push(t);
 
-  for (int i = 0; i < 4; i++){
-    //      if (!t->getNeigh(i) || !t->getNeigh(i)->onWhat())
-    {
-      GFace* gfound = findInFaceSearchStructure (t->tet()->getVertex(faces[i][0]),
-                                                 t->tet()->getVertex(faces[i][1]),
-                                                 t->tet()->getVertex(faces[i][2]),
-                                                 search);
-      if (gfound){
-        FF[i] = true;
-        if (faces_bound.find(gfound) == faces_bound.end())
-          faces_bound.insert(gfound);
+  while(!_stackounette.empty()){
+    t = _stackounette.top();
+    _stackounette.pop();
+    if (!t) Msg::Error("a tet is not connected by a boundary face");
+    if (!t->onWhat()) {
+      theRegion.push_back(t);
+      t->setOnWhat(bidon);
+      bool FF[4] = {0,0,0,0};
+      for (int i = 0; i < 4; i++){
+	GFace* gfound = findInFaceSearchStructure (t->tet()->getVertex(faces[i][0]),
+						   t->tet()->getVertex(faces[i][1]),
+						   t->tet()->getVertex(faces[i][2]),
+						   search);
+	if (gfound){
+	  FF[i] = true;
+	  if (faces_bound.find(gfound) == faces_bound.end())
+	    faces_bound.insert(gfound);
+	}
       }
-
-//        MTriangle tri (t->tet()->getVertex (faces[i][0]),
-//                       t->tet()->getVertex (faces[i][1]),
-//                       t->tet()->getVertex (faces[i][2]));
-//        GFace *gfound;
-//        if (FF[i] = find_triangle_in_model(model, &tri, &gfound, false)){
-//          if (faces_bound.find(gfound) == faces_bound.end())
-//            faces_bound.insert(gfound);
-//        }
+      for (int i = 0; i < 4; i++){
+	if (!FF[i])
+	  _stackounette.push(t->getNeigh(i));
+      }
     }
   }
-  for (int i = 0; i < 4; i++){
-    if (!FF[i])
-      recur_classify(t->getNeigh(i), theRegion, faces_bound, bidon, model, search );
-  }
 }
+
+
 
 void adaptMeshGRegion::operator () (GRegion *gr)
 {
@@ -744,7 +862,7 @@ void optimizeMesh(GRegion *gr, const qualityMeasure4Tet &qm)
 }
 
 
-static double tetcircumcenter(double a[3], double b[3], double c[3], double d[3],
+double tetcircumcenter(double a[3], double b[3], double c[3], double d[3],
 			      double circumcenter[3], double *xi, double *eta, double *zeta){
   double xba, yba, zba, xca, yca, zca, xda, yda, zda;
   double balength, calength, dalength;
@@ -865,7 +983,7 @@ void insertVerticesInRegion (GRegion *gr)
       GRegion *bidon = (GRegion*)123;
       double _t1 = Cpu();
       Msg::Debug("start with a non classified tet");
-      recur_classify(*it, theRegion, faces_bound, bidon, gr->model(), search);
+      non_recursive_classify(*it, theRegion, faces_bound, bidon, gr->model(), search);
       double _t2 = Cpu();
       Msg::Debug("found %d tets with %d faces (%g sec for the classification)",
                  theRegion.size(), faces_bound.size(), _t2 - _t1);
@@ -894,6 +1012,8 @@ void insertVerticesInRegion (GRegion *gr)
 
   int ITER = 0;
 
+  int COUNT_MISS_1 = 0;
+  int COUNT_MISS_2 = 0;
   while(1){
     if(allTets.empty()){
       Msg::Error("No tetrahedra in region %d %d", gr->tag(), allTets.size());
@@ -908,12 +1028,13 @@ void insertVerticesInRegion (GRegion *gr)
     }
     else{
       if(ITER++ %5000 == 0)
-        Msg::Info("%d points created -- Worst tet radius is %g",
-                  vSizes.size(), worst->getRadius());
+        Msg::Info("%d points created -- Worst tet radius is %g (MISSES %d %d)",
+                  vSizes.size(), worst->getRadius(), COUNT_MISS_1,COUNT_MISS_2);
       if(worst->getRadius() < 1) break;
       double center[3];
       double uvw[3];
       MTetrahedron *base = worst->tet();
+
       double pa[3] = {base->getVertex(0)->x(),
 		      base->getVertex(0)->y(),
 		      base->getVertex(0)->z()};
@@ -927,22 +1048,30 @@ void insertVerticesInRegion (GRegion *gr)
 		      base->getVertex(3)->y(),
 		      base->getVertex(3)->z()};
 
-      //      double UU,VV,WW;
       tetcircumcenter(pa,pb,pc,pd, center,&uvw[0],&uvw[1],&uvw[2] );
-      //      worst->tet()->xyz2uvw(center, uvw);
-      //      printf("%12.5E %12.5E %12.5E -- %12.5E %12.5E %12.5E \n",
-      //	     UU,VV,WW,uvw[0],uvw[1],uvw[2]);
-      /*
-      if (!worst->tet()->isInside(uvw[0], uvw[1], uvw[2]) &&
-	  worst->getRadius() > 20){
-	uvw[0] = uvw[1] = uvw[2] = 0.25;
-	center[0] = 0.25*(pa[0]+pb[0]+pc[0]+pd[0]);
-	center[1] = 0.25*(pa[1]+pb[1]+pc[1]+pd[1]);
-	center[2] = 0.25*(pa[2]+pb[2]+pc[2]+pd[2]);
-      }
-      */
 
-      if(worst->tet()->isInside(uvw[0], uvw[1], uvw[2])){
+
+      //// A TEST !!!
+      std::list<faceXtet> shell;
+      std::list<MTet4*> cavity;
+      MVertex vv (center[0], center[1], center[2], worst->onWhat());
+      recurFindCavity(shell, cavity, &vv, worst);
+      bool FOUND = false;
+      for (std::list<MTet4*>::iterator itc = cavity.begin(); itc != cavity.end(); ++itc){	  
+	MTetrahedron *toto = (*itc)->tet();
+	//	(*itc)->setDeleted(false);
+	toto->xyz2uvw(center,uvw);
+	if (toto->isInside(uvw[0], uvw[1], uvw[2])){
+	  worst = (*itc);
+	  FOUND = true;
+	  break;	  
+	}
+      }
+      /// END TETS
+      
+      //      worst->tet()->xyz2uvw(center,uvw);
+      
+      if(FOUND){
         MVertex *v = new MVertex(center[0], center[1], center[2], worst->onWhat());
         v->setIndex(NUM++);
         double lc1 =
@@ -955,7 +1084,8 @@ void insertVerticesInRegion (GRegion *gr)
         vSizes.push_back(lc1);
         vSizesBGM.push_back(lc);
         // compute mesh spacing there
-        if(!insertVertex(v, worst, myFactory, allTets, vSizes,vSizesBGM)){
+        if(!insertVertexB(shell,cavity,v, worst, myFactory, allTets, vSizes,vSizesBGM)){
+	  COUNT_MISS_1++;
           myFactory.changeTetRadius(allTets.begin(), 0.);
           delete v;
         }
@@ -965,6 +1095,8 @@ void insertVerticesInRegion (GRegion *gr)
       else{
 	//	printf("point outside %12.5E %12.5E %12.5E %12.5E %12.5E\n",VV,uvw[0], uvw[1], uvw[2],1-uvw[0]-uvw[1]-uvw[2]);
         myFactory.changeTetRadius(allTets.begin(), 0.0);
+	COUNT_MISS_2++;
+	for (std::list<MTet4*>::iterator itc = cavity.begin(); itc != cavity.end(); ++itc)  (*itc)->setDeleted(false);
       }
     }
 
@@ -985,6 +1117,7 @@ void insertVerticesInRegion (GRegion *gr)
       Msg::Info("cleaning up the memory %d -> %d", n1, allTets.size());
     }
   }
+  
 
     // relocate vertices
   int nbReloc = 0;
@@ -1094,7 +1227,7 @@ void bowyerWatsonFrontalLayers(GRegion *gr, bool hex)
       GRegion *bidon = (GRegion*)123;
       double _t1 = Cpu();
       Msg::Debug("start with a non classified tet");
-      recur_classify(*it, theRegion, faces_bound, bidon, gr->model(), search);
+      non_recursive_classify(*it, theRegion, faces_bound, bidon, gr->model(), search);
       double _t2 = Cpu();
       Msg::Debug("found %d tets with %d faces (%g sec for the classification)",
                  theRegion.size(), faces_bound.size(), _t2 - _t1);

@@ -60,10 +60,12 @@ class PViewOptions {
   int type;
   int position[2], size[2], autoPosition;
   std::string format;
-  int axes, axesAutoPosition, axesMikado, axesTics[3];
+  int axes, axesAutoPosition, axesMikado;
+  double axesTics[3];
   std::string axesFormat[3], axesLabel[3];
   double axesPosition[6];
   double customMin, customMax, tmpMin, tmpMax, externalMin, externalMax;
+  double customAbscissaMin, customAbscissaMax;
   SBoundingBox3d tmpBBox;
   double offset[3], raise[3], transform[3][3], displacementFactor, normalRaise;
   double explode;
@@ -74,7 +76,7 @@ class PViewOptions {
   double angleSmoothNormals;
   int saturateValues, fakeTransparency;
   int showElement, showTime, showScale;
-  int scaleType, rangeType;
+  int scaleType, rangeType, abscissaRangeType;
   int vectorType, tensorType, glyphLocation, centerGlyphs;
   int timeStep;
   int drawStrings;
@@ -96,17 +98,20 @@ class PViewOptions {
   int clip; // status of clip planes (bit array)
   int forceNumComponents, componentMap[9];
   int sampling;
+  std::string attributes;
   struct{
     unsigned int point, line, triangle, quadrangle;
     unsigned int tetrahedron, hexahedron, prism, pyramid;
     unsigned int tangents, normals;
     unsigned int text2d, text3d, axes, background2d;
   } color;
+ private:
+  // static reference that contains default values
+  static PViewOptions *_reference;
  public:
-  // static reference container that contains default values
-  static PViewOptions reference;
   PViewOptions();
   ~PViewOptions();
+  static PViewOptions *reference();
   // return a floating point value in [min, max] corresponding to the
   // integer iso in [0, numIso - 1]
   double getScaleValue(int iso, int numIso, double min, double max);

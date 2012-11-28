@@ -358,33 +358,37 @@ static void Mesh0D(GModel *m)
 static void Mesh1D(GModel *m)
 {
   if(TooManyElements(m, 1)) return;
-  Msg::StatusBar(2, true, "Meshing 1D...");
+  Msg::StatusBar(true, "Meshing 1D...");
   double t1 = Cpu();
 
   for(GModel::eiter it = m->firstEdge(); it != m->lastEdge(); ++it)
     (*it)->meshStatistics.status = GEdge::PENDING;
 
-  int nIter = 0;
+  Msg::ResetProgressMeter();
+
+  int nIter = 0, nTot = m->getNumEdges();
   while(1){
     meshGEdge mesher;
-    int nbPending = 0;
+    int nPending = 0;
     for(GModel::eiter it = m->firstEdge(); it != m->lastEdge(); ++it){
       if ((*it)->meshStatistics.status == GEdge::PENDING){
 	mesher(*it);
-	nbPending++;
+	nPending++;
       }
+      if(!nIter) Msg::ProgressMeter(nPending, nTot, false, "Meshing 1D...");
     }
-    if(!nbPending) break;
+    if(!nPending) break;
     if(nIter++ > 10) break;
   }
 
   double t2 = Cpu();
   CTX::instance()->meshTimer[0] = t2 - t1;
-  Msg::StatusBar(2, true, "Done meshing 1D (%g s)", CTX::instance()->meshTimer[0]);
+  Msg::StatusBar(true, "Done meshing 1D (%g s)", CTX::instance()->meshTimer[0]);
 }
 
 static void PrintMesh2dStatistics(GModel *m)
 {
+
   FILE *statreport = 0;
   if(CTX::instance()->createAppendMeshStatReport == 1)
     statreport = fopen(CTX::instance()->meshStatReportFileName.c_str(), "w");
@@ -405,20 +409,24 @@ static void PrintMesh2dStatistics(GModel *m)
   }
 
   for(GModel::fiter it = m->firstFace() ; it != m->lastFace(); ++it){
-    worst = std::min((*it)->meshStatistics.worst_element_shape, worst);
-    best = std::max((*it)->meshStatistics.best_element_shape, best);
-    avg += (*it)->meshStatistics.average_element_shape * (*it)->meshStatistics.nbTriangle;
-    e_avg += (*it)->meshStatistics.efficiency_index;//* (*it)->meshStatistics.nbEdge;
-    e_long = std::max((*it)->meshStatistics.longest_edge_length, e_long);
-    e_short = std::min((*it)->meshStatistics.smallest_edge_length, e_short);
-    if ((*it)->meshStatistics.status == GFace::FAILED ||
-        (*it)->meshStatistics.status == GFace::PENDING) nUnmeshed++;
-    nTotT += (*it)->meshStatistics.nbTriangle;
-    nTotE += (*it)->meshStatistics.nbEdge;
-    nTotGoodLength += (*it)->meshStatistics.nbGoodLength;
-    nTotGoodQuality += (*it)->meshStatistics.nbGoodQuality;
-    numFaces++;
+      if((*it)->geomType() != GEntity::DiscreteSurface){
+      worst = std::min((*it)->meshStatistics.worst_element_shape, worst);
+      best = std::max((*it)->meshStatistics.best_element_shape, best);
+      avg += (*it)->meshStatistics.average_element_shape * (*it)->meshStatistics.nbTriangle;
+      e_avg += (*it)->meshStatistics.efficiency_index;
+      e_long = std::max((*it)->meshStatistics.longest_edge_length, e_long);
+      e_short = std::min((*it)->meshStatistics.smallest_edge_length, e_short);
+      if ((*it)->meshStatistics.status == GFace::FAILED ||
+	  (*it)->meshStatistics.status == GFace::PENDING) nUnmeshed++;
+      nTotT += (*it)->meshStatistics.nbTriangle;
+      nTotE += (*it)->meshStatistics.nbEdge;
+      nTotGoodLength += (*it)->meshStatistics.nbGoodLength;
+      nTotGoodQuality += (*it)->meshStatistics.nbGoodQuality;
+      numFaces++;
+    }
   }
+
+  Msg::Info("*** Efficiency index for surface mesh tau=%g ", 100*exp(e_avg/(double)nTotE));
 
   fprintf(statreport,"\t%16s\t%d\t\t%d\t\t", m->getName().c_str(), numFaces, nUnmeshed);
   fprintf(statreport,"%d\t\t%8.7f\t%8.7f\t%8.7f\t%d\t\t%8.7f\t",
@@ -433,7 +441,7 @@ static void PrintMesh2dStatistics(GModel *m)
 static void Mesh2D(GModel *m)
 {
   if(TooManyElements(m, 2)) return;
-  Msg::StatusBar(2, true, "Meshing 2D...");
+  Msg::StatusBar(true, "Meshing 2D...");
   double t1 = Cpu();
 
   for(GModel::fiter it = m->firstFace(); it != m->lastFace(); ++it)
@@ -453,24 +461,28 @@ static void Mesh2D(GModel *m)
       else
         f.insert(*it);
 
-    int nIter = 0;
+    Msg::ResetProgressMeter();
+
+    int nIter = 0, nTot = m->getNumFaces();
     while(1){
-      int nbPending = 0;
+      int nPending = 0;
       for(std::set<GFace*>::iterator it = f.begin(); it != f.end(); ++it){
         if ((*it)->meshStatistics.status == GFace::PENDING){
 	  meshGFace mesher (true, CTX::instance()->mesh.multiplePasses);
           mesher(*it);
-          nbPending++;
+          nPending++;
         }
+        if(!nIter) Msg::ProgressMeter(nPending, nTot, false, "Meshing 2D...");
       }
       for(std::set<GFace*>::iterator it = cf.begin(); it != cf.end(); ++it){
         if ((*it)->meshStatistics.status == GFace::PENDING){
 	  meshGFace mesher (true, CTX::instance()->mesh.multiplePasses);
           mesher(*it);
-          nbPending++;
+          nPending++;
         }
+        if(!nIter) Msg::ProgressMeter(nPending, nTot, false, "Meshing 2D...");
       }
-      if(!nbPending) break;
+      if(!nPending) break;
       if(nIter++ > 10) break;
     }
   }
@@ -508,7 +520,7 @@ static void Mesh2D(GModel *m)
 
   double t2 = Cpu();
   CTX::instance()->meshTimer[1] = t2 - t1;
-  Msg::StatusBar(2, true, "Done meshing 2D (%g s)", CTX::instance()->meshTimer[1]);
+  Msg::StatusBar(true, "Done meshing 2D (%g s)", CTX::instance()->meshTimer[1]);
 
   PrintMesh2dStatistics(m);
 }
@@ -523,7 +535,7 @@ static void FindConnectedRegions(std::vector<GRegion*> &delaunay,
 static void Mesh3D(GModel *m)
 {
   if(TooManyElements(m, 3)) return;
-  Msg::StatusBar(2, true, "Meshing 3D...");
+  Msg::StatusBar(true, "Meshing 3D...");
   double t1 = Cpu();
 
   // mesh the extruded volumes first
@@ -555,47 +567,46 @@ static void Mesh3D(GModel *m)
 
   double t2 = Cpu();
   CTX::instance()->meshTimer[2] = t2 - t1;
-  Msg::StatusBar(2, true, "Done meshing 3D (%g s)", CTX::instance()->meshTimer[2]);
-
+  Msg::StatusBar(true, "Done meshing 3D (%g s)", CTX::instance()->meshTimer[2]);
 }
 
 void OptimizeMeshNetgen(GModel *m)
 {
-  Msg::StatusBar(2, true, "Optimizing 3D mesh with Netgen...");
+  Msg::StatusBar(true, "Optimizing 3D mesh with Netgen...");
   double t1 = Cpu();
 
   std::for_each(m->firstRegion(), m->lastRegion(), optimizeMeshGRegionNetgen());
 
   double t2 = Cpu();
-  Msg::StatusBar(2, true, "Done optimizing 3D mesh with Netgen (%g s)", t2 - t1);
+  Msg::StatusBar(true, "Done optimizing 3D mesh with Netgen (%g s)", t2 - t1);
 }
 
 void OptimizeMesh(GModel *m)
 {
-  Msg::StatusBar(2, true, "Optimizing 3D mesh...");
+  Msg::StatusBar(true, "Optimizing 3D mesh...");
   double t1 = Cpu();
 
   std::for_each(m->firstRegion(), m->lastRegion(), optimizeMeshGRegionGmsh());
 
   double t2 = Cpu();
-  Msg::StatusBar(2, true, "Done optimizing 3D mesh (%g s)", t2 - t1);
+  Msg::StatusBar(true, "Done optimizing 3D mesh (%g s)", t2 - t1);
 }
 
 void AdaptMesh(GModel *m)
 {
-  Msg::StatusBar(2, true, "Adapting 3D mesh...");
+  Msg::StatusBar(true, "Adapting 3D mesh...");
   double t1 = Cpu();
 
   for(int i = 0; i < 10; i++)
     std::for_each(m->firstRegion(), m->lastRegion(), adaptMeshGRegion());
 
   double t2 = Cpu();
-  Msg::StatusBar(2, true, "Done adaptating 3D mesh (%g s)", t2 - t1);
+  Msg::StatusBar(true, "Done adaptating 3D mesh (%g s)", t2 - t1);
 }
 
 void RecombineMesh(GModel *m)
 {
-  Msg::StatusBar(2, true, "Recombining 2D mesh...");
+  Msg::StatusBar(true, "Recombining 2D mesh...");
   double t1 = Cpu();
 
   for(GModel::fiter it = m->firstFace(); it != m->lastFace(); ++it){
@@ -606,14 +617,14 @@ void RecombineMesh(GModel *m)
   CTX::instance()->mesh.changed = ENT_ALL;
 
   double t2 = Cpu();
-  Msg::StatusBar(2, true, "Done recombining 2D mesh (%g s)", t2 - t1);
+  Msg::StatusBar(true, "Done recombining 2D mesh (%g s)", t2 - t1);
 }
 
 //#include <google/profiler.h>
 
 void GenerateMesh(GModel *m, int ask)
 {
-  //  ProfilerStart("gmsh.prof");
+  // ProfilerStart("gmsh.prof");
   if(CTX::instance()->lock) {
     Msg::Info("I'm busy! Ask me that later...");
     return;
@@ -683,5 +694,5 @@ void GenerateMesh(GModel *m, int ask)
 
   CTX::instance()->lock = 0;
   CTX::instance()->mesh.changed = ENT_ALL;
-  //  ProfilerStop();
+  // ProfilerStop();
 }

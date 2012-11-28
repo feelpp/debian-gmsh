@@ -35,7 +35,9 @@
 // CTX::instance()->mesh.minCircPoints tells the minimum number of points per
 // radius of curvature
 
+#if defined(HAVE_ANN)
 static int _NBANN = 2;
+#endif
 
 SMetric3 buildMetricTangentToCurve(SVector3 &t, double l_t, double l_n)
 {
@@ -386,8 +388,11 @@ double BGM_MeshSize(GEntity *ge, double U, double V,
     lc = l1;
   }
 
-  // Msg::Debug("BGM X,Y,Z=%g,%g,%g L4=%g L3=%g L2=%g L1=%g LC=%g LFINAL=%g",
-  //            X, Y, Z, l4, l3, l2, l1, lc, lc * CTX::instance()->mesh.lcFactor);
+  //Msg::Debug("BGM X,Y,Z=%g,%g,%g L4=%g L3=%g L2=%g L1=%g LC=%g LFINAL=%g DIM =%d ",
+  //X, Y, Z, l4, l3, l2, l1, lc, lc * CTX::instance()->mesh.lcFactor, ge->dim());
+
+  //Emi fix
+  //if (lc == l1) lc /= 10.;
 
   return lc * CTX::instance()->mesh.lcFactor;
 }
@@ -490,8 +495,10 @@ void backgroundMesh::unset()
   _current = 0;
 }
 
-backgroundMesh::backgroundMesh(GFace *_gf, bool cfd) :
-  _octree(0), uv_kdtree(0), nodes(0), angle_nodes(0), angle_kdtree(0)
+backgroundMesh::backgroundMesh(GFace *_gf, bool cfd)
+#if defined(HAVE_ANN)
+  : _octree(0), uv_kdtree(0), nodes(0), angle_nodes(0), angle_kdtree(0)
+#endif
 {
 
   if (cfd){
@@ -745,6 +752,7 @@ void backgroundMesh::propagateCrossFieldByDistance(GFace *_gf)
     }
   }
 
+#if defined(HAVE_ANN)
   index = new ANNidx[_NBANN];
   dist  = new ANNdist[_NBANN];
   angle_nodes = annAllocPts(_cosines4.size(), 3);
@@ -765,6 +773,7 @@ void backgroundMesh::propagateCrossFieldByDistance(GFace *_gf)
     itp++;ind++;
   }
   angle_kdtree = new ANNkd_tree(angle_nodes, _cosines4.size(), 3);
+#endif
 }
 
 void backgroundMesh::propagatecrossField(GFace *_gf)
@@ -895,6 +904,11 @@ void backgroundMesh::updateSizes(GFace *_gf)
       else s0->second = std::min(s0->second,_beta*s1->second);
     }
   }
+}
+
+bool backgroundMesh::inDomain (double u, double v, double w) const
+{
+  return _octree->find(u, v, w, 2, true) != 0;
 }
 
 double backgroundMesh::operator() (double u, double v, double w) const

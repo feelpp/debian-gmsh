@@ -57,7 +57,8 @@ class MHexahedron : public MElement {
   virtual int getDim() const { return 3; }
   virtual int getNumVertices() const { return 8; }
   virtual MVertex *getVertex(int num){ return _v[num]; }
-  virtual const polynomialBasis* getFunctionSpace(int o=-1) const;
+  virtual const nodalBasis* getFunctionSpace(int o=-1) const;
+  virtual const JacobianBasis* getJacobianFuncSpace(int o=-1) const;
   virtual MVertex *getVertexDIFF(int num)
   {
     static const int map[8] = {2, 3, 7, 6, 0, 1, 5, 4};
@@ -89,6 +90,7 @@ class MHexahedron : public MElement {
                  _v[faces_hexa(num, 3)]);
   }
   virtual double getInnerRadius();
+  virtual double angleShapeMeasure();
   virtual void getFaceInfo (const MFace & face, int &ithFace, int &sign, int &rot)const;
   virtual int getNumFacesRep(){ return 12; }
   virtual void getFaceRep(int num, double *x, double *y, double *z, SVector3 *n)

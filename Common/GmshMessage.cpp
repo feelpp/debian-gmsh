@@ -5,8 +5,10 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 #include <string.h>
 #include <time.h>
+#include <sys/stat.h>
 #include "GmshConfig.h"
 #include "GmshMessage.h"
 #include "GmshSocket.h"
@@ -14,6 +16,7 @@
 #include "GModel.h"
 #include "Options.h"
 #include "Context.h"
+#include "OpenFile.h"
 #include "OS.h"
 
 #if defined(HAVE_ONELAB)
@@ -41,7 +44,7 @@
 int Msg::_commRank = 0;
 int Msg::_commSize = 1;
 int Msg::_verbosity = 5;
-int Msg::_progressMeterStep = 10;
+int Msg::_progressMeterStep = 20;
 int Msg::_progressMeterCurrent = 0;
 std::map<std::string, double> Msg::_timers;
 int Msg::_warningCount = 0;
@@ -50,6 +53,7 @@ GmshMessage *Msg::_callback = 0;
 std::string Msg::_commandLine;
 std::string Msg::_launchDate;
 GmshClient *Msg::_client = 0;
+std::string Msg::_execName;
 #if defined(HAVE_ONELAB)
 onelab::client *Msg::_onelabClient = 0;
 onelab::server *onelab::server::_server = 0;
@@ -73,20 +77,31 @@ static int vsnprintf(char *str, size_t size, const char *fmt, va_list ap)
 
 void Msg::Init(int argc, char **argv)
 {
+  int sargc = argc;
+  char **sargv = argv;
+  for(int i = 0; i < argc; i++){
+    std::string val(argv[i]);
+    if(val == "info" || val == "-info" ||
+       val == "help" || val == "-help"){
+      sargc = 0;
+      sargv = 0;
+      break;
+    }
+  }
 #if defined(HAVE_MPI)
   int flag;
   MPI_Initialized(&flag);
-  if(!flag) MPI_Init(&argc, &argv);
+  if(!flag) MPI_Init(&sargc, &sargv);
   MPI_Comm_rank(MPI_COMM_WORLD, &_commRank);
   MPI_Comm_size(MPI_COMM_WORLD, &_commSize);
   MPI_Errhandler_set(MPI_COMM_WORLD, MPI_ERRORS_RETURN);
 #endif
 #if defined(HAVE_PETSC)
-  PetscInitialize(&argc, &argv, PETSC_NULL, PETSC_NULL);
+  PetscInitialize(&sargc, &sargv, PETSC_NULL, PETSC_NULL);
   PetscPopSignalHandler();
 #endif
 #if defined(HAVE_SLEPC)
-  SlepcInitialize(&argc, &argv, PETSC_NULL, PETSC_NULL);
+  SlepcInitialize(&sargc, &sargv, PETSC_NULL, PETSC_NULL);
 #endif
   time_t now;
   time(&now);
@@ -155,11 +170,47 @@ void Msg::Exit(int level)
   exit(_errorCount);
 }
 
+static int streamIsFile(FILE* stream)
+{
+  // the given stream is definitely not interactive if it is a regular file
+  struct stat stream_stat;
+  if(fstat(fileno(stream), &stream_stat) == 0){
+    if(stream_stat.st_mode & S_IFREG) return 1;
+  }
+  return 0;
+}
+
+static int streamIsVT100(FILE* stream)
+{
+  // if running inside emacs the terminal is not VT100
+  const char* emacs = getenv("EMACS");
+  if(emacs && *emacs == 't') return 0;
+
+  // list of known terminal names (from cmake)
+  static const char* names[] =
+    {"Eterm", "ansi", "color-xterm", "con132x25", "con132x30", "con132x43",
+     "con132x60", "con80x25",  "con80x28", "con80x30", "con80x43", "con80x50",
+     "con80x60",  "cons25", "console", "cygwin", "dtterm", "eterm-color", "gnome",
+     "gnome-256color", "konsole", "konsole-256color", "kterm", "linux", "msys",
+     "linux-c", "mach-color", "mlterm", "putty", "rxvt", "rxvt-256color",
+     "rxvt-cygwin", "rxvt-cygwin-native", "rxvt-unicode", "rxvt-unicode-256color",
+     "screen", "screen-256color", "screen-256color-bce", "screen-bce", "screen-w",
+     "screen.linux", "vt100", "xterm", "xterm-16color", "xterm-256color",
+     "xterm-88color", "xterm-color", "xterm-debian", 0};
+  const char** t = 0;
+  const char* term = getenv("TERM");
+  if(term){
+    for(t = names; *t && strcmp(term, *t) != 0; ++t) {}
+  }
+  if(!(t && *t)) return 0;
+  return 1;
+}
+
 void Msg::Fatal(const char *fmt, ...)
 {
   _errorCount++;
 
-  char str[1024];
+  char str[5000];
   va_list args;
   va_start(args, fmt);
   vsnprintf(str, sizeof(str), fmt, args);
@@ -183,10 +234,14 @@ void Msg::Fatal(const char *fmt, ...)
 #endif
 
   if(CTX::instance()->terminal){
+    const char *c0 = "", *c1 = "";
+    if(!streamIsFile(stderr) && streamIsVT100(stderr)){
+      c0 = "\33[1m\33[31m"; c1 = "\33[0m";  // bold red
+    }
     if(_commSize > 1)
-      fprintf(stderr, "Fatal   : [On processor %d] %s\n", _commRank, str);
+      fprintf(stderr, "%sFatal   : [On processor %d] %s%s\n", c0, _commRank, str, c1);
     else
-      fprintf(stderr, "Fatal   : %s\n", str);
+      fprintf(stderr, "%sFatal   : %s%s\n", c0, str, c1);
     fflush(stderr);
   }
 
@@ -200,7 +255,7 @@ void Msg::Error(const char *fmt, ...)
 
   if(_verbosity < 1) return;
 
-  char str[1024];
+  char str[5000];
   va_list args;
   va_start(args, fmt);
   vsnprintf(str, sizeof(str), fmt, args);
@@ -219,10 +274,14 @@ void Msg::Error(const char *fmt, ...)
 #endif
 
   if(CTX::instance()->terminal){
+    const char *c0 = "", *c1 = "";
+    if(!streamIsFile(stderr) && streamIsVT100(stderr)){
+      c0 = "\33[1m\33[31m"; c1 = "\33[0m";  // bold red
+    }
     if(_commSize > 1)
-      fprintf(stderr, "Error   : [On processor %d] %s\n", _commRank, str);
+      fprintf(stderr, "%sError   : [On processor %d] %s%s\n", c0, _commRank, str, c1);
     else
-      fprintf(stderr, "Error   : %s\n", str);
+      fprintf(stderr, "%sError   : %s%s\n", c0, str, c1);
     fflush(stderr);
   }
 }
@@ -233,7 +292,7 @@ void Msg::Warning(const char *fmt, ...)
 
   if(_commRank || _verbosity < 2) return;
 
-  char str[1024];
+  char str[5000];
   va_list args;
   va_start(args, fmt);
   vsnprintf(str, sizeof(str), fmt, args);
@@ -251,7 +310,11 @@ void Msg::Warning(const char *fmt, ...)
 #endif
 
   if(CTX::instance()->terminal){
-    fprintf(stderr, "Warning : %s\n", str);
+    const char *c0 = "", *c1 = "";
+    if(!streamIsFile(stderr) && streamIsVT100(stderr)){
+      c0 = "\33[35m"; c1 = "\33[0m";  // magenta
+    }
+    fprintf(stderr, "%sWarning : %s%s\n", c0, str, c1);
     fflush(stderr);
   }
 }
@@ -260,7 +323,7 @@ void Msg::Info(const char *fmt, ...)
 {
   if(_commRank || _verbosity < 4) return;
 
-  char str[1024];
+  char str[5000];
   va_list args;
   va_start(args, fmt);
   vsnprintf(str, sizeof(str), fmt, args);
@@ -287,7 +350,7 @@ void Msg::Direct(const char *fmt, ...)
 {
   if(_commRank || _verbosity < 3) return;
 
-  char str[1024];
+  char str[5000];
   va_list args;
   va_start(args, fmt);
   vsnprintf(str, sizeof(str), fmt, args);
@@ -300,7 +363,7 @@ void Msg::Direct(int level, const char *fmt, ...)
 {
   if(_commRank || _verbosity < level) return;
 
-  char str[1024];
+  char str[5000];
   va_list args;
   va_start(args, fmt);
   vsnprintf(str, sizeof(str), fmt, args);
@@ -326,17 +389,20 @@ void Msg::Direct(int level, const char *fmt, ...)
 #endif
 
   if(CTX::instance()->terminal){
-    fprintf(stdout, "%s\n", str);
+    const char *c0 = "", *c1 = "";
+    if(!streamIsFile(stdout) && streamIsVT100(stdout)){
+      c0 = "\33[34m"; c1 = "\33[0m";  // blue
+    }
+    fprintf(stdout, "%s%s%s\n", c0, str, c1);
     fflush(stdout);
   }
 }
 
-void Msg::StatusBar(int num, bool log, const char *fmt, ...)
+void Msg::StatusBar(bool log, const char *fmt, ...)
 {
   if(_commRank || _verbosity < 4) return;
-  if(num < 1 || num > 3) return;
 
-  char str[1024];
+  char str[5000];
   va_list args;
   va_start(args, fmt);
   vsnprintf(str, sizeof(str), fmt, args);
@@ -348,8 +414,8 @@ void Msg::StatusBar(int num, bool log, const char *fmt, ...)
 #if defined(HAVE_FLTK)
   if(FlGui::available()){
     if(log) FlGui::instance()->check();
-    if(!log || num != 2 || _verbosity > 4)
-      FlGui::instance()->setStatus(str, num - 1);
+    if(!log || _verbosity > 4)
+      FlGui::instance()->setStatus(str);
     if(log){
       std::string tmp = std::string("Info    : ") + str;
       FlGui::instance()->addMessage(tmp.c_str());
@@ -363,11 +429,25 @@ void Msg::StatusBar(int num, bool log, const char *fmt, ...)
   }
 }
 
+void Msg::StatusGl(const char *fmt, ...)
+{
+#if defined(HAVE_FLTK)
+  if(_commRank) return;
+  char str[5000];
+  va_list args;
+  va_start(args, fmt);
+  vsnprintf(str, sizeof(str), fmt, args);
+  va_end(args);
+  if(FlGui::available())
+    FlGui::instance()->setStatus(str, true);
+#endif
+}
+
 void Msg::Debug(const char *fmt, ...)
 {
   if(_verbosity < 99) return;
 
-  char str[1024];
+  char str[5000];
   va_list args;
   va_start(args, fmt);
   vsnprintf(str, sizeof(str), fmt, args);
@@ -392,56 +472,38 @@ void Msg::Debug(const char *fmt, ...)
   }
 }
 
-void Msg::ProgressMeter(int n, int N, const char *fmt, ...)
+void Msg::ProgressMeter(int n, int N, bool log, const char *fmt, ...)
 {
-  if(_commRank || _verbosity < 4) return;
+  if(_commRank || _verbosity < 4 ||
+     _progressMeterStep <= 0 || _progressMeterStep >= 100) return;
 
   double percent = 100. * (double)n/(double)N;
 
-  if(percent >= _progressMeterCurrent){
-    char str[1024];
+  if(percent >= _progressMeterCurrent || n > N - 1){
+    char str[5000], str2[5000];
     va_list args;
     va_start(args, fmt);
     vsnprintf(str, sizeof(str), fmt, args);
     va_end(args);
-
-    if(strlen(fmt)) strcat(str, " ");
-
-    char str2[1024];
-    sprintf(str2, "%s(%d %%)", str, _progressMeterCurrent);
+    sprintf(str2, "%3d%%    : %s", _progressMeterCurrent, str);
 
     if(_client) _client->Progress(str2);
 
 #if defined(HAVE_FLTK)
     if(FlGui::available() && _verbosity > 4){
       FlGui::instance()->check();
-      FlGui::instance()->setProgress(str, n, 0, N);
+      FlGui::instance()->setProgress(str, (n > N - 1) ? 0 : n, 0, N);
     }
 #endif
 
-    if(CTX::instance()->terminal){
-      fprintf(stdout, "%s                     \r", str2);
+    if(!streamIsFile(stdout) && log && CTX::instance()->terminal){
+      fprintf(stdout, "%s                                          \r",
+              (n > N - 1) ? "" : str2);
       fflush(stdout);
     }
 
     while(_progressMeterCurrent < percent)
       _progressMeterCurrent += _progressMeterStep;
-  }
-
-  if(n > N - 1){
-    if(_client) _client->Progress("Done!");
-
-#if defined(HAVE_FLTK)
-    if(FlGui::available() && _verbosity > 4){
-      FlGui::instance()->check();
-      FlGui::instance()->setProgress("", 0, 0, N);
-    }
-#endif
-
-    if(CTX::instance()->terminal){
-      fprintf(stdout, "Done!                                              \r");
-      fflush(stdout);
-    }
   }
 }
 
@@ -496,10 +558,14 @@ void Msg::PrintErrorCounter(const char *title)
 #endif
 
   if(CTX::instance()->terminal){
-    fprintf(stderr, "%s\n%s\n%s\n%s\n%s\n%s\n", (prefix + line).c_str(),
+    const char *c0 = "", *c1 = "";
+    if(!streamIsFile(stderr) && streamIsVT100(stderr)){
+      c0 = "\33[31m"; c1 = "\33[0m";  // red
+    }
+    fprintf(stderr, "%s%s\n%s\n%s\n%s\n%s\n%s%s\n", c0, (prefix + line).c_str(),
             (prefix + title).c_str(), (prefix + warn).c_str(),
             (prefix + err).c_str(), (prefix + help).c_str(),
-            (prefix + line).c_str());
+            (prefix + line).c_str(), c1);
     fflush(stderr);
   }
 }
@@ -591,29 +657,88 @@ bool Msg::UseOnelab()
 #endif
 }
 
+void Msg::SetOnelabNumber(std::string name, double val, bool visible)
+{
+#if defined(HAVE_ONELAB)
+  if(_onelabClient){
+    std::vector<onelab::number> numbers;
+    _onelabClient->get(numbers, name);
+    if(numbers.empty()){
+      numbers.resize(1);
+      numbers[0].setName(name);
+    }
+    numbers[0].setValue(val);
+    numbers[0].setVisible(visible);
+    _onelabClient->set(numbers[0]);
+  }
+#endif
+}
+
+void Msg::SetOnelabString(std::string name, std::string val, bool visible)
+{
+#if defined(HAVE_ONELAB)
+  if(_onelabClient){
+    std::vector<onelab::string> strings;
+    _onelabClient->get(strings, name);
+    if(strings.empty()){
+      strings.resize(1);
+      strings[0].setName(name);
+    }
+    strings[0].setValue(val);
+    strings[0].setVisible(visible);
+    _onelabClient->set(strings[0]);
+  }
+#endif
+}
+
+#if defined(HAVE_ONELAB)
+class localGmsh : public onelab::localClient {
+public:
+  localGmsh() : onelab::localClient("Gmsh") {}
+  // redefinition of virtual onelab_client::sendMergeFileRequest
+  void sendMergeFileRequest(const std::string &name)
+  {
+    if(name.find(".geo")!= std::string::npos){
+      MergePostProcessingFile(name, CTX::instance()->solver.autoShowLastStep,
+			      CTX::instance()->solver.autoHideNewViews, true);
+      GModel::current()->setFileName(name);
+    }
+    else if((name.find(".opt")!= std::string::npos)){
+      MergeFile(name);
+    }
+    else if((name.find(".macro")!= std::string::npos)){
+      MergeFile(name);
+    }
+    else
+      MergePostProcessingFile(name, CTX::instance()->solver.autoShowLastStep,
+			      CTX::instance()->solver.autoHideNewViews, true);
+  }
+  void sendInfo(const std::string &msg){ Msg::Info("%s", msg.c_str()); }
+  void sendWarning(const std::string &msg){ Msg::Warning("%s", msg.c_str()); }
+  void sendError(const std::string &msg){ Msg::Error("%s", msg.c_str()); }
+};
+#endif
+
 void Msg::InitializeOnelab(const std::string &name, const std::string &sockname)
 {
 #if defined(HAVE_ONELAB)
   if(_onelabClient) delete _onelabClient;
-  if(sockname.empty())
-    _onelabClient = new onelab::localClient(name);
+  if(sockname.empty()){
+    _onelabClient = new localGmsh();
+    if(name != "Gmsh"){ // load db from file:
+      if(!_onelabClient->fromFile(name))
+        Error("Error loading onelab database '%s'", name.c_str());
+    }
+  }
   else{
     onelab::remoteNetworkClient *c = new onelab::remoteNetworkClient(name, sockname);
     _onelabClient = c;
     _client = c->getGmshClient();
 
-    onelab::number o5(name + "/UseCommandLine",1);
-    o5.setVisible(false);
-    _onelabClient->set(o5);
-    onelab::string o(name + "/FileExtension", ".geo");
-    o.setVisible(false);
-    _onelabClient->set(o);
-    onelab::string o3(name + "/9CheckCommand", "-");
-    o3.setVisible(false);
-    _onelabClient->set(o3);
-    onelab::string o4(name + "/9ComputeCommand", "-3");
-    o4.setVisible(false);
-    _onelabClient->set(o4);
+    SetOnelabNumber(name + "/UseCommandLine", 1, false);
+    SetOnelabString(name + "/FileExtension", ".geo", false);
+    SetOnelabString(name + "/9CheckCommand", "-", false);
+    SetOnelabString(name + "/9ComputeCommand", "-3", false);
 
     std::vector<onelab::string> ps;
     _onelabClient->get(ps, name + "/Action");
@@ -621,19 +746,65 @@ void Msg::InitializeOnelab(const std::string &name, const std::string &sockname)
       //Info("Performing OneLab '%s'", ps[0].getValue().c_str());
       if(ps[0].getValue() == "initialize") Exit(0);
     }
-
   }
 #endif
 }
 
-void Msg::ExchangeOnelabParameter(const std::string &key,
-                                  std::vector<double> &val,
-                                  std::map<std::string, std::vector<double> > &fopt,
-                                  std::map<std::string, std::vector<std::string> > &copt)
+void Msg::LoadOnelabClient(const std::string &clientName, const std::string &sockName)
 {
 #if defined(HAVE_ONELAB)
-  if(!_onelabClient || val.empty()) return;
+  onelab::remoteNetworkClient *client = 0;
+  client = new onelab::remoteNetworkClient(clientName,sockName);
+  if(client){
+    std::string action, cmd;
+    std::vector<onelab::string> ps;
+    client->get(ps,clientName+"/Action");
+    if(ps.size() && ps[0].getValue().size())
+      action.assign(ps[0].getValue());
 
+    //cmd.assign("");
+    if(!action.compare("compute")){
+      std::vector<onelab::string> ps;
+      client->get(ps,clientName+"/FullCmdLine");
+      if(ps.size() && ps[0].getValue().size())
+	cmd.assign(ps[0].getValue());
+
+      if(cmd.size()){
+	Msg::Info("Loader calls <%s>",cmd.c_str());
+	//client->sendInfo(strcat("Loader calls",cmd.c_str()));
+	std::cout << "Loader calls " << cmd << std::endl;
+	SystemCall(cmd.c_str(),true); //true->blocking
+      }
+      else
+	Msg::Info("No full command line found for <%s>",
+		    clientName.c_str());
+    }
+    Msg::Info("Stopping client <%s>", clientName.c_str());
+    delete client;
+  }
+  exit(1);
+#endif
+}
+
+#if defined(HAVE_ONELAB)
+static void _setStandardOptions(onelab::parameter *p,
+                                std::map<std::string, std::vector<double> > &fopt,
+                                std::map<std::string, std::vector<std::string> > &copt)
+{
+  if(copt.count("Label")) p->setLabel(copt["Label"][0]);
+  if(copt.count("ShortHelp")) p->setLabel(copt["ShortHelp"][0]);
+  if(copt.count("Help")) p->setHelp(copt["Help"][0]);
+  if(fopt.count("Visible")) p->setVisible(fopt["Visible"][0] ? true : false);
+  if(fopt.count("ReadOnly")) p->setReadOnly(fopt["ReadOnly"][0] ? true : false);
+  if(copt.count("Highlight")) p->setAttribute("Highlight", copt["Highlight"][0]);
+  if(copt.count("AutoCheck")) p->setAttribute("AutoCheck", copt["AutoCheck"][0]);
+  if(copt.count("Macro")) p->setAttribute("Macro", copt["Macro"][0]);
+  if(copt.count("GmshOption")) p->setAttribute("GmshOption", copt["GmshOption"][0]);
+}
+
+static std::string _getParameterName(const std::string &key,
+                                     std::map<std::string, std::vector<std::string> > &copt)
+{
   std::string name(key);
   if(copt.count("Path")){
     std::string path = copt["Path"][0];
@@ -645,12 +816,29 @@ void Msg::ExchangeOnelabParameter(const std::string &key,
     else
       name = path + "/" + name;
   }
+  return name;
+}
+#endif
+
+void Msg::ExchangeOnelabParameter(const std::string &key,
+                                  std::vector<double> &val,
+                                  std::map<std::string, std::vector<double> > &fopt,
+                                  std::map<std::string, std::vector<std::string> > &copt)
+{
+#if defined(HAVE_ONELAB)
+  if(!_onelabClient || val.empty()) return;
+
+  std::string name = _getParameterName(key, copt);
 
   std::vector<onelab::number> ps;
   _onelabClient->get(ps, name);
-  bool noRange = true, noChoices = true, noLoop = true, noGraph = true;
+  bool noRange = true, noChoices = true, noLoop = true;
+  bool noGraph = true, noClosed = true;
   if(ps.size()){
-    val[0] = ps[0].getValue(); // always use value from server
+    if(fopt.count("ReadOnly") && fopt["ReadOnly"][0])
+      ps[0].setValue(val[0]); // use local value
+    else
+      val[0] = ps[0].getValue(); // use value from server
     // keep track of these attributes, which can be changed server-side
     if(ps[0].getMin() != -onelab::parameter::maxNumber() ||
        ps[0].getMax() != onelab::parameter::maxNumber() ||
@@ -658,6 +846,7 @@ void Msg::ExchangeOnelabParameter(const std::string &key,
     if(ps[0].getChoices().size()) noChoices = false;
     if(ps[0].getAttribute("Loop").size()) noLoop = false;
     if(ps[0].getAttribute("Graph").size()) noGraph = false;
+    if(ps[0].getAttribute("Closed").size()) noClosed = false;
   }
   else{
     ps.resize(1);
@@ -678,23 +867,71 @@ void Msg::ExchangeOnelabParameter(const std::string &key,
     ps[0].setMax(fopt["Max"][0]); ps[0].setMin(-onelab::parameter::maxNumber());
   }
   if(noRange && fopt.count("Step")) ps[0].setStep(fopt["Step"][0]);
+  // if no range/min/max/step info is provided, try to compute a reasonnable
+  // range and step (this makes the gui much nicer to use)
+  if(noRange && !fopt.count("Range") && !fopt.count("Step") &&
+     !fopt.count("Min") && !fopt.count("Max")){
+    bool isInteger = (floor(val[0]) == val[0]);
+    double fact = isInteger ? 5. : 20.;
+    if(val[0] > 0){
+      ps[0].setMin(val[0] / fact);
+      ps[0].setMax(val[0] * fact);
+      ps[0].setStep((ps[0].getMax() - ps[0].getMin()) / 100.);
+    }
+    else if(val[0] < 0){
+      ps[0].setMin(val[0] * fact);
+      ps[0].setMax(val[0] / fact);
+      ps[0].setStep((ps[0].getMax() - ps[0].getMin()) / 100.);
+    }
+    if(val[0] && isInteger){
+      ps[0].setMin((int)ps[0].getMin());
+      ps[0].setMax((int)ps[0].getMax());
+      ps[0].setStep((int)ps[0].getStep());
+    }
+  }
   if(noChoices && fopt.count("Choices")){
     ps[0].setChoices(fopt["Choices"]);
     if(copt.count("Choices")) ps[0].setChoiceLabels(copt["Choices"]);
   }
-  if(fopt.count("Visible")) ps[0].setVisible(fopt["Visible"][0] ? true : false);
-  if(fopt.count("ReadOnly")) {
-    ps[0].setReadOnly(fopt["ReadOnly"][0] ? true : false);
-    // If the parameter is set "read-only" here, the local value is used instead
-    // of that from the server
-    if(ps[0].getReadOnly()) ps[0].setValue(val[0]);
-  }
-  if(copt.count("Help")) ps[0].setHelp(copt["Help"][0]);
-  if(copt.count("Label")) ps[0].setLabel(copt["Label"][0]);
-  if(copt.count("ShortHelp")) ps[0].setLabel(copt["ShortHelp"][0]);
   if(noLoop && copt.count("Loop")) ps[0].setAttribute("Loop", copt["Loop"][0]);
   if(noGraph && copt.count("Graph")) ps[0].setAttribute("Graph", copt["Graph"][0]);
-  if(copt.count("Highlight")) ps[0].setAttribute("Highlight", copt["Highlight"][0]);
+  if(noClosed && copt.count("Closed")) ps[0].setAttribute("Closed", copt["Closed"][0]);
+  _setStandardOptions(&ps[0], fopt, copt);
+  _onelabClient->set(ps[0]);
+#endif
+}
+
+void Msg::ExchangeOnelabParameter(const std::string &key,
+                                  std::string &val,
+                                  std::map<std::string, std::vector<double> > &fopt,
+                                  std::map<std::string, std::vector<std::string> > &copt)
+{
+#if defined(HAVE_ONELAB)
+  if(!_onelabClient || val.empty()) return;
+
+  std::string name = _getParameterName(key, copt);
+
+  std::vector<onelab::string> ps;
+  _onelabClient->get(ps, name);
+  bool noChoices = true, noClosed = true;
+  if(ps.size()){
+    if(fopt.count("ReadOnly") && fopt["ReadOnly"][0])
+      ps[0].setValue(val); // use local value
+    else
+      val = ps[0].getValue(); // use value from server
+    // keep track of these attributes, which can be changed server-side
+    if(ps[0].getChoices().size()) noChoices = false;
+    if(ps[0].getAttribute("Closed").size()) noClosed = false;
+  }
+  else{
+    ps.resize(1);
+    ps[0].setName(name);
+    ps[0].setValue(val);
+  }
+  if(copt.count("Kind")) ps[0].setKind(copt["Kind"][0]);
+  if(noChoices && copt.count("Choices")) ps[0].setChoices(copt["Choices"]);
+  if(noClosed && copt.count("Closed")) ps[0].setAttribute("Closed", copt["Closed"][0]);
+  _setStandardOptions(&ps[0], fopt, copt);
   _onelabClient->set(ps[0]);
 #endif
 }
@@ -705,7 +942,7 @@ void Msg::ImportPhysicalsAsOnelabRegions()
   if(_onelabClient){
     std::map<int, std::vector<GEntity*> > groups[4];
     GModel::current()->getPhysicalGroups(groups);
-    for(int dim = 0; dim < 3; dim++){
+    for(int dim = 0; dim <= 3; dim++){
       for(std::map<int, std::vector<GEntity*> >::iterator it = groups[dim].begin();
           it != groups[dim].end(); it++){
         // create "read-only" onelab region
@@ -716,10 +953,12 @@ void Msg::ImportPhysicalsAsOnelabRegions()
           name = std::string("Physical") +
             ((dim == 3) ? "Volume" : (dim == 2) ? "Surface" :
              (dim == 1) ? "Line" : "Point") + num.str();
-        name.insert(0, "Gmsh/Physical groups/");
+        name.insert(0, "Gmsh parameters/Physical groups/");
         onelab::region p(name, num.str());
         p.setDimension(dim);
         p.setReadOnly(true);
+        p.setVisible(false);
+        p.setAttribute("Closed", "1");
         _onelabClient->set(p);
       }
     }

@@ -14,14 +14,15 @@
 
 #if defined(HAVE_KBIPACK)
 
-Homology::Homology(GModel* model, std::vector<int> physicalDomain,
+Homology::Homology(GModel* model,
+                   std::vector<int> physicalDomain,
 		   std::vector<int> physicalSubdomain,
+                   std::vector<int> physicalImdomain,
                    bool saveOrig,
-		   bool combine, bool omit, bool smoothen) :
+		   int combine, bool omit, bool smoothen) :
   _model(model), _domain(physicalDomain), _subdomain(physicalSubdomain),
-  _saveOrig(saveOrig),
-  _combine(combine), _omit(omit), _smoothen(smoothen), _cellComplex(NULL),
-  _homologyComputed(false), _cohomologyComputed(false)
+  _imdomain(physicalImdomain), _saveOrig(saveOrig),
+  _combine(combine), _omit(omit), _smoothen(smoothen), _cellComplex(NULL)
 {
   _fileName = "";
 
@@ -35,13 +36,19 @@ Homology::Homology(GModel* model, std::vector<int> physicalDomain,
       if((*it)->dim() == dim) _domainEntities.push_back(*it);
     }
   }
+  else {
+    _getEntities(_domain, _domainEntities);
+    _getEntities(_subdomain, _subdomainEntities);
+    _getEntities(_nondomain, _nondomainEntities);
+    _getEntities(_nonsubdomain, _nonsubdomainEntities);
+    _getEntities(_imdomain, _immuneEntities);
+  }
 
-  _getEntities(_domain, _domainEntities);
-  _getEntities(_subdomain, _subdomainEntities);
-  _getEntities(_nondomain, _nondomainEntities);
-  _getEntities(_nonsubdomain, _nonsubdomainEntities);
-  _getEntities(_imdomain, _immuneEntities);
-
+  for(unsigned int i = 0; i < 4; i++) {
+    _homologyComputed[i] = false;
+    _cohomologyComputed[i] = false;
+    _betti[i] = -1;
+  }
 }
 
 void Homology::_getEntities(const std::vector<int>& physicalGroups,
@@ -79,7 +86,7 @@ void Homology::_getElements(const std::vector<GEntity*>& entities,
 
 void Homology::_createCellComplex()
 {
-  Msg::StatusBar(2, true, "Creating cell complex...");
+  Msg::StatusBar(true, "Creating cell complex...");
   double t1 = Cpu();
 
   if(_domainEntities.empty()) Msg::Error("Domain is empty");
@@ -110,32 +117,50 @@ void Homology::_createCellComplex()
     Msg::Error("Cell Complex is empty: check the domain and the mesh");
   }
   double t2 = Cpu();
-  Msg::StatusBar(2, true, "Done creating cell complex (%g s)", t2 - t1);
-  Msg::Info("%d volumes, %d faces, %d edges and %d vertices",
+  Msg::StatusBar(true, "Done creating cell complex (%g s)", t2 - t1);
+  Msg::Info("%d volumes, %d faces, %d edges, and %d vertices",
             _cellComplex->getSize(3), _cellComplex->getSize(2),
 	    _cellComplex->getSize(1), _cellComplex->getSize(0));
 }
 
-void Homology::_deleteChains()
+void Homology::_deleteChains(std::vector<int> dim)
 {
-  for(int j = 0; j < 4; j ++) {
-    for(unsigned int i = 0; i < _chains[j].size(); i++) {
-      delete _chains[j].at(i);
-      _chains[j].clear();
-    }
+  if(dim.empty()) {
+    std::vector<int> alldim(4);
+    for(int i = 0; i < 4; i++) alldim[i] = i;
+    _deleteChains(alldim);
+    return;
   }
-  _homologyComputed = false;
+
+  for(unsigned int j = 0; j < dim.size(); j ++) {
+    int d = dim.at(j);
+    if(d < 0 || d > 3) continue;
+    for(unsigned int i = 0; i < _chains[d].size(); i++) {
+      delete _chains[d].at(i);
+    }
+    _chains[d].clear();
+    _homologyComputed[d] = false;
+  }
 }
 
-void Homology::_deleteCochains()
+void Homology::_deleteCochains(std::vector<int> dim)
 {
-  for(int j = 0; j < 4; j ++) {
-    for(unsigned int i = 0; i < _cochains[j].size(); i++) {
-      delete _cochains[j].at(i);
-      _cochains[j].clear();
-    }
+  if(dim.empty()) {
+    std::vector<int> alldim(4);
+    for(int i = 0; i < 4; i++) alldim[i] = i;
+    _deleteCochains(alldim);
+    return;
   }
-  _cohomologyComputed = false;
+
+  for(unsigned int j = 0; j < dim.size(); j ++) {
+    int d = dim.at(j);
+    if(d < 0 || d > 3) continue;
+    for(unsigned int i = 0; i < _cochains[d].size(); i++) {
+      delete _cochains[d].at(i);
+    }
+    _cochains[d].clear();
+    _cohomologyComputed[d] = false;
+  }
 }
 
 Homology::~Homology()
@@ -145,33 +170,40 @@ Homology::~Homology()
   _deleteCochains();
 }
 
-void Homology::findHomologyBasis()
+void Homology::findHomologyBasis(std::vector<int> dim)
 {
   if(_cellComplex == NULL) _createCellComplex();
   if(_cellComplex->isReduced()) _cellComplex->restoreComplex();
-  Msg::StatusBar(2, true, "Reducing cell complex...");
+  Msg::StatusBar(true, "Reducing cell complex...");
 
   double t1 = Cpu();
   int omitted = _cellComplex->reduceComplex(_combine, _omit);
 
+  if(!dim.empty() && _combine > 1 && !_smoothen) {
+    for(int i = 1; i <= 3;  i++) {
+      if(!std::binary_search(dim.begin(), dim.end(), i)) {
+        _cellComplex->cocombine(i-1);
+      }
+    }
+  }
+
   double t2 = Cpu();
-  Msg::StatusBar(2, true, "Done reducing cell complex (%g s)", t2 - t1);
-  Msg::Info("%d volumes, %d faces, %d edges and %d vertices",
+  Msg::StatusBar(true, "Done reducing cell complex (%g s)", t2 - t1);
+  Msg::Info("%d volumes, %d faces, %d edges, and %d vertices",
             _cellComplex->getSize(3), _cellComplex->getSize(2),
 	    _cellComplex->getSize(1), _cellComplex->getSize(0));
 
-  Msg::StatusBar(2, true, "Computing homology space basis ...");
+  Msg::StatusBar(true, "Computing homology space bases ...");
   t1 = Cpu();
   ChainComplex chainComplex = ChainComplex(_cellComplex);
   chainComplex.computeHomology();
   t2 = Cpu();
-  Msg::StatusBar(2, true, "Done computing homology space basis (%g s)", t2 - t1);
+  Msg::StatusBar(true, "Done computing homology space bases (%g s)", t2 - t1);
 
   std::string domain = _getDomainString(_domain, _subdomain);
-  _deleteChains();
-  int HRank[4];
+  _deleteChains(dim);
   for(int j = 0; j < 4; j++){
-    HRank[j] = 0;
+    _betti[j] = 0;
     std::string dimension = "";
     convert(j, dimension);
     for(int i = 1; i <= chainComplex.getBasisSize(j, 3); i++){
@@ -179,15 +211,15 @@ void Homology::findHomologyBasis()
       std::string generator = "";
       convert(i, generator);
 
-      std::string name = "H" + dimension + domain + generator;
+      std::string name = "H_" + dimension + domain + generator;
       std::map<Cell*, int, Less_Cell> chain;
       chainComplex.getBasisChain(chain, i, j, 3, _smoothen);
       int torsion = chainComplex.getTorsion(j,i);
       if(!chain.empty()) {
         _createChain(chain, name, false);
-        HRank[j] = HRank[j] + 1;
+        _betti[j] = _betti[j] + 1;
         if(torsion != 1){
-          Msg::Warning("H%d %d has torsion coefficient %d!",
+          Msg::Warning("H_%d %d has torsion coefficient %d!",
                        j, i, torsion);
         }
       }
@@ -197,45 +229,63 @@ void Homology::findHomologyBasis()
   if(_fileName != "") writeBasisMSH();
 
   Msg::Info("Ranks of domain %shomology spaces:", domain.c_str());
-  Msg::Info("H0 = %d", HRank[0]);
-  Msg::Info("H1 = %d", HRank[1]);
-  Msg::Info("H2 = %d", HRank[2]);
-  Msg::Info("H3 = %d", HRank[3]);
+  Msg::Info("H_0 = %d", _betti[0]);
+  Msg::Info("H_1 = %d", _betti[1]);
+  Msg::Info("H_2 = %d", _betti[2]);
+  Msg::Info("H_3 = %d", _betti[3]);
   if(omitted != 0) Msg::Info("The computation of basis elements in the highest dimension was omitted");
 
-  Msg::StatusBar(2, false, "H0: %d, H1: %d, H2: %d, H3: %d",
-		 HRank[0], HRank[1], HRank[2], HRank[3]);
-  _homologyComputed = true;
+  Msg::StatusBar(false, "H_0: %d, H_1: %d, H_2: %d, H_3: %d",
+		 _betti[0], _betti[1], _betti[2], _betti[3]);
+
+  if(dim.empty()) {
+    for(unsigned int i = 0; i < 4; i++)
+      _homologyComputed[i] = true;
+  }
+  else {
+    for(unsigned int i = 0; i < dim.size(); i++)
+      _homologyComputed[dim.at(i)] = true;
+  }
 }
 
-void Homology::findCohomologyBasis()
+void Homology::findCohomologyBasis(std::vector<int> dim)
 {
   if(_cellComplex == NULL) _createCellComplex();
   if(_cellComplex->isReduced()) _cellComplex->restoreComplex();
 
-  Msg::StatusBar(2, true, "Reducing cell complex...");
+  Msg::StatusBar(true, "Reducing cell complex...");
 
   double t1 = Cpu();
+
   int omitted = _cellComplex->coreduceComplex(_combine, _omit);
+
+  std::sort(dim.begin(), dim.end());
+  if(!dim.empty()  && _combine > 1) {
+    for(int i = 2; i >= 0;  i--) {
+      if(!std::binary_search(dim.begin(), dim.end(), i)) {
+        _cellComplex->combine(i+1);
+      }
+    }
+  }
+
   double t2 = Cpu();
 
-  Msg::StatusBar(2, true, "Done reducing cell complex (%g s)", t2 - t1);
-  Msg::Info("%d volumes, %d faces, %d edges and %d vertices",
+  Msg::StatusBar(true, "Done reducing cell complex (%g s)", t2 - t1);
+  Msg::Info("%d volumes, %d faces, %d edges, and %d vertices",
             _cellComplex->getSize(3), _cellComplex->getSize(2),
 	    _cellComplex->getSize(1), _cellComplex->getSize(0));
 
-  Msg::StatusBar(2, true, "Computing cohomology space basis ...");
+  Msg::StatusBar(true, "Computing cohomology space bases ...");
   t1 = Cpu();
   ChainComplex chainComplex = ChainComplex(_cellComplex);
   chainComplex.transposeHMatrices();
   chainComplex.computeHomology(true);
   t2 = Cpu();
-  Msg::StatusBar(2, true, "Done computing cohomology space basis (%g s)", t2- t1);
+  Msg::StatusBar(true, "Done computing cohomology space bases (%g s)", t2- t1);
 
   std::string domain = _getDomainString(_domain, _subdomain);
-  _deleteCochains();
-  int HRank[4];
-  for(int i = 0; i < 4; i++) HRank[i] = 0;
+  _deleteCochains(dim);
+  for(int i = 0; i < 4; i++) _betti[i] = 0;
   for(int j = 3; j > -1; j--){
     std::string dimension = "";
     convert(j, dimension);
@@ -245,16 +295,15 @@ void Homology::findCohomologyBasis()
       std::string generator = "";
       convert(i, generator);
 
-      std::string name = "H" + dimension + "*" +
-	domain + generator;
+      std::string name = "H^" + dimension + domain + generator;
       std::map<Cell*, int, Less_Cell> chain;
-      chainComplex.getBasisChain(chain, i, j, 3, _smoothen);
+      chainComplex.getBasisChain(chain, i, j, 3, false);
       int torsion = chainComplex.getTorsion(j,i);
       if(!chain.empty()) {
         _createChain(chain, name, true);
-        HRank[j] = HRank[j] + 1;
+        _betti[j] = _betti[j] + 1;
         if(torsion != 1){
-          Msg::Warning("H%d* %d has torsion coefficient %d!", j, i, torsion);
+          Msg::Warning("H^%d %d has torsion coefficient %d!", j, i, torsion);
         }
       }
     }
@@ -263,45 +312,171 @@ void Homology::findCohomologyBasis()
   if(_fileName != "") writeBasisMSH();
 
   Msg::Info("Ranks of domain %scohomology spaces:", domain.c_str());
-  Msg::Info("H0* = %d", HRank[0]);
-  Msg::Info("H1* = %d", HRank[1]);
-  Msg::Info("H2* = %d", HRank[2]);
-  Msg::Info("H3* = %d", HRank[3]);
+  Msg::Info("H^0 = %d", _betti[0]);
+  Msg::Info("H^1 = %d", _betti[1]);
+  Msg::Info("H^2 = %d", _betti[2]);
+  Msg::Info("H^3 = %d", _betti[3]);
   if(omitted != 0) Msg::Info("The computation of basis elements in the highest dimension was omitted");
 
-  Msg::StatusBar(2, false, "H0*: %d, H1*: %d, H2*: %d, H3*: %d",
-		 HRank[0], HRank[1], HRank[2], HRank[3]);
-  _cohomologyComputed = true;
+  Msg::StatusBar(false, "H^0: %d, H^1: %d, H^2: %d, H^3: %d",
+		 _betti[0], _betti[1], _betti[2], _betti[3]);
+
+  if(dim.empty()) {
+    for(unsigned int i = 0; i < 4; i++)
+      _cohomologyComputed[i] = true;
+  }
+  else {
+    for(unsigned int i = 0; i < dim.size(); i++)
+      _cohomologyComputed[dim.at(i)] = true;
+  }
 }
 
-void Homology::addChainsToModel(int dim, bool post)
+bool Homology::isHomologyComputed(std::vector<int> dim)
 {
-  if(!_homologyComputed) Msg::Warning("Homology is not computed");
-  if(dim == -1)
-    for(int j = 0; j < 4; j++)
-      for(unsigned int i = 0; i < _chains[j].size(); i++)
-        _chains[j].at(i)->addToModel(this->getModel(), post);
-  else if (dim > -1 && dim < 4)
-    for(unsigned int i = 0; i < _chains[dim].size(); i++)
-      _chains[dim].at(i)->addToModel(this->getModel(), post);
+  if(dim.empty()) return (_homologyComputed[0] &&
+                          _homologyComputed[1] &&
+                          _homologyComputed[2] &&
+                          _homologyComputed[3]);
+
+  bool computed = true;
+  for(unsigned int i = 0; i < dim.size(); i++) {
+    int d = dim.at(i);
+    if(d < 0 || d > 3) continue;
+    computed = computed && _homologyComputed[d];
+  }
+  return computed;
 }
 
-void Homology::addCochainsToModel(int dim, bool post)
+bool Homology::isCohomologyComputed(std::vector<int> dim)
 {
-  if(!_cohomologyComputed) Msg::Warning("Cohomology is not computed");
-  if(dim == -1)
-    for(int j = 0; j < 4; j++)
-      for(unsigned int i = 0; i < _cochains[j].size(); i++)
-        _cochains[j].at(i)->addToModel(this->getModel(), post);
-  else if (dim > -1 && dim < 4)
-    for(unsigned int i = 0; i < _cochains[dim].size(); i++)
-      _cochains[dim].at(i)->addToModel(this->getModel(), post);
+  if(dim.empty()) return (_cohomologyComputed[0] &&
+                          _cohomologyComputed[1] &&
+                          _cohomologyComputed[2] &&
+                          _cohomologyComputed[3]);
+
+  bool computed = true;
+  for(unsigned int i = 0; i < dim.size(); i++) {
+    int d = dim.at(i);
+    if(d < 0 || d > 3) continue;
+    computed = computed && _cohomologyComputed[d];
+  }
+  return computed;
+}
+
+void Homology::findCompatibleBasisPair(int master, std::vector<int> dim)
+{
+  if(!this->isHomologyComputed(dim)) this->findHomologyBasis(dim);
+  if(!this->isCohomologyComputed(dim)) this->findCohomologyBasis(dim);
+  for(unsigned int idim = 0 ; idim < dim.size(); idim++) {
+    int d = dim.at(idim);
+    if(d < 1 || d > 2) continue;
+    int n = this->betti(d);
+    if(n < 2) continue;
+    if((int)_chains[d].size() != n || (int)_cochains[d].size() != n) {
+      Msg::Warning("Cannot produce compatible %d-(co)homology bases.", d);
+      Msg::Debug("%d basis %d-chains and %d basis %d-cochains.",
+                 (int)_chains[d].size(), d, (int)_cochains[d].size(), d);
+      continue;
+    }
+    fullMatrix<double> m(n,n);
+    for(int i = 0; i < n; i++) {
+      for(int j = 0; j < n; j++) {
+        if(master==0) m(i,j) = incidence(*_cochains[d].at(i), *_chains[d].at(j));
+        else m(i,j) = incidence(*_chains[d].at(i), *_cochains[d].at(j));
+      }
+    }
+
+    int det = m.determinant();
+    if(abs(det) != 1 || !m.invertInPlace()) {
+      Msg::Warning("Cannot produce compatible %d-(co)homology bases.", d);
+      Msg::Debug("Incidence matrix: ");
+      for(int i = 0; i < n; i++)
+        for(int j = 0; j < n; j++)
+          Msg::Debug("(%d, %d) = %d", i, j, m(i,j));
+      continue;
+    }
+
+    std::vector<Chain<int>*> newBasis(n);
+
+    if(master==0) {
+      for(int i = 0; i < n; i++) {
+        newBasis.at(i) = new Chain<int>();
+        for(int j = 0; j < n; j++) {
+          *newBasis.at(i) += (int)m(i,j)*(*_cochains[d].at(j));
+        }
+      }
+      for(int i = 0; i < n; i++) {
+        newBasis.at(i)->setName(_cochains[d].at(i)->getName());
+        delete _cochains[d].at(i);
+        _cochains[d].at(i) = newBasis.at(i);
+      }
+    }
+    else {
+      for(int i = 0; i < n; i++) {
+        newBasis.at(i) = new Chain<int>();
+        for(int j = 0; j < n; j++) {
+          *newBasis.at(i) += (int)m(i,j)*(*_chains[d].at(j));
+        }
+      }
+      for(int i = 0; i < n; i++) {
+        newBasis.at(i)->setName(_chains[d].at(i)->getName());
+        delete _chains[d].at(i);
+        _chains[d].at(i) = newBasis.at(i);
+      }
+    }
+  }
+}
+
+void Homology::addChainsToModel(int dim, bool post, int physicalNumRequest)
+{
+  int pgnum = -1;
+  if(!_homologyComputed[dim])
+    Msg::Warning("%d-Homology is not computed", dim);
+  if(dim == -1) {
+    for(int j = 0; j < 4; j++) {
+      for(unsigned int i = 0; i < _chains[j].size(); i++) {
+        if(physicalNumRequest != -1) pgnum = physicalNumRequest + i;
+        else pgnum = -1;
+        _chains[j].at(i)->addToModel(this->getModel(), post, pgnum);
+      }
+    }
+  }
+  else if (dim > -1 && dim < 4) {
+    for(unsigned int i = 0; i < _chains[dim].size(); i++) {
+      if(physicalNumRequest != -1) pgnum = physicalNumRequest + i;
+      else pgnum = -1;
+      _chains[dim].at(i)->addToModel(this->getModel(), post, pgnum);
+    }
+  }
+}
+
+void Homology::addCochainsToModel(int dim, bool post, int physicalNumRequest)
+{
+  int pgnum = -1;
+  if(!_cohomologyComputed[dim])
+    Msg::Warning("%d-Cohomology is not computed", dim);
+  if(dim == -1) {
+    for(int j = 0; j < 4; j++) {
+      for(unsigned int i = 0; i < _cochains[j].size(); i++) {
+        if(physicalNumRequest != -1) pgnum = physicalNumRequest + i;
+        else pgnum = -1;
+        _cochains[j].at(i)->addToModel(this->getModel(), post, pgnum);
+      }
+    }
+  }
+  else if (dim > -1 && dim < 4) {
+    for(unsigned int i = 0; i < _cochains[dim].size(); i++) {
+      if(physicalNumRequest != -1) pgnum = physicalNumRequest + i;
+      else pgnum = -1;
+      _cochains[dim].at(i)->addToModel(this->getModel(), post, pgnum);
+    }
+  }
 }
 
 void Homology::getHomologyBasis(int dim, std::vector<Chain<int> >& hom)
 {
   if(dim < 0 || dim > 3) return;
-  if(!_homologyComputed) findHomologyBasis();
+  if(!_homologyComputed[dim]) findHomologyBasis();
 
   hom.resize(_chains[dim].size());
   for(unsigned int i = 0; i < _chains[dim].size(); i++)
@@ -311,7 +486,7 @@ void Homology::getHomologyBasis(int dim, std::vector<Chain<int> >& hom)
 void Homology::getCohomologyBasis(int dim, std::vector<Chain<int> >& coh)
 {
   if(dim < 0 || dim > 3) return;
-  if(!_cohomologyComputed) findCohomologyBasis();
+  if(!_cohomologyComputed[dim]) findCohomologyBasis();
 
   coh.resize(_cochains[dim].size());
   for(unsigned int i = 0; i < _cochains[dim].size(); i++)
@@ -321,11 +496,10 @@ void Homology::getCohomologyBasis(int dim, std::vector<Chain<int> >& coh)
 int Homology::betti(int dim)
 {
   if(dim < 0 || dim > 3) return 0;
-  if(_homologyComputed) return _chains[dim].size();
-  if(_cohomologyComputed) return _cochains[dim].size();
+  if(_betti[dim] != -1) return _betti[dim];
 
   findHomologyBasis();
-  return _chains[dim].size();
+  return _betti[dim];
 }
 
 int Homology::eulerCharacteristic()

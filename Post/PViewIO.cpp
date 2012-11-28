@@ -210,7 +210,7 @@ bool PView::readMSH(const std::string &fileName, int fileIndex)
         if(p) d = dynamic_cast<PViewDataGModel*>(p->getData());
         bool create = d ? false : true;
         if(create) d = new PViewDataGModel(type);
-        if(!d->readMSH(fileName, fileIndex, fp, binary, swap, timeStep,
+        if(!d->readMSH(viewName, fileName, fileIndex, fp, binary, swap, timeStep,
                        time, partition, numComp, numEnt, interpolationScheme)){
           Msg::Error("Could not read data in msh file");
           if(create) delete d;
@@ -300,7 +300,7 @@ bool PView::readMED(const std::string &fileName, int fileIndex)
 
 bool PView::write(const std::string &fileName, int format, bool append)
 {
-  Msg::StatusBar(2, true, "Writing '%s'...", fileName.c_str());
+  Msg::StatusBar(true, "Writing '%s'...", fileName.c_str());
 
   bool ret;
   switch(format){
@@ -309,7 +309,7 @@ bool PView::write(const std::string &fileName, int format, bool append)
   case 2: ret = _data->writePOS(fileName, false, true, append); break; // parsed
   case 3: ret = _data->writeSTL(fileName); break;
   case 4: ret = _data->writeTXT(fileName); break;
-  case 5: ret = _data->writeMSH(fileName, CTX::instance()->mesh.binary); break;
+  case 5: ret = _data->writeMSH(fileName, CTX::instance()->mesh.mshFileVersion, CTX::instance()->mesh.binary); break;
   case 6: ret = _data->writeMED(fileName); break;
   case 10:
     {
@@ -319,7 +319,7 @@ bool PView::write(const std::string &fileName, int format, bool append)
       else if(ext == ".stl")
         ret = _data->writeSTL(fileName);
       else if(ext == ".msh")
-        ret = _data->writeMSH(fileName, CTX::instance()->mesh.binary);
+        ret = _data->writeMSH(fileName, CTX::instance()->mesh.mshFileVersion, CTX::instance()->mesh.binary);
       else if(ext == ".med")
         ret = _data->writeMED(fileName);
       else
@@ -329,6 +329,6 @@ bool PView::write(const std::string &fileName, int format, bool append)
   default: ret = false; Msg::Error("Unknown view format %d", format); break;
   }
 
-  if(ret) Msg::StatusBar(2, true, "Done writing '%s'", fileName.c_str());
+  if(ret) Msg::StatusBar(true, "Done writing '%s'", fileName.c_str());
   return ret;
 }

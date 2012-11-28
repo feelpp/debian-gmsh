@@ -79,6 +79,7 @@ string	{alpha}({alpha}|{digit})*
 "<="                    return tLESSOREQUAL;
 ">="                    return tGREATEROREQUAL;
 
+Abort                   return tAbort;
 Acos                    return tAcos;
 ArcCos                  return tAcos;
 Alias                   return tAlias;
@@ -126,6 +127,7 @@ Elliptic		return tElliptic;
 EndFor                  return tEndFor;
 EndIf                   return tEndIf;
 Euclidian               return tEuclidian;
+Error                   return tError;
 Exit                    return tExit;
 
 Fabs                    return tFabs;
@@ -204,6 +206,7 @@ Sprintf                 return tSprintf;
 StrCat                  return tStrCat;
 StrPrefix               return tStrPrefix;
 StrRelative             return tStrRelative;
+StrFind                 return tStrFind;
 Show                    return tShow;
 Symmetry                return tSymmetry;
 SyncModel               return tSyncModel;

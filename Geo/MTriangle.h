@@ -124,7 +124,7 @@ class MTriangle : public MElement {
   {
     MVertex *tmp = _v[1]; _v[1] = _v[2]; _v[2] = tmp;
   }
-  virtual const polynomialBasis* getFunctionSpace(int o=-1) const;
+  virtual const nodalBasis* getFunctionSpace(int o=-1) const;
   virtual const JacobianBasis* getJacobianFuncSpace(int o=-1) const;
   virtual void getNode(int num, double &u, double &v, double &w)
   {
@@ -143,7 +143,7 @@ class MTriangle : public MElement {
   virtual bool isInside(double u, double v, double w)
   {
     double tol = _isInsideTolerance;
-    if(u < (-tol) || v < (-tol) || u > ((1. + tol) - v))
+    if(u < (-tol) || v < (-tol) || u > ((1. + tol) - v) || fabs(w) > tol)
       return false;
     return true;
   }
@@ -199,6 +199,7 @@ class MTriangle6 : public MTriangle {
     static const int map[6] = {0, 3, 1, 4, 2, 5};
     return getVertex(map[num]);
   }
+  virtual void xyz2uvw(double xyz[3], double uvw[3]){ MElement::xyz2uvw(xyz, uvw); }
   virtual int getNumEdgeVertices() const { return 3; }
   virtual int getNumEdgesRep();
   virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n);
@@ -294,6 +295,7 @@ class MTriangleN : public MTriangle {
     if(_order == 10  && _vs.size() == 27) return 0;
     return 0;
   }
+  virtual void xyz2uvw(double xyz[3], double uvw[3]){ MElement::xyz2uvw(xyz, uvw); }
   virtual int getNumEdgeVertices() const { return 3 * (_order - 1); }
   virtual int getNumEdgesRep();
   virtual int getNumFacesRep();

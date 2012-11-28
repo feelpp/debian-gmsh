@@ -10,17 +10,16 @@
 #include <vector>
 
 #define GMSH_WINDOW_BOX FL_FLAT_BOX
-#define NB_BUTT_SCROLL 25
-#define NB_HISTORY_MAX 1000
-#define NB_SOLVER_MAX 5
+#define GMSH_SIMPLE_RIGHT_BOX (Fl_Boxtype)(FL_FREE_BOXTYPE+1)
+#define GMSH_SIMPLE_TOP_BOX (Fl_Boxtype)(FL_FREE_BOXTYPE+2)
+
 #define IW (10 * FL_NORMAL_SIZE)    // input field width
 #define BB (7 * FL_NORMAL_SIZE)     // width of a button with internal label
 #define BH (2 * FL_NORMAL_SIZE + 1) // button height
-#define WB (7)                      // window border
+#define WB (5)                      // window border
 
 class graphicWindow;
 class openglWindow;
-class menuWindow;
 class optionWindow;
 class fieldWindow;
 class pluginWindow;
@@ -32,7 +31,7 @@ class manipWindow;
 class geometryContextWindow;
 class meshContextWindow;
 class aboutWindow;
-class onelabWindow;
+class onelabGroup;
 class Fl_Widget;
 
 class GVertex;
@@ -44,7 +43,7 @@ class MElement;
 class FlGui{
  private:
   static FlGui *_instance;
-  bool _openedThroughMacFinder;
+  static std::string _openedThroughMacFinder;
  public:
   std::vector<GVertex*> selectedVertices;
   std::vector<GEdge*> selectedEdges;
@@ -53,7 +52,6 @@ class FlGui{
   std::vector<MElement*> selectedElements;
  public:
   std::vector<graphicWindow*> graph;
-  menuWindow *menu;
   optionWindow *options;
   fieldWindow *fields;
   pluginWindow *plugins;
@@ -65,7 +63,7 @@ class FlGui{
   geometryContextWindow *geoContext;
   meshContextWindow *meshContext;
   aboutWindow *about;
-  onelabWindow *onelab;
+  onelabGroup *onelab;
  public:
   FlGui(int argc, char **argv);
   ~FlGui(){}
@@ -82,8 +80,11 @@ class FlGui{
   // wait (at most time seconds) for any events, then process them
   static void wait(double time);
   // is a file opened through the Mac Finder?
-  void setOpenedThroughMacFinder(bool val){ _openedThroughMacFinder = val; }
-  bool getOpenedThroughMacFinder(){ return _openedThroughMacFinder; }
+  static void setOpenedThroughMacFinder(const std::string &name)
+  {
+    _openedThroughMacFinder = name;
+  }
+  static std::string getOpenedThroughMacFinder(){ return _openedThroughMacFinder; }
   // test application-level keyboard shortcuts
   int testGlobalShortcuts(int event);
   // test the arrow shortcuts (not in the application-level shortcuts)
@@ -107,7 +108,7 @@ class FlGui{
   // select an entity in the most recent graphic window
   char selectEntity(int type);
   // display status message
-  void setStatus(const char *msg, int num);
+  void setStatus(const char *msg, bool opengl=false);
   // display status message and update progress bar
   void setProgress(const char *msg, double val, double min, double max);
   // create the window for physical context dependant definitions
@@ -118,6 +119,10 @@ class FlGui{
   void showMessages();
   // add line in message console(s)
   void saveMessages(const char *fileName);
+  // rebuild the tree
+  void rebuildTree();
+  // open module in tree
+  void openModule(const std::string &name);
 };
 
 void redraw_cb(Fl_Widget *w, void *data);

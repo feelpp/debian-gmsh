@@ -7,6 +7,7 @@
 #define _MLINE_H_
 
 #include "MElement.h"
+#include "nodalBasis.h"
 
 /*
  * MLine
@@ -71,12 +72,12 @@ class MLine : public MElement {
   {
     MVertex *tmp = _v[0]; _v[0] = _v[1]; _v[1] = tmp;
   }
-  virtual const polynomialBasis* getFunctionSpace(int o=-1) const;
+  virtual const nodalBasis* getFunctionSpace(int o=-1) const;
   virtual const JacobianBasis* getJacobianFuncSpace(int o=-1) const;
   virtual bool isInside(double u, double v, double w)
   {
     double tol = _isInsideTolerance;
-    if(u < -(1. + tol) || u > (1. + tol))
+    if(u < -(1. + tol) || u > (1. + tol) || fabs(v) > tol || fabs(w) > tol)
       return false;
     return true;
   }
@@ -198,6 +199,8 @@ class MLineN : public MLine {
   }
   virtual int getTypeForMSH() const
   {
+    if(_vs.size() == 0) return MSH_LIN_2;
+    if(_vs.size() == 1) return MSH_LIN_3;
     if(_vs.size() == 2) return MSH_LIN_4;
     if(_vs.size() == 3) return MSH_LIN_5;
     if(_vs.size() == 4) return MSH_LIN_6;

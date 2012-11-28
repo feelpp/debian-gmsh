@@ -9,6 +9,7 @@
 #include "Context.h"
 #include "qualityMeasures.h"
 #include "Numeric.h"
+#include "BasisFactory.h"
 
 #if defined(HAVE_MESH)
 #include "qualityMeasures.h"
@@ -16,7 +17,7 @@
 
 #define SQU(a)      ((a)*(a))
 
-const polynomialBasis* MQuadrangle::getFunctionSpace(int o) const
+const nodalBasis* MQuadrangle::getFunctionSpace(int o) const
 {
   int order = (o == -1) ? getPolynomialOrder() : o;
 
@@ -24,31 +25,31 @@ const polynomialBasis* MQuadrangle::getFunctionSpace(int o) const
 
   if ((nf == 0) && (o == -1)) {
     switch (order) {
-      case 0: return polynomialBases::find(MSH_QUA_1);
-      case 1: return polynomialBases::find(MSH_QUA_4);
-      case 2: return polynomialBases::find(MSH_QUA_8);
-      case 3: return polynomialBases::find(MSH_QUA_12);
-      case 4: return polynomialBases::find(MSH_QUA_16I);
-      case 5: return polynomialBases::find(MSH_QUA_20);
-      case 6: return polynomialBases::find(MSH_QUA_24);
-      case 7: return polynomialBases::find(MSH_QUA_28);
-      case 8: return polynomialBases::find(MSH_QUA_32);
-      case 9: return polynomialBases::find(MSH_QUA_36I);
-      case 10: return polynomialBases::find(MSH_QUA_40);
+      case 0: return BasisFactory::create(MSH_QUA_1);
+      case 1: return BasisFactory::create(MSH_QUA_4);
+      case 2: return BasisFactory::create(MSH_QUA_8);
+      case 3: return BasisFactory::create(MSH_QUA_12);
+      case 4: return BasisFactory::create(MSH_QUA_16I);
+      case 5: return BasisFactory::create(MSH_QUA_20);
+      case 6: return BasisFactory::create(MSH_QUA_24);
+      case 7: return BasisFactory::create(MSH_QUA_28);
+      case 8: return BasisFactory::create(MSH_QUA_32);
+      case 9: return BasisFactory::create(MSH_QUA_36I);
+      case 10: return BasisFactory::create(MSH_QUA_40);
     }
   }
   switch (order) {
-    case 0: return polynomialBases::find(MSH_QUA_1);
-    case 1: return polynomialBases::find(MSH_QUA_4);
-    case 2: return polynomialBases::find(MSH_QUA_9);
-    case 3: return polynomialBases::find(MSH_QUA_16);
-    case 4: return polynomialBases::find(MSH_QUA_25);
-    case 5: return polynomialBases::find(MSH_QUA_36);
-    case 6: return polynomialBases::find(MSH_QUA_49);
-    case 7: return polynomialBases::find(MSH_QUA_64);
-    case 8: return polynomialBases::find(MSH_QUA_81);
-    case 9: return polynomialBases::find(MSH_QUA_100);
-    case 10: return polynomialBases::find(MSH_QUA_121);
+    case 0: return BasisFactory::create(MSH_QUA_1);
+    case 1: return BasisFactory::create(MSH_QUA_4);
+    case 2: return BasisFactory::create(MSH_QUA_9);
+    case 3: return BasisFactory::create(MSH_QUA_16);
+    case 4: return BasisFactory::create(MSH_QUA_25);
+    case 5: return BasisFactory::create(MSH_QUA_36);
+    case 6: return BasisFactory::create(MSH_QUA_49);
+    case 7: return BasisFactory::create(MSH_QUA_64);
+    case 8: return BasisFactory::create(MSH_QUA_81);
+    case 9: return BasisFactory::create(MSH_QUA_100);
+    case 10: return BasisFactory::create(MSH_QUA_121);
     default: Msg::Error("Order %d quadrangle function space not implemented", order);
   }
   return 0;
@@ -242,7 +243,10 @@ double  MQuadrangle::etaShapeMeasure()
   SVector3 c = crossprod(v23,v30);
   SVector3 d = crossprod(v30,v01);
 
-  if (dot(a,b) < 0 || dot(a,c) < 0 || dot(a,d) < 0 )return 0.0;
+  double sign = 1.0;
+  if (dot(a,b) < 0 || dot(a,c) < 0 || dot(a,d) < 0 )sign = -1;
+  // FIXME ...
+  //  if (a.z() > 0 || b.z() > 0 || c.z() > 0 || d.z() > 0) sign = -1;
 
   double a1 = 180 * angle3Vertices(_v[0], _v[1], _v[2]) / M_PI;
   double a2 = 180 * angle3Vertices(_v[1], _v[2], _v[3]) / M_PI;
@@ -258,8 +262,60 @@ double  MQuadrangle::etaShapeMeasure()
   angle = std::max(fabs(90. - a3),angle);
   angle = std::max(fabs(90. - a4),angle);
 
-  return 1.-angle/90;
+  return sign*(1.-angle/90);
 }
+
+/// a shape measure for quadrangles
+/// assume (for now) 2D elements -- 
+///  sf = (1 \pm xi) (1 \pm eta) / 4
+///  dsf_xi  =  \pm (1 \pm  eta) / 4
+///             1 + eta , -(1+eta) , -(1-eta), 1-eta  
+///  dsf_eta =  \pm (1 \pm  xi)  / 4
+///             1 + xi , 1 - xi ,  -(1-xi), -(1+xi)    
+double MQuadrangle::gammaShapeMeasure(){
+  return etaShapeMeasure();
+  /*
+  // xi = -1 eta = -1 
+  const double dsf_corner1 [2][4] = {{0,0,-.5,.5},{0,0.5,-.5,0}};
+  // xi =  1 eta = -1 
+  const double dsf_corner2 [2][4] = {{0,0,-.5,.5},{0.5,0,0,-.5}};
+  // xi =  1 eta =  1 
+  const double dsf_corner3 [2][4] = {{.5,-.5,0,0},{0.5,0,0,-.5}};
+  // xi =  -1 eta =  1 
+  const double dsf_corner4 [2][4] = {{0,0,-.5,.5},{0.5,0,0,-.5}};
+  */
+  double QT[4] = {qmTriangle(_v[0],_v[1],_v[2],QMTRI_RHO),
+		  qmTriangle(_v[1],_v[2],_v[3],QMTRI_RHO), 
+		  qmTriangle(_v[2],_v[3],_v[0],QMTRI_RHO), 
+		  qmTriangle(_v[3],_v[0],_v[1],QMTRI_RHO)} ;
+  std::sort(QT,QT+4);
+  double quality = QT[0]*QT[1] / (QT[2] * QT[3]);
+
+  SVector3 v01 (_v[1]->x()-_v[0]->x(),_v[1]->y()-_v[0]->y(),_v[1]->z()-_v[0]->z());
+  SVector3 v12 (_v[2]->x()-_v[1]->x(),_v[2]->y()-_v[1]->y(),_v[2]->z()-_v[1]->z());
+  SVector3 v23 (_v[3]->x()-_v[2]->x(),_v[3]->y()-_v[2]->y(),_v[3]->z()-_v[2]->z());
+  SVector3 v30 (_v[0]->x()-_v[3]->x(),_v[0]->y()-_v[3]->y(),_v[0]->z()-_v[3]->z());
+
+  SVector3 a = crossprod(v01,v12);
+  SVector3 b = crossprod(v12,v23);
+  SVector3 c = crossprod(v23,v30);
+  SVector3 d = crossprod(v30,v01);
+
+  if (a.z() < 0 || b.z() < 0 || c.z() < 0 || d.z() < 0) return -quality;
+  
+  if (dot(a,b) < 0 || dot(a,c) < 0 || dot(a,d) < 0 )return -quality;
+
+  return quality;
+  /*
+  double J[3][3];
+  double detJ = getJacobian(-1,-1, J);
+  double C[2][2] = {{0,0}{0,0}};
+  for (int i=0;i<2;i++){
+    
+  }*/
+  
+}
+
 
 double MQuadrangle::distoShapeMeasure()
 {
