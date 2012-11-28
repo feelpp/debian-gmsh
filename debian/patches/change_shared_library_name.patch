@@ -1,35 +1,7 @@
 Description: Change name of shared library
 Author: Anton Gladky <gladky.anton@gmail.com>
-Last-Update: 2012-07-10
+Last-Update: 2012-11-28
 
---- a/CMakeLists.txt
-+++ b/CMakeLists.txt
-@@ -1027,7 +1027,11 @@
- # want to build the lib we need to recompile everything (the first
- # time--it's a separate target)
- add_library(lib STATIC EXCLUDE_FROM_ALL ${GMSH_SRC})
--set_target_properties(lib PROPERTIES OUTPUT_NAME Gmsh)
-+set_target_properties(lib PROPERTIES 
-+  OUTPUT_NAME gmsh
-+  SOVERSION "${GMSH_MAJOR_VERSION}"
-+  )
-+
- if(MSVC)
-   set_target_properties(lib PROPERTIES DEBUG_POSTFIX d) 
-   if(ENABLE_MSVC_STATIC_RUNTIME)
-@@ -1037,7 +1041,11 @@
- 
- # shared library target: we don't build it by default either
- add_library(shared SHARED EXCLUDE_FROM_ALL ${GMSH_SRC})
--set_target_properties(shared PROPERTIES OUTPUT_NAME Gmsh)
-+set_target_properties(shared PROPERTIES 
-+  OUTPUT_NAME gmsh
-+  SOVERSION "${GMSH_MAJOR_VERSION}"
-+  )
-+
- if(HAVE_LAPACK AND LAPACK_FLAGS)
-   set_target_properties(shared PROPERTIES LINK_FLAGS ${LAPACK_FLAGS})
- endif(HAVE_LAPACK AND LAPACK_FLAGS)
 --- a/wrappers/java/CMakeLists.txt
 +++ b/wrappers/java/CMakeLists.txt
 @@ -34,7 +34,11 @@
@@ -45,3 +17,29 @@ Last-Update: 2012-07-10
  endif(UNIX)		
  add_custom_command(TARGET WrapGmsh 
  POST_BUILD # do the rest of the command after the build period
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1043,7 +1043,10 @@
+ # static library target
+ if(ENABLE_BUILD_LIB)
+   add_library(lib STATIC ${GMSH_SRC})
+-  set_target_properties(lib PROPERTIES OUTPUT_NAME Gmsh)
++  set_target_properties(lib PROPERTIES 
++      OUTPUT_NAME gmsh
++      SOVERSION "${GMSH_MAJOR_VERSION}"
++      )
+   if(MSVC)
+     set_target_properties(lib PROPERTIES DEBUG_POSTFIX d) 
+     if(ENABLE_MSVC_STATIC_RUNTIME)
+@@ -1055,7 +1058,10 @@
+ # shared library target
+ if(ENABLE_BUILD_SHARED OR ENABLE_WRAP_PYTHON OR ENABLE_WRAP_JAVA)
+   add_library(shared SHARED ${GMSH_SRC})
+-  set_target_properties(shared PROPERTIES OUTPUT_NAME Gmsh)
++  set_target_properties(shared PROPERTIES 
++      OUTPUT_NAME gmsh
++      SOVERSION "${GMSH_MAJOR_VERSION}"
++      )
+   if(HAVE_LAPACK AND LAPACK_FLAGS)
+     set_target_properties(shared PROPERTIES LINK_FLAGS ${LAPACK_FLAGS})
+   endif(HAVE_LAPACK AND LAPACK_FLAGS)

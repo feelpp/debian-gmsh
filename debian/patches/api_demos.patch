@@ -1,721 +1,13 @@
 Desctiption: fix compilation of api_demos
-Author: Christophe Trophime <christophe.trophime@lncmi.cnrs.fr>
+Author: Christophe Trophime <christophe.trophime@lncmi.cnrs.
 Reviewed-by: Anton Gladky <gladky.anton@gmail.com>
-Last-Update: 2012-03-11
+Last-Update: 2012-11-28
 
---- a/utils/api_demos/CMakeLists.txt
-+++ b/utils/api_demos/CMakeLists.txt
-@@ -9,45 +9,691 @@
-   set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Choose build type")
- endif(DEFINED CMAKE_BUILD_TYPE)
- 
--project(api_demos CXX)
-+project(api_demos CXX C)
- 
--add_subdirectory(../.. "${CMAKE_CURRENT_BINARY_DIR}/gmsh")
--
--include_directories(../../Common ../../Numeric ../../Geo ../../Mesh 
--   ../../Solver ../../Post ../../Plugin ../../Graphics ../../contrib/ANN/include
--   ../../contrib/DiscreteIntegration ${GMSH_EXTERNAL_INCLUDE_DIRS}
--   ${CMAKE_CURRENT_BINARY_DIR}/gmsh/Common)
-+# this variable controls the default value of the "ENABLE_XXX" options which are
-+# normally set to ON (useful if you want to configure a minimal version of Gmsh:
-+# e.g. "cmake -DDEFAULT=0 -DENABLE_POST=1 -DENABLE_PARSER=1")
-+set(DEFAULT ON CACHE INTERNAL "Default value for options")
-+
-+option(ENABLE_GMSH "Enable Gmsh" ${DEFAULT})
-+option(ENABLE_ANN "Enable ANN to compute Approximate Nearest Neighbors" ${DEFAULT})
-+option(ENABLE_KBIPACK "Enable Kbipack for homology solver" ${DEFAULT})
-+option(ENABLE_MATHEX "Enable MathEx expression parser" ${DEFAULT})
-+option(ENABLE_OCC "Enable Open CASCADE geometrical models" ${DEFAULT})
-+option(ENABLE_PETSC "Enable PETSc linear algebra solvers" ${DEFAULT})
-+option(ENABLE_SLEPC "Enable SLEPc eigensolvers" ${DEFAULT})
-+option(ENABLE_FLTK "Build FLTK GUI" ${DEFAULT})
-+option(ENABLE_FL_TREE "Enable FLTK tree browser widget" ${DEFAULT})
-+option(ENABLE_MED "Enable MED mesh and post-processing file formats" ${DEFAULT})
-+option(ENABLE_MMG3D "Enable 3D Mobile Mesh Generation" ${DEFAULT})
-+option(ENABLE_TETGEN "Enable Tetgen mesh generator" ${DEFAULT})
-+option(ENABLE_TETGEN_NEW "Enable experimental version of Tetgen" OFF)
-+option(ENABLE_GRAPHICS "Compile-in OpenGL graphics even if there is no GUI" OFF)
-+option(ENABLE_MESH "Build the mesh module" ${DEFAULT})
-+option(ENABLE_POST "Build the post-processing module" ${DEFAULT})
-+option(ENABLE_PLUGINS "Build the post-processing plugins" ${DEFAULT})
-+option(ENABLE_DINTEGRATION "Enable discrete integration and levelsets" ${DEFAULT})
-+option(ENABLE_BLAS_LAPACK "Use BLAS and Lapack for linear algebra" ON)
-+
-+include(CheckTypeSize)
-+include(CheckFunctionExists)
-+include(CheckIncludeFile)
-+
-+macro(find_all_libraries VARNAME LISTNAME PATH SUFFIX)
-+  set(${VARNAME})
-+  list(LENGTH ${LISTNAME} NUM_LIST)
-+  foreach(LIB ${${LISTNAME}})
-+    find_library(FOUND_LIB ${LIB} PATHS ${PATH} PATH_SUFFIXES ${SUFFIX})
-+    if(FOUND_LIB)
-+      list(APPEND ${VARNAME} ${FOUND_LIB})
-+    endif(FOUND_LIB)
-+    set(FOUND_LIB FOUND_LIB-NOTFOUND CACHE INTERNAL "")
-+    # unset(FOUND_LIB CACHE) # cleaner, but only available in cmake >= 2.6.4
-+  endforeach(LIB)
-+  list(LENGTH ${VARNAME} NUM_FOUND_LIBRARIES)
-+  if(NUM_FOUND_LIBRARIES LESS NUM_LIST)
-+    set(${VARNAME})
-+  endif(NUM_FOUND_LIBRARIES LESS NUM_LIST)
-+endmacro(find_all_libraries)
-+
-+macro(set_config_option VARNAME STRING)
-+  set(${VARNAME} TRUE)
-+  list(APPEND CONFIG_OPTIONS ${STRING})
-+  message(STATUS "Found " ${STRING})
-+endmacro(set_config_option)
-+
-+# check if the machine is 64 bits (this is more reliable than using
-+# CMAKE_SIZEOF_VOID_P, which does not seem to work e.g. on some Suse
-+# machines)
-+check_type_size("void*" SIZEOF_VOID_P)
-+if(SIZEOF_VOID_P EQUAL 8)
-+  set_config_option(HAVE_64BIT_SIZE_T "Have64BitSizeT")
-+endif(SIZEOF_VOID_P EQUAL 8)
-+
-+if(ENABLE_BLAS_LAPACK)
-+  if(MSVC)
-+    # on Windows with Visual C++ try really hard to find blas/lapack
-+    # *without* requiring a Fortran compiler: 1) try to find the Intel
-+    # MKL libs using the standard search path; if not found 2) try to
-+    # get the reference blas/lapack libs (useful for users with no
-+    # Fortran compiler and no MKL license, who can just download our
-+    # precompiled "gmsh-dep" package)
-+    if(HAVE_64BIT_SIZE_T)
-+      set(MKL_PATH em64t/lib)
-+    else(HAVE_64BIT_SIZE_T)
-+      set(MKL_PATH ia32/lib)
-+    endif(HAVE_64BIT_SIZE_T)
-+    set(MKL_LIBS_REQUIRED libguide40 mkl_intel_c mkl_intel_thread mkl_core)
-+    find_all_libraries(LAPACK_LIBRARIES MKL_LIBS_REQUIRED "" ${MKL_PATH})
-+    if(LAPACK_LIBRARIES)
-+      set_config_option(HAVE_BLAS "Blas(IntelMKL)")
-+      set_config_option(HAVE_LAPACK "Lapack(IntelMKL)")
-+    else(LAPACK_LIBRARIES)
-+      set(REFLAPACK_LIBS_REQUIRED lapack blas g2c gcc)
-+      find_all_libraries(LAPACK_LIBRARIES REFLAPACK_LIBS_REQUIRED "" "")
-+      if(LAPACK_LIBRARIES)
-+        set_config_option(HAVE_BLAS "Blas(Ref)")
-+        set_config_option(HAVE_LAPACK "Lapack(Ref)")
-+      endif(LAPACK_LIBRARIES)
-+    endif(LAPACK_LIBRARIES)
-+  elseif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-+    # on Linux try to find the Intel MKL without a Fortran compiler
-+    if(HAVE_64BIT_SIZE_T)
-+      set(MKL_PATH lib/em64t)
-+    else(HAVE_64BIT_SIZE_T)
-+      set(MKL_PATH lib/32)
-+    endif(HAVE_64BIT_SIZE_T)
-+    set(MKL_LIBS_REQUIRED mkl_gf_lp64 iomp5 mkl_gnu_thread mkl_core guide pthread)
-+    find_all_libraries(LAPACK_LIBRARIES MKL_LIBS_REQUIRED "" ${MKL_PATH})
-+    if(NOT LAPACK_LIBRARIES)
-+      #match lapack 9.0 on 64bit
-+      set(MKL_LIBS_REQUIRED mkl_lapack mkl_em64t guide)
-+      find_all_libraries(LAPACK_LIBRARIES MKL_LIBS_REQUIRED "" ${MKL_PATH})
-+    endif(NOT LAPACK_LIBRARIES)
-+    if(LAPACK_LIBRARIES)
-+      set_config_option(HAVE_BLAS "Blas(IntelMKL)")
-+      set_config_option(HAVE_LAPACK "Lapack(IntelMKL)")
-+    else(LAPACK_LIBRARIES)
-+      # on Linux also try to find ATLAS without a Fortran compiler,
-+      # because cmake ships with a buggy FindBLAS e.g. on Ubuntu Lucid
-+      # Lynx
-+      set(ATLAS_LIBS_REQUIRED lapack f77blas cblas atlas)
-+      find_all_libraries(LAPACK_LIBRARIES ATLAS_LIBS_REQUIRED "" "")
-+      if(LAPACK_LIBRARIES)
-+        set_config_option(HAVE_BLAS "Blas(ATLAS)")
-+        set_config_option(HAVE_LAPACK "Lapack(ATLAS)")
-+      endif(LAPACK_LIBRARIES)
-+    endif(LAPACK_LIBRARIES)
-+  elseif(${CMAKE_SYSTEM_NAME} MATCHES "SunOS")
-+    # on SunOS we know blas and lapack are available in sunperf
-+    set(LAPACK_FLAGS -library=sunperf)
-+    set_config_option(HAVE_BLAS "Blas(SubPerf)")
-+    set_config_option(HAVE_LAPACK "Lapack(SunPerf)")
-+  elseif(APPLE)
-+    # on Mac we also know that blas and lapack are available
-+    set(LAPACK_LIBRARIES "-framework vecLib")
-+    set_config_option(HAVE_BLAS "Blas(VecLib)")
-+    set_config_option(HAVE_LAPACK "Lapack(VecLib)")
-+  endif(MSVC)
-+  if(NOT HAVE_BLAS OR NOT HAVE_LAPACK)
-+    # if we haven't found blas and lapack without using the standard
-+    # cmake tests, do it (this requires a working Fortran compiler)
-+    enable_language(Fortran)
-+    find_package(BLAS)
-+    if(BLAS_FOUND)
-+      set_config_option(HAVE_BLAS "Blas")
-+      find_package(LAPACK)
-+      if(LAPACK_FOUND)
-+        set_config_option(HAVE_LAPACK "Lapack")
-+      else(LAPACK_FOUND)
-+        set(LAPACK_LIBRARIES ${BLAS_LIBRARIES})
-+      endif(LAPACK_FOUND)
-+      if(CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
-+        if(CMAKE_Fortran_COMPILER MATCHES "gfortran")
-+          list(APPEND LAPACK_LIBRARIES gfortran)
-+        elseif(CMAKE_Fortran_COMPILER MATCHES "f95")
-+          list(APPEND LAPACK_LIBRARIES gfortran)
-+        elseif(CMAKE_Fortran_COMPILER MATCHES "g77")
-+          list(APPEND LAPACK_LIBRARIES g2c)
-+        endif(CMAKE_Fortran_COMPILER MATCHES "gfortran")
-+      endif(CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
-+    endif(BLAS_FOUND)
-+  endif(NOT HAVE_BLAS OR NOT HAVE_LAPACK)
-+  if(NOT HAVE_BLAS OR NOT HAVE_LAPACK)
-+    message("WARNING: Could not find Blas or Lapack: most meshing algorithms "
-+            "will not be functional")
-+  endif(NOT HAVE_BLAS OR NOT HAVE_LAPACK)
-+endif(ENABLE_BLAS_LAPACK)
-+
-+if(ENABLE_KBIPACK)
-+  find_library(GMP_LIB gmp)
-+  if(GMP_LIB)
-+    find_path(GMP_INC "gmp.h" PATH_SUFFIXES src include)
-+    if(GMP_INC)
-+      set_config_option(HAVE_GMP "GMP")
-+      list(APPEND EXTERNAL_LIBRARIES ${GMP_LIB})
-+      list(APPEND EXTERNAL_INCLUDES ${GMP_INC})
-+      include_directories(../../contrib/kbipack)
-+      set_config_option(HAVE_KBIPACK "Kbipack")
-+    endif(GMP_INC)
-+  endif(GMP_LIB)
-+endif(ENABLE_KBIPACK)
-+
-+if(ENABLE_MATHEX)
-+  include_directories(../../contrib/MathEx)
-+  set_config_option(HAVE_MATHEX "MathEx")
-+endif(ENABLE_MATHEX)
-+
-+if(ENABLE_PETSC)
-+    set(ENV_PETSC_DIR $ENV{PETSC_DIR})
-+    set(ENV_PETSC_ARCH $ENV{PETSC_ARCH})
-+    if(EXISTS ${ENV_PETSC_DIR}/${ENV_PETSC_ARCH}/conf/petscvariables)
-+      # old-style PETSc installations (using PETSC_DIR and PETSC_ARCH)
-+      set_config_option(HAVE_PETSC "PETSc")
-+      file(STRINGS ${ENV_PETSC_DIR}/${ENV_PETSC_ARCH}/conf/petscvariables 
-+           PETSC_VARIABLES NEWLINE_CONSUME)
-+      # find include directories
-+      list(APPEND EXTERNAL_INCLUDES ${ENV_PETSC_DIR}/include)
-+      list(APPEND EXTERNAL_INCLUDES ${ENV_PETSC_DIR}/${ENV_PETSC_ARCH}/include)
-+      string(REGEX MATCH "PACKAGES_INCLUDES = [^\n\r]*" PETSC_PACKAGES_INCLUDES
-+             ${PETSC_VARIABLES})
-+      if(PETSC_PACKAGES_INCLUDES)
-+        string(REPLACE "PACKAGES_INCLUDES = " "" PETSC_PACKAGES_INCLUDES
-+               ${PETSC_PACKAGES_INCLUDES})
-+        if(PETSC_PACKAGES_INCLUDES)
-+          string(REPLACE "-I" "" PETSC_PACKAGES_INCLUDES ${PETSC_PACKAGES_INCLUDES})
-+          string(REPLACE " " ";" PETSC_PACKAGES_INCLUDES ${PETSC_PACKAGES_INCLUDES})
-+          foreach(VAR ${PETSC_PACKAGES_INCLUDES})
-+            list(APPEND EXTERNAL_INCLUDES ${VAR})
-+          endforeach(VAR)
-+        endif(PETSC_PACKAGES_INCLUDES)
-+      endif(PETSC_PACKAGES_INCLUDES)
-+      # find libraries (<= 3.0)
-+      set(PETSC_LIBS_REQUIRED petscksp petscdm petscmat petscvec petsc)
-+      find_all_libraries(PETSC_LIBS PETSC_LIBS_REQUIRED 
-+                         ${ENV_PETSC_DIR}/${ENV_PETSC_ARCH}/lib "")
-+      # petsc 3.1 creates only one library (libpetsc)
-+      if(NOT PETSC_LIBS)
-+        find_library(PETSC_LIBS petsc PATHS ${ENV_PETSC_DIR}/${ENV_PETSC_ARCH}/lib)
-+      endif(NOT PETSC_LIBS)
-+      # find slepc (needs to be linked in before petsc)
-+      if(ENABLE_SLEPC)
-+        set(ENV_SLEPC_DIR $ENV{SLEPC_DIR})
-+        find_library(SLEPC_LIB slepc PATHS ${ENV_SLEPC_DIR}/${ENV_PETSC_ARCH}/lib)
-+        if(SLEPC_LIB)
-+          find_path(SLEPC_INC "slepc.h" PATHS ${ENV_SLEPC_DIR} PATH_SUFFIXES include 
-+                    ${ENV_PETSC_ARCH}/include include/slepc)
-+          if(SLEPC_INC)
-+            set_config_option(HAVE_SLEPC "SLEPc")
-+            list(APPEND EXTERNAL_LIBRARIES ${SLEPC_LIB})
-+            list(APPEND EXTERNAL_INCLUDES ${SLEPC_INC}) 
-+            find_path(SLEPC_INC2 "slepcconf.h" PATHS ${ENV_SLEPC_DIR} 
-+                      PATH_SUFFIXES ${ENV_PETSC_ARCH}/include)
-+            if(SLEPC_INC2)
-+              list(APPEND EXTERNAL_INCLUDES ${SLEPC_INC2}) 
-+            endif(SLEPC_INC2)
-+          endif(SLEPC_INC)
-+        endif(SLEPC_LIB)
-+        if(NOT HAVE_SLEPC AND NOT ENV_SLEPC_DIR)
-+           message("WARNING: Export SLEPC_DIR before calling cmake")
-+        endif(NOT HAVE_SLEPC AND NOT ENV_SLEPC_DIR)
-+      endif(ENABLE_SLEPC)
-+      list(APPEND EXTERNAL_LIBRARIES ${PETSC_LIBS})
-+      # find additional libraries to link with
-+      string(REGEX MATCH "PACKAGES_LIBS = [^\n\r]*" PLIBS ${PETSC_VARIABLES})
-+      if(PLIBS)
-+        string(REPLACE "PACKAGES_LIBS = " "" PLIBS ${PLIBS})
-+        string(STRIP ${PLIBS} PLIBS)
-+        list(APPEND EXTERNAL_LIBRARIES "${PLIBS}")
-+      endif(PLIBS)
-+      string(REGEX MATCH "PETSC_EXTERNAL_LIB_BASIC = [^\n\r]*" PLIBS_BASIC ${PETSC_VARIABLES})
-+      if(PLIBS_BASIC)
-+        string(REPLACE "PETSC_EXTERNAL_LIB_BASIC = " "" PLIBS_BASIC ${PLIBS_BASIC})
-+        string(STRIP ${PLIBS_BASIC} PLIBS_BASIC)
-+        list(APPEND EXTERNAL_LIBRARIES "${PLIBS_BASIC}")
-+      endif(PLIBS_BASIC)
-+      string(REGEX MATCH "PCC_LINKER_LIBS = [^\n\r]*" LLIBS ${PETSC_VARIABLES})
-+      if(LLIBS)
-+        string(REPLACE "PCC_LINKER_LIBS = " "" LLIBS ${LLIBS})
-+        string(STRIP ${LLIBS} LLIBS)
-+        list(APPEND EXTERNAL_LIBRARIES "${LLIBS}")
-+      endif(LLIBS)
-+    else(EXISTS ${ENV_PETSC_DIR}/${ENV_PETSC_ARCH}/conf/petscvariables)
-+      # new-style PETSc installations (in standard system directories)
-+      find_library(PETSC_LIBS petsc)
-+      find_path(PETSC_INC "petsc.h" PATH_SUFFIXES include/petsc)
-+      if(PETSC_LIBS AND PETSC_INC)
-+        set_config_option(HAVE_PETSC "PETSc")
-+        if(ENABLE_SLEPC)
-+          find_library(SLEPC_LIB slepc)
-+          find_path(SLEPC_INC "slepc.h" PATH_SUFFIXES include/slepc)
-+          if(SLEPC_LIB AND SLEPC_INC)
-+            set_config_option(HAVE_SLEPC "SLEPc")
-+            list(APPEND EXTERNAL_LIBRARIES ${SLEPC_LIB})
-+            list(APPEND EXTERNAL_INCLUDES ${SLEPC_INC}) 
-+          endif(SLEPC_LIB AND SLEPC_INC)
-+        endif(ENABLE_SLEPC)
-+        list(APPEND EXTERNAL_LIBRARIES ${PETSC_LIBS})
-+        list(APPEND EXTERNAL_INCLUDES ${PETSC_INC}) 
-+      endif(PETSC_LIBS AND PETSC_INC)
-+    endif(EXISTS ${ENV_PETSC_DIR}/${ENV_PETSC_ARCH}/conf/petscvariables)
-+    if(NOT HAVE_PETSC AND NOT ENV_PETSC_DIR)
-+       message("WARNING: Export PETSC_DIR before calling cmake")
-+    endif(NOT HAVE_PETSC AND NOT ENV_PETSC_DIR)
-+    if(NOT HAVE_PETSC AND NOT ENV_PETSC_ARCH)
-+       message("WARNING: Export PETSC_ARCH before calling cmake")
-+    endif(NOT HAVE_PETSC AND NOT ENV_PETSC_ARCH)
-+  endif(ENABLE_PETSC)
-+
-+if(ENABLE_OCC)
-+  if(WIN32 OR CYGWIN)
-+    if(HAVE_64BIT_SIZE_T)
-+      set(OCC_SYS_NAME win64)
-+    else(HAVE_64BIT_SIZE_T)
-+      set(OCC_SYS_NAME win32)
-+    endif(HAVE_64BIT_SIZE_T)
-+  else(WIN32 OR CYGWIN)
-+    set(OCC_SYS_NAME ${CMAKE_SYSTEM_NAME})
-+  endif(WIN32 OR CYGWIN)
-+  set(OCC_LIBS_REQUIRED
-+      # subset of DataExchange
-+      TKSTEP TKSTEP209 TKSTEPAttr TKSTEPBase TKIGES TKXSBase
-+      # ModelingAlgorithms
-+      TKOffset TKFeat TKFillet TKBool TKShHealing TKMesh TKHLR TKBO TKPrim
-+      TKTopAlgo TKGeomAlgo
-+      # ModelingData
-+      TKBRep TKGeomBase TKG3d TKG2d
-+      # FoundationClasses
-+      TKAdvTools TKMath TKernel)
-+  list(LENGTH OCC_LIBS_REQUIRED NUM_OCC_LIBS_REQUIRED)
-+  set(OCC_LIBS)
-+  foreach(OCC ${OCC_LIBS_REQUIRED})
-+    find_library(OCC_LIB ${OCC} HINTS ENV CASROOT PATH_SUFFIXES lib 
-+                 ${OCC_SYS_NAME}/lib ${OCC_SYS_NAME}/vc8/lib)
-+    if(OCC_LIB)
-+      list(APPEND OCC_LIBS ${OCC_LIB})
-+    else(OCC_LIB)
-+      message(STATUS "OCC lib " ${OCC} " not Found")
-+    endif(OCC_LIB)
-+    set(OCC_LIB OCC_LIB-NOTFOUND CACHE INTERNAL "")
-+    # unset(OCC_LIB CACHE) # cleaner, but only available in cmake >= 2.6.4
-+  endforeach(OCC)
-+  list(LENGTH OCC_LIBS NUM_OCC_LIBS)
-+  if(NUM_OCC_LIBS EQUAL NUM_OCC_LIBS_REQUIRED)
-+    find_path(OCC_INC "BRep_Tool.hxx" PATHS ENV CASROOT PATH_SUFFIXES inc 
-+              include include/oce opencascade)
-+    if(OCC_INC)
-+      set_config_option(HAVE_OCC "OpenCascade")
-+      list(APPEND EXTERNAL_LIBRARIES ${OCC_LIBS})
-+      list(APPEND EXTERNAL_INCLUDES ${OCC_INC})
-+      if(HAVE_64BIT_SIZE_T)
-+        add_definitions(-D_OCC64)
-+      endif(HAVE_64BIT_SIZE_T)
-+      if(CYGWIN)
-+        list(APPEND EXTERNAL_LIBRARIES "winspool")
-+      elseif(MSVC)
-+        add_definitions(-DWNT)
-+      endif(CYGWIN)
-+      find_path(OCC_CONFIG_H "config.h" PATHS ${OCC_INC} ${OCC_CONFIG_H_PATH}
-+                NO_DEFAULT_PATH)
-+      if(NOT OCC_CONFIG_H)
-+        add_definitions(-DHAVE_NO_OCC_CONFIG_H)
-+      endif(NOT OCC_CONFIG_H)
-+    endif(OCC_INC)
-+  endif(NUM_OCC_LIBS EQUAL NUM_OCC_LIBS_REQUIRED)
-+endif(ENABLE_OCC)
-+
-+if(ENABLE_ANN)
-+  find_library(ANN_LIB ann PATH_SUFFIXES lib)
-+  find_path(ANN_INC "ANN.h" PATH_SUFFIXES src include ANN)
-+  if(ANN_LIB AND ANN_INC)
-+    list(APPEND EXTERNAL_LIBRARIES ${ANN_LIB})
-+    list(APPEND EXTERNAL_INCLUDES ${ANN_INC})
-+    set_config_option(HAVE_ANN "Ann")
-+  else(ANN_LIB AND ANN_INC)
-+    message(STATUS "System ANN not found - using contrib/ANN instead")
-+    add_subdirectory(../contrib/ANN)
-+    include_directories(../contrib/ANN/include)
-+  endif(ANN_LIB AND ANN_INC)
-+endif(ENABLE_ANN)
-+
-+find_library(GMSH_LIB gmsh PATH_SUFFIXES lib)
-+find_path(GMSH_INC "Gmsh.h" PATH_SUFFIXES src include gmsh)
-+if(GMSH_LIB AND GMSH_INC)
-+  list(APPEND EXTERNAL_LIBRARIES ${GMSH_LIB})
-+  list(APPEND EXTERNAL_INCLUDES ${GMSH_INC})
-+  set_config_option(HAVE_GMSH "Gmsh")
-+else(GMSH_LIB AND GMSH_INC)
-+  message(STATUS "Gmsh.h not found")
-+endif(GMSH_LIB AND GMSH_INC)
-+
-+find_library(ANTTWEAKBAR_LIB AntTweakBar PATH_SUFFIXES lib)
-+find_path(ANTTWEAKBAR_INC "AntTweakBar.h" PATH_SUFFIXES src include AntTweakBar)
-+if(ANTTWEAKBAR_LIB AND ANTTWEAKBAR_INC)
-+  list(APPEND EXTERNAL_LIBRARIES ${ANTTWEAKBAR_LIB})
-+  list(APPEND EXTERNAL_INCLUDES ${ANTTWEAKBAR_INC})
-+  set_config_option(HAVE_ANTTWEAKBAR "AntTweakBar")
-+else(ANTTWEAKBAR_LIB AND ANTTWEAKBAR_INC)
-+  message(STATUS "ANTTWEAKBAR not found")
-+endif(ANTTWEAKBAR_LIB AND ANTTWEAKBAR_INC)
-+
-+if(ENABLE_FLTK)
-+  # first, try to use fltk-config for fltk >= 1.3 (FindFLTK is buggy
-+  # on Unix, where e.g. xft and xinerama options are not dealt with)
-+  find_program(FLTK_CONFIG_SCRIPT fltk-config)
-+  if(FLTK_CONFIG_SCRIPT)
-+    execute_process(COMMAND ${FLTK_CONFIG_SCRIPT} --api-version
-+                    OUTPUT_VARIABLE FLTK_VERSION)
-+    string(STRIP ${FLTK_VERSION} FLTK_VERSION)
-+    if(FLTK_VERSION GREATER 1.1)
-+      set_config_option(HAVE_FLTK "Fltk")
-+      message(STATUS "Using fltk-config script for Fltk " ${FLTK_VERSION})
-+      execute_process(COMMAND ${FLTK_CONFIG_SCRIPT} --use-gl --use-images --includedir
-+                      OUTPUT_VARIABLE FLTK_INCLUDE_DIR)
-+      string(STRIP ${FLTK_INCLUDE_DIR} FLTK_INCLUDE_DIR)
-+      list(APPEND EXTERNAL_INCLUDES ${FLTK_INCLUDE_DIR} ${FLTK_INCLUDE_DIR}/FL/images
-+           ${FLTK_INCLUDE_DIR}/jpeg ${FLTK_INCLUDE_DIR}/zlib ${FLTK_INCLUDE_DIR}/png)
-+      execute_process(COMMAND ${FLTK_CONFIG_SCRIPT} --use-gl --use-images --ldflags
-+                      OUTPUT_VARIABLE FLTK_LIBRARIES)
-+      string(STRIP ${FLTK_LIBRARIES} FLTK_LIBRARIES)
-+      string(REGEX MATCH "fltk[_ ]jpeg" FLTK_JPEG ${FLTK_LIBRARIES})
-+      string(REGEX MATCH "fltk[_ ]z" FLTK_Z ${FLTK_LIBRARIES})
-+      string(REGEX MATCH "fltk[_ ]png" FLTK_PNG ${FLTK_LIBRARIES})
-+    endif(FLTK_VERSION GREATER 1.1)
-+  endif(FLTK_CONFIG_SCRIPT)
-+  # then try the built-in FindFLTK module
-+  if(NOT HAVE_FLTK)
-+    set(FLTK_SKIP_FORMS TRUE)
-+    set(FLTK_SKIP_FLUID TRUE)
-+    find_package(FLTK)
-+    if(FLTK_FOUND)
-+      add_subdirectory(Fltk)
-+      set_config_option(HAVE_FLTK "Fltk")
-+      list(APPEND EXTERNAL_INCLUDES ${FLTK_INCLUDE_DIR})
-+      # find fltk jpeg
-+      find_library(FLTK_JPEG NAMES fltk_jpeg fltkjpeg)
-+      if(FLTK_JPEG)
-+        list(APPEND EXTERNAL_LIBRARIES ${FLTK_JPEG})
-+        foreach(DIR ${FLTK_INCLUDE_DIR})
-+          list(APPEND EXTERNAL_INCLUDES ${DIR}/FL/images ${DIR}/jpeg)
-+        endforeach(DIR)
-+      endif(FLTK_JPEG)
-+      # find fltk zlib
-+      find_library(FLTK_Z NAMES fltk_z fltkz)
-+      if(FLTK_Z)
-+        list(APPEND EXTERNAL_LIBRARIES ${FLTK_Z})
-+        foreach(DIR ${FLTK_INCLUDE_DIR})
-+          list(APPEND EXTERNAL_INCLUDES ${DIR}/FL/images ${DIR}/zlib)
-+        endforeach(DIR)
-+      endif(FLTK_Z)
-+      # find fltk png
-+      find_library(FLTK_PNG NAMES fltk_png fltkpng)
-+      if(FLTK_PNG)
-+        list(APPEND EXTERNAL_LIBRARIES ${FLTK_PNG})
-+        foreach(DIR ${FLTK_INCLUDE_DIR})
-+          list(APPEND EXTERNAL_INCLUDES ${DIR}/FL/images ${DIR}/png)
-+        endforeach(DIR)
-+      endif(FLTK_PNG)   
-+    endif(FLTK_FOUND)
-+  endif(NOT HAVE_FLTK)
-+  if(HAVE_FLTK)
-+    if(ENABLE_NATIVE_FILE_CHOOSER)
-+      if(NOT FLTK_VERSION OR FLTK_VERSION EQUAL 1.1)
-+        add_subdirectory(contrib/NativeFileChooser)
-+        include_directories(contrib/NativeFileChooser)
-+        add_definitions(-DFLTK1)
-+      endif(NOT FLTK_VERSION OR FLTK_VERSION EQUAL 1.1)
-+      set_config_option(HAVE_NATIVE_FILE_CHOOSER "NativeFileChooser")
-+    endif(ENABLE_NATIVE_FILE_CHOOSER)
-+    if(ENABLE_FL_TREE)
-+      if(NOT FLTK_VERSION OR FLTK_VERSION EQUAL 1.1)
-+        add_subdirectory(contrib/Fl_Tree)
-+        include_directories(contrib/Fl_Tree)
-+      endif(NOT FLTK_VERSION OR FLTK_VERSION EQUAL 1.1)
-+      set_config_option(HAVE_FL_TREE "FlTree")
-+    endif(ENABLE_FL_TREE)
-+  endif(HAVE_FLTK)
-+elseif(ENABLE_QT)
-+  find_package(Qt4)
-+  set(QT_USE_QTOPENGL TRUE)
-+  include(${QT_USE_FILE})
-+  if(QT_FOUND)
-+    add_subdirectory(Qt)
-+    set_config_option(HAVE_QT "Qt")
-+    list(APPEND EXTERNAL_INCLUDES ${QT_INCLUDE_DIR})
-+  endif(QT_FOUND)
-+endif(ENABLE_FLTK)
- 
- if(APPLE)
-   set(glut "-framework GLUT")
- else(APPLE)
--  set(glut "glut")
-+  list(APPEND EXTERNAL_LIBRARIES "glut")
- endif(APPLE)
- 
-+  if(ENABLE_MMG3D)
-+    find_library(MMG3D_LIB mmg3dlib4.0 PATH_SUFFIXES lib)
-+    find_path(MMG3D_INC "libmmg3d.h" PATH_SUFFIXES src include)
-+    if(MMG3D_LIB AND MMG3D_INC)
-+       list(APPEND EXTERNAL_LIBRARIES ${MMG3D_LIB})
-+       list(APPEND EXTERNAL_INCLUDES ${MMG3D_INC})
-+    else(MMG3D_LIB AND MMG3D_INC)
-+       message(STATUS "System MMG3D not found - using contrib/mmg3d instead")
-+       add_subdirectory(contrib/mmg3d)
-+       include_directories(contrib/mmg3d/build/sources)
-+    endif(MMG3D_LIB AND MMG3D_INC)
-+    set_config_option(HAVE_MMG3D "Mmg3d")
-+  endif(ENABLE_MMG3D)
-+
-+  if(ENABLE_TETGEN_NEW AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/contrib/TetgenNew/tetgen.h)
-+    add_subdirectory(contrib/TetgenNew)
-+    include_directories(contrib/TetgenNew)
-+    set_config_option(HAVE_TETGEN "Tetgen(New)")
-+    add_definitions(-DTETLIBRARY)
-+    message("WARNING: You are including an experimental version of Tetgen "
-+            "that is KNOWN TO BE BUGGY on 64 bits archs and on WIN32/MSVC.")
-+  elseif(ENABLE_TETGEN AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/contrib/Tetgen/tetgen.h)
-+    add_subdirectory(contrib/Tetgen)
-+    include_directories(contrib/Tetgen)
-+    set_config_option(HAVE_TETGEN "Tetgen")
-+    add_definitions(-DTETLIBRARY)
-+  elseif(ENABLE_TETGEN)
-+    find_library(TETGEN_LIB tet PATH_SUFFIXES lib)
-+    find_path(TETGEN_INC "tetgen.h" PATH_SUFFIXES src include tetgen)
-+    if(TETGEN_LIB AND TETGEN_INC)
-+      list(APPEND EXTERNAL_LIBRARIES ${TETGEN_LIB})
-+      list(APPEND EXTERNAL_INCLUDES ${TETGEN_INC})
-+      set_config_option(HAVE_TETGEN "Tetgen")
-+    endif(TETGEN_LIB AND TETGEN_INC)
-+  endif(ENABLE_TETGEN_NEW AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/contrib/TetgenNew/tetgen.h)
-+  if(HAVE_TETGEN)
-+    message("WARNING: By including Tetgen you have to comply with Tetgen's "
-+            "special licensing requirements stated in contrib/Tetgen/LICENSE.")
-+  endif(HAVE_TETGEN)
-+
-+if(ENABLE_MED OR ENABLE_CGNS)
-+  find_library(HDF5_LIB hdf5)
-+  if(HDF5_LIB)
-+    if(ENABLE_MED)
-+      find_library(MED_LIB med)
-+      if(MED_LIB)
-+        set_config_option(HAVE_MED "Med")
-+        list(APPEND EXTERNAL_LIBRARIES ${MED_LIB})
-+      endif(MED_LIB)
-+    endif(ENABLE_MED)    
-+    if(ENABLE_CGNS)
-+      find_library(CGNS_LIB cgns PATHS ENV CGNS_ROOT PATH_SUFFIXES lib)
-+      find_path(CGNS_INC "cgnslib.h" PATHS ENV CGNS_ROOT PATH_SUFFIXES include)
-+      if(CGNS_LIB)
-+        set_config_option(HAVE_LIBCGNS "Cgns")
-+        list(APPEND EXTERNAL_LIBRARIES ${CGNS_LIB})
-+        list(APPEND EXTERNAL_INCLUDES ${CGNS_INC})
-+      endif(CGNS_LIB)
-+    endif(ENABLE_CGNS)    
-+    if(MED_LIB OR CGNS_LIB)
-+      list(APPEND EXTERNAL_LIBRARIES ${HDF5_LIB})
-+      find_library(SZ_LIB NAMES szlib sz)
-+      if(SZ_LIB)
-+        list(APPEND EXTERNAL_LIBRARIES ${SZ_LIB})
-+      endif(SZ_LIB)
-+      if(NOT HAVE_LIBZ) # necessary for non-GUI builds
-+        find_package(ZLIB)
-+        if(ZLIB_FOUND)
-+          set_config_option(HAVE_LIBZ "Zlib")
-+          list(APPEND EXTERNAL_LIBRARIES ${ZLIB_LIBRARIES})
-+        endif(ZLIB_FOUND)
-+      endif(NOT HAVE_LIBZ)
-+    endif(MED_LIB OR CGNS_LIB)
-+  endif(HDF5_LIB)
-+endif(ENABLE_MED OR ENABLE_CGNS)
-+
-+if(ENABLE_MESH)
-+  set_config_option(HAVE_MESH "Mesh")
-+endif(ENABLE_MESH)
-+
-+if(ENABLE_POST)
-+  set_config_option(HAVE_POST "Post")
-+  if(ENABLE_PLUGINS)
-+    set_config_option(HAVE_PLUGINS "Plugins")
-+  endif(ENABLE_PLUGINS)
-+endif(ENABLE_POST)
-+
-+if(HAVE_FLTK OR HAVE_QT OR ENABLE_GRAPHICS)
-+  if(NOT HAVE_MESH OR NOT HAVE_POST OR NOT HAVE_PLUGINS)
-+    message(SEND_ERROR "Cannot compile GUI without Mesh, Post or Plugin modules")
-+  endif(NOT HAVE_MESH OR NOT HAVE_POST OR NOT HAVE_PLUGINS)
-+
-+  if(FLTK_JPEG)
-+    set_config_option(HAVE_LIBJPEG "Jpeg(Fltk)")
-+  else(FLTK_JPEG)
-+    find_package(JPEG)
-+    if(JPEG_FOUND)
-+      set_config_option(HAVE_LIBJPEG "Jpeg")
-+      list(APPEND EXTERNAL_LIBRARIES ${JPEG_LIBRARIES})
-+      list(APPEND EXTERNAL_INCLUDES ${JPEG_INCLUDE_DIR})
-+    endif(JPEG_FOUND)
-+  endif(FLTK_JPEG)
-+
-+  if(FLTK_Z)
-+    set_config_option(HAVE_LIBZ "Zlib(Fltk)")
-+  else(FLTK_Z)
-+    find_package(ZLIB)
-+    if(ZLIB_FOUND)
-+      set_config_option(HAVE_LIBZ "Zlib")
-+      list(APPEND EXTERNAL_LIBRARIES ${ZLIB_LIBRARIES})
-+      list(APPEND EXTERNAL_INCLUDES ${ZLIB_INCLUDE_DIR})
-+    endif(ZLIB_FOUND)
-+  endif(FLTK_Z)
-+
-+  if(HAVE_LIBZ)
-+    if(FLTK_PNG)
-+      set_config_option(HAVE_LIBPNG "Png(Fltk)")
-+    else(FLTK_PNG)
-+      find_package(PNG)
-+      if(PNG_FOUND)
-+        set_config_option(HAVE_LIBPNG "Png")
-+        list(APPEND EXTERNAL_LIBRARIES ${PNG_LIBRARIES})
-+        list(APPEND EXTERNAL_INCLUDES ${PNG_INCLUDE_DIR})
-+      endif(PNG_FOUND)
-+    endif(FLTK_PNG)
-+  endif(HAVE_LIBZ)
-+
-+  if(ENABLE_MPEG_ENCODE)
-+    add_subdirectory(contrib/mpeg_encode)
-+    include_directories(contrib/mpeg_encode/headers)
-+    set_config_option(HAVE_MPEG_ENCODE "Mpeg")
-+  endif(ENABLE_MPEG_ENCODE)
-+
-+  if(ENABLE_OSMESA)
-+    find_library(OSMESA_LIB OSMesa)
-+    if(OSMESA_LIB)
-+      set_config_option(HAVE_OSMESA "OSMesa")
-+      list(APPEND EXTERNAL_LIBRARIES ${OSMESA_LIB})
-+    endif(OSMESA_LIB)
-+  endif(ENABLE_OSMESA)
-+
-+  find_package(OpenGL REQUIRED)
-+  if(OPENGL_GLU_FOUND)
-+    set_config_option(HAVE_OPENGL "OpenGL")
-+  else(OPENGL_GLU_FOUND)
-+    message(SEND_ERROR "Could not find GLU: disabling OpenGL support")
-+  endif(OPENGL_GLU_FOUND)
-+endif(HAVE_FLTK OR HAVE_QT OR ENABLE_GRAPHICS)
-+
-+if(ENABLE_DINTEGRATION)
-+  include_directories(../contrib/DiscreteIntegration)
-+  set_config_option(HAVE_DINTEGRATION "DIntegration")
-+endif(ENABLE_DINTEGRATION)
-+
-+# process cmake environment variables so we can append them to the -I
-+# include commands. This is not recommended (we should only use the
-+# cache variables) but it is very convenient: otherwise we have to
-+# remember providing the -D... options to cmake for each new build.
-+set(ENV_CMAKE_PREFIX_PATH $ENV{CMAKE_PREFIX_PATH})
-+set(ENV_CMAKE_INCLUDE_PATH $ENV{CMAKE_INCLUDE_PATH})
-+if(UNIX)
-+  if(ENV_CMAKE_PREFIX_PATH)
-+    string(REPLACE ":" ";" ENV_CMAKE_PREFIX_PATH ${ENV_CMAKE_PREFIX_PATH})
-+  endif(ENV_CMAKE_PREFIX_PATH)
-+  if(ENV_CMAKE_INCLUDE_PATH)
-+    string(REPLACE ":" ";" ENV_CMAKE_INCLUDE_PATH ${ENV_CMAKE_INCLUDE_PATH})
-+  endif(ENV_CMAKE_INCLUDE_PATH)
-+endif(UNIX)
-+list(APPEND EXTERNAL_INCLUDES ${CMAKE_INCLUDE_PATH} ${ENV_CMAKE_INCLUDE_PATH})
-+list(APPEND EXTERNAL_INCLUDES ${CMAKE_PREFIX_PATH} ${ENV_CMAKE_PREFIX_PATH})
-+foreach(DIR ${CMAKE_PREFIX_PATH} ${ENV_CMAKE_PREFIX_PATH})
-+  list(APPEND EXTERNAL_INCLUDES ${DIR}/include)
-+endforeach(DIR)
-+
-+if(EXTERNAL_INCLUDES)
-+  list(REMOVE_DUPLICATES EXTERNAL_INCLUDES)
-+endif(EXTERNAL_INCLUDES)
-+
-+if(HAVE_FLTK)
-+  set(LINK_LIBRARIES ${FLTK_LIBRARIES} ${EXTERNAL_LIBRARIES} 
-+                     ${OPENGL_LIBRARIES} ${LAPACK_LIBRARIES})
-+elseif(HAVE_QT)
-+  set(LINK_LIBRARIES ${QT_LIBRARIES} ${EXTERNAL_LIBRARIES}
-+                     ${OPENGL_LIBRARIES} ${LAPACK_LIBRARIES})
-+elseif(HAVE_OPENGL)
-+  set(LINK_LIBRARIES ${EXTERNAL_LIBRARIES} ${OPENGL_LIBRARIES}
-+                     ${LAPACK_LIBRARIES})
-+else(HAVE_FLTK)
-+  set(LINK_LIBRARIES ${EXTERNAL_LIBRARIES} ${LAPACK_LIBRARIES})
-+endif(HAVE_FLTK)
-+
-+# set this for external codes that might include this CMakeList file
-+set(GMSH_EXTERNAL_INCLUDE_DIRS ${EXTERNAL_INCLUDES} CACHE 
-+    STRING "External include directories" FORCE)
-+set(GMSH_EXTERNAL_LIBRARIES ${EXTERNAL_LIBRARIES} CACHE 
-+    STRING "External libraries" FORCE)
-+
-+include_directories(${GMSH_EXTERNAL_INCLUDE_DIRS})
-+
- add_executable(mainAntTweakBar mainAntTweakBar.cpp)
--target_link_libraries(mainAntTweakBar shared AntTweakBar ${glut})
-+target_link_libraries(mainAntTweakBar ${LINK_LIBRARIES})
- 
- add_executable(mainCartesian mainCartesian.cpp)
--target_link_libraries(mainCartesian shared)
-+target_link_libraries(mainCartesian ${LINK_LIBRARIES})
- 
- add_executable(mainElasticity mainElasticity.cpp)
--target_link_libraries(mainElasticity shared)
-+target_link_libraries(mainElasticity ${LINK_LIBRARIES})
- 
- add_executable(mainGlut mainGlut.cpp)
--target_link_libraries(mainGlut lib ${GMSH_EXTERNAL_LIBRARIES} ${glut})
-+target_link_libraries(mainGlut ${glut} ${LINK_LIBRARIES})
- 
- add_executable(mainHomology mainHomology.cpp)
--target_link_libraries(mainHomology shared)
-+target_link_libraries(mainHomology ${LINK_LIBRARIES})
- 
- add_executable(mainLevelset mainLevelset.cpp)
--target_link_libraries(mainLevelset shared)
-+target_link_libraries(mainLevelset ${LINK_LIBRARIES})
- 
- add_executable(mainOcc mainOcc.cpp)
--target_link_libraries(mainOcc shared)
-+target_link_libraries(mainOcc ${LINK_LIBRARIES})
- 
- add_executable(mainPost mainPost.cpp)
--target_link_libraries(mainPost shared)
-+target_link_libraries(mainPost ${LINK_LIBRARIES})
- 
- add_executable(mainSimple mainSimple.cpp)
--target_link_libraries(mainSimple shared)
-+target_link_libraries(mainSimple ${LINK_LIBRARIES})
- 
---- a/utils/api_demos/mainAntTweakBar.cpp
-+++ b/utils/api_demos/mainAntTweakBar.cpp
+
+Index: gmsh-tetgen-2.6.2~svn13566/utils/api_demos/mainAntTweakBar.cpp
+===================================================================
+--- gmsh-tetgen-2.6.2~svn13566.orig/utils/api_demos/mainAntTweakBar.cpp	2012-10-19 15:26:39.000000000 +0200
++++ gmsh-tetgen-2.6.2~svn13566/utils/api_demos/mainAntTweakBar.cpp	2012-10-19 15:40:40.000000000 +0200
 @@ -14,6 +14,7 @@
  #include "GModel.h"
  #include "MElement.h"
@@ -724,8 +16,135 @@ Last-Update: 2012-03-11
  
  static drawContext *ctx = 0;
  static mousePosition clickPos, prevPos;
---- a/utils/api_demos/mainCartesian.cpp
-+++ b/utils/api_demos/mainCartesian.cpp
+Index: gmsh-tetgen-2.6.2~svn13566/utils/api_demos/mainOcc.cpp
+===================================================================
+--- gmsh-tetgen-2.6.2~svn13566.orig/utils/api_demos/mainOcc.cpp	2012-10-19 15:26:39.000000000 +0200
++++ gmsh-tetgen-2.6.2~svn13566/utils/api_demos/mainOcc.cpp	2012-10-19 15:40:40.000000000 +0200
+@@ -19,7 +19,7 @@
+ #include "MElement.h"
+ 
+ #if !defined(HAVE_NO_OCC_CONFIG_H)
+-#include "config.h"
++#include "oce-config.h"
+ #endif
+ #include <TopoDS_Shape.hxx>
+ #include <BRep_Tool.hxx>
+Index: gmsh-tetgen-2.6.2~svn13566/utils/api_demos/CMakeLists.txt
+===================================================================
+--- gmsh-tetgen-2.6.2~svn13566.orig/utils/api_demos/CMakeLists.txt	2012-10-19 15:26:39.000000000 +0200
++++ gmsh-tetgen-2.6.2~svn13566/utils/api_demos/CMakeLists.txt	2012-10-19 15:40:40.000000000 +0200
+@@ -11,46 +11,81 @@
+ 
+ project(api_demos CXX)
+ 
+-add_subdirectory(../.. "${CMAKE_CURRENT_BINARY_DIR}/gmsh")
++macro(set_config_option VARNAME STRING)
++  set(${VARNAME} TRUE)
++  list(APPEND CONFIG_OPTIONS ${STRING})
++  message(STATUS "Found " ${STRING})
++endmacro(set_config_option)
++
++SET( CMAKE_MODULE_PATH  ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules )
++
++FIND_PACKAGE(Gmsh REQUIRED)
++if ( GMSH_FOUND )
++  if ( GL2PS_LIBRARY )
++   if ( GL_LIBRARY )
++     SET(GMSH_EXTERNAL_LIBRARIES ${GMSH_LIBRARY} ${GL2PS_LIBRARY} ${GL_LIBRARY} ${GMSH_EXTERNAL_LIBRARIES})
++   else()
++     SET(GMSH_EXTERNAL_LIBRARIES ${GMSH_LIBRARY} ${GL2PS_LIBRARY} ${GMSH_EXTERNAL_LIBRARIES})
++   endif()
++ else()
++   SET(GMSH_EXTERNAL_LIBRARIES ${GMSH_LIBRARY} ${GMSH_EXTERNAL_LIBRARIES})
++ endif()
++ include_directories(${GMSH_INCLUDE_DIR})
++endif()
++
++FIND_PACKAGE(ANN REQUIRED)
++if ( ANN_FOUND )
++  INCLUDE_DIRECTORIES( ${ANN_INCLUDE_DIR} )
++  SET(GMSH_EXTERNAL_LIBRARIES ${ANN_LIBRARIES} ${GMSH_EXTERNAL_LIBRARIES})
++endif()
++
++FIND_PACKAGE(Anttweakbar REQUIRED)
++if ( ANTTWEAKBAR_FOUND )
++  INCLUDE_DIRECTORIES( ${ANTTWEAKBAR_INCLUDE_DIR} )
++  SET_CONFIG_OPTION(HAVE_ANTTWEAKBAR "AntTweakBar")
++endif()
+ 
+-include_directories(../../Common ../../Numeric ../../Geo ../../Mesh 
+-   ../../Solver ../../Post ../../Plugin ../../Graphics ../../contrib/ANN/include
+-   ../../contrib/DiscreteIntegration ${GMSH_EXTERNAL_INCLUDE_DIRS}
+-   ${CMAKE_CURRENT_BINARY_DIR}/gmsh/Common)
+-
+-if(APPLE)
+-  set(glut "-framework GLUT")
+-else(APPLE)
+-  set(glut "glut")
+-endif(APPLE)
+ 
+ add_executable(mainVertexArray mainVertexArray.cpp)
+-target_link_libraries(mainVertexArray shared)
++target_link_libraries(mainVertexArray ${GMSH_EXTERNAL_LIBRARIES})
+ 
+-add_executable(mainAntTweakBar mainAntTweakBar.cpp)
+-target_link_libraries(mainAntTweakBar shared AntTweakBar ${glut})
++FIND_PACKAGE(GLUT REQUIRED)
++if ( ANTTWEAKBAR_FOUND AND GLUT_FOUND)
++   INCLUDE_DIRECTORIES( ${ANTTWEAKBAR_INCLUDE_DIR} )
++   SET_CONFIG_OPTION(HAVE_ANTTWEAKBAR "AntTweakBar")
++
++   add_executable(mainAntTweakBar mainAntTweakBar.cpp)
++   target_link_libraries(mainAntTweakBar ${GMSH_EXTERNAL_LIBRARIES} ${ANTTWEAKBAR_LIBRARIES} ${GLUT_LIBRARY} -lX11)
++endif()
+ 
+ add_executable(mainCartesian mainCartesian.cpp)
+-target_link_libraries(mainCartesian shared)
++target_link_libraries(mainCartesian ${GMSH_EXTERNAL_LIBRARIES})
+ 
+ add_executable(mainElasticity mainElasticity.cpp)
+-target_link_libraries(mainElasticity shared)
++target_link_libraries(mainElasticity ${GMSH_EXTERNAL_LIBRARIES})
+ 
+-add_executable(mainGlut mainGlut.cpp)
+-target_link_libraries(mainGlut lib ${GMSH_EXTERNAL_LIBRARIES} ${glut})
++if ( GLUT_FOUND )
++   add_executable(mainGlut mainGlut.cpp)
++   target_link_libraries(mainGlut  ${glut} ${GMSH_EXTERNAL_LIBRARIES} ${GLUT_LIBRARY} ${GLU_LIBRARY})
++endif ( GLUT_FOUND )
+ 
+ add_executable(mainHomology mainHomology.cpp)
+-target_link_libraries(mainHomology shared)
++target_link_libraries(mainHomology ${GMSH_EXTERNAL_LIBRARIES})
+ 
+-add_executable(mainLevelset mainLevelset.cpp)
+-target_link_libraries(mainLevelset shared)
+-
+-add_executable(mainOcc mainOcc.cpp)
+-target_link_libraries(mainOcc shared)
++# No DILevelset.h file in gmsh source
++#add_executable(mainLevelset mainLevelset.cpp)
++#target_link_libraries(mainLevelset ${GMSH_EXTERNAL_LIBRARIES})
++
++find_package(OCC)
++if ( OCC_FOUND )
++   INCLUDE_DIRECTORIES( ${OCC_INCLUDE_DIR} )
++   add_executable(mainOcc mainOcc.cpp)
++   target_link_libraries(mainOcc ${GMSH_EXTERNAL_LIBRARIES} ${OCC_LIBRARIES})
++endif ( OCC_FOUND )
+ 
+ add_executable(mainPost mainPost.cpp)
+-target_link_libraries(mainPost shared)
++target_link_libraries(mainPost ${GMSH_EXTERNAL_LIBRARIES})
+ 
+ add_executable(mainSimple mainSimple.cpp)
+-target_link_libraries(mainSimple shared)
++target_link_libraries(mainSimple ${GMSH_EXTERNAL_LIBRARIES})
+ 
+Index: gmsh-tetgen-2.6.2~svn13566/utils/api_demos/mainCartesian.cpp
+===================================================================
+--- gmsh-tetgen-2.6.2~svn13566.orig/utils/api_demos/mainCartesian.cpp	2012-10-19 15:26:39.000000000 +0200
++++ gmsh-tetgen-2.6.2~svn13566/utils/api_demos/mainCartesian.cpp	2012-10-19 15:40:40.000000000 +0200
 @@ -12,7 +12,7 @@
  #include "GmshMessage.h"
  #include "cartesian.h"
@@ -833,8 +252,10 @@ Last-Update: 2012-03-11
  
    Msg::Info("Removing cells outside the structure");
    removeOutsideCells(&box);
---- a/utils/api_demos/mainElasticity.cpp
-+++ b/utils/api_demos/mainElasticity.cpp
+Index: gmsh-tetgen-2.6.2~svn13566/utils/api_demos/mainElasticity.cpp
+===================================================================
+--- gmsh-tetgen-2.6.2~svn13566.orig/utils/api_demos/mainElasticity.cpp	2012-10-19 15:26:39.000000000 +0200
++++ gmsh-tetgen-2.6.2~svn13566/utils/api_demos/mainElasticity.cpp	2012-10-19 15:40:40.000000000 +0200
 @@ -3,6 +3,7 @@
  #include "elasticitySolver.h"
  #include "PView.h"
@@ -843,3 +264,281 @@ Last-Update: 2012-03-11
  
  void Info (int i, char* c){
    printf("%d %s\n",i,c);
+Index: gmsh-tetgen-2.6.2~svn13566/utils/api_demos/mainHomology.cpp
+===================================================================
+--- gmsh-tetgen-2.6.2~svn13566.orig/utils/api_demos/mainHomology.cpp	2012-10-19 15:26:39.000000000 +0200
++++ gmsh-tetgen-2.6.2~svn13566/utils/api_demos/mainHomology.cpp	2012-10-19 15:40:40.000000000 +0200
+@@ -8,6 +8,7 @@
+ 
+ #include <stdio.h>
+ #include <sstream>
++#include "GmshConfig.h"
+ #include "Gmsh.h"
+ #include "GModel.h"
+ #include "MElement.h"
+@@ -28,9 +29,10 @@
+   // (relative to subdomain).
+   std::vector<int> domain;
+   std::vector<int> subdomain;
++  std::vector<int> im;
+ 
+   // initialize
+-  Homology* homology = new Homology(m, domain, subdomain);
++  Homology* homology = new Homology(m, domain, subdomain, im);
+ 
+   // find homology basis elements
+   homology->findHomologyBasis();
+Index: gmsh-tetgen-2.6.2~svn13566/utils/api_demos/cmake/modules/FindGmsh.cmake
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ gmsh-tetgen-2.6.2~svn13566/utils/api_demos/cmake/modules/FindGmsh.cmake	2012-10-19 15:40:40.000000000 +0200
+@@ -0,0 +1,119 @@
++# -*- mode: cmake -*-
++#
++#  This file is part of the Feel library
++#
++#  Author(s): Christophe Prud'homme <christophe.prudhomme@ujf-grenoble.fr>
++#       Date: 2010-07-28
++#
++#  Copyright (C) 2010 Université de Grenoble 1 (Joseph Fourier)
++#
++#  This library is free software; you can redistribute it and/or
++#  modify it under the terms of the GNU Lesser General Public
++#  License as published by the Free Software Foundation; either
++#  version 3.0 of the License, or (at your option) any later version.
++#
++#  This library is distributed in the hope that it will be useful,
++#  but WITHOUT ANY WARRANTY; without even the implied warranty of
++#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++#  Lesser General Public License for more details.
++#
++#  You should have received a copy of the GNU Lesser General Public
++#  License along with this library; if not, write to the Free Software
++#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
++#
++include (FindPackageHandleStandardArgs)
++
++find_program( GMSH_EXECUTABLE gmsh DOC "GMSH mesh generator" )
++
++
++option(FEELPP_ENABLE_GMSH_LIBRARY "Enables Gmsh library in Feel++" ON )
++if ( FEELPP_ENABLE_GMSH_LIBRARY )
++  INCLUDE(CheckIncludeFileCXX)
++  FIND_PATH(GMSH_INCLUDE_DIR
++    Gmsh.h Context.h GModel.h
++    PATHS ${CMAKE_SYSTEM_PREFIX_PATH} $ENV{GMSH_DIR}/include/gmsh
++    PATH_SUFFIXES include include/gmsh
++    DOC "Directory where GMSH header files are stored" )
++  include_directories(${GMSH_INCLUDE_DIR})
++  if ( GMSH_INCLUDE_DIR )
++	set( FEELPP_HAS_GMSH_H 1 )
++    FIND_PATH(GMSH_ADAPTMESH_INCLUDE_DIR
++      Openfile.h Field.h
++      PATHS ${GMSH_INCLUDE_DIR}
++      DOC "Directory where GMSH header files are stored" )
++      if ( GMSH_ADAPTMESH_INCLUDE_DIR )
++	set( FEELPP_HAS_GMSH_H 1 )
++      else ( GMSH_ADAPTMESH_INCLUDE_DIR )
++	message(STATUS "Gmsh headers: some headers needed for meshadaptation are missing")
++	message(STATUS "Check wiki pages for mesh adaptation to install properly gmsh")
++      endif( GMSH_ADAPTMESH_INCLUDE_DIR )
++  endif()
++  #include(CheckIncludeFiles)
++  #set(CMAKE_REQUIRED_INCLUDES "${GMSH_INCLUDE_DIR};${CMAKE_REQUIRED_INCLUDES}")
++  #check_include_file(Gmsh.h FEELPP_HAS_GMSH_GMSH_H )
++  ##check_include_file(Context.h FEELPP_HAS_GMSH_CONTEXT_H )
++  #check_include_file(GModel.h FEELPP_HAS_GMSH_GMODEL_H )
++  #if ( FEELPP_HAS_GMSH_GMODEL_H AND FEELPP_HAS_GMSH_CONTEXT_H and FEELPP_HAS_GMSH_GMSH_H )
++  #  set( FEELPP_HAS_GMSH_H 1 )
++  #endif()
++  #message(STATUS "Gmsh headers : ${FEELPP_HAS_GMSH_H}, ${CMAKE_REQUIRED_INCLUDES}" )
++
++  FIND_LIBRARY(GMSH_LIBRARY NAMES Gmsh gmsh-2.5.1 gmsh1 gmsh
++    PATH
++    ${CMAKE_SYSTEM_PREFIX_PATH}
++    $ENV{GMSH_DIR}
++    PATH_SUFFIXES
++    lib  )
++  if( NOT GMSH_LIBRARY )
++    FIND_PATH(GMSH_LIBRARY_PATH
++      libGmsh.so
++      PATHS ${CMAKE_SYSTEM_PREFIX_PATH} $ENV{GMSH_DIR}/
++      PATH_SUFFIXES lib )
++    set(GMSH_LIBRARY "${GMSH_LIBRARY_PATH}/libGmsh.so" )
++  endif()
++
++  FIND_LIBRARY(GL2PS_LIBRARY NAMES gl2ps
++    PATH
++    ${CMAKE_SYSTEM_PREFIX_PATH}
++    $ENV{GMSH_DIR}/lib
++    PATH_SUFFIXES
++    lib  )
++  FIND_LIBRARY(GL_LIBRARY NAMES GL
++    PATH
++    ${CMAKE_SYSTEM_PREFIX_PATH}
++    $ENV{GMSH_DIR}/lib
++    PATH_SUFFIXES
++    lib  )
++
++  FIND_PACKAGE_HANDLE_STANDARD_ARGS (GMSH DEFAULT_MSG
++    GMSH_INCLUDE_DIR GMSH_LIBRARY GMSH_EXECUTABLE
++    )
++
++  if ( GMSH_FOUND )
++    set(FEELPP_HAS_GMSH_LIBRARY 1)
++    MESSAGE( STATUS "GMSH found: header(${GMSH_INCLUDE_DIR}) lib(${GMSH_LIBRARY}) executable(${GMSH_EXECUTABLE})" )
++    MESSAGE( STATUS "GL2PS found: lib(${GL2PS_LIBRARY})" )
++    MESSAGE( STATUS "GL found: lib(${GL_LIBRARY})" )
++  endif()
++
++  mark_as_advanced( GMSH_INCLUDE_DIR )
++  mark_as_advanced( GMSH_LIBRARY )
++  mark_as_advanced( GL2PS_LIBRARY )
++  mark_as_advanced( GL_LIBRARY )
++  mark_as_advanced( GMSH_EXECUTABLE )
++
++else(FEELPP_ENABLE_GMSH_LIBRARY)
++
++  FIND_PACKAGE_HANDLE_STANDARD_ARGS (GMSH DEFAULT_MSG GMSH_EXECUTABLE )
++
++  if ( GMSH_FOUND )
++    MESSAGE( STATUS "GMSH found: executable(${GMSH_EXECUTABLE})" )
++  endif()
++  mark_as_advanced( GMSH_EXECUTABLE )
++
++endif(FEELPP_ENABLE_GMSH_LIBRARY)
++
++
++
++
++
+Index: gmsh-tetgen-2.6.2~svn13566/utils/api_demos/cmake/modules/FindAnttweakbar.cmake
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ gmsh-tetgen-2.6.2~svn13566/utils/api_demos/cmake/modules/FindAnttweakbar.cmake	2012-10-19 15:40:40.000000000 +0200
+@@ -0,0 +1,12 @@
++FIND_LIBRARY(ANTTWEAKBAR_LIB AntTweakBar PATHS /usr/lib /opt/local/lib  $ENV{ANTTWEAKBAR_DIR}/lib)
++SET(ANTTWEAKBAR_LIBRARIES ${ANTTWEAKBAR_LIB} )
++
++find_path(ANTTWEAKBAR_INCLUDE_DIR 
++  AntTweakBar.h
++  PATH_SUFFIXES src include AntTweakBar
++  DOC "Directory where ANTTWEAKBAR header files are stored" )
++  
++
++FIND_PACKAGE_HANDLE_STANDARD_ARGS(ANTTWEAKBAR "Could not find ANTTWEAKBAR " ANTTWEAKBAR_INCLUDE_DIR ANTTWEAKBAR_LIB)
++# show the BERKELEY_DB_INCLUDE_DIR and BERKELEY_DB_LIBRARIES variables only in the advanced view
++MARK_AS_ADVANCED(ANTTWEAKBAR_INCLUDE_DIR ANTTWEAKBAR_LIBRARIES )
+Index: gmsh-tetgen-2.6.2~svn13566/utils/api_demos/cmake/modules/FindOCC.cmake
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ gmsh-tetgen-2.6.2~svn13566/utils/api_demos/cmake/modules/FindOCC.cmake	2012-10-19 15:40:40.000000000 +0200
+@@ -0,0 +1,34 @@
++set(OCC_LIBS_REQUIRED
++    # subset of DataExchange
++    TKSTEP TKSTEP209 TKSTEPAttr TKSTEPBase TKIGES TKXSBase
++    # ModelingAlgorithms
++    TKOffset TKFeat TKFillet TKBool TKShHealing TKMesh TKHLR TKBO TKPrim
++    TKTopAlgo TKGeomAlgo
++    # ModelingData
++    TKBRep TKGeomBase TKG3d TKG2d
++    # FoundationClasses
++    TKAdvTools TKMath TKernel)
++    
++list(LENGTH OCC_LIBS_REQUIRED NUM_OCC_LIBS_REQUIRED)
++set(OCC_LIBS)
++foreach(OCC ${OCC_LIBS_REQUIRED})
++  find_library(OCC_LIB ${OCC} HINTS ENV CASROOT PATH_SUFFIXES lib 
++               ${OCC_SYS_NAME}/lib ${OCC_SYS_NAME}/vc8/lib)
++  if(OCC_LIB)
++    list(APPEND OCC_LIBS ${OCC_LIB})
++  else(OCC_LIB)
++    message(STATUS "OCC lib " ${OCC} " not Found")
++  endif(OCC_LIB)
++  unset(OCC_LIB CACHE)
++endforeach(OCC)
++SET(OCC_LIBRARIES ${OCC_LIBS} )
++
++find_path(OCC_INCLUDE_DIR "BRep_Tool.hxx" 
++  PATHS $ENV{CASROOT} 
++  PATH_SUFFIXES inc include include/oce opencascade
++  DOC "Directory where OCC headers files are stored" )
++ 
++
++FIND_PACKAGE_HANDLE_STANDARD_ARGS(OCC "Could not find OCC " OCC_INCLUDE_DIR OCC_LIBRARIES)
++# show the BERKELEY_DB_INCLUDE_DIR and BERKELEY_DB_LIBRARIES variables only in the advanced view
++MARK_AS_ADVANCED(OCC_INCLUDE_DIR OCC_LIBRARIES )
+Index: gmsh-tetgen-2.6.2~svn13566/utils/api_demos/cmake/modules/FindGLUT.cmake
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ gmsh-tetgen-2.6.2~svn13566/utils/api_demos/cmake/modules/FindGLUT.cmake	2012-10-19 15:40:40.000000000 +0200
+@@ -0,0 +1,20 @@
++include (FindPackageHandleStandardArgs)
++
++FIND_LIBRARY(GLUT_LIB NAMES glut
++    PATH
++    ${CMAKE_SYSTEM_PREFIX_PATH}
++    PATH_SUFFIXES
++    lib  )
++SET(GLUT_LIBRARY ${GLUT_LIB} )
++    
++FIND_LIBRARY(GLU_LIB NAMES GLU
++    PATH
++    ${CMAKE_SYSTEM_PREFIX_PATH}
++    PATH_SUFFIXES
++    lib  )
++SET(GLU_LIBRARY ${GLU_LIB} )
++
++FIND_PACKAGE_HANDLE_STANDARD_ARGS(GLUT "Could not find GLUT " GLUT_LIBRARY GLU_LIBRARY)
++# show the BERKELEY_DB_INCLUDE_DIR and BERKELEY_DB_LIBRARIES variables only in the advanced view
++MARK_AS_ADVANCED(GLUT_LIBRARY )
++MARK_AS_ADVANCED(GLU_LIBRARY )
+Index: gmsh-tetgen-2.6.2~svn13566/utils/api_demos/cmake/modules/FindANN.cmake
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ gmsh-tetgen-2.6.2~svn13566/utils/api_demos/cmake/modules/FindANN.cmake	2012-10-19 15:40:40.000000000 +0200
+@@ -0,0 +1,44 @@
++# -*- mode: cmake -*-
++#
++#  This file is part of the Feel++ library
++#
++#  Author(s): Christophe Prud'homme <christophe.prudhomme@ujf-grenoble.fr>
++#       Date: 2010-02-10
++#
++#  Copyright (C) 2010 Université Joseph Fourier
++#
++#  This library is free software; you can redistribute it and/or
++#  modify it under the terms of the GNU Lesser General Public
++#  License as published by the Free Software Foundation; either
++#  version 3.0 of the License, or (at your option) any later version.
++#
++#  This library is distributed in the hope that it will be useful,
++#  but WITHOUT ANY WARRANTY; without even the implied warranty of
++#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++#  Lesser General Public License for more details.
++#
++#  You should have received a copy of the GNU Lesser General Public
++#  License along with this library; if not, write to the Free Software
++#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
++#
++# this files defines
++#  - ANN_INCLUDE_DIR
++#  - ANN_LIBRARIES
++#  - ANN_FOUND
++
++INCLUDE(CheckIncludeFileCXX)
++# CHECK_INCLUDE_FILE_CXX(ANN/ANN.h FEELPP_HAS_ANN_H)
++
++
++FIND_LIBRARY( ANN_LIB ann ANN PATHS /usr/lib /opt/local/lib  $ENV{ANN_DIR}/lib)
++SET(ANN_LIBRARIES ${ANN_LIB} )
++
++FIND_PATH(ANN_INCLUDE_DIR
++  ANN.h
++  PATHS /usr/include/ /usr/include/ANN /opt/local/include/ANN /usr/local/include/ANN  $ENV{ANN_DIR}/include/ANN
++  DOC "Directory where ANN header files are stored" )
++
++include(FindPackageHandleStandardArgs)
++find_package_handle_standard_args(ANN "Could not find ANN " ANN_INCLUDE_DIR ANN_LIBRARIES)
++# show the BERKELEY_DB_INCLUDE_DIR and BERKELEY_DB_LIBRARIES variables only in the advanced view
++MARK_AS_ADVANCED(ANN_INCLUDE_DIR ANN_LIBRARIES )

@@ -1,9 +1,3 @@
-Description: Apply anizotropic mesh technique according to Alauzet.
-Author: Christophe Trophime <christophe.trophime@lncmi.cnrs.fr>
-Reviewed-by: Anton Gladky <gladky.anton@gmail.com>
-Last-Update: 2012-06-20
-
-
 --- a/Mesh/Field.cpp
 +++ b/Mesh/Field.cpp
 @@ -479,6 +479,55 @@
@@ -66,11 +60,11 @@ Last-Update: 2012-06-20
    }
    virtual void operator() (double x, double y, double z, SMetric3 &metr, GEntity *ge=0)
    {
-+    std::cout << "MinAnisoField idlist=" << idlist.size() << "\n";
++    //std::cout << "MinAnisoField idlist=" << idlist.size() << "\n";
      SMetric3 v (1./MAX_LC);
      for(std::list<int>::iterator it = idlist.begin(); it != idlist.end(); it++) {
        Field *f = (GModel::current()->getFields()->get(*it));
-+      std::cout << "Field[" << *it << "]\n";
++      //std::cout << "Field[" << *it << "]\n";
        SMetric3 ff;
        if(f && *it != id) {
  	if (f->isotropic()){

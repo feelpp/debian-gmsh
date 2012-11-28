@@ -1,6 +1,6 @@
 Description: delete gl2ps and use packaged version.
 Author: Anton Gladky <gladky.anton@gmail.com>, Julian Taylor <jtaylor.debian@googlemail.com>
-Last-Update: 2011-12-09
+Last-Update: 2012-11-28
 
 --- a/Graphics/CMakeLists.txt
 +++ b/Graphics/CMakeLists.txt
@@ -14,7 +14,7 @@ Last-Update: 2011-12-09
    gl2png.cpp
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -1068,7 +1068,7 @@
+@@ -1085,7 +1085,7 @@
    add_executable(gmsh_dynamic EXCLUDE_FROM_ALL Common/Main.cpp)
    target_link_libraries(gmsh_dynamic shared)
  endif(HAVE_FLTK)

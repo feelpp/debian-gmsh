@@ -1,10 +1,10 @@
 Description: skips LICENSE.txt during installation. All information is in debian/copyright.
 Author: Anton Gladky <gladky.anton@gmail.com>
-Last-Update: 2011-12-09
+Last-Update: 2012-11-28
 
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -1110,7 +1110,7 @@
+@@ -1128,7 +1128,7 @@
  endif(UNIX)
  
  set(WELCOME_FILE ${CMAKE_CURRENT_SOURCE_DIR}/doc/WELCOME.txt)
@@ -13,7 +13,7 @@ Last-Update: 2011-12-09
  set(CREDITS_FILE ${CMAKE_CURRENT_SOURCE_DIR}/doc/CREDITS.txt)
  file(GLOB TUTORIAL_FILES ${CMAKE_CURRENT_SOURCE_DIR}/tutorial/?*.*)
  file(GLOB DEMO_FILES ${CMAKE_CURRENT_SOURCE_DIR}/demos/?*.*)
-@@ -1205,7 +1205,7 @@
+@@ -1228,7 +1228,7 @@
  if(MAKEINFO AND TEXI2PDF)
    add_custom_target(doc COMMAND ${CMAKE_COMMAND} -E tar zcf 
                      ${CMAKE_CURRENT_BINARY_DIR}/gmsh-${GMSH_VERSION}-doc.tgz
