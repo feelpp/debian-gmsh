@@ -5,4 +5,3 @@ delete_gl2ps_from_source.patch
 switch_from_opencascade_to_oce.patch
 fix_FTBFS_linking.patch
 alauzet.patch
-api-demos.patch
