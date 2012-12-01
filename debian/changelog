@@ -1,3 +1,12 @@
+gmsh (2.6.2~beta1~svn13992~dfsg-1) experimental; urgency=low
+
+  * [87ea161] Minor fixes in README.Debian. (Closes: #691896)
+  * [af0cbc6] Replace python git_orig script by bash-one.
+  * [e1584a2] Imported Upstream version 2.6.2~beta1~svn13992~dfsg
+  * [d04e4d6] Update/Refresh patches.
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Sat, 01 Dec 2012 09:40:20 +0100
+
 gmsh (2.6.1.dfsg-4) unstable; urgency=low
 
   [ Andreas Tille ]
