@@ -214,7 +214,7 @@
    map_type_name["Laplacian"] = new FieldFactoryT<LaplacianField>();
 --- a/Geo/STensor3.h
 +++ b/Geo/STensor3.h
-@@ -171,6 +171,8 @@
+@@ -172,6 +172,8 @@
  // compute the largest inscribed ellipsoid...
  SMetric3 intersection (const SMetric3 &m1,
                         const SMetric3 &m2);
@@ -225,7 +225,7 @@
                          const double t);
 --- a/Geo/STensor3.cpp
 +++ b/Geo/STensor3.cpp
-@@ -39,6 +39,27 @@
+@@ -40,6 +40,27 @@
    return iv;
  }
  
