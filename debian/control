@@ -21,7 +21,6 @@ Build-Depends: debhelper (>= 9), cmake, gfortran, libgl1-mesa-dev,
  libslepc3.2-dev [!kfreebsd-amd64 !kfreebsd-i386 !armel !armhf !s390x],
  javahelper, default-jdk
 Standards-Version: 3.9.4
-DM-Upload-Allowed: yes
 X-Python-Version: current
 Vcs-Git: git://git.debian.org/git/debian-science/packages/gmsh.git
 Vcs-Browser: http://git.debian.org/?p=debian-science/packages/gmsh.git
