@@ -42,8 +42,9 @@ int main(int argc, char** argv){
   writer.setDomain(goe.getAll());
 
   // Plot Basis //
-  TriNodeBasis b(atoi(argv[2]));
-  cout << "Size: " << b.getSize() << endl;
+  TriEdgeBasis b(atoi(argv[2]));
+  cout << "Size: " << b.getNFunction() << endl;
+  cout << b.toString() << endl;
 
   PlotBasis plot(b, goe, writer);
   plot.plot("basis");

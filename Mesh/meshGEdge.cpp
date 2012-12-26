@@ -256,7 +256,9 @@ static void copyMesh(GEdge *from, GEdge *to, int direction)
     double u; v->getParameter(0, u);
     double newu = (direction > 0) ? u : (u_max - u + u_min);
     GPoint gp = to->point(newu);
-    to->mesh_vertices.push_back(new MEdgeVertex(gp.x(), gp.y(), gp.z(), to, newu));
+    MEdgeVertex *vv = new MEdgeVertex(gp.x(), gp.y(), gp.z(), to, newu);
+    to->mesh_vertices.push_back(vv);
+    to->correspondingVertices[vv] = v;
   }
   for(unsigned int i = 0; i < to->mesh_vertices.size() + 1; i++){
     MVertex *v0 = (i == 0) ?
@@ -272,6 +274,7 @@ void deMeshGEdge::operator() (GEdge *ge)
   if(ge->geomType() == GEntity::DiscreteCurve) return;
   ge->deleteMesh();
   ge->meshStatistics.status = GEdge::PENDING;
+  ge->correspondingVertices.clear();
 }
 
 /*
@@ -369,9 +372,10 @@ void meshGEdge::operator() (GEdge *ge)
     N = ge->meshAttributes.nbPointsTransfinite;
   }
   else{
-    if (CTX::instance()->mesh.algo2d == ALGO_2D_BAMG || blf)
+    if (CTX::instance()->mesh.algo2d == ALGO_2D_BAMG || CTX::instance()->mesh.algo2d == ALGO_2D_PACK_PRLGRMS || blf){
       a = Integration(ge, t_begin, t_end, F_Lc_aniso, Points,
                       CTX::instance()->mesh.lcIntegrationPrecision);
+    }
     else{
       a = Integration(ge, t_begin, t_end, F_Lc, Points,
                       CTX::instance()->mesh.lcIntegrationPrecision);

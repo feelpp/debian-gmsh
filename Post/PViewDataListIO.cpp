@@ -525,8 +525,8 @@ static void createElements(std::vector<double> &list, int nbelm, int nbnod,
   }
 }
 
-bool PViewDataList::writeMSH(const std::string &fileName, double version, bool binary, bool savemesh,
-                             bool multipleView)
+bool PViewDataList::writeMSH(const std::string &fileName, double version, bool binary,
+                             bool savemesh, bool multipleView)
 {
   if(_adaptive){
     Msg::Warning("Writing adapted dataset (will only export current time step)");
@@ -581,7 +581,8 @@ bool PViewDataList::writeMSH(const std::string &fileName, double version, bool b
   fprintf(fp, "%d\n", (int)elements.size());
   for(unsigned int i = 0; i < elements.size(); i++){
     if(version > 2.2)
-      Msg::Warning("PViewDataList: Unable to writeMSH in version '%d'. Version 2.2 selected.", version);
+      Msg::Warning("Unable to write file in version '%g': using version 2.2",
+                   version);
     elements[i]->writeMSH2(fp, 2.2, false, i + 1);
   }
   fprintf(fp, "$EndElements\n");
@@ -640,4 +641,27 @@ bool PViewDataList::writeMSH(const std::string &fileName, double version, bool b
 
   fclose(fp);
   return true;
+}
+
+void PViewDataList::importLists(int N[24], std::vector<double> *V[24])
+{
+  for(int i = 0; i < 24; i++){
+    std::vector<double> *list = 0;
+    int *nbe = 0, nbc, nbn;
+    _getRawData(i, &list, &nbe, &nbc, &nbn);
+    *nbe = N[i];
+    *list = *V[i]; // deep copy
+  }
+  finalize();
+}
+
+void PViewDataList::getListPointers(int N[24], std::vector<double> *V[24])
+{
+  for(int i = 0; i < 24; i++){
+    std::vector<double> *list = 0;
+    int *nbe = 0, nbc, nbn;
+    _getRawData(i, &list, &nbe, &nbc, &nbn);
+    N[i] = *nbe;
+    V[i] = list; // copy pointer only
+  }
 }

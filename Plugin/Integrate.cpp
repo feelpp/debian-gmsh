@@ -9,7 +9,8 @@
 
 StringXNumber IntegrateOptions_Number[] = {
   {GMSH_FULLRC, "View", NULL, -1.},
-  {GMSH_FULLRC, "OverTime", NULL, -1.}
+  {GMSH_FULLRC, "OverTime", NULL, -1.},
+  {GMSH_FULLRC, "Dimension", NULL, -1.}
 };
 
 extern "C"
@@ -22,12 +23,13 @@ extern "C"
 
 std::string GMSH_IntegratePlugin::getHelp() const
 {
-  return "Plugin(Integrate) integrates scalar fields over "
-    "all the elements in the view `View', as well "
-    "as the circulation/flux of vector fields over "
-    "line/surface elements.\n\n"
+  return "Plugin(Integrate) integrates a scalar field over "
+    "all the elements of the view `View' (if `Dimension' < 0), "
+    "or over all elements of the prescribed dimension "
+    "(if `Dimension' > 0). If the field is a vector field,"
+    "the circulation/flux of the field over "
+    "line/surface elements is calculated.\n\n"
     "If `View' < 0, the plugin is run on the current view.\n\n"
-    "Plugin(Integrate) creates one new view."
     "If `OverTime' = 1 , the plugin integrates the scalar view "
     "over time instead of over space.\n\n"
     "Plugin(Integrate) creates one new view.";
@@ -47,6 +49,7 @@ PView *GMSH_IntegratePlugin::execute(PView * v)
 {
   int iView = (int)IntegrateOptions_Number[0].def;
   int overTime = (int)IntegrateOptions_Number[1].def;
+  int dimension = (int)IntegrateOptions_Number[2].def;
 
   PView *v1 = getView(iView, v);
   if(!v1) return v;
@@ -75,6 +78,7 @@ PView *GMSH_IntegratePlugin::execute(PView * v)
 	  bool flux = (numComp == 3 && (numEdges == 3 || numEdges == 4));
 	  int numNodes = data1->getNumNodes(step, ent, ele);
 	  int dim = data1->getDimension(step, ent, ele);
+          if((dimension>0) && (dim!=dimension)) continue;
 	  double x[8], y[8], z[8], val[8 * 3];
 	  for(int nod = 0; nod < numNodes; nod++){
 	    data1->getNode(step, ent, ele, nod, x[nod], y[nod], z[nod]);
@@ -124,6 +128,9 @@ PView *GMSH_IntegratePlugin::execute(PView * v)
     for(int ent = 0; ent < data1->getNumEntities(timeBeg); ent++){
       for(int ele = 0; ele < data1->getNumElements(timeBeg, ent); ele++){
 	if(data1->skipElement(timeBeg, ent, ele)) continue;
+	int dim = data1->getDimension(timeBeg, ent, ele);
+	if((dimension>0) && (dim!=dimension)) continue;
+
 	int numNodes = data1->getNumNodes(timeBeg, ent, ele);
 	int type = data1->getType(timeBeg, ent, ele);
 	int numComp = data1->getNumComponents(timeBeg, ent, ele);

@@ -825,12 +825,12 @@ bool PViewDataList::combineTime(nameData &nd)
 }
 
 int PViewDataList::_getRawData(int idxtype, std::vector<double> **l, int **ne,
-                                int *nc, int *nn)
+                               int *nc, int *nn)
 {
   int type = 0;
   // No constant nn for polygons!
   if(idxtype > 23 && idxtype < 30)
-    Msg::Warning("No constant number of nodes for polygons and polyhedra.");
+    Msg::Warning("No constant number of nodes for polygons and polyhedra");
   switch(idxtype){
   case 0 : *l = &SP; *ne = &NbSP; *nc = 1; *nn = 1; type = TYPE_PNT; break;
   case 1 : *l = &VP; *ne = &NbVP; *nc = 3; *nn = 1; type = TYPE_PNT; break;
@@ -883,11 +883,12 @@ void PViewDataList::setOrder2(int type)
   case TYPE_TET: typeMSH = MSH_TET_10; break;
   case TYPE_HEX: typeMSH = MSH_HEX_27; break;
   case TYPE_PRI: typeMSH = MSH_PRI_18; break;
-//  case TYPE_PYR: typeMSH = MSH_PYR_14; break;
+  // case TYPE_PYR: typeMSH = MSH_PYR_14; break;
   }
   const polynomialBasis *fs = (polynomialBasis*)BasisFactory::create(typeMSH);
   if(!fs){
-    Msg::Error("Could not find polynomial function space for element type %d", typeMSH);
+    Msg::Error("Could not find polynomial function space for element type %d",
+               typeMSH);
     return;
   }
   setInterpolationMatrices(type, fs->coefficients, fs->monomials,
@@ -959,3 +960,4 @@ std::vector<double> *PViewDataList::incrementList(int numComp, int type, int num
   }
   return 0;
 }
+

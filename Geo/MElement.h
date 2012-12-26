@@ -182,7 +182,7 @@ class MElement
   virtual double rhoShapeMeasure();
   virtual double gammaShapeMeasure(){ return 0.; }
   virtual double etaShapeMeasure(){ return 0.; }
-  virtual double distoShapeMeasure(){ return 1.0; }
+  virtual double distoShapeMeasure(){ double jmin,jmax; scaledJacRange(jmin,jmax); return jmin; }
   virtual double angleShapeMeasure() { return 1.0; }
   virtual void scaledJacRange(double &jmin, double &jmax);
 
@@ -223,7 +223,7 @@ class MElement
   virtual const nodalBasis* getFunctionSpace(int order=-1) const { return 0; }
 
   // get the function space for the jacobian of the element
-  virtual const JacobianBasis* getJacobianFuncSpace(int o=-1) const { return 0; }
+  virtual const JacobianBasis* getJacobianFuncSpace(int order=-1) const { return 0; }
 
   // return parametric coordinates (u,v,w) of a vertex
   virtual void getNode(int num, double &u, double &v, double &w);
@@ -264,6 +264,8 @@ class MElement
   {
     double jac[3][3]; return getJacobian(u, v, w, jac);
   }
+  void getSignedJacobian(fullVector<double> &jacobian, int o = -1);
+  void getNodesCoord(fullMatrix<double> &nodesXYZ);
   virtual int getNumShapeFunctions(){ return getNumVertices(); }
   virtual int getNumPrimaryShapeFunctions(){ return getNumPrimaryVertices(); }
   virtual MVertex *getShapeFunctionNode(int i){ return getVertex(i); }

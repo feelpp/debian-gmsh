@@ -13,9 +13,12 @@
 #include "meshGFaceDelaunayInsertion.h"
 #include "STensor3.h"
 
+
+
 class GFace;
 class GVertex;
 class MVertex;
+
 
 class edge_angle {
  public :
@@ -59,7 +62,7 @@ void buildEdgeToElements(std::vector<MElement*> &tris, e2t_cont &adj);
 void laplaceSmoothing(GFace *gf, int niter=1, bool infinity_norm = false);
 
 void _relocateVertex(GFace *gf, MVertex *ver,
-		     const std::vector<MElement*> &lt);
+                     const std::vector<MElement*> &lt);
 
 /*
 void edgeSwappingLawson(GFace *gf);
@@ -70,37 +73,19 @@ enum splitCriterion {SPCR_CLOSE, SPCR_QUAL, SPCR_ALLWAYS};
 
 int edgeSwapPass(GFace *gf, 
                  std::set<MTri3*, compareTri3Ptr> &allTris, 
-                 const swapCriterion &cr,
-                 const std::vector<double> &Us, 
-                 const std::vector<double> &Vs,
-                 const std::vector<double> &vSizes, 
-                 const std::vector<double> &vSizesBGM);
-/*int edgeSplitPass(double maxLC, GFace *gf, 
-                  std::set<MTri3*, compareTri3Ptr> &allTris,
-                  const splitCriterion &cr,   
-                  std::vector<double> &Us,
-                  std::vector<double> &Vs,
-                  std::vector<double> &vSizes ,
-                  std::vector<double> &vSizesBGM);
-int edgeCollapsePass(double minLC, GFace *gf, 
-                     std::set<MTri3*, compareTri3Ptr> &allTris,
-                     std::vector<double> &Us,
-                     std::vector<double> &Vs,
-                     std::vector<double> &vSizes ,
-                     std::vector<double> &vSizesBGM);*/
+                 const swapCriterion &cr, bidimMeshData &DATA);
 void removeFourTrianglesNodes(GFace *gf, bool replace_by_quads);
 void buildMeshGenerationDataStructures(GFace *gf, 
                                        std::set<MTri3*, compareTri3Ptr> &AllTris,
-                                       std::vector<double> &vSizes,
-                                       std::vector<double> &vSizesBGM,
-                                       std::vector<SMetric3> &vMetricsBGM,
-                                       std::vector<double> &Us,
-                                       std::vector<double> &Vs);
-void transferDataStructure(GFace *gf, std::set<MTri3*, compareTri3Ptr> &AllTris,
-                           std::vector<double> &Us, std::vector<double> &Vs);
+				       bidimMeshData & data);
+void transferDataStructure(GFace *gf, std::set<MTri3*, compareTri3Ptr> &AllTris,bidimMeshData &DATA);
 void recombineIntoQuads(GFace *gf, 
-			bool topologicalOpti   = true, 
-			bool nodeRepositioning = true);
+                        bool topologicalOpti   = true, 
+                        bool nodeRepositioning = true);
+
+//used for meshGFaceRecombine development
+int recombineWithBlossom(GFace *gf, double dx, double dy,
+                         int *&, std::map<MElement*,int> &);
 void quadsToTriangles(GFace *gf, double minqual);
 
 struct swapquad{
@@ -136,19 +121,61 @@ struct swapquad{
 
 class Temporary{
   private :
-	static double w1,w2,w3;
-	static std::vector<SVector3> gradients;
-	void read_data(std::string);
-	static SVector3 compute_normal(MElement*);
-	static SVector3 compute_other_vector(MElement*);
-	static SVector3 compute_gradient(MElement*);
+        static double w1,w2,w3;
+        static std::vector<SVector3> gradients;
+        void read_data(std::string);
+        static SVector3 compute_normal(MElement*);
+        static SVector3 compute_other_vector(MElement*);
+        static SVector3 compute_gradient(MElement*);
   public :
-	Temporary();
-	~Temporary();
-	void quadrilaterize(std::string,double,double,double);
-	static double compute_total_cost(double,double);
-	static void select_weights(double,double,double);
-	static double compute_alignment(const MEdge&,MElement*,MElement*);
+        Temporary();
+        ~Temporary();
+        void quadrilaterize(std::string,double,double,double);
+        static double compute_total_cost(double,double);
+        static void select_weights(double,double,double);
+        static double compute_alignment(const MEdge&,MElement*,MElement*);
 };
-
+      
+struct RecombineTriangle
+{
+  MElement *t1, *t2;
+  double angle;
+  double cost_quality; //addition for class Temporary
+  double cost_alignment; //addition for class Temporary
+  double total_cost; //addition for class Temporary
+  double total_gain;
+  MVertex *n1, *n2, *n3, *n4;
+  RecombineTriangle(const MEdge &me, MElement *_t1, MElement *_t2)
+    : t1(_t1), t2(_t2)
+  {
+    n1 = me.getVertex(0);
+    n2 = me.getVertex(1);
+    
+    if(t1->getVertex(0) != n1 && t1->getVertex(0) != n2) n3 = t1->getVertex(0);
+    else if(t1->getVertex(1) != n1 && t1->getVertex(1) != n2) n3 = t1->getVertex(1);
+    else if(t1->getVertex(2) != n1 && t1->getVertex(2) != n2) n3 = t1->getVertex(2);
+    if(t2->getVertex(0) != n1 && t2->getVertex(0) != n2) n4 = t2->getVertex(0);
+    else if(t2->getVertex(1) != n1 && t2->getVertex(1) != n2) n4 = t2->getVertex(1);
+    else if(t2->getVertex(2) != n1 && t2->getVertex(2) != n2) n4 = t2->getVertex(2);
+    
+    double a1 = 180 * angle3Vertices(n1, n4, n2) / M_PI;
+    double a2 = 180 * angle3Vertices(n4, n2, n3) / M_PI;
+    double a3 = 180 * angle3Vertices(n2, n3, n1) / M_PI;
+    double a4 = 180 * angle3Vertices(n3, n1, n4) / M_PI;
+    angle = fabs(90. - a1);
+    angle = std::max(fabs(90. - a2),angle);
+    angle = std::max(fabs(90. - a3),angle);
+    angle = std::max(fabs(90. - a4),angle);
+    cost_quality = 1.0 - std::max(1.0 - angle/90.0,0.0); //addition for class Temporary
+    cost_alignment = Temporary::compute_alignment(me,_t1,_t2); //addition for class Temporary
+    total_cost = Temporary::compute_total_cost(cost_quality,cost_alignment); //addition for class Temporary
+    total_cost = 100.0*cost_alignment; //addition for class Temporary
+    total_gain = 101. - total_cost;
+  }
+  bool operator < (const RecombineTriangle &other) const
+  {
+    //return angle < other.angle;
+    return total_cost < other.total_cost; //addition for class Temporary
+  }
+};
 #endif

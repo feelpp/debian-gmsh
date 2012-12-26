@@ -351,6 +351,8 @@ bool onelab::localNetworkClient::kill()
   if(_pid > 0) {
     if(KillProcess(_pid)){
       Msg::Info("Killed '%s' (pid %d)", _name.c_str(), _pid);
+      if(FlGui::available())
+        FlGui::instance()->setProgress("Killed", 0, 0, 0);
       _pid = -1;
       return true;
     }
@@ -384,11 +386,14 @@ static bool incrementLoops()
 
 static void updateGraphs()
 {
-  bool redraw0 = onelabUtils::updateGraph("0");
-  bool redraw1 = onelabUtils::updateGraph("1");
-  bool redraw2 = onelabUtils::updateGraph("2");
-  bool redraw3 = onelabUtils::updateGraph("3");
-  if(redraw0 || redraw1 || redraw2 || redraw3){
+  bool redraw = false;
+  for(int i = 0; i < 18; i++){
+    std::ostringstream tmp;
+    tmp << i;
+    bool ret = onelabUtils::updateGraph(tmp.str());
+    redraw = redraw || ret;
+  }
+  if(redraw){
     FlGui::instance()->updateViews();
     drawContext::global()->draw();
   }
@@ -1636,14 +1641,15 @@ int metamodel_cb(const std::string &name, const std::string &action)
   if(FlGui::instance()->onelab->isBusy())
     FlGui::instance()->onelab->show();
   else{
-    initializeMetamodel(Msg::GetExecutableName(),Msg::GetOnelabClient(), &flgui_wait_cb);
+    initializeMetamodel(Msg::GetExecutableName(),Msg::GetOnelabClient(),
+			&flgui_wait_cb,Msg::GetVerbosity());
 
     onelab::number n("IsMetamodel", 1.);
     n.setVisible(false);
     onelab::server::instance()->set(n);
     std::vector<std::string> split = SplitFileName(name);
     onelab::string s1("Arguments/WorkingDir",
-		      split[0].size()?split[0]:getCurrentWorkdir());
+		      split[0].size() ? split[0] : GetCurrentWorkdir());
     s1.setVisible(false);
     onelab::server::instance()->set(s1);
     onelab::string s2("Arguments/FileName", split[1]);

@@ -43,7 +43,7 @@ N.setAttribute(Highlight, Coral);
 T.setAttribute(Highlight, Coral);
 MAX.setAttribute(Highlight, Coral);
 
-X.number(0.75, 1Geometry/,"Cut location [m]");
+X.number(0.10, 1Geometry/,"Cut location [m]");
 
 OL.iftrue(LOOP)
 X.setAttribute(Loop,3);
@@ -53,16 +53,17 @@ T.setAttribute(Graph,000100);
 OL.else
   OL.if( OL.get(X, attrib.get(Loop)) == 3)
     X.setAttribute(Loop,0);
+    X.setAttribute(Graph,0);
+    M.setAttribute(Graph,0);
+    T.setAttribute(Graph,0);
   OL.endif
-X.setAttribute(Graph,0);
-M.setAttribute(Graph,0);
-T.setAttribute(Graph,0);
 OL.endif
 
 OL.if( OL.get(X, choices.index()) == 0 )
-M.resetChoices();
-T.resetChoices();
+  M.resetChoices();
+  T.resetChoices();
 OL.endif
+
 
 #1) Client Gmsh pour le maillage initial
 Mesher.register(native);
@@ -75,7 +76,7 @@ Mesher.frontPage(OL.get(Arguments/FileName).geo,
 OL.iftrue(LOOP)
 X.range(0.10:OL.get(1Geometry/L)|15.00001);
 OL.else
-X.range(1e-4:OL.eval(OL.get(1Geometry/L)-1e-4):O.1);
+X.range(1e-4:OL.eval(OL.get(1Geometry/L)-1e-4):0.1);
 X.withinRange();
 OL.endif
 

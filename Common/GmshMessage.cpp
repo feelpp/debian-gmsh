@@ -77,31 +77,29 @@ static int vsnprintf(char *str, size_t size, const char *fmt, va_list ap)
 
 void Msg::Init(int argc, char **argv)
 {
-  int sargc = argc;
-  char **sargv = argv;
-  for(int i = 0; i < argc; i++){
-    std::string val(argv[i]);
-    if(val == "info" || val == "-info" ||
-       val == "help" || val == "-help"){
-      sargc = 0;
-      sargv = 0;
-      break;
-    }
-  }
 #if defined(HAVE_MPI)
   int flag;
   MPI_Initialized(&flag);
-  if(!flag) MPI_Init(&sargc, &sargv);
+  if(!flag) MPI_Init(&argc, &argv);
   MPI_Comm_rank(MPI_COMM_WORLD, &_commRank);
   MPI_Comm_size(MPI_COMM_WORLD, &_commSize);
   MPI_Errhandler_set(MPI_COMM_WORLD, MPI_ERRORS_RETURN);
 #endif
 #if defined(HAVE_PETSC)
+  int sargc = 0;
+  char **sargv = new char*[argc + 1];
+  // prune argv from gmsh-specific options that make PETSc verbose
+  for(int i = 0; i < argc; i++){
+    std::string val(argv[i]);
+    if(val != "-info" && val != "-help" && val != "-v")
+      sargv[sargc++] = argv[i];
+  }
   PetscInitialize(&sargc, &sargv, PETSC_NULL, PETSC_NULL);
   PetscPopSignalHandler();
-#endif
 #if defined(HAVE_SLEPC)
   SlepcInitialize(&sargc, &sargv, PETSC_NULL, PETSC_NULL);
+#endif
+  delete [] sargv;
 #endif
   time_t now;
   time(&now);
@@ -333,10 +331,13 @@ void Msg::Info(const char *fmt, ...)
   if(_client) _client->Info(str);
 
 #if defined(HAVE_FLTK)
-  if(FlGui::available()){
-    FlGui::instance()->check();
-    std::string tmp = std::string("Info    : ") + str;
-    FlGui::instance()->addMessage(tmp.c_str());
+  #pragma omp critical
+  {
+    if(FlGui::available()){
+      FlGui::instance()->check();
+      std::string tmp = std::string("Info    : ") + str;
+      FlGui::instance()->addMessage(tmp.c_str());
+    }
   }
 #endif
 
@@ -373,18 +374,21 @@ void Msg::Direct(int level, const char *fmt, ...)
   if(_client) _client->Info(str);
 
 #if defined(HAVE_FLTK)
-  if(FlGui::available()){
-    FlGui::instance()->check();
-    std::string tmp;
-    if(level < 2)
-      tmp = std::string("@C1@.") + str;
-    else if(level < 3)
-      tmp = std::string("@C5@.") + str;
-    else
-      tmp = std::string("@C4@.") + str;
-    FlGui::instance()->addMessage(tmp.c_str());
-    if(level == 1)
-      FlGui::instance()->showMessages();
+#pragma omp master
+  {
+    if(FlGui::available()){
+      FlGui::instance()->check();
+      std::string tmp;
+      if(level < 2)
+	tmp = std::string("@C1@.") + str;
+      else if(level < 3)
+	tmp = std::string("@C5@.") + str;
+      else
+	tmp = std::string("@C4@.") + str;
+      FlGui::instance()->addMessage(tmp.c_str());
+      if(level == 1)
+	FlGui::instance()->showMessages();
+    }
   }
 #endif
 
@@ -412,13 +416,16 @@ void Msg::StatusBar(bool log, const char *fmt, ...)
   if(_client && log) _client->Info(str);
 
 #if defined(HAVE_FLTK)
-  if(FlGui::available()){
-    if(log) FlGui::instance()->check();
-    if(!log || _verbosity > 4)
-      FlGui::instance()->setStatus(str);
-    if(log){
-      std::string tmp = std::string("Info    : ") + str;
-      FlGui::instance()->addMessage(tmp.c_str());
+#pragma omp master 
+  {
+    if(FlGui::available()){
+      if(log) FlGui::instance()->check();
+      if(!log || _verbosity > 4)
+	FlGui::instance()->setStatus(str);
+      if(log){
+	std::string tmp = std::string("Info    : ") + str;
+	FlGui::instance()->addMessage(tmp.c_str());
+      }
     }
   }
 #endif

@@ -112,28 +112,20 @@ void MElement::scaledJacRange(double &jmin, double &jmax)
 {
   jmin = jmax = 1.0;
 #if defined(HAVE_MESH)
-  extern double mesh_functional_distorsion_2D(MElement*,double,double);
-  extern double mesh_functional_distorsion_3D(MElement*,double,double,double);
   if (getPolynomialOrder() == 1) return;
-  const bezierBasis *jac = getJacobianFuncSpace()->bezier;
-  fullVector<double>Ji(jac->points.size1());
-  for (int i=0;i<jac->points.size1();i++){
-    double u = jac->points(i,0);
-    double v = jac->points(i,1);
-    if (getDim() == 2) {
-      if (getType() == TYPE_QUA) {
-        u = -1 + 2*u;
-        v = -1 + 2*v;
-      }
-      Ji(i) = mesh_functional_distorsion_2D(this,u,v);
-    }
-    else {
-      double w = jac->points(i,2);
-      Ji(i) = mesh_functional_distorsion_3D(this,u,v,w);
-    }
-  }
-  fullVector<double> Bi( jac->matrixLag2Bez.size1() );
-  jac->matrixLag2Bez.mult(Ji,Bi);
+  const JacobianBasis *jac = getJacobianFuncSpace(),*jac1 = getJacobianFuncSpace(1);    // Jac. and prim. Jac. basis
+  const int numJacNodes = jac->getNumJacNodes(), numJac1Nodes = jac1->getNumJacNodes();
+  const int numMapNodes = jac->getNumMapNodes(), numMap1Nodes = jac1->getNumMapNodes();
+  fullMatrix<double> nodesXYZ(numMapNodes,3), nodesXYZ1(numMap1Nodes,3);
+  getNodesCoord(nodesXYZ);
+  nodesXYZ1.copy(nodesXYZ,0,numMap1Nodes,0,3,0,0);
+  fullVector<double> Ji(numJacNodes), J1i(numJac1Nodes), J1Ji(numJacNodes);
+  jac->getSignedJacobian(nodesXYZ,Ji);
+  jac1->getSignedJacobian(nodesXYZ1,J1i);
+  jac->primJac2Jac(J1i,J1Ji);
+  fullVector<double> SJi(numJacNodes), Bi(numJacNodes);                                 // Calc scaled Jacobian -> Bezier
+  for (int i=0; i<numJacNodes; i++) SJi(i) = Ji(i)/J1Ji(i);
+  jac->lag2Bez(SJi,Bi);
   jmin = *std::min_element(Bi.getDataPtr(),Bi.getDataPtr()+Bi.size());
   jmax = *std::max_element(Bi.getDataPtr(),Bi.getDataPtr()+Bi.size());
 #endif
@@ -416,6 +408,25 @@ double MElement::getPrimaryJacobian(double u, double v, double w, double jac[3][
   }
 
   return _computeDeterminantAndRegularize(this, jac);
+}
+
+void MElement::getSignedJacobian(fullVector<double> &jacobian, int o)
+{
+  const int numNodes = getNumVertices();
+  fullMatrix<double> nodesXYZ(numNodes,3);
+  getNodesCoord(nodesXYZ);
+  getJacobianFuncSpace(o)->getSignedJacobian(nodesXYZ,jacobian);
+}
+
+void MElement::getNodesCoord(fullMatrix<double> &nodesXYZ)
+{
+  const int numNodes = getNumShapeFunctions();
+  for (int i = 0; i < numNodes; i++) {
+    MVertex *v = getShapeFunctionNode(i);
+    nodesXYZ(i,0) = v->x();
+    nodesXYZ(i,1) = v->y();
+    nodesXYZ(i,2) = v->z();
+  }
 }
 
 void MElement::pnt(double u, double v, double w, SPoint3 &p)
@@ -1227,7 +1238,7 @@ int MElement::getInfoMSH(const int typeMSH, const char **const name)
   case MSH_HEX_56  : if(name) *name = "Hexahedron 56";    return 56;
   case MSH_HEX_98  : if(name) *name = "Hexahedron 98";    return 98;
   case MSH_HEX_152 : if(name) *name = "Hexahedron 152";   return 152;
-  case MSH_HEX_222 : if(name) *name = "Hexahedron 222";   return 222;
+  case MSH_HEX_218 : if(name) *name = "Hexahedron 218";   return 218;
   case MSH_HEX_296 : if(name) *name = "Hexahedron 296";   return 296;
   case MSH_HEX_386 : if(name) *name = "Hexahedron 386";   return 386;
   case MSH_HEX_488 : if(name) *name = "Hexahedron 488";   return 488;
@@ -1409,7 +1420,7 @@ int MElement::ParentTypeFromTag(int tag)
     case(MSH_HEX_512):  case(MSH_HEX_729):
     case(MSH_HEX_1000): case(MSH_HEX_56):
     case(MSH_HEX_98):   case(MSH_HEX_152):
-    case(MSH_HEX_222):  case(MSH_HEX_296):
+    case(MSH_HEX_218):  case(MSH_HEX_296):
     case(MSH_HEX_386):  case(MSH_HEX_488):
       return TYPE_HEX;
     case(MSH_POLYG_): case(MSH_POLYG_B):
@@ -1528,7 +1539,7 @@ int MElement::OrderFromTag(int tag)
   case MSH_HEX_56  : return 3;
   case MSH_HEX_98  : return 4;
   case MSH_HEX_152 : return 5;
-  case MSH_HEX_222 : return 6;
+  case MSH_HEX_218 : return 6;
   case MSH_HEX_296 : return 7;
   case MSH_HEX_386 : return 8;
   case MSH_HEX_488 : return 9;
@@ -1611,9 +1622,6 @@ MElement *MElementFactory::create(int type, std::vector<MVertex*> &v,
   case MSH_PRI_6:   return new MPrism(v, num, part);
   case MSH_PRI_15:  return new MPrism15(v, num, part);
   case MSH_PRI_18:  return new MPrism18(v, num, part);
-  case MSH_PYR_5:   return new MPyramid(v, num, part);
-  case MSH_PYR_13:  return new MPyramid13(v, num, part);
-  case MSH_PYR_14:  return new MPyramid14(v, num, part);
   case MSH_TET_20:  return new MTetrahedronN(v, 3, num, part);
   case MSH_TET_34:  return new MTetrahedronN(v, 3, num, part);
   case MSH_TET_35:  return new MTetrahedronN(v, 4, num, part);
@@ -1637,6 +1645,9 @@ MElement *MElementFactory::create(int type, std::vector<MVertex*> &v,
   case MSH_LIN_SUB: return new MSubLine(v, num, part, owner, parent);
   case MSH_TRI_SUB: return new MSubTriangle(v, num, part, owner, parent);
   case MSH_TET_SUB: return new MSubTetrahedron(v, num, part, owner, parent);
+  case MSH_PYR_5:   return new MPyramid(v, num, part);
+  case MSH_PYR_13:  return new MPyramidN(v, 2, num, part);
+  case MSH_PYR_14:  return new MPyramidN(v, 2, num, part);
   case MSH_PYR_30:  return new MPyramidN(v, 3, num, part);
   case MSH_PYR_55:  return new MPyramidN(v, 4, num, part);
   case MSH_PYR_91:  return new MPyramidN(v, 5, num, part);
