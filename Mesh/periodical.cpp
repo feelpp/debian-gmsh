@@ -4,7 +4,7 @@
 // bugs and problems to <gmsh@geuz.org>.
 //
 // Contributor(s):
-//   Tristan Carrier
+//   Tristan Carrier Maxime Melchior
 
 #include "periodical.h"
 #include "GModel.h"
@@ -63,7 +63,7 @@ voroMetal3D::voroMetal3D(){}
 
 voroMetal3D::~voroMetal3D(){}
 
-void voroMetal3D::execute(){
+void voroMetal3D::execute(double h){
   GRegion* gr;
   GModel* model = GModel::current();
   GModel::riter it;
@@ -72,12 +72,12 @@ void voroMetal3D::execute(){
   {
     gr = *it;
 	if(gr->getNumMeshElements()>0){
-	  execute(gr);
+	  execute(gr,h);
 	}
   }
 }
 
-void voroMetal3D::execute(GRegion* gr){
+void voroMetal3D::execute(GRegion* gr,double h){
   unsigned int i;
   int j;
   MElement* element;
@@ -98,10 +98,10 @@ void voroMetal3D::execute(GRegion* gr){
     vertices2.push_back(SPoint3((*it)->x(),(*it)->y(),(*it)->z()));
   }
 
-  execute(vertices2);
+  execute(vertices2,h);
 }
 
-void voroMetal3D::execute(std::vector<double>& vertices){
+void voroMetal3D::execute(std::vector<double>& vertices,double h){
   unsigned int i;
   SPoint3 point;
   std::vector<SPoint3> temp;
@@ -113,10 +113,10 @@ void voroMetal3D::execute(std::vector<double>& vertices){
     temp.push_back(point);
   }
   
-  execute(temp);
+  execute(temp,h);
 }
 
-void voroMetal3D::execute(std::vector<SPoint3>& vertices)
+void voroMetal3D::execute(std::vector<SPoint3>& vertices,double h)
 {
 #if defined(HAVE_VORO3D)
   unsigned int i;
@@ -129,6 +129,7 @@ void voroMetal3D::execute(std::vector<SPoint3>& vertices)
   int val;
   int face_number;
   int last;
+  int mem;
   double x,y,z;
   double x1,y1,z1;
   double x2,y2,z2;
@@ -201,12 +202,14 @@ void voroMetal3D::execute(std::vector<SPoint3>& vertices)
 	}
   }
 	
-  printf("Squared root of smallest face area : %.9f\n",sqrt(min_area));
+  printf("\nSquared root of smallest face area : %.9f\n\n",sqrt(min_area));
 		
-  std::ofstream file("cells.pos");
+  std::ofstream file("MicrostructurePolycrystal3D.pos");
   file << "View \"test\" {\n";
-  std::ofstream file2("cells.geo");
-  file2 << "c = 1.0;\n";
+
+  std::ofstream file2("MicrostructurePolycrystal3D.geo");
+
+  file2 << "c=" << h << ";\n";
 		
   for(i=0;i<pointers.size();i++){
 	obj = geo_cell();
@@ -305,12 +308,15 @@ void voroMetal3D::execute(std::vector<SPoint3>& vertices)
 	  obj.faces2.push_back(get_counter());
 	  increase_counter();
 	}
-
+	  
 	print_geo_face_loop(get_counter(),obj.faces2,file2);
 	obj.face_loops2 = get_counter();
 	increase_counter();
 
 	print_geo_volume(get_counter(),obj.face_loops2,file2);
+	mem = get_counter();
+        increase_counter();
+        print_geo_physical_volume(get_counter(),mem,file2);	
 	increase_counter();
   }
 
@@ -329,7 +335,7 @@ void voroMetal3D::print_segment(SPoint3 p1,SPoint3 p2,std::ofstream& file){
 }
 
 void voroMetal3D::initialize_counter(){
-  counter = 1;
+  counter = 12;
 }
 
 void voroMetal3D::increase_counter(){
@@ -358,8 +364,20 @@ void voroMetal3D::print_geo_face(int index1,int index2,std::ofstream& file){
   << "};\n";
 }
 
+void voroMetal3D::print_geo_physical_face(int index1,int index2,std::ofstream& file){
+  file << "Physical Surface(" << index1 << ")={"
+  << index2
+  << "};\n";
+}
+
 void voroMetal3D::print_geo_volume(int index1,int index2,std::ofstream& file){
   file << "Volume(" << index1 << ")={"
+  << index2
+  << "};\n";
+}
+
+void voroMetal3D::print_geo_physical_volume(int index1,int index2,std::ofstream& file){
+  file << "Physical Volume(" << index1 << ")={"
   << index2
   << "};\n";
 }
@@ -395,8 +413,14 @@ void voroMetal3D::correspondance(double e){
   unsigned int i;
   unsigned int j;
   int count;
-  int count2;
+  int val;
+  int normal;
+  int phase;
   bool flag;
+  bool flag1;
+  bool flag2;
+  bool flag3;
+  bool flag4;
   double x,y,z;
   double delta_x;
   double delta_y;
@@ -404,10 +428,25 @@ void voroMetal3D::correspondance(double e){
   SPoint3 p1;
   SPoint3 p2;
   GFace* gf;
+  GFace* gf1;
+  GFace* gf2;
+  GVertex* v1;
+  GVertex* v2;
+  GVertex* v3;
+  GVertex* v4;
   GModel* model = GModel::current();
   GModel::fiter it;
   std::vector<GFace*> faces;
+  std::vector<std::pair<GFace*,GFace*> > pairs;
+  std::vector<int> categories;
+  std::vector<int> indices1;
+  std::vector<int> indices2;
+  std::vector<int> indices3;
   std::list<GVertex*> vertices;
+  std::list<GEdge*> edges1;
+  std::list<GEdge*> edges2;
+  std::list<int> orientations1;
+  std::list<int> orientations2;
   std::map<GFace*,SPoint3> centers;
   std::map<GFace*,bool> markings;
   std::list<GVertex*>::iterator it2;
@@ -415,6 +454,11 @@ void voroMetal3D::correspondance(double e){
   std::map<GFace*,SPoint3>::iterator it4;
   std::map<GFace*,bool>::iterator it5;
   std::map<GFace*,bool>::iterator it6;
+  std::list<GEdge*>::iterator it7;
+  std::list<GEdge*>::iterator it8;
+  std::list<int>::iterator it9;
+  std::list<int>::iterator it10;
+  std::list<GEdge*>::iterator mem;
 	
   faces.clear();	
 	
@@ -427,7 +471,9 @@ void voroMetal3D::correspondance(double e){
   }
 	
   centers.clear();
-  markings.clear();	
+  markings.clear();
+  pairs.clear();
+  categories.clear();
 	
   for(i=0;i<faces.size();i++){
 	x = 0.0;
@@ -456,19 +502,14 @@ void voroMetal3D::correspondance(double e){
   }
 	
   count = 0;
-  count2 = 0;
 	
-  std::ofstream file;
-  file.open("cells.geo",std::ios::out | std::ios::app);	
-  std::ofstream file2("check.pos");
-  file2 << "View \"test\" {\n";	
-		
-  printf("Face 1 nbr. - Face 2 nbr.\n");	
+  std::ofstream file("MicrostructurePolycrystal3D.pos");
+  file << "View \"test\" {\n";
+  
+  std::ofstream file2("vectors");
 	
   for(i=0;i<faces.size();i++){
     for(j=0;j<faces.size();j++){
-	  flag = 0;	
-	
 	  it3 = centers.find(faces[i]);
 	  it4 = centers.find(faces[j]);
 		
@@ -479,55 +520,247 @@ void voroMetal3D::correspondance(double e){
 	  delta_y = fabs(p2.y()-p1.y());
 	  delta_z = fabs(p2.z()-p1.z());
 		
-	  if(equal(delta_x,1.0,e) && equal(delta_y,0.0,e) && equal(delta_z,0.0,e)){
-	    flag = 1;
-	  }
-	  if(equal(delta_x,0.0,e) && equal(delta_y,1.0,e) && equal(delta_z,0.0,e)){
-	    flag = 1;
-	  }
-	  if(equal(delta_x,0.0,e) && equal(delta_y,0.0,e) && equal(delta_z,1.0,e)){
-	    flag = 1;
-	  }
-	  
-	  if(equal(delta_x,1.0,e) && equal(delta_y,1.0,e) && equal(delta_z,0.0,e)){
-	    flag = 1;
-	  }
-	  if(equal(delta_x,0.0,e) && equal(delta_y,1.0,e) && equal(delta_z,1.0,e)){
-	    flag = 1;
-	  }
-	  if(equal(delta_x,1.0,e) && equal(delta_y,0.0,e) && equal(delta_z,1.0,e)){
-	    flag = 1;
-	  }
-			
-	  if(equal(delta_x,1.0,e) && equal(delta_y,1.0,e) && equal(delta_z,1.0,e)){
-	    flag = 1;
-	  }
+	  flag = correspondance(delta_x,delta_y,delta_z,e,val);
 		
 	  if(flag){
 	    it5 = markings.find(faces[i]);
 	    it6 = markings.find(faces[j]);
+		
 		if(it5->second==0 && it6->second==0){
 		  it5->second = 1;
 		  it6->second = 1;
 		  
-		  printf("%d %d\n",faces[i]->tag(),faces[j]->tag());
-		  print_segment(p1,p2,file2);
-		  //file << faces[i]->tag() << " " << faces[j]->tag() << "\n";
+		  pairs.push_back(std::pair<GFace*,GFace*>(faces[i],faces[j]));
+		  categories.push_back(val);
+			
+		  print_segment(p1,p2,file);
 		  
+		  file2 << faces[i]->tag() << " " << faces[j]->tag() << " " << p2.x()-p1.x() << " " << p2.y()-p1.y() << " " << p2.z()-p1.z() << "\n";	
+			
 		  count++;
-		}
-		else{
-		  count2++;
 		}
 	  }
 	}
   }
 
-  file2 << "};\n";
+  file << "};\n";
 	
-  printf("Number of linked exterior faces : %d\n",2*count);
-  printf("Total number of exterior faces : %zu\n",faces.size());
-  printf("Number of mislinked : %d\n",count2-count);
+  printf("\nNumber of exterior face periodicities : %d\n",2*count);
+  printf("Total number of exterior faces : %zu\n\n",faces.size());
+	
+  std::ofstream file3;
+  file3.open("MicrostructurePolycrystal3D.geo",std::ios::out | std::ios::app);
+  
+  std::ofstream file4("MicrostructurePolycrystal3D2.pos");
+  file4 << "View \"test\" {\n";
+	
+  file3 << "Physical Surface(11)={";
+	
+  count = 0;
+  for(it=model->firstFace();it!=model->lastFace();it++)
+  {
+    gf = *it;
+	if(count>0) file3 << ",";
+	file3 << gf->tag();
+	count++;
+  }
+	
+  file3 << "};\n";
+	
+  for(i=0;i<pairs.size();i++){
+    gf1 = pairs[i].first;
+	gf2 = pairs[i].second;
+  
+	edges1 = gf1->edges();
+	edges2 = gf2->edges();  
+	 
+	orientations1 = gf1->edgeOrientations();
+	orientations2 = gf2->edgeOrientations();
+	  
+	indices1.clear();
+	indices2.clear();
+	indices3.clear();	  
+	phase = 1;
+	normal = 0;  
+	  
+	it9 = orientations1.begin(); 
+	it10 = orientations2.begin();
+	for(it8=edges2.begin();it8!=edges2.end();it8++,it10++){
+	  if (*it10==1)
+	  	indices3.push_back((*it8)->tag());
+	  else
+		indices3.push_back(-(*it8)->tag());
+	}
+	int countReverseEdge=0;
+	for(it7=edges1.begin();it7!=edges1.end();it7++,it9++){
+	  v1 = (*it7)->getBeginVertex();
+	  v2 = (*it7)->getEndVertex();
+	  
+	  if (*it9==1)	
+	  	indices1.push_back((*it7)->tag());
+	  else
+		indices1.push_back(-(*it7)->tag());
+		
+	  flag1 = 0;
+	  flag2 = 0;
+	  flag3 = 0;
+	  flag4 = 0;
+			
+	  it10 = orientations2.begin();
+	  for(it8=edges2.begin();it8!=edges2.end();it8++,it10++){
+	        v3 = (*it8)->getBeginVertex();
+		v4 = (*it8)->getEndVertex();
+		  
+		correspondance(fabs(v3->x()-v1->x()),fabs(v3->y()-v1->y()),fabs(v3->z()-v1->z()),e,categories[i],flag1);
+		correspondance(fabs(v4->x()-v2->x()),fabs(v4->y()-v2->y()),fabs(v4->z()-v2->z()),e,categories[i],flag2);
+		  
+		correspondance(fabs(v4->x()-v1->x()),fabs(v4->y()-v1->y()),fabs(v4->z()-v1->z()),e,categories[i],flag3);
+		correspondance(fabs(v3->x()-v2->x()),fabs(v3->y()-v2->y()),fabs(v3->z()-v2->z()),e,categories[i],flag4);
+		  
+		if(flag1 && flag2){
+	          if(phase==1){
+		    mem = it8;
+		    phase = 2;
+		  }
+		  else if(phase==2){
+			mem++;
+			  
+			if(it8==mem){
+			  normal = 1;
+			}
+			else{
+			  normal = -1;
+			}
+			  
+			phase = 3;
+		  }
+		  if (*it9==1)	
+		  	indices2.push_back((*it8)->tag());
+		  else
+			indices2.push_back(-(*it8)->tag());
+		  if (*it9!=*it10)
+		  	countReverseEdge++;
+		  print_segment(SPoint3(v3->x(),v3->y(),v3->z()),SPoint3(v1->x(),v1->y(),v1->z()),file4);
+		  print_segment(SPoint3(v4->x(),v4->y(),v4->z()),SPoint3(v2->x(),v2->y(),v2->z()),file4);
+		}
+		else if(flag3 && flag4){
+		  if(phase==1){
+		    mem = it8;
+			phase = 2;
+		  }
+		  else if(phase==2){
+		    mem++;
+			  
+			if(it8==mem){
+			  normal = 1;
+			}
+			else{
+			  normal = -1;
+			}
+			  
+			phase = 3;
+		  }
+		  if (*it9==1)
+		  	indices2.push_back(-(*it8)->tag());
+		  else
+			indices2.push_back((*it8)->tag());
+		  if (*it9!=*it10)
+                        countReverseEdge++;
+		  print_segment(SPoint3(v4->x(),v4->y(),v4->z()),SPoint3(v1->x(),v1->y(),v1->z()),file4);
+		  print_segment(SPoint3(v3->x(),v3->y(),v3->z()),SPoint3(v2->x(),v2->y(),v2->z()),file4);
+		}
+	  }
+	}
+	  
+	if(indices1.size()!=indices2.size()){
+	  printf("Error\n\n");
+	}
+	  
+	file3 << "Periodic Surface " << gf1->tag() << " {";  
+	  
+	for(j=0;j<indices1.size();j++){
+	  if(j>0) file3 << ",";
+	  file3 << indices1[j];
+	}
+	file3 << "} = " << gf2->tag() << " {";
+	  
+	for(j=0;j<indices2.size();j++){
+      if(j>0) file3 << ",";
+	  file3 << indices2[j];
+	}
+	  
+	file3 << "};\n";
+  }
+	
+  file4 << "};\n";
+}
+
+bool voroMetal3D::correspondance(double delta_x,double delta_y,double delta_z,double e,int& val){
+  bool flag;
+	
+  flag = 0;
+  val = 1000;
+	
+  if(equal(delta_x,1.0,e) && equal(delta_y,0.0,e) && equal(delta_z,0.0,e)){
+    flag = 1;
+	val = 1;
+  }
+  if(equal(delta_x,0.0,e) && equal(delta_y,1.0,e) && equal(delta_z,0.0,e)){
+    flag = 1;
+	val = 2;
+  }
+  if(equal(delta_x,0.0,e) && equal(delta_y,0.0,e) && equal(delta_z,1.0,e)){
+    flag = 1;
+	val = 3;
+  }
+	
+  if(equal(delta_x,1.0,e) && equal(delta_y,1.0,e) && equal(delta_z,0.0,e)){
+    flag = 1;
+	val = 4;
+  }
+  if(equal(delta_x,0.0,e) && equal(delta_y,1.0,e) && equal(delta_z,1.0,e)){
+    flag = 1;
+	val = 5;
+  }
+  if(equal(delta_x,1.0,e) && equal(delta_y,0.0,e) && equal(delta_z,1.0,e)){
+    flag = 1;
+	val = 6;
+  }
+	
+  if(equal(delta_x,1.0,e) && equal(delta_y,1.0,e) && equal(delta_z,1.0,e)){
+    flag = 1;
+	val = 7;
+  }
+	
+  return flag;
+}
+
+void voroMetal3D::correspondance(double delta_x,double delta_y,double delta_z,double e,int val,bool& flag){
+  flag = 0;
+	
+  if(val==1 && equal(delta_x,1.0,e) && equal(delta_y,0.0,e) && equal(delta_z,0.0,e)){
+    flag = 1;
+  }
+  if(val==2 && equal(delta_x,0.0,e) && equal(delta_y,1.0,e) && equal(delta_z,0.0,e)){
+    flag = 1;
+  }
+  if(val==3 && equal(delta_x,0.0,e) && equal(delta_y,0.0,e) && equal(delta_z,1.0,e)){
+    flag = 1;
+  }
+	
+  if(val==4 && equal(delta_x,1.0,e) && equal(delta_y,1.0,e) && equal(delta_z,0.0,e)){
+    flag = 1;
+  }
+  if(val==5 && equal(delta_x,0.0,e) && equal(delta_y,1.0,e) && equal(delta_z,1.0,e)){
+    flag = 1;
+  }
+  if(val==6 && equal(delta_x,1.0,e) && equal(delta_y,0.0,e) && equal(delta_z,1.0,e)){
+    flag = 1;
+  }
+	
+  if(val==7 && equal(delta_x,1.0,e) && equal(delta_y,1.0,e) && equal(delta_z,1.0,e)){
+    flag = 1;
+  }
 }
 
 bool voroMetal3D::equal(double x,double y,double e){
@@ -539,6 +772,6 @@ bool voroMetal3D::equal(double x,double y,double e){
   else{
     flag = 0;
   }
-	
+
   return flag;
 }

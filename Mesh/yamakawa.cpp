@@ -136,7 +136,7 @@ bool Facet::same_vertices(Facet facet){
 }
 
 void Facet::compute_hash(){
-  hash = (unsigned long long)a + (unsigned long long)b + (unsigned long long)c;
+  hash = a->getNum() + b->getNum() + c->getNum();
 }
 
 unsigned long long Facet::get_hash() const{
@@ -185,7 +185,7 @@ bool Diagonal::same_vertices(Diagonal diagonal){
 }
 
 void Diagonal::compute_hash(){
-  hash = (unsigned long long)a + (unsigned long long)b;
+  hash = a->getNum() + b->getNum();
 }
 
 unsigned long long Diagonal::get_hash() const{
@@ -3217,12 +3217,12 @@ void PostOp::pyramids2(MVertex* a,MVertex* b,MVertex* c,MVertex* d,GRegion* gr){
     pyramids.insert(*it);
   }
 
-  if(pyramids.size()==0 && tetrahedra.size()==1){
+  /*if(pyramids.size()==0 && tetrahedra.size()==1){
 	printf("tetrahedron deleted\n");
     it2 = markings.find(*tetrahedra.begin());
 	it2->second = 1;
 	return;
-  }
+  }*/
 
   if(flag){
     diagA = a;
@@ -3549,6 +3549,28 @@ void PostOp::mean(const std::set<MVertex*>& Ns,MVertex* mid,const std::vector<ME
 	y = 0.1*init_y + 0.9*mid->y();
 	z = 0.1*init_z + 0.9*mid->z();
 
+	mid->setXYZ(x,y,z);
+  }
+
+  iterations = iterations + j;
+	
+  for(j=0;j<6;j++){
+    flag = 0;
+		
+	for(i=0;i<movables.size();i++){
+	  if(movables[i]->gammaShapeMeasure()<0.2){
+	    flag = 1;
+	  }
+	}
+		
+	if(!flag){
+	  break;
+	}
+		
+	x = 0.1*init_x + 0.9*mid->x();
+	y = 0.1*init_y + 0.9*mid->y();
+	z = 0.1*init_z + 0.9*mid->z();
+		
 	mid->setXYZ(x,y,z);
   }
 

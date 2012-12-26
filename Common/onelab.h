@@ -146,8 +146,19 @@ namespace onelab{
     {
       if(first == std::string::npos) return "";
       std::string::size_type last = msg.find_first_of(separator, first);
-      std::string next = msg.substr(first, last - first);
-      first = (last == std::string::npos) ? last : last + 1;
+      std::string next("");
+      if(last == std::string::npos){
+        next = msg.substr(first);
+        first = last;
+      }
+      else if(first == last){
+        next = "";
+        first = last + 1;
+      }
+      else{
+        next = msg.substr(first, last - first);
+        first = last + 1;
+      }
       return next;
     }
     static std::vector<std::string> split(const std::string &msg,
@@ -275,7 +286,7 @@ namespace onelab{
   class number : public parameter{
   private:
     double _value, _min, _max, _step;
-    // when in a loop, indicates current index in the vector _choices; 
+    // when in a loop, indicates current index in the vector _choices;
     // is -1 when not in a loop
     int _index;
     std::vector<double> _choices;
@@ -691,7 +702,7 @@ namespace onelab{
              const std::string &client=""){ return _set(p, client, _functions); }
     bool get(std::vector<number> &ps, const std::string &name="",
              const std::string &client=""){ return _get(ps, name, client, _numbers); }
-    bool get(std::vector<string> &ps, const std::string &name="",
+    bool get(std::vector<onelab::string> &ps, const std::string &name="",
              const std::string &client=""){ return _get(ps, name, client, _strings); }
     bool get(std::vector<region> &ps, const std::string &name="",
              const std::string &client=""){ return _get(ps, name, client, _regions); }
@@ -806,7 +817,7 @@ namespace onelab{
     virtual bool set(const region &p) = 0;
     virtual bool set(const function &p) = 0;
     virtual bool get(std::vector<number> &ps, const std::string &name="") = 0;
-    virtual bool get(std::vector<string> &ps, const std::string &name="") = 0;
+    virtual bool get(std::vector<onelab::string> &ps, const std::string &name="") = 0;
     virtual bool get(std::vector<region> &ps, const std::string &name="") = 0;
     virtual bool get(std::vector<function> &ps, const std::string &name="") = 0;
     std::vector<std::string> toChar()
@@ -927,6 +938,7 @@ namespace onelab{
     }
   };
 
+  // A local client, which lives in the same memory space as the server.
   class localClient : public client{
   private:
     template <class T> bool _set(const T &p)
@@ -955,7 +967,7 @@ namespace onelab{
     virtual bool set(const region &p){ return _set(p); }
     virtual bool get(std::vector<number> &ps,
                      const std::string &name=""){ return _get(ps, name); }
-    virtual bool get(std::vector<string> &ps,
+    virtual bool get(std::vector<onelab::string> &ps,
                      const std::string &name=""){ return _get(ps, name); }
     virtual bool get(std::vector<function> &ps,
                      const std::string &name=""){ return _get(ps, name); }
@@ -963,6 +975,7 @@ namespace onelab{
                      const std::string &name=""){ return _get(ps, name); }
   };
 
+  // The local part of a network client.
   class localNetworkClient : public localClient{
   private:
     // executable of the client (including filesystem path, if necessary)
@@ -992,10 +1005,13 @@ namespace onelab{
     void setPid(int pid){ _pid = pid; }
     GmshServer *getGmshServer(){ return _gmshServer; }
     void setGmshServer(GmshServer *server){ _gmshServer = server; }
+    #ifndef SWIG
     virtual bool run();
     virtual bool kill();
+    #endif
   };
 
+  // The remote part of a network client.
   class remoteNetworkClient : public client{
   private:
     // address (inet:port or unix socket) of the server
@@ -1098,7 +1114,7 @@ namespace onelab{
     virtual bool set(const region &p){ return _set(p); }
     virtual bool get(std::vector<number> &ps,
                      const std::string &name=""){ return _get(ps, name); }
-    virtual bool get(std::vector<string> &ps,
+    virtual bool get(std::vector<onelab::string> &ps,
                      const std::string &name=""){ return _get(ps, name); }
     virtual bool get(std::vector<function> &ps,
                      const std::string &name=""){ return _get(ps, name); }

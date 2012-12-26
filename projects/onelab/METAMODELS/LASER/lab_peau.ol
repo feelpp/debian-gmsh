@@ -20,8 +20,9 @@ Mesher.out( OL.get(Arguments/FileName).msh );
 Mesher.frontPage(OL.get(Arguments/FileName).geo,OL.get(Arguments/FileName).msh);
 
 # Enumeration, i.e. a set of real values each associated with a label
-SKINTYPE.number(1, Parameters/Skin/1,"Skin type"); 
-SKINTYPE.valueLabels(1,"hairy", 2,"hairless");
+SKINTYPE.number(2, Parameters/Skin/1,"Skin type"); 
+SKINTYPE.valueLabels(1,"hairy (thin)", 
+                     2,"glabrous (thick)");
 # Numbers in pathes allow to sort parameters in the onelab window.
 # SKINTYPE will be the 1 paraemeter in the subtree /Parameters/Skin
 
@@ -42,8 +43,8 @@ OL.endif
 
 # other parameters of the model
 WCONTENT.number(0.65,Parameters/Skin/,"Water content []");
-BODYTEMP.number(310, Parameters/Skin/,"Body temperature [K]");
-OVERTEMP.number(320, Parameters/Skin/,"Thermal threshold fiber [K]");
+BODYTEMP.number(37, Parameters/Skin/,"Body temperature [C]");
+OVERTEMP.number(47, Parameters/Skin/,"Thermal threshold fiber [C]");
 REFLECTIVITY.number(0.0078, Parameters/Skin/, "Skin reflectivity []");
 
 # Flags to describe model features that are activated or not
@@ -56,13 +57,11 @@ OL.endif
 
 CONVBC.radioButton(0,Parameters/Skin/4,"Account for convection");
 HCONV.number(100, Parameters/Skin/5, "Convection coefficient [W/(Km)]");
-TAMBIANT.number(293, Parameters/Skin/6, "Ambiant temperature [K]");
+TAMBIANT.number(20, Parameters/Skin/6, "Ambiant temperature [C]");
 OL.iftrue(CONVBC) 
 HCONV.setVisible(1);
-TAMBIANT.setVisible(1);
 OL.else
 HCONV.setVisible(0);
-TAMBIANT.setVisible(0);
 OL.endif
 
 # Available LASER models, another enumeration
@@ -76,32 +75,47 @@ LASERSHAPE.number(1, Parameters/Laser/2,"Laser shape");
 LASERSHAPE.valueLabels(1,"Gaussian", 2,"Flat-top");
 
 # Parameters describing the laser stimulator
-APPLICTIME.number(0.110, Parameters/Laser/, "Application time [s]");
+STIMTIME.number(0.110, Parameters/Laser/, "Stimulus duration [s]");
 ABSORPTION.number(2e4, Parameters/Laser/, "Absorption coefficient [1/m]");
-LASERTEMP.number(323, Parameters/Laser/, "Target temperature [K]");
-LASERPOWER.number(4, Parameters/Laser/, "Power [W]");
+LASERTEMP.number(50, Parameters/Laser/, "Imposed temperature [C]");
+LASERPOWER.number(4.0, Parameters/Laser/, "Power [W]");
+TSKINFILE.string(,Parameters/Laser/, "Imposed temp. file");
+QSKINFILE.string(,Parameters/Laser/, "Imposed laser power file");
+TSKINFILE.addChoices(tskin.sif);
+QSKINFILE.addChoices(pin.sif);
 
 # Visibility of the parameters in the onelab interactive window
 # can be controlled with conditional statements
 # so that only the relevant parameters appear.
 OL.if( OL.get(LASERTYPE) == 1)
 LASERTEMP.setVisible(1);
+TSKINFILE.setVisible(1);
 LASERPOWER.setVisible(0);
+QSKINFILE.setVisible(0);
 ABSORPTION.setVisible(0);
 LASERSHAPE.setVisible(0);
+REFLECTIVITY.setVisible(0);
 OL.endif
 OL.if( OL.get(LASERTYPE) == 2)
 LASERTEMP.setVisible(0);
+TSKINFILE.setVisible(0);
 LASERPOWER.setVisible(1);
+QSKINFILE.setVisible(1);
 ABSORPTION.setVisible(1);
 LASERSHAPE.setVisible(1);
+REFLECTIVITY.setVisible(1);
 OL.endif
 OL.if( OL.get(LASERTYPE) == 3)
 LASERTEMP.setVisible(1);
+TSKINFILE.setVisible(0);
 LASERPOWER.setVisible(1);
+QSKINFILE.setVisible(0);
 ABSORPTION.setVisible(1);
 LASERSHAPE.setVisible(1);
+REFLECTIVITY.setVisible(1);
 OL.endif
+
+PROBETIME.number(OL.get(STIMTIME), PostPro/, "Probe time [s]");
 
 ZSURF.number( , PostPro/,"Z coordinates");
 ZSURF.setValue(OL.eval( (OL.get(Parameters/Skin/DERMIS)+OL.get(Parameters/Skin/EPIDERMIS))* 1e-3)); 
@@ -135,9 +149,7 @@ ZSURF.addChoices( OL.eval( OL.get(ZSURF) - 0.1750 * 1e-3) );
 ZSURF.addChoices( OL.eval( OL.get(ZSURF) - 0.1875 * 1e-3) );
 ZSURF.addChoices( OL.eval( OL.get(ZSURF) - 0.2000 * 1e-3) );
 
-Tmin.number(,Solution/,"Minimum temperature");
-Tmax.number(,Solution/,"Maximum temperature");
-
+VOLUME.number(,Solution/,"Vol. above threshold [mm3]");
 
 #-2) ElmerGrid converts the mesh for Elmer
 ElmerGrid.register(interfaced);
@@ -157,15 +169,16 @@ Elmer.merge(solution.pos);
 #-4) Post-processing with Gmsh and a script
 Post1.register(interfaced);
 Post1.in(solution.pos , script.opt.ol );
-Post1.out(tempmin.txt, tempmax.txt, temp0.txt, activeMax.txt);
+Post1.out(temp0.txt, activeMax.txt);
 Post1.run(solution.pos script.opt -);
-Post1.up( tempmin.txt,-1,8,Solution/Tmin, tempmax.txt,-1,8,Solution/Tmax);
 
 #-5) Further post-processing with Gmsh and a script
 Post2.register(interfaced);
-Post2.in(solution.pos, script2.opt.ol, overheat.pos.opt.ol );
-Post2.out(overheat.pos );
+Post2.in(solution.pos, script2.opt.ol);
+Post2.out(volume.txt, aboveThres.pos );
 Post2.run( solution.pos script2.opt - );
+Post2.merge(aboveThres.pos);
+Post1.up( volmax.txt,-1,8,Solution/VOLUME);
 
 #-6) Display solution curves with either gnuplot or matlab
 POSTPRO.number(2, PostPro/,"Plot results with");

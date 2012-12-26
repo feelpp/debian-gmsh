@@ -14,30 +14,43 @@
 #include "adaptiveData.h"
 #include "GmshMessage.h"
 
-int PView::_globalNum = 0;
+int PView::_globalTag = 0;
 std::vector<PView*> PView::list;
 
-void PView::_init(int num)
+void PView::_init(int tag)
 {
-  if(num){
-    _num = num;
-    _globalNum = std::max(_globalNum, _num);
+  if(tag >= 0){
+    _tag = tag;
+    _globalTag = std::max(_globalTag, _tag) + 1;
   }
   else{
-    _num = ++_globalNum;
+    _tag = _globalTag++;
   }
+
   _changed = true;
-  _aliasOf = 0;
+  _aliasOf = -1;
   _eye = SPoint3(0., 0., 0.);
   va_points = va_lines = va_triangles = va_vectors = va_ellipses = 0;
   normals = 0;
+
+  for(unsigned int i = 0; i < list.size(); i++){
+    if(list[i]->getTag() == _tag){
+      // in normal operation this should not happen, but we allow it when
+      // programmatically forcing view tags (e.g. when using the views from
+      // within getdp's post-processing operations); this is dangerous, as it
+      // breaks aliases
+      Msg::Info("Removing existing View[%d] (tag = %d)", i, _tag);
+      delete list[i]; // warning: this changes the list
+    }
+  }
+
   list.push_back(this);
   for(unsigned int i = 0; i < list.size(); i++) list[i]->setIndex(i);
 }
 
-PView::PView(int num)
+PView::PView(int tag)
 {
-  _init(num);
+  _init(tag);
   _data = new PViewDataList();
   _options = new PViewOptions(*PViewOptions::reference());
   if(_options->adaptVisualizationGrid)
@@ -45,9 +58,9 @@ PView::PView(int num)
                             _options->targetError);
 }
 
-PView::PView(PViewData *data, int num)
+PView::PView(PViewData *data, int tag)
 {
-  _init(num);
+  _init(tag);
   _data = data;
   _options = new PViewOptions(*PViewOptions::reference());
   if(_options->adaptVisualizationGrid)
@@ -59,16 +72,16 @@ PView::PView(PView *ref, bool copyOptions)
 {
   _init();
 
-  if(ref->getAliasOf()){ // alias of an alias
-    PView *orig = getViewByNum(ref->getAliasOf());
-    if(orig) _aliasOf = orig->getNum();
+  if(ref->getAliasOf() >= 0){ // alias of an alias
+    PView *orig = getViewByTag(ref->getAliasOf());
+    if(orig) _aliasOf = orig->getTag();
     else{
       Msg::Warning("Original view for alias does not exist anymore");
-      _aliasOf = ref->getNum();
+      _aliasOf = ref->getTag();
     }
   }
   else
-    _aliasOf = ref->getNum();
+    _aliasOf = ref->getTag();
 
   _data = ref->getData();
   if(copyOptions)
@@ -145,17 +158,17 @@ PView::~PView()
 
   // do not delete if another view is an alias of this one
   for(unsigned int i = 0; i < list.size(); i++)
-    if(list[i]->getAliasOf() == _num)
+    if(list[i]->getAliasOf() == _tag)
       return;
 
   // do not delete if this view is an alias and 1) if the original
   // still exists, or 2) if there are other aliases to the same view
-  if(_aliasOf)
+  if(_aliasOf >= 0)
     for(unsigned int i = 0; i < list.size(); i++)
-      if(list[i]->getNum() == _aliasOf || list[i]->getAliasOf() == _aliasOf)
+      if(list[i]->getTag() == _aliasOf || list[i]->getAliasOf() == _aliasOf)
         return;
 
-  Msg::Debug("Deleting data in View[%d] (unique num = %d)", _index, _num);
+  Msg::Debug("Deleting data in View[%d] (tag = %d)", _index, _tag);
   delete _data;
 }
 
@@ -300,10 +313,10 @@ PView *PView::getViewByFileName(const std::string &name, int timeStep, int parti
   return 0;
 }
 
-PView *PView::getViewByNum(int num, int timeStep, int partition)
+PView *PView::getViewByTag(int tag, int timeStep, int partition)
 {
   for(unsigned int i = 0; i < list.size(); i++){
-    if(list[i]->getNum() == num &&
+    if(list[i]->getTag() == tag &&
        ((timeStep < 0 || !list[i]->getData()->hasTimeStep(timeStep)) ||
         (partition < 0 || !list[i]->getData()->hasPartition(timeStep, partition))))
       return list[i];
