@@ -3,7 +3,7 @@ Section: math
 Priority: optional
 Maintainer: Debian Science Maintainers <debian-science-maintainers@lists.alioth.debian.org>
 Uploaders: Christophe Prud'homme <prudhomm@debian.org>, 
- Anton Gladky <gladky.anton@gmail.com>,
+ Anton Gladky <gladk@debian.org>,
  Christophe Trophime <christophe.trophime@lncmi.cnrs.fr>
 Build-Depends: debhelper (>= 9), cmake, gfortran, libgl1-mesa-dev,
  libglu1-mesa-dev, libfltk1.3-dev (>=1.1.7),
