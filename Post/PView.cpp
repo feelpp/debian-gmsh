@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <string.h>
 #include <algorithm>
@@ -121,6 +121,8 @@ PView::PView(const std::string &name, const std::string &type,
     t = PViewDataGModel::ElementData;
   else if(type == "ElementNodeData")
     t = PViewDataGModel::ElementNodeData;
+  else if(type == "Beam")
+    t = PViewDataGModel::BeamData;
   else{
     Msg::Error("Unknown type of view to create '%s'", type.c_str());
     return;

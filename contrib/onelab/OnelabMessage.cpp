@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -18,7 +18,7 @@
 
 int OLMsg::_commRank = 0;
 int OLMsg::_commSize = 1;
-int OLMsg::_verbosity = 1;
+int OLMsg::_verbosity = 4;
 // int OLMsg::_progressMeterStep = 10;
 // int OLMsg::_progressMeterCurrent = 0;
 // std::map<std::string, double> OLMsg::_timers;

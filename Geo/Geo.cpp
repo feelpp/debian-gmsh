@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <stdlib.h>
 #include <string.h>
@@ -594,6 +594,7 @@ Surface *Create_Surface(int Num, int Typ)
   pS->TransfiniteSmoothing = -1;
   pS->TrsfPoints = List_Create(4, 4, sizeof(Vertex *));
   pS->Generatrices = NULL;
+  pS->GeneratricesByTag = NULL;
   pS->EmbeddedPoints = NULL;
   pS->EmbeddedCurves = NULL;
   pS->Extrude = NULL;
@@ -607,6 +608,7 @@ static void Free_Surface(void *a, void *b)
   if(pS) {
     List_Delete(pS->TrsfPoints);
     List_Delete(pS->Generatrices);
+    List_Delete(pS->GeneratricesByTag);
     List_Delete(pS->EmbeddedCurves);
     List_Delete(pS->EmbeddedPoints);
     delete pS;
@@ -619,6 +621,7 @@ Volume *Create_Volume(int Num, int Typ)
   Volume *pV = new Volume;
   pV->Color.type = 0;
   pV->Visible = 1;
+  pV->Recombine3D = 0;
   pV->Num = Num;
   GModel::current()->getGEOInternals()->MaxVolumeNum =
     std::max(GModel::current()->getGEOInternals()->MaxVolumeNum, Num);
@@ -1022,9 +1025,11 @@ static void CopySurface(Surface *s, Surface *ss, bool copyMeshingMethod)
     if(List_Nbr(s->TrsfPoints))
       Msg::Warning("Only automatic transfinite surface specifications can be copied");
   }
-  ss->Generatrices = List_Create(List_Nbr(s->Generatrices), 1, sizeof(Curve *));
+  ss->Generatrices = List_Create(List_Nbr(s->Generatrices) + 1, 1, sizeof(Curve *));
+  ss->GeneratricesByTag = List_Create(List_Nbr(s->GeneratricesByTag) + 1, 1, sizeof(int));
   ss->InSphereCenter = s->InSphereCenter; // FIXME: hack...
   List_Copy(s->Generatrices, ss->Generatrices);
+  List_Copy(s->GeneratricesByTag, ss->GeneratricesByTag);
   End_Surface(ss);
 }
 
@@ -1048,6 +1053,7 @@ static void CopyVolume(Volume *v, Volume *vv, bool copyMeshingMethod)
   if(copyMeshingMethod){
     vv->Method = v->Method;
     vv->QuadTri = v->QuadTri;
+    vv->Recombine3D = v->Recombine3D;
     if(List_Nbr(v->TrsfPoints))
       Msg::Warning("Only automatic transfinite volume specifications can be copied");
   }
@@ -3624,7 +3630,10 @@ void setSurfaceEmbeddedCurves(Surface *s, List_T *curves)
 void setSurfaceGeneratrices(Surface *s, List_T *loops)
 {
   int nbLoop = List_Nbr(loops);
+  List_Delete(s->Generatrices);
   s->Generatrices = List_Create(4, 4, sizeof(Curve *));
+  List_Delete(s->GeneratricesByTag);
+  s->GeneratricesByTag = List_Create(4, 4, sizeof(int));
   for(int i = 0; i < nbLoop; i++) {
     int iLoop;
     List_Read(loops, i, &iLoop);
@@ -3645,10 +3654,9 @@ void setSurfaceGeneratrices(Surface *s, List_T *loops)
           ic *= sign(iLoop);
           if(i != 0) ic *= -1; // hole
           if(!(c = FindCurve(ic))) {
-            Msg::Error("Unknown curve %d", ic);
             List_Delete(s->Generatrices);
             s->Generatrices = NULL;
-            return;
+            break;
           }
           else
             List_Add(s->Generatrices, &c);
@@ -3663,10 +3671,23 @@ void setSurfaceGeneratrices(Surface *s, List_T *loops)
             Msg::Error("Unknown curve %d", ic);
             List_Delete(s->Generatrices);
             s->Generatrices = NULL;
-            return;
+            break;
           }
           else
             List_Add(s->Generatrices, &c);
+        }
+      }
+      if(!s->Generatrices){
+        for(int j = 0; j < List_Nbr(el->Curves); j++) {
+          List_Read(el->Curves, j, &ic);
+          GEdge *ge = GModel::current()->getEdgeByTag(abs(ic));
+          if(ge) {
+            List_Add(s->GeneratricesByTag, &ic);
+          }
+          else{
+            Msg::Error("Unknown curve %d", ic);
+            return;
+          }
         }
       }
     }

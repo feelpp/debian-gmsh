@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <limits>
 #include <stdlib.h>
@@ -579,7 +579,7 @@ int GModel::adaptMesh(std::vector<int> technique,
       char name[256];
       sprintf(name, "meshAdapt-%d.msh", ITER);
       writeMSH(name);
-      metric->exportInfo(name);
+      //metric->exportInfo(name);
 
       if (ITER++ >= niter)  break;
       if (ITER > 3 && fabs((double)(nbElems - nbElemsOld)) < 0.01 * nbElemsOld) break;
@@ -3187,6 +3187,8 @@ void GModel::computeHomology()
   if(_homologyRequests.empty()) return;
 
 #if defined(HAVE_KBIPACK)
+  double t1 = Cpu();
+
   // find unique domain/subdomain requests
   typedef std::pair<std::vector<int>, std::vector<int> > dpair;
   typedef std::pair<std::string, std::vector<int> > tpair;
@@ -3253,6 +3255,11 @@ void GModel::computeHomology()
     _pruneMeshVertexAssociations();
     delete homology;
   }
+
+  double t2 = Cpu();
+  Msg::StatusBar(true, "Done homology and cohomology computation (%g s)",
+                 t2 - t1);
+
 #else
   Msg::Error("Homology computation requires KBIPACK");
 #endif

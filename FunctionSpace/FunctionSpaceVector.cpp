@@ -1,90 +1,93 @@
+#include "Mapper.h"
 #include "FunctionSpaceVector.h"
 
-using namespace std;
-
-FunctionSpaceVector::FunctionSpaceVector(void){
-  hasCurl   = false;
-  curlBasis = NULL;
-
-  hasDiv   = false;
-  divBasis = NULL;
-
-  locPreEvaluated  = false;
-  curlPreEvaluated = false;  
-  divPreEvaluated  = false;  
-  evalLoc          = NULL;
-  evalCurl         = NULL;
-  evalDiv          = NULL;
+FunctionSpaceVector::FunctionSpaceVector(GroupOfElement& goe,
+                                         const Basis& basis){
+  scalar = false;
+  build(goe, basis);
 }
 
 FunctionSpaceVector::~FunctionSpaceVector(void){
-  if(hasCurl)
-    delete curlBasis;
-
-  if(hasDiv)
-    delete divBasis;
-
-  if(locPreEvaluated)
-    delete evalLoc;
-
-  if(curlPreEvaluated)
-    delete evalCurl;
-
-  if(divPreEvaluated)
-    delete evalDiv;
+  // Done by FunctionSpace
 }
 
-void FunctionSpaceVector::
-preEvaluateLocalFunctions(fullMatrix<double>& points){
-  // Delete Old Struct (if any) //
-  if(locPreEvaluated)
-    delete evalLoc;
+fullVector<double> FunctionSpaceVector::
+interpolate(const MElement& element,
+	    const std::vector<double>& coef,
+	    const fullVector<double>& xyz) const{
 
-  // New Struct //
-  evalLoc = new EvaluatedBasis(*basisVector, points);
+  // Const Cast For MElement //
+  MElement& eelement =
+    const_cast<MElement&>(element);
 
-  // PreEvaluated //
-  locPreEvaluated = true;
-}
+  // Get Reference coordinate //
+  double phys[3] = {xyz(0), xyz(1), xyz(2)};
+  double uvw[3];
 
-void FunctionSpaceVector::
-preEvaluateCurlLocalFunctions(fullMatrix<double>& points){
-  // Got Curl Basis ? //
-  // --> mutable data 
-  //  --> Just a 'cache memory' 
-  if(!hasCurl){
-    curlBasis = new CurlBasis(*basisVector);
-    hasCurl   = true;
+  eelement.xyz2uvw(phys, uvw);
+
+  // Get Jacobian //
+  fullMatrix<double>  invJac(3, 3);
+  eelement.getJacobian(uvw[0], uvw[1], uvw[2], invJac);
+  invJac.invertInPlace();
+
+  // Get Basis Functions //
+  fullMatrix<double>* fun =
+    (*basis)[0]->getFunctions(element, uvw[0], uvw[1], uvw[2]);
+
+  const unsigned int nFun = fun->size1();
+
+  // Interpolate (in Reference Place) //
+  fullVector<double> val(3);
+  val(0) = 0;
+  val(1) = 0;
+  val(2) = 0;
+
+  for(unsigned int i = 0; i < nFun; i++){
+    val(0) += (*fun)(i, 0) * coef[i];
+    val(1) += (*fun)(i, 1) * coef[i];
+    val(2) += (*fun)(i, 2) * coef[i];
   }
 
-  // Delete Old Struct (if any) //
-  if(curlPreEvaluated)
-    delete evalCurl;
-
-  // New Struct //
-  evalCurl = new EvaluatedBasis(*curlBasis, points);
-
-  // PreEvaluated //
-  curlPreEvaluated = true;
+  // Return Interpolated Value //
+  delete fun;
+  return Mapper::grad(val, invJac);
 }
 
-void FunctionSpaceVector::
-preEvaluateDivLocalFunctions(fullMatrix<double>& points){
-  // Got Div Basis ? //
-  // --> mutable data 
-  //  --> Just a 'cache memory' 
-  if(!hasDiv){
-    divBasis = new DivBasis(*basisVector);
-    hasDiv   = true;
+fullVector<double> FunctionSpaceVector::
+interpolateInRefSpace(const MElement& element,
+		      const std::vector<double>& coef,
+		      const fullVector<double>& uvw) const{
+
+  // Const Cast For MElement //
+  MElement& eelement =
+    const_cast<MElement&>(element);
+
+  // Get Jacobian //
+  fullMatrix<double>  invJac(3, 3);
+  eelement.getJacobian(uvw(0), uvw(1), uvw(2), invJac);
+  invJac.invertInPlace();
+
+  // Get Basis Functions //
+  fullMatrix<double>* fun =
+    (*basis)[0]->getFunctions(element, uvw(0), uvw(1), uvw(2));
+
+  const unsigned int nFun = fun->size1();
+
+
+  // Interpolate (in Reference Place) //
+  fullVector<double> val(3);
+  val(0) = 0;
+  val(1) = 0;
+  val(2) = 0;
+
+  for(unsigned int i = 0; i < nFun; i++){
+    val(0) += (*fun)(i, 0) * coef[i];
+    val(1) += (*fun)(i, 1) * coef[i];
+    val(2) += (*fun)(i, 2) * coef[i];
   }
 
-  // Delete Old Struct (if any) //
-  if(divPreEvaluated)
-    delete evalDiv;
-
-  // New Struct //
-  evalDiv = new EvaluatedBasis(*divBasis, points);
-
-  // PreEvaluated //
-  divPreEvaluated = true;
+  // Return Interpolated Value //
+  delete fun;
+  return Mapper::grad(val, invJac);
 }

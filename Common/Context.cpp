@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <stdlib.h>
 #include <string.h>
@@ -23,8 +23,13 @@ CTX::CTX()
   const char *tmp;
   if((tmp = GetEnvironmentVar("GMSH_HOME")))
     homeDir = tmp;
+#if defined(WIN32)
+  else if((tmp = GetEnvironmentVar("APPDATA")))
+    homeDir = tmp;
+#else
   else if((tmp = GetEnvironmentVar("HOME")))
     homeDir = tmp;
+#endif
   else if((tmp = GetEnvironmentVar("TMP")))
     homeDir = tmp;
   else if((tmp = GetEnvironmentVar("TEMP")))

@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <FL/Fl.H>
 #include "GmshConfig.h"
@@ -241,6 +241,8 @@ bool onelab::localNetworkClient::run()
           server->SendMessage(GmshSocket::GMSH_PARAMETER, reply.size(), &reply[0]);
         }
         else{
+          // FIXME: introduce GMSH_PARAMETER_NOT_FOUND message to handle this
+          // (need to change onelab.h accordingly)
           reply = "OneLab parameter '" + name + "' not found";
           server->SendMessage(GmshSocket::GMSH_INFO, reply.size(), &reply[0]);
         }
@@ -658,7 +660,16 @@ static void onelab_choose_executable_cb(Fl_Widget *w, void *data)
   const char *old = 0;
   if(!c->getExecutable().empty()) old = c->getExecutable().c_str();
 
-  if(fileChooser(FILE_CHOOSER_SINGLE, "Choose executable", pattern.c_str(), old)){
+  if(!w){
+    const char *old = fl_close;
+    fl_close = "OK";
+    fl_message("This appears to be the first time you are trying to run %s.\n\n"
+               "Please select the path to the executable.", c->getName().c_str());
+    fl_close = old;
+  }
+
+  std::string title = "Choose location of " + c->getName() + " executable";
+  if(fileChooser(FILE_CHOOSER_SINGLE, title.c_str(), pattern.c_str(), old)){
     std::string exe = fileChooserGetName(1);
     c->setExecutable(exe);
     if(c->getIndex() >= 0 && c->getIndex() < 5)
@@ -779,11 +790,14 @@ onelabGroup::onelabGroup(int x, int y, int w, int h, const char *l)
   _tree->color(col);
   _tree->callback(onelab_tree_cb);
   _tree->connectorstyle(FL_TREE_CONNECTOR_SOLID);
-  //_tree->connectorstyle(FL_TREE_CONNECTOR_NONE);
+  // _tree->marginleft(0);
+  // _tree->usericonmarginleft(0);
+  // _tree->labelmarginleft(0);
+  // _tree->connectorwidth(15);
   _tree->showroot(0);
   _tree->box(FL_FLAT_BOX);
   _tree->scrollbar_size(std::max(10, FL_NORMAL_SIZE - 2));
-  //_tree->resizable(0);
+  // _tree->resizable(0);
   _tree->end();
 
   _computeWidths();
@@ -1500,8 +1514,11 @@ void onelabGroup::rebuildSolverList()
 void onelabGroup::addSolver(const std::string &name, const std::string &executable,
                             const std::string &remoteLogin, int index)
 {
-  if(onelab::server::instance()->findClient(name) !=
-     onelab::server::instance()->lastClient()) return; // solver already exists
+  onelab::server::citer it = onelab::server::instance()->findClient(name);
+  if(it != onelab::server::instance()->lastClient()){
+    if(executable.empty()) onelab_choose_executable_cb(0, (void *)it->second);
+    return; // solver already exists
+  }
 
   // unregister the other non-local clients so we keep only the new one
   std::vector<onelab::client*> networkClients;
@@ -1519,8 +1536,7 @@ void onelabGroup::addSolver(const std::string &name, const std::string &executab
                                                                  remoteLogin);
   c->setIndex(index);
   opt_solver_name(index, GMSH_SET, name);
-  if(executable.empty())
-    onelab_choose_executable_cb(0, (void *)c);
+  if(executable.empty()) onelab_choose_executable_cb(0, (void *)c);
   opt_solver_remote_login(index, GMSH_SET, remoteLogin);
 
   FlGui::instance()->onelab->rebuildSolverList();

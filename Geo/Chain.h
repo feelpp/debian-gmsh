@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 //
 // Contributed by Matti Pellikka <matti.pellikka@tut.fi>.
 
@@ -18,11 +18,9 @@
 #include "PViewOptions.h"
 #endif
 
-#if defined(HAVE_FLTK)
-#include "FlGui.h"
-#endif
-
 #if defined(HAVE_KBIPACK)
+
+void updateFltkTree();
 
 template <class TTypeA, class TTypeB>
   bool convert(const TTypeA& input, TTypeB& output ){
@@ -520,9 +518,7 @@ void Chain<C>::addToModel(GModel* m, bool post,
     if(opt->tangents == 0) opt->tangents = size;
     if(opt->normals == 0) opt->normals = size;
     view->setOptions(opt);
-#if defined(HAVE_FLTK)
-    FlGui::instance()->rebuildTree();
-#endif
+    updateFltkTree();
   }
 #endif
 }

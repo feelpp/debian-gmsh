@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include "PViewDataGModel.h"
 #include "MPoint.h"
@@ -292,8 +292,10 @@ SBoundingBox3d PViewDataGModel::getBoundingBox(int step)
 {
   if(step < 0 || _steps.empty()){
     SBoundingBox3d tmp;
-    for(unsigned int i = 0; i < _steps.size(); i++)
-      tmp += _steps[i]->getBoundingBox();
+    for(unsigned int i = 0; i < _steps.size(); i++){
+      if(!_steps[i]->getBoundingBox().empty())
+        tmp += _steps[i]->getBoundingBox();
+    }
     return tmp;
   }
   return _steps[step]->getBoundingBox();

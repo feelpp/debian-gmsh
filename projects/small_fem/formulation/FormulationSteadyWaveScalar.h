@@ -1,20 +1,18 @@
 #ifndef _FORMULATIONSTEADYWAVESCALAR_H_
 #define _FORMULATIONSTEADYWAVESCALAR_H_
 
-#include <vector>
+#include "FunctionSpaceScalar.h"
 
-#include "FunctionSpaceNode.h"
+#include "TermHCurl.h"
+#include "TermHOne.h"
+
 #include "Formulation.h"
 
 /**
    @class FormulationSteadyWaveScalar
    @brief Scalar Formulation for the Steady Wave problem
 
-   Scalar Formulation for the @em Steady @em Wave problem.
-
-   @todo
-   Remove ALL const_cast%S by correcting MElement constness@n
-   Allow Hybrid Mesh
+   Scalar Formulation for the @em Steady @em Wave problem
  */
 
 class FormulationSteadyWaveScalar: public Formulation{
@@ -26,30 +24,25 @@ class FormulationSteadyWaveScalar: public Formulation{
   // Wave Number Squared //
   double kSquare;
 
-  // Gaussian Quadrature Data (Term One) //
-  int G1;
-  fullMatrix<double>* gC1;
-  fullVector<double>* gW1;
+  // Function Space & Basis //
+  FunctionSpaceScalar* fspace;
+  Basis*               basis;
 
-  // Gaussian Quadrature Data (Term Two) //
-  int G2;
-  fullMatrix<double>* gC2;
-  fullVector<double>* gW2;
-
-  // Function Space //
-  FunctionSpaceNode* fspace;
+  // Local Terms //
+  TermHCurl* localTerms1;
+  TermHOne*  localTerms2;
 
  public:
-  FormulationSteadyWaveScalar(const GroupOfElement& goe,
+  FormulationSteadyWaveScalar(GroupOfElement& goe,
 			      double k,
 			      unsigned int order);
 
   virtual ~FormulationSteadyWaveScalar(void);
 
-  virtual double weak(int dofI, int dofJ, 
+  virtual double weak(unsigned int dofI, unsigned int dofJ,
 		      const GroupOfDof& god) const;
 
-  virtual double rhs(int equationI,
+  virtual double rhs(unsigned int equationI,
 		     const GroupOfDof& god) const;
 
   virtual const FunctionSpace& fs(void) const;
@@ -61,28 +54,15 @@ class FormulationSteadyWaveScalar: public Formulation{
    @param k A real number
    @param order A natural number
 
-   Instantiates a new FormulationSteadyWaveScalar of the given 
+   Instantiates a new FormulationSteadyWaveScalar of the given
    @em order and @em wave @em number (@c k)@n
 
-   The given GroupOfElement will be used as the 
+   The given GroupOfElement will be used as the
    geomtrical @em domain
    **
 
    @fn FormulationSteadyWaveScalar::~FormulationSteadyWaveScalar
    Deletes this FormulationSteadyWaveScalar
 */
-
-//////////////////////
-// Inline Functions //
-//////////////////////
-
-inline double FormulationSteadyWaveScalar::rhs(int equationI,
-					       const GroupOfDof& god) const{
-  return 0;
-}
-
-inline const FunctionSpace& FormulationSteadyWaveScalar::fs(void) const{
-  return *fspace;
-}
 
 #endif

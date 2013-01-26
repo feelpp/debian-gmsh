@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include "GmshConfig.h"
 #include "GModel.h"
@@ -372,7 +372,9 @@ void meshGEdge::operator() (GEdge *ge)
     N = ge->meshAttributes.nbPointsTransfinite;
   }
   else{
-    if (CTX::instance()->mesh.algo2d == ALGO_2D_BAMG || CTX::instance()->mesh.algo2d == ALGO_2D_PACK_PRLGRMS || blf){
+    if (CTX::instance()->mesh.algo2d == ALGO_2D_BAMG
+	//	|| CTX::instance()->mesh.algo2d == ALGO_2D_PACK_PRLGRMS
+	|| blf){
       a = Integration(ge, t_begin, t_end, F_Lc_aniso, Points,
                       CTX::instance()->mesh.lcIntegrationPrecision);
     }
@@ -388,10 +390,10 @@ void meshGEdge::operator() (GEdge *ge)
       pt.xp = der.norm();
     }
     a = smoothPrimitive(ge, sqrt(CTX::instance()->mesh.smoothRatio), Points);
-    N = std::max(ge->minimumMeshSegments() + 1, (int)(a + 1.));
+    N = std::max(ge->minimumMeshSegments() + 1, (int)(a + 1.99));
   }
 
-  // force odd number of points for if blossom is used for recombination
+  // force odd number of points if blossom is used for recombination
   if(ge->meshAttributes.Method != MESH_TRANSFINITE &&
      CTX::instance()->mesh.algoRecombine == 1 && N % 2 == 0){
     if(/* 1 ||*/ CTX::instance()->mesh.recombineAll){

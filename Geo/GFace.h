@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #ifndef _GFACE_H_
 #define _GFACE_H_
@@ -93,6 +93,11 @@ class GFace : public GEntity
   // edges that bound the face
   virtual std::list<GEdge*> edges() const { return l_edges; }
   virtual std::list<int> edgeOrientations() const { return l_dirs; }
+  inline bool containsEdge (int iEdge) const {
+    for (std::list<GEdge*>::const_iterator it = l_edges.begin() ; it !=l_edges.end() ; ++it)
+      if ((*it)->tag() == iEdge) return true;
+    return false;
+  }
 
   // edges that are embedded in the face
   virtual std::list<GEdge*> embeddedEdges() const { return embedded_edges; }

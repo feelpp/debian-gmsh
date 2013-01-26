@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <stdlib.h>
 #include <math.h>
@@ -112,19 +112,12 @@ void MElement::scaledJacRange(double &jmin, double &jmax)
 {
   jmin = jmax = 1.0;
 #if defined(HAVE_MESH)
-  if (getPolynomialOrder() == 1) return;
-  const JacobianBasis *jac = getJacobianFuncSpace(),*jac1 = getJacobianFuncSpace(1);    // Jac. and prim. Jac. basis
-  const int numJacNodes = jac->getNumJacNodes(), numJac1Nodes = jac1->getNumJacNodes();
-  const int numMapNodes = jac->getNumMapNodes(), numMap1Nodes = jac1->getNumMapNodes();
-  fullMatrix<double> nodesXYZ(numMapNodes,3), nodesXYZ1(numMap1Nodes,3);
+  const JacobianBasis *jac = getJacobianFuncSpace();
+  const int numJacNodes = jac->getNumJacNodes();
+  fullMatrix<double> nodesXYZ(jac->getNumMapNodes(),3);
   getNodesCoord(nodesXYZ);
-  nodesXYZ1.copy(nodesXYZ,0,numMap1Nodes,0,3,0,0);
-  fullVector<double> Ji(numJacNodes), J1i(numJac1Nodes), J1Ji(numJacNodes);
-  jac->getSignedJacobian(nodesXYZ,Ji);
-  jac1->getSignedJacobian(nodesXYZ1,J1i);
-  jac->primJac2Jac(J1i,J1Ji);
-  fullVector<double> SJi(numJacNodes), Bi(numJacNodes);                                 // Calc scaled Jacobian -> Bezier
-  for (int i=0; i<numJacNodes; i++) SJi(i) = Ji(i)/J1Ji(i);
+  fullVector<double> SJi(numJacNodes), Bi(numJacNodes);
+  jac->getScaledJacobian(nodesXYZ,SJi);
   jac->lag2Bez(SJi,Bi);
   jmin = *std::min_element(Bi.getDataPtr(),Bi.getDataPtr()+Bi.size());
   jmax = *std::max_element(Bi.getDataPtr(),Bi.getDataPtr()+Bi.size());
@@ -1074,7 +1067,12 @@ void MElement::writeMESH(FILE *fp, int elementTagType, int elementary,
 {
   setVolumePositive();
   for(int i = 0; i < getNumVertices(); i++)
-    fprintf(fp, " %d", getVertex(i)->getIndex());
+    if (getTypeForMSH() == MSH_TET_10 && i == 8)
+      fprintf(fp, " %d", getVertex(9)->getIndex());
+    else if (getTypeForMSH() == MSH_TET_10 && i == 9)
+      fprintf(fp, " %d", getVertex(8)->getIndex());
+    else
+      fprintf(fp, " %d", getVertex(i)->getIndex());
   fprintf(fp, " %d\n", (elementTagType == 3) ? _partition :
           (elementTagType == 2) ? physical : elementary);
 }

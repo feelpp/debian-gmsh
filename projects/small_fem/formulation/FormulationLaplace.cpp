@@ -1,80 +1,61 @@
-#include <cmath>
+#include "BasisGenerator.h"
+#include "GaussIntegration.h"
+#include "Jacobian.h"
 
 #include "Exception.h"
-#include "fullMatrix.h"
-#include "GaussIntegration.h"
-#include "Polynomial.h"
-#include "Mapper.h"
-
 #include "FormulationLaplace.h"
 
 using namespace std;
 
-FormulationLaplace::FormulationLaplace(const GroupOfElement& goe,
+FormulationLaplace::FormulationLaplace(GroupOfElement& goe,
 				       unsigned int order){
   // Can't have 0th order //
   if(order == 0)
-    throw 
+    throw
       Exception("Can't have a Laplace formulation of order 0");
 
+  // Function Space & Basis //
+  basis  = BasisGenerator::generate(goe.get(0).getType(),
+                                    0, order, "hierarchical");
+
+  fspace = new FunctionSpaceScalar(goe, *basis);
+
   // Gaussian Quadrature Data //
-  gC = new fullMatrix<double>();
-  gW = new fullVector<double>();
+  fullMatrix<double> gC;
+  fullVector<double> gW;
 
   // Look for 1st element to get element type
   // (We suppose only one type of Mesh !!)
-  gaussIntegration::get(goe.get(0).getType(), 2 * (order - 1), *gC, *gW);
+  gaussIntegration::get(goe.get(0).getType(), 2 * (order - 1), gC, gW);
 
-  G = gW->size(); // Nbr of Gauss points
+  // Local Terms //
+  basis->preEvaluateDerivatives(gC);
+  goe.orientAllElements(*basis);
 
-  // Function Space //
-  fspace = new FunctionSpaceNode(goe, order);
+  Jacobian jac(goe, gC);
+  jac.computeInvertJacobians();
 
-  // PreEvaluate
-  fspace->preEvaluateGradLocalFunctions(*gC);
+  localTerms = new TermHCurl(jac, *basis, gW);
 }
 
 FormulationLaplace::~FormulationLaplace(void){
-  delete gC;
-  delete gW;
+  delete basis;
   delete fspace;
+  delete localTerms;
 }
 
-double FormulationLaplace::weak(int dofI, int dofJ, 
+double FormulationLaplace::weak(unsigned int dofI, unsigned int dofJ,
 				const GroupOfDof& god) const{
-  // Init Some Stuff //
-  fullVector<double> phiI(3);
-  fullVector<double> phiJ(3);
-  fullMatrix<double> invJac(3, 3);        
-  double integral = 0;
 
-  // Get Element and Basis Functions //
-  const MElement& element = god.getGeoElement();
-  MElement&      celement = const_cast<MElement&>(element);
-  
-  const fullMatrix<double>& eFun = 
-    fspace->getEvaluatedGradLocalFunctions(element);
+  return localTerms->getTerm(dofI, dofJ, god);
+}
 
-  // Loop over Integration Point //
-  for(int g = 0; g < G; g++){
-    double det = celement.getJacobian((*gC)(g, 0), 
-				      (*gC)(g, 1), 
-				      (*gC)(g, 2), 
-				      invJac);
-    invJac.invertInPlace();
 
-    phiI = Mapper::grad(eFun(dofI, g * 3),
-			eFun(dofI, g * 3 + 1),
-			eFun(dofI, g * 3 + 2),
-			invJac);
+double FormulationLaplace::rhs(unsigned int equationI,
+                               const GroupOfDof& god) const{
+  return 0;
+}
 
-    phiJ = Mapper::grad(eFun(dofJ, g * 3),
-			eFun(dofJ, g * 3 + 1), 
-			eFun(dofJ, g * 3 + 2), 
-			invJac);
-    
-    integral += phiI * phiJ * fabs(det) * (*gW)(g);
-  }
-
-  return integral;
+const FunctionSpace& FormulationLaplace::fs(void) const{
+  return *fspace;
 }

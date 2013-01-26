@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <stack>
 #include "GmshConfig.h"
@@ -2148,7 +2148,7 @@ void _relocateVertex(GFace *gf, MVertex *ver,
     }
     else{
 #if defined(HAVE_BFGS)
-      _relocateVertexOpti(gf, ver, lt);
+      //      _relocateVertexOpti(gf, ver, lt);
 #endif
     }
   }
@@ -2182,7 +2182,7 @@ void laplaceSmoothing(GFace *gf, int niter, bool infinity_norm)
 
 int untangleInvalidQuads(GFace *gf, int niter)
 {
-  //  return;
+  //  return 0;
   int N = 0;
 #if defined(HAVE_BFGS)
   v2t_cont adj;

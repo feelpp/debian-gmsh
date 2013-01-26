@@ -1,8 +1,8 @@
 %{
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <string.h>
 #include <stdarg.h>
@@ -911,13 +911,13 @@ Affectation :
     {
       std::string tmp($5);
       StringOption(GMSH_SET|GMSH_GUI, $1, 0, $3, tmp);
-      Free($1); Free($3); Free($5)
+      Free($1); Free($3); Free($5);
     }
   | tSTRING '[' FExpr ']' '.' tSTRING tAFFECT StringExpr tEND
     {
       std::string tmp($8);
       StringOption(GMSH_SET|GMSH_GUI, $1, (int)$3, $6, tmp);
-      Free($1); Free($6); Free($8)
+      Free($1); Free($6); Free($8);
     }
 
   // Option Numbers
@@ -3687,6 +3687,45 @@ Transfinite :
         List_Delete($3);
       }
     }
+  | tRecombine tVolume ListOfDoubleOrAll  tEND
+    {
+      if(!$3){
+	List_T *tmp = Tree2List(GModel::current()->getGEOInternals()->Volumes);
+        if(List_Nbr(tmp)){
+          for(int i = 0; i < List_Nbr(tmp); i++){
+            Volume *v;
+            List_Read(tmp, i, &v);
+            v->Recombine3D = 1;
+          }
+        }
+        else{
+          for(GModel::riter it = GModel::current()->firstRegion();
+              it != GModel::current()->lastRegion(); it++){
+            (*it)->meshAttributes.recombine3D = 1;
+          }
+        }
+        List_Delete(tmp);
+      }
+      else{
+        for(int i = 0; i < List_Nbr($3); i++){
+          double d;
+          List_Read($3, i, &d);
+          Volume *v = FindVolume((int)d);
+          if(v){
+            v->Recombine3D = 1;
+          }
+          else{
+            GRegion *gr = GModel::current()->getRegionByTag((int)d);
+            if(gr){
+              gr->meshAttributes.recombine3D = 1;
+            }
+            else
+              yymsg(1, "Unknown volume %d", (int)d);
+          }
+        }
+        List_Delete($3);
+      }
+    }
   | tSmoother tSurface ListOfDouble tAFFECT FExpr tEND
     {
       for(int i = 0; i < List_Nbr($3); i++){
@@ -4335,9 +4374,8 @@ FExpr_Multi :
   | FExpr tDOTS FExpr tDOTS FExpr
     {
       $$ = List_Create(2, 1, sizeof(double));
-      if(!$5 || ($1 < $3 && $5 < 0) || ($1 > $3 && $5 > 0)){
+      if(!$5){  //|| ($1 < $3 && $5 < 0) || ($1 > $3 && $5 > 0)
         yymsg(0, "Wrong increment in '%g:%g:%g'", $1, $3, $5);
-	List_Add($$, &($1));
       }
       else
 	for(double d = $1; ($5 > 0) ? (d <= $3) : (d >= $3); d += $5)
@@ -4394,6 +4432,17 @@ FExpr_Multi :
             List_Add($$, &d);
           }
         }
+        else{
+          std::map<int, std::vector<GEntity*> > groups[4];
+          GModel::current()->getPhysicalGroups(groups);
+          std::map<int, std::vector<GEntity*> >::iterator it = groups[0].find((int)num);
+          if(it != groups[0].end()){
+            for(unsigned j = 0; j < it->second.size(); j++){
+              double d = it->second[j]->tag();
+              List_Add($$, &d);
+            }
+          }
+        }
       }
       List_Delete($4);
     }
@@ -4410,6 +4459,17 @@ FExpr_Multi :
             List_Read(p->Entities, j, &nume);
             double d = nume;
             List_Add($$, &d);
+          }
+        }
+        else{
+          std::map<int, std::vector<GEntity*> > groups[4];
+          GModel::current()->getPhysicalGroups(groups);
+          std::map<int, std::vector<GEntity*> >::iterator it = groups[1].find((int)num);
+          if(it != groups[1].end()){
+            for(unsigned j = 0; j < it->second.size(); j++){
+              double d = it->second[j]->tag();
+              List_Add($$, &d);
+            }
           }
         }
       }
@@ -4430,6 +4490,17 @@ FExpr_Multi :
             List_Add($$, &d);
           }
         }
+        else{
+          std::map<int, std::vector<GEntity*> > groups[4];
+          GModel::current()->getPhysicalGroups(groups);
+          std::map<int, std::vector<GEntity*> >::iterator it = groups[2].find((int)num);
+          if(it != groups[2].end()){
+            for(unsigned j = 0; j < it->second.size(); j++){
+              double d = it->second[j]->tag();
+              List_Add($$, &d);
+            }
+          }
+        }
       }
       List_Delete($4);
     }
@@ -4446,6 +4517,17 @@ FExpr_Multi :
             List_Read(p->Entities, j, &nume);
             double d = nume;
             List_Add($$, &d);
+          }
+        }
+        else{
+          std::map<int, std::vector<GEntity*> > groups[4];
+          GModel::current()->getPhysicalGroups(groups);
+          std::map<int, std::vector<GEntity*> >::iterator it = groups[3].find((int)num);
+          if(it != groups[3].end()){
+            for(unsigned j = 0; j < it->second.size(); j++){
+              double d = it->second[j]->tag();
+              List_Add($$, &d);
+            }
           }
         }
       }

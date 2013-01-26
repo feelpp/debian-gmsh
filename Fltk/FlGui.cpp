@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include "GmshConfig.h"
 #if !defined(HAVE_NO_STDINT_H)
@@ -71,7 +71,7 @@ static void simple_right_box_draw(int x, int y, int w, int h, Fl_Color c)
 {
   fl_color(c);
   fl_rectf(x, y, w, h);
-  fl_color(FL_BACKGROUND_COLOR);
+  fl_color(FL_DARK2);
   fl_line(x + w - 1, y, x + w - 1, y + h);
 }
 
@@ -79,7 +79,7 @@ static void simple_top_box_draw(int x, int y, int w, int h, Fl_Color c)
 {
   fl_color(c);
   fl_rectf(x, y, w, h);
-  fl_color(FL_BACKGROUND_COLOR);
+  fl_color(FL_DARK2);
   fl_line(x, y, x + w, y);
 }
 
@@ -96,9 +96,9 @@ FlGui::FlGui(int argc, char **argv)
   //Fl::set_color(FL_SELECTION_COLOR, 50, 50, 0);
 #endif
 
-  // add new box types used in graphic window
-  Fl::set_boxtype(GMSH_SIMPLE_RIGHT_BOX, simple_right_box_draw, 1, 1, 2, 2);
-  Fl::set_boxtype(GMSH_SIMPLE_TOP_BOX, simple_top_box_draw, 1, 1, 2, 2);
+  // add new box types used in graphic window (dx dy dw dh)
+  Fl::set_boxtype(GMSH_SIMPLE_RIGHT_BOX, simple_right_box_draw, 0, 0, 1, 0);
+  Fl::set_boxtype(GMSH_SIMPLE_TOP_BOX, simple_top_box_draw, 0, 1, 0, 1);
 
   // add global shortcuts
   Fl::add_handler(globalShortcut);
@@ -657,11 +657,12 @@ char FlGui::selectEntity(int type)
      selectedElements);
 }
 
-void FlGui::setStatus(const char *msg, bool opengl)
+void FlGui::setStatus(const std::string &msg, bool opengl)
 {
   if(!opengl){
     static char buff[1024];
-    strncpy(buff, msg, sizeof(buff) - 1);
+    std::string tmp = std::string(" ") + msg;
+    strncpy(buff, tmp.c_str(), sizeof(buff) - 1);
     buff[sizeof(buff) - 1] = '\0';
     for(unsigned int i = 0; i < graph.size(); i++){
       graph[i]->getProgress()->label(buff);
@@ -670,21 +671,21 @@ void FlGui::setStatus(const char *msg, bool opengl)
   }
   else{
     openglWindow *gl = getCurrentOpenglWindow();
-    int n = strlen(msg);
+    int n = msg.size();
     int i = 0;
     while(i < n) if(msg[i++] == '\n') break;
-    gl->screenMessage[0] = std::string(msg);
+    gl->screenMessage[0] = msg;
     if(i)
       gl->screenMessage[0].resize(i - 1);
     if(i < n)
-      gl->screenMessage[1] = std::string(&msg[i]);
+      gl->screenMessage[1] = msg.substr(i);
     else
       gl->screenMessage[1].clear();
     drawContext::global()->draw();
   }
 }
 
-void FlGui::setProgress(const char *msg, double val, double min, double max)
+void FlGui::setProgress(const std::string &msg, double val, double min, double max)
 {
   for(unsigned int i = 0; i < FlGui::instance()->graph.size(); i++){
     if(FlGui::instance()->graph[i]->getProgress()->value() != val)
@@ -695,6 +696,12 @@ void FlGui::setProgress(const char *msg, double val, double min, double max)
       FlGui::instance()->graph[i]->getProgress()->maximum(max);
   }
   setStatus(msg);
+}
+
+void FlGui::setProgressColor(int col)
+{
+  for(unsigned int i = 0; i < FlGui::instance()->graph.size(); i++)
+    FlGui::instance()->graph[i]->getProgress()->labelcolor(col);
 }
 
 void FlGui::storeCurrentWindowsInfo()

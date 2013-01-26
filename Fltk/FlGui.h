@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #ifndef _FL_GUI_H_
 #define _FL_GUI_H_
@@ -108,9 +108,11 @@ class FlGui{
   // select an entity in the most recent graphic window
   char selectEntity(int type);
   // display status message
-  void setStatus(const char *msg, bool opengl=false);
+  void setStatus(const std::string &msg, bool opengl=false);
   // display status message and update progress bar
-  void setProgress(const char *msg, double val, double min, double max);
+  void setProgress(const std::string &msg, double val, double min, double max);
+  // set color of progress message
+  void setProgressColor(int col);
   // create the window for physical context dependant definitions
   void callForSolverPlugin(int dim);
   // add line in message console(s)

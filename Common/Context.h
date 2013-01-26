@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #ifndef _CONTEXT_H_
 #define _CONTEXT_H_
@@ -28,7 +28,7 @@ struct contextMeshOptions {
   int lcFromPoints, lcFromCurvature, lcExtendFromBoundary;
   int dual, voronoi, drawSkinOnly, colorCarousel, labelSampling;
   int fileFormat, nbSmoothing, algo2d, algo3d, algoSubdivide;
-  int algoRecombine, recombineAll;
+  int algoRecombine, recombineAll, recombine3DAll;
   int remeshParam, remeshAlgo;
   int order, secondOrderLinear, secondOrderIncomplete;
   int secondOrderExperimental, meshOnlyVisible;
@@ -60,7 +60,7 @@ struct contextGeometryOptions {
   int occSewFaces, occConnectFaces;
   int copyMeshingMethod, exactExtrusion;
   int matchGeomAndMesh;
-  int hideCompounds;
+  int hideCompounds, orientedPhysicals;
 };
 
 class CTX {

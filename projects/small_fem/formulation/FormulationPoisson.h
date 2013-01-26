@@ -1,50 +1,50 @@
 #ifndef _FORMULATIONPOISSON_H_
 #define _FORMULATIONPOISSON_H_
 
-#include <vector>
+#include "FunctionSpaceScalar.h"
+#include "fullMatrix.h"
 
-#include "FunctionSpaceNode.h"
+#include "TermHCurl.h"
+#include "TermProjectionHOne.h"
+
 #include "Formulation.h"
 
 /**
    @class FormulationPoisson
    @brief Formulation for the Poisson problem
 
-   Formulation for the @em Poisson problem.
-
-   @todo
-   Remove ALL const_cast%S by correcting MElement constness@n
-   Allow Hybrid Mesh
+   Formulation for the @em Poisson problem
  */
 
 class FormulationPoisson: public Formulation{
  private:
-  // Gaussian Quadrature Data (LHS) //
-  int GL;
-  fullMatrix<double>* gCL;
-  fullVector<double>* gWL;
+  // Source Term //
+  static const unsigned int sourceOrder;
 
-  // Gaussian Quadrature Data (RHS) //
-  int GR;
-  fullMatrix<double>* gCR;
-  fullVector<double>* gWR;
+  // Function Space & Basis //
+  FunctionSpaceScalar* fspace;
+  Basis*               basis;
 
-  // Function Space //
-  FunctionSpaceNode* fspace;
+  // Local Terms //
+  TermHCurl*          localTermsL;
+  TermProjectionHOne* localTermsR;
 
  public:
-  FormulationPoisson(const GroupOfElement& goe, 
+  FormulationPoisson(GroupOfElement& goe,
 		     unsigned int order);
 
   virtual ~FormulationPoisson(void);
 
-  virtual double weak(int nodeI, int nodeJ, 
+  virtual double weak(unsigned int dofI, unsigned int dofJ,
 		      const GroupOfDof& god) const;
 
-  virtual double rhs(int equationI,
+  virtual double rhs(unsigned int equationI,
 		     const GroupOfDof& god) const;
 
   virtual const FunctionSpace& fs(void) const;
+
+ private:
+  static double gSource(fullVector<double>& xyz);
 };
 
 /**
@@ -54,21 +54,12 @@ class FormulationPoisson: public Formulation{
 
    Instantiates a new FormulationPoisson of the given order@n
 
-   The given GroupOfElement will be used as the 
+   The given GroupOfElement will be used as the
    geomtrical @em domain
    **
 
    @fn FormulationPoisson::~FormulationPoisson
    Deletes this FormulationPoisson
-   **
 */
-
-//////////////////////
-// Inline Functions //
-//////////////////////
-
-inline const FunctionSpace& FormulationPoisson::fs(void) const{
-  return *fspace;
-}
 
 #endif

@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #ifndef _JACOBIAN_BASIS_H_
 #define _JACOBIAN_BASIS_H_
@@ -46,8 +46,9 @@ class JacobianBasis {
   inline int getNumDivisions() const { return bezier->numDivisions; }
   inline int getNumSubNodes() const { return bezier->subDivisor.size1(); }
   inline int getNumLagPts() const { return bezier->numLagPts; }
-  void getPrimNormals1D(const fullMatrix<double> &nodesXYZ, fullMatrix<double> &result) const;
+  double getPrimNormals1D(const fullMatrix<double> &nodesXYZ, fullMatrix<double> &result) const;
   double getPrimNormal2D(const fullMatrix<double> &nodesXYZ, fullMatrix<double> &result) const;
+  double getPrimJac3D(const fullMatrix<double> &nodesXYZ) const;
   void getSignedJacobian(const fullMatrix<double> &nodesXYZ,
                          const fullMatrix<double> &normals, fullVector<double> &jacobian) const;
   void getSignedJacAndGradients(const fullMatrix<double> &nodesXYZ,
@@ -58,6 +59,7 @@ class JacobianBasis {
   void getSignedJacobian(const fullMatrix<double> &nodesXYZ, fullVector<double> &jacobian) const;
   void getSignedJacobian(const fullMatrix<double> &nodesX, const fullMatrix<double> &nodesY,
                          const fullMatrix<double> &nodesZ, fullMatrix<double> &jacobian) const;
+  void getScaledJacobian(const fullMatrix<double> &nodesXYZ, fullVector<double> &jacobian) const;
   inline void lag2Bez(const fullVector<double> &jac, fullVector<double> &bez) const {
     bezier->matrixLag2Bez.mult(jac,bez);
   }

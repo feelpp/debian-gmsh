@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <string.h>
 #include <stdlib.h>
@@ -3833,6 +3833,13 @@ double opt_geometry_hide_compounds(OPT_ARGS_NUM)
   return CTX::instance()->geom.hideCompounds;
 }
 
+double opt_geometry_oriented_physicals(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->geom.orientedPhysicals = (int)val;
+  return CTX::instance()->geom.orientedPhysicals;
+}
+
 double opt_geometry_highlight_orphans(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
@@ -5068,6 +5075,18 @@ double opt_mesh_bunin(OPT_ARGS_NUM)
   return CTX::instance()->mesh.bunin;
 }
 
+double opt_mesh_lloyd(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->mesh.optimizeLloyd = (int)val;
+#if defined(HAVE_FLTK)
+  if(FlGui::available() && (action & GMSH_GUI))
+    FlGui::instance()->options->mesh.value[27]->value
+      (CTX::instance()->mesh.optimizeLloyd);
+#endif
+  return CTX::instance()->mesh.optimizeLloyd;
+}
+
 double opt_mesh_bdf_field_format(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET){
@@ -5153,6 +5172,20 @@ double opt_mesh_recombine_all(OPT_ARGS_NUM)
       (CTX::instance()->mesh.recombineAll);
 #endif
   return CTX::instance()->mesh.recombineAll;
+}
+
+double opt_mesh_recombine3d_all(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET){
+    CTX::instance()->mesh.recombine3DAll = (int)val;
+  }
+#if defined(HAVE_FLTK)
+  if(FlGui::available() && (action & GMSH_GUI)){
+    FlGui::instance()->options->mesh.butt[22]->value
+      (CTX::instance()->mesh.recombine3DAll);
+  }
+#endif
+  return CTX::instance()->mesh.recombine3DAll;
 }
 
 double opt_mesh_remesh_algo(OPT_ARGS_NUM)
@@ -6733,7 +6766,7 @@ double opt_view_auto_position(OPT_ARGS_NUM)
   GET_VIEWo(0.);
   if(action & GMSH_SET) {
     opt->autoPosition = (int)val;
-    if(opt->autoPosition < 0 || opt->autoPosition > 10)
+    if(opt->autoPosition < 0 || opt->autoPosition > 11)
       opt->autoPosition = 0;
   }
 #if defined(HAVE_FLTK)

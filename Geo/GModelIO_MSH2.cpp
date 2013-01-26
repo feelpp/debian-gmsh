@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <stdlib.h>
 #include <string.h>
@@ -818,7 +818,7 @@ static int getNumElementsMSH(GModel *m, bool saveAll, int saveSinglePartition)
 
 int GModel::_writeMSH2(const std::string &name, double version, bool binary,
                        bool saveAll, bool saveParametric, double scalingFactor,
-                       int elementStartNum, int saveSinglePartition,bool multipleView)
+                       int elementStartNum, int saveSinglePartition, bool multipleView)
 {
   FILE *fp;
   if(multipleView)

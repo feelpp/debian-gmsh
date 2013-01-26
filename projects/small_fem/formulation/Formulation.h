@@ -14,7 +14,7 @@
    @f$\mathbf{A}~\mathbf{x} = \mathbf{b}@f$@n
 
    A Formulation is defined by:
-   @li A Function Space 
+   @li A Function Space
    @see FunctionSpace class
    @li A Bilinear Weak Formulation
    @li A Right hand Side.@n
@@ -24,17 +24,18 @@
 
    @todo
    Add quadrature laws as a paramaeter of a Formulation@n
-   Allow evaluation of non GroupOfDof related Dof.
+   Allow evaluation of non GroupOfDof related Dof.@n
+   virtual weak() is not a good idea with 'fast' assembly
  */
 
 class Formulation{
  public:
   virtual ~Formulation(void);
-  
-  virtual double weak(int dofI, int dofJ,
+
+  virtual double weak(unsigned int dofI, unsigned int dofJ,
 		      const GroupOfDof& god) const = 0;
-  
-  virtual double rhs(int equationI, 
+
+  virtual double rhs(unsigned int equationI,
 		     const GroupOfDof& god) const = 0;
 
   virtual const FunctionSpace& fs(void) const = 0;
@@ -46,15 +47,15 @@ class Formulation{
    **
 
    @fn Formulation::weak
-   @param dofI The @em first index of the formulation term 
+   @param dofI The @em first index of the formulation term
    @param dofJ The @em second index of the formulation term
-   @param god The @em GroupOfDof associated with the formulation term   
+   @param god The @em GroupOfDof associated with the formulation term
    @return The value of the requested formulation term
    **
 
    @fn Formulation::rhs
    @param equationI The @em ith equation of the formulation
-   @param god The @em GroupOfDof associated 
+   @param god The @em GroupOfDof associated
    with the @em ith  equation of the formulation
    @return The value of the @em ith equation Right Hand Side
    **

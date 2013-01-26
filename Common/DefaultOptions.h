@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #ifndef _DEFAULT_OPTIONS_H_
 #define _DEFAULT_OPTIONS_H_
@@ -46,7 +46,12 @@ StringXString GeneralOptions_String[] = {
   { F,   "Display" , opt_general_display , "" ,
     "X server to use (only for Unix versions)" },
 
-  { F|O, "ErrorFileName" , opt_general_error_filename , ".gmsh-errors" ,
+  { F|O, "ErrorFileName" , opt_general_error_filename ,
+#if defined(WIN32)
+    "gmsh-errors" ,
+#else
+    ".gmsh-errors" ,
+#endif
     "File into which the log is saved if a fatal error occurs" },
 
   { F,   "FileName" , opt_general_filename , "" ,
@@ -59,7 +64,12 @@ StringXString GeneralOptions_String[] = {
   { F|O, "GraphicsFontTitle" , opt_general_graphics_font_title , "Helvetica" ,
     "Font used in the graphic window for titles" },
 
-  { F|S, "OptionsFileName" , opt_general_options_filename , ".gmsh-options" ,
+  { F|S, "OptionsFileName" , opt_general_options_filename ,
+#if defined(WIN32)
+    "gmsh-options" ,
+#else
+    ".gmsh-options" ,
+#endif
     "Option file created with `Tools->Options->Save'; automatically read on startup" },
 
   { F|S, "RecentFile0", opt_general_recent_file0 , "untitled.geo" ,
@@ -73,7 +83,12 @@ StringXString GeneralOptions_String[] = {
   { F|S, "RecentFile4", opt_general_recent_file4 , "untitled.geo" ,
     "5th most recent opened file"},
 
-  { 0,   "SessionFileName" , opt_general_session_filename , ".gmshrc" ,
+  { 0,   "SessionFileName" , opt_general_session_filename ,
+#if defined(WIN32)
+    "gmshrc" ,
+#else
+    ".gmshrc" ,
+#endif
     "Option file into which session specific information is saved; automatically "
     "read on startup" },
 
@@ -86,7 +101,12 @@ StringXString GeneralOptions_String[] = {
     "sensible-editor '%s'" ,
 #endif
     "System command to launch a text editor" },
-  { F|S, "TmpFileName" , opt_general_tmp_filename , ".gmsh-tmp" ,
+  { F|S, "TmpFileName" , opt_general_tmp_filename ,
+#if defined(WIN32)
+    "gmsh-tmp" ,
+#else
+    ".gmsh-tmp" ,
+#endif
     "Temporary file used by the geometry module" },
 
   { F|O, "WebBrowser" , opt_general_web_browser ,
@@ -747,6 +767,8 @@ StringXNumber GeometryOptions_Number[] = {
 
   { F|O, "ScalingFactor" , opt_geometry_scaling_factor , 1.0 ,
     "Global geometry scaling factor" },
+  { F|O, "OrientedPhysicals" , opt_geometry_oriented_physicals, 1. ,
+    "Use sign of elementary entity in physical definition as orientation indicator" },
   { F|O, "SnapX" , opt_geometry_snap0 , 0.1 ,
     "Snapping grid spacing along the X-axis" },
   { F|O, "SnapY" , opt_geometry_snap1 , 0.1 ,
@@ -817,6 +839,8 @@ StringXNumber MeshOptions_Number[] = {
     "Write mesh files in binary format (if possible)" },
   { F|O, "Bunin" , opt_mesh_bunin , 0. ,
     "Apply Bunin optimization on quad meshes (the parameter is the maximal size of a cavity that may be remeshed)" },
+  { F|O, "Lloyd" , opt_mesh_lloyd , 0. ,
+    "Apply lloyd optimization on surface meshes" },
 
   { F|O, "CgnsImportOrder" , opt_mesh_cgns_import_order , 1. ,
    "Enable the creation of high-order mesh from CGNS structured meshes."
@@ -1032,7 +1056,8 @@ StringXNumber MeshOptions_Number[] = {
     "Mesh recombination algorithm (0=standard, 1=blossom)" },
   { F|O, "RecombineAll" , opt_mesh_recombine_all , 0 ,
     "Apply recombination algorithm to all surfaces, ignoring per-surface spec" },
-
+  { F|O, "Recombine3DAll" , opt_mesh_recombine3d_all , 0 ,
+    "Apply recombination3D algorithm to all volumes, ignoring per-volume spec" },
   { F|O, "RemeshAlgorithm" , opt_mesh_remesh_algo , 0 ,
     "Remeshing algorithm (0=no split, 1=automatic, 2=automatic only with metis)" },
   { F|O, "RemeshParametrization" , opt_mesh_remesh_param , 4 ,
@@ -1112,7 +1137,7 @@ StringXNumber SolverOptions_Number[] = {
     "Automatically archive output files after each computation" },
   { F|O, "AutoCheck" , opt_solver_auto_check , 1. ,
     "Automatically check model every time a parameter is changed" },
-  { F|O, "AutoSaveDatabase" , opt_solver_auto_save_database , 1. ,
+  { F|O, "AutoSaveDatabase" , opt_solver_auto_save_database , 0. ,
     "Automatically save database after each computation" },
   { F|O, "AutoMesh" , opt_solver_auto_mesh , 1. ,
     "Automatically mesh if necesssary" },
@@ -1181,7 +1206,7 @@ StringXNumber ViewOptions_Number[] = {
   { F|O, "AutoPosition" , opt_view_auto_position , 1. ,
     "Position the scale or 2D plot automatically (0: manual, 1: automatic, 2: top left, "
     "3: top right, 4: bottom left, 5: bottom right, 6: top, 7: bottom, 8: left, 9: right, "
-    "10: full)" },
+    "10: full, 11: top third)" },
   { F|O, "Axes" , opt_view_axes , 0 ,
     "Axes (0=none, 1=simple axes, 2=box, 3=full grid, 4=open grid, 5=ruler)" },
   { F|O, "AxesMikado" , opt_view_axes_mikado , 0. ,

@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <sstream>
 #include <algorithm>
@@ -172,7 +172,7 @@ void GEdge::setVisibility(char val, bool recursive)
 std::string GEdge::getAdditionalInfoString()
 {
   std::ostringstream sstream;
-  if(v0 && v1) sstream << "{" << v0->tag() << "," << v1->tag() << "}";
+  if(v0 && v1) sstream << "{" << v0->tag() << " " << v1->tag() << "}";
   return sstream.str();
 }
 

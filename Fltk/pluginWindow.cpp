@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include "GmshConfig.h"
 #if !defined(HAVE_NO_STDINT_H)
@@ -197,7 +197,10 @@ static void plugin_run_cb(Fl_Widget *w, void *data)
         }
       }
     }
-    if(no_view_selected) pp->execute(0);
+    if(no_view_selected){
+      pp->execute(0);
+      add_scripting(pp, 0);
+    }
   }
   else{
     p->run();
@@ -205,27 +208,6 @@ static void plugin_run_cb(Fl_Widget *w, void *data)
 
   FlGui::instance()->updateViews();
   GMSH_Plugin::draw = 0;
-  drawContext::global()->draw();
-}
-
-static void plugin_create_new_view_cb(Fl_Widget *w, void *data)
-{
-  if(GModel::current()->getMeshStatus() < 1){
-    Msg::Error("No mesh available to create the view: please mesh your model!");
-    return;
-  }
-  std::map<int, std::vector<double> > d;
-  std::vector<GEntity*> entities;
-  GModel::current()->getEntities(entities);
-  for(unsigned int i = 0; i < entities.size(); i++){
-    for(unsigned int j = 0; j < entities[i]->mesh_vertices.size(); j++){
-      MVertex *v = entities[i]->mesh_vertices[j];
-      d[v->getNum()].push_back(0.);
-    }
-  }
-  PView *view = new PView("New view", "NodeData", GModel::current(), d);
-  view->setChanged(true);
-  FlGui::instance()->updateViews();
   drawContext::global()->draw();
 }
 
@@ -239,7 +221,6 @@ void pluginWindow::_createDialogBox(GMSH_Plugin *p, int x, int y,
   title->labelfont(FL_BOLD);
   title->labelsize(FL_NORMAL_SIZE + 3);
   title->align(FL_ALIGN_INSIDE);
-
   Fl_Box *help = new Fl_Box
     (x, y + BH, width, BH + WB, strdup(p->getShortHelp().c_str()));
   help->align(FL_ALIGN_WRAP | FL_ALIGN_CLIP | FL_ALIGN_TOP | FL_ALIGN_INSIDE);
@@ -331,18 +312,13 @@ pluginWindow::pluginWindow(int deltaFontSize)
 
   browser = new Fl_Hold_Browser(0, 0, L1, height);
   browser->callback(plugin_browser_cb);
-  browser->box(FL_FLAT_BOX);
+  browser->box(GMSH_SIMPLE_RIGHT_BOX);
   browser->has_scrollbar(Fl_Browser_::VERTICAL);
 
-  view_browser = new Fl_Multi_Browser(L1, 0, L2, height - BH);
+  view_browser = new Fl_Multi_Browser(L1, 0, L2, height);
   view_browser->has_scrollbar(Fl_Browser_::VERTICAL);
   view_browser->callback(plugin_browser_cb);
-  view_browser->box(FL_FLAT_BOX);
-
-  Fl_Button *b = new Fl_Button(L1, height - BH, L2, BH, "New view");
-  b->callback(plugin_create_new_view_cb);
-  b->tooltip("Create new post-processing dataset based on current mesh");
-  b->box(FL_FLAT_BOX);
+  view_browser->box(GMSH_SIMPLE_RIGHT_BOX);
 
   for(std::map<std::string, GMSH_Plugin*>::iterator it = PluginManager::
         instance()->begin(); it != PluginManager::instance()->end(); ++it) {

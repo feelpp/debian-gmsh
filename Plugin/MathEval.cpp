@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include "GmshConfig.h"
 #include "GmshDefines.h"
@@ -66,7 +66,7 @@ std::string GMSH_MathEvalPlugin::getHelp() const
     "the time steps in the view.\n\n"
     "If `View' < 0, the plugin is run on the current view.\n\n"
     "Plugin(MathEval) creates one new view."
-    "If `PhysicalRegion' < 0, the plugin is run"
+    "If `PhysicalRegion' < 0, the plugin is run "
     "on all physical regions.\n\n"
     "Plugin(MathEval) creates one new view.";
 }
