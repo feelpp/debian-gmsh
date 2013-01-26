@@ -1,58 +1,65 @@
 #include "FunctionSpaceScalar.h"
 
-using namespace std;
-
-FunctionSpaceScalar::FunctionSpaceScalar(void){
-  hasGrad   = false;
-  gradBasis = NULL;
-  
-  locPreEvaluated  = false;
-  gradPreEvaluated = false;  
-  evalLoc          = NULL;
-  evalGrad         = NULL;
+FunctionSpaceScalar::FunctionSpaceScalar(GroupOfElement& goe,
+                                         const Basis& basis){
+  scalar = true;
+  build(goe, basis);
 }
 
 FunctionSpaceScalar::~FunctionSpaceScalar(void){
-  if(hasGrad)
-    delete gradBasis;
-  
-  if(locPreEvaluated)
-    delete evalLoc;
-
-  if(gradPreEvaluated)
-    delete evalGrad;
+  // Done by FunctionSpace
 }
 
-void FunctionSpaceScalar::
-preEvaluateLocalFunctions(fullMatrix<double>& points){
-  // Delete Old Struct (if any) //
-  if(locPreEvaluated)
-    delete evalLoc;
+double FunctionSpaceScalar::
+interpolate(const MElement& element,
+	    const std::vector<double>& coef,
+	    const fullVector<double>& xyz) const{
 
-  // New Struct //
-  evalLoc = new EvaluatedBasis(*basisScalar, points);
+  // Const Cast For MElement //
+  MElement& eelement =
+    const_cast<MElement&>(element);
 
-  // PreEvaluated //
-  locPreEvaluated = true;
+  // Get Reference coordinate //
+  double phys[3] = {xyz(0), xyz(1), xyz(2)};
+  double uvw[3];
+
+  eelement.xyz2uvw(phys, uvw);
+
+  // Get Basis Functions //
+  fullMatrix<double>* fun =
+    (*basis)[0]->getFunctions(element, uvw[0], uvw[1], uvw[2]);
+
+  const unsigned int nFun = fun->size1();
+
+  // Interpolate (in Reference Place) //
+  double val = 0;
+
+  for(unsigned int i = 0; i < nFun; i++)
+    val += (*fun)(i, 0) * coef[i];
+
+  // Return Interpolated Value //
+  delete fun;
+  return val;
 }
 
-void FunctionSpaceScalar::
-preEvaluateGradLocalFunctions(fullMatrix<double>& points){
-  // Got Grad Basis ? //
-  // --> mutable data 
-  //  --> Just a 'cache memory' 
-  if(!hasGrad){
-    gradBasis = new GradBasis(*basisScalar);
-    hasGrad   = true;
-  }
+double FunctionSpaceScalar::
+interpolateInRefSpace(const MElement& element,
+		      const std::vector<double>& coef,
+		      const fullVector<double>& uvw) const{
 
-  // Delete Old Struct (if any) //
-  if(gradPreEvaluated)
-    delete evalGrad;
+  // Get Basis Functions //
+  fullMatrix<double>* fun =
+    (*basis)[0]->getFunctions(element, uvw(0), uvw(1), uvw(2));
 
-  // New Struct //
-  evalGrad = new EvaluatedBasis(*gradBasis, points);
+  const unsigned int nFun = fun->size1();
 
-  // PreEvaluated //
-  gradPreEvaluated = true;
+  // Interpolate (in Reference Place) //
+  double val = 0;
+
+  for(unsigned int i = 0; i < nFun; i++)
+    val += (*fun)(i, 0) * coef[i];
+
+  // Return Interpolated Value //
+  delete fun;
+  return val;
 }

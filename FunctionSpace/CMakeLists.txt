@@ -1,7 +1,7 @@
-# Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+# Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 #
 # See the LICENSE.txt file for license information. Please report all
-# bugs and problems to <gmsh@geuz.org>.
+# bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 set(SRC
   Polynomial.cpp
@@ -13,16 +13,12 @@ set(SRC
   TetReferenceSpace.cpp
 
   Basis.cpp
-  LagrangeBasis.cpp
-  BasisScalar.cpp
-  BasisVector.cpp
+  BasisLocal.cpp
   BasisGenerator.cpp
 
-  GradBasis.cpp
-  CurlBasis.cpp
-  DivBasis.cpp
-
-  EvaluatedBasis.cpp
+  BasisLagrange.cpp
+  BasisHierarchical0From.cpp
+  BasisHierarchical1From.cpp
 
   LineNodeBasis.cpp
   LineEdgeBasis.cpp
@@ -41,15 +37,13 @@ set(SRC
 
   TetNodeBasis.cpp
   TetEdgeBasis.cpp
-  
+
   FunctionSpace.cpp
   FunctionSpaceScalar.cpp
   FunctionSpaceVector.cpp
-  FunctionSpaceNode.cpp
-  FunctionSpaceEdge.cpp
 )
 
-file(GLOB HDR RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.h) 
+file(GLOB HDR RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.h)
 append_gmsh_src(FunctionSpace "${SRC};${HDR}")
 
 ## Compatibility with SmallFEM (TO BE REMOVED !!!)

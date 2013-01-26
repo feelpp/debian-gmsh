@@ -1,31 +1,28 @@
 #include <cstdio>
 #include <set>
 
-#include "BasisScalar.h"
-#include "BasisVector.h"
 #include "Polynomial.h"
-
 #include "PlotBasis.h"
 
 using namespace std;
 
-PlotBasis::PlotBasis(const Basis& basis,
-		     const GroupOfElement& group, 
+PlotBasis::PlotBasis(const BasisLocal& basis,
+		     const GroupOfElement& group,
 		     Writer& writer){
 
   this->writer = &writer;
-  
+
   nFunction = basis.getNFunction();
   getGeometry(group);
 
   if(basis.isScalar()){
     isScalar = true;
-    interpolate(static_cast<const BasisScalar&>(basis));
+    interpolateScalar(basis);
   }
 
   else{
     isScalar = false;
-    interpolate(static_cast<const BasisVector&>(basis));
+    interpolateVector(basis);
   }
 }
 
@@ -35,14 +32,14 @@ PlotBasis::~PlotBasis(void){
   if(nodalScalarValue){
     for(unsigned int i = 0; i < nFunction; i++)
       delete nodalScalarValue[i];
-   
+
     delete[] nodalScalarValue;
   }
 
   if(nodalVectorValue){
     for(unsigned int i = 0; i < nFunction; i++)
       delete nodalVectorValue[i];
-    
+
     delete[] nodalVectorValue;
   }
 }
@@ -60,13 +57,13 @@ void PlotBasis::plot(const string name) const{
 
   // Plot //
   char fileName[1024];
-  
+
   for(unsigned int i = 0, j = 0; i < nFunction; i++, j++){
     // Basis Name
-    sprintf(fileName, 
+    sprintf(fileName,
 	    "%s%0*d", name.c_str(), dec, i + 1);
-   
-    // Set Values 
+
+    // Set Values
     if(isScalar)
       writer->setValues(*(nodalScalarValue[i]));
 
@@ -88,20 +85,20 @@ void PlotBasis::getGeometry(const GroupOfElement& group){
 
   for(int i = 0; i < E; i++){
     const int N = (*element)[i]->getNumVertices();
-    MElement* myElement = 
+    MElement* myElement =
       const_cast<MElement*>((*element)[i]);
-    
+
     for(int j = 0; j < N; j++)
       setVertex.insert(myElement->getVertex(j));
   }
 
   // Serialize the set into a vector //
-  node = new vector<MVertex*>(setVertex.begin(), 
+  node = new vector<MVertex*>(setVertex.begin(),
 			      setVertex.end());
   N    = node->size();
 }
 
-void PlotBasis::interpolate(const BasisScalar& basis){
+void PlotBasis::interpolateScalar(const BasisLocal& basis){
   // Allocate //
   nodalVectorValue = NULL;
   nodalScalarValue = new vector<double>*[nFunction];
@@ -109,33 +106,47 @@ void PlotBasis::interpolate(const BasisScalar& basis){
   for(unsigned int i = 0; i < nFunction; i++)
     nodalScalarValue[i] = new vector<double>(N);
 
-  
   // Interpolate //
-  for(unsigned int i = 0; i < nFunction; i++){
-    for(int n = 0; n < N; n++)
-      (*nodalScalarValue[i])[n] = 
-	basis.getFunction(0, i).at((*node)[n]->x(),
-				   (*node)[n]->y(),
-				   (*node)[n]->z());
+  for(int n = 0; n < N; n++){
+    fullMatrix<double>* fun =
+      basis.getFunctions(0,
+			 (*node)[n]->x(),
+			 (*node)[n]->y(),
+			 (*node)[n]->z());
+
+    for(unsigned int i = 0; i < nFunction; i++)
+      (*nodalScalarValue[i])[n] = (*fun)(i, 0);
+
+    delete fun;
   }
 }
 
-void PlotBasis::interpolate(const BasisVector& basis){
+void PlotBasis::interpolateVector(const BasisLocal& basis){
   // Allocate //
-  nodalScalarValue = NULL;  
+  nodalScalarValue = NULL;
   nodalVectorValue = new vector<fullVector<double> >*[nFunction];
 
   for(unsigned int i = 0; i < nFunction; i++)
     nodalVectorValue[i] = new vector<fullVector<double> >(N);
-  
 
   // Interpolate //
-  for(unsigned int i = 0; i < nFunction; i++){
-    for(int n = 0; n < N; n++)
-      (*nodalVectorValue[i])[n] = 
-	Polynomial::at(basis.getFunction(0, i), 
-		       (*node)[n]->x(),
-		       (*node)[n]->y(),
-		       (*node)[n]->z());    
+  for(int n = 0; n < N; n++){
+    fullMatrix<double>* fun =
+      basis.getFunctions(0,
+			 (*node)[n]->x(),
+			 (*node)[n]->y(),
+			 (*node)[n]->z());
+
+    for(unsigned int i = 0; i < nFunction; i++){
+      fullVector<double> tmp(3);
+
+      tmp(0) = (*fun)(i, 0);
+      tmp(1) = (*fun)(i, 1);
+      tmp(2) = (*fun)(i, 2);
+
+      (*nodalVectorValue[i])[n] = tmp;
+    }
+
+    delete fun;
   }
 }

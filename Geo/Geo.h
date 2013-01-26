@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #ifndef _GEO_H_
 #define _GEO_H_
@@ -152,6 +152,7 @@ class Surface{
   double RecombineAngle;
   int TransfiniteSmoothing;
   List_T *Generatrices;
+  List_T *GeneratricesByTag;
   List_T *EmbeddedCurves;
   List_T *EmbeddedPoints;
   List_T *TrsfPoints;
@@ -181,6 +182,7 @@ class Volume {
   int Typ;
   char Visible;
   int Method;
+  int Recombine3D;
   int QuadTri;
   ExtrudeParams *Extrude;
   List_T *TrsfPoints;

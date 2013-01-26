@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <set>
 #include <map>
@@ -1534,8 +1534,8 @@ void bowyerWatsonParallelograms(GFace *gf)
       packed[i]->getParameter(1,newPoint[1]);
       delete packed[i];
       double metric[3];
-      buildMetric(gf, newPoint, metrics[i], metric);
-	    //buildMetric(gf, newPoint, metric);
+      //      buildMetric(gf, newPoint, metrics[i], metric);
+      buildMetric(gf, newPoint, metric);
 
       bool success = insertAPoint( gf, AllTris.begin(), newPoint, metric, DATA , AllTris, 0, oneNewTriangle, &oneNewTriangle);
       if (!success) oneNewTriangle = 0;

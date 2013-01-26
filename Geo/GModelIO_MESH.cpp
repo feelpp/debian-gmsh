@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <stdlib.h>
 #include <string.h>
@@ -11,6 +11,7 @@
 #include "MQuadrangle.h"
 #include "MTetrahedron.h"
 #include "MHexahedron.h"
+#include "Context.h"
 
 static bool getVertices(int num, int *indices, std::vector<MVertex*> &vec,
                         std::vector<MVertex*> &vertices)
@@ -85,6 +86,21 @@ int GModel::readMESH(const std::string &name)
           elements[0][cl].push_back(new MLine(vertices));
         }
       }
+      else if(!strcmp(str, "EdgesP2")){
+        if(!fgets(buffer, sizeof(buffer), fp)) break;
+        int nbe;
+        sscanf(buffer, "%d", &nbe);
+        Msg::Info("%d edges", nbe);
+        for(int i = 0; i < nbe; i++) {
+          if(!fgets(buffer, sizeof(buffer), fp)) break;
+          int n[3], cl;
+          sscanf(buffer, "%d %d %d", &n[0], &n[1], &n[2], &cl);
+          for(int j = 0; j < 3; j++) n[j]--;
+          std::vector<MVertex*> vertices;
+          if(!getVertices(3, n, vertexVector, vertices)) return 0;
+          elements[0][cl].push_back(new MLine3(vertices));
+        }
+      }
       else if(!strcmp(str, "Triangles")){
         if(!fgets(buffer, sizeof(buffer), fp)) break;
         int nbe;
@@ -98,6 +114,21 @@ int GModel::readMESH(const std::string &name)
           std::vector<MVertex*> vertices;
           if(!getVertices(3, n, vertexVector, vertices)) return 0;
           elements[1][cl].push_back(new MTriangle(vertices));
+        }
+      }
+      else if(!strcmp(str, "TrianglesP2")){
+        if(!fgets(buffer, sizeof(buffer), fp)) break;
+        int nbe;
+        sscanf(buffer, "%d", &nbe);
+        Msg::Info("%d triangles", nbe);
+        for(int i = 0; i < nbe; i++) {
+          if(!fgets(buffer, sizeof(buffer), fp)) break;
+          int n[6], cl;
+          sscanf(buffer, "%d %d %d %d %d %d %d", &n[0], &n[1], &n[2], &n[3], &n[4], &n[5],&cl);
+          for(int j = 0; j < 6; j++) n[j]--;
+          std::vector<MVertex*> vertices;
+          if(!getVertices(6, n, vertexVector, vertices)) return 0;
+          elements[1][cl].push_back(new MTriangle6(vertices));
         }
       }
       else if(!strcmp(str, "Quadrilaterals")) {
@@ -128,6 +159,21 @@ int GModel::readMESH(const std::string &name)
           std::vector<MVertex*> vertices;
           if(!getVertices(4, n, vertexVector, vertices)) return 0;
           elements[3][cl].push_back(new MTetrahedron(vertices));
+        }
+      }
+      else if(!strcmp(str, "TetrahedraP2")) {
+        if(!fgets(buffer, sizeof(buffer), fp)) break;
+        int nbe;
+        sscanf(buffer, "%d", &nbe);
+        Msg::Info("%d tetrahedra", nbe);
+        for(int i = 0; i < nbe; i++) {
+          if(!fgets(buffer, sizeof(buffer), fp)) break;
+          int n[10], cl;
+          sscanf(buffer, "%d %d %d %d %d %d %d %d %d %d %d", &n[0], &n[1], &n[2], &n[3],&n[4], &n[5], &n[6], &n[7], &n[9], &n[8], &cl);
+          for(int j = 0; j < 10; j++) n[j]--;
+          std::vector<MVertex*> vertices;
+          if(!getVertices(10, n, vertexVector, vertices)) return 0;
+          elements[3][cl].push_back(new MTetrahedron10(vertices));
         }
       }
       else if(!strcmp(str, "Hexahedra")) {
@@ -171,7 +217,7 @@ int GModel::writeMESH(const std::string &name, int elementTagType,
 
   int numVertices = indexMeshVertices(saveAll);
 
-  fprintf(fp, " MeshVersionFormatted 1\n");
+  fprintf(fp, " MeshVersionFormatted 2\n");
   fprintf(fp, " Dimension\n");
   fprintf(fp, " 3\n");
 
@@ -204,7 +250,10 @@ int GModel::writeMESH(const std::string &name, int elementTagType,
   }
 
   if(numEdges){
-    fprintf(fp, " Edges\n");
+    if(CTX::instance()->mesh.order == 2)
+      fprintf(fp, " EdgesP2\n");
+    else
+      fprintf(fp, " Edges\n");
     fprintf(fp, " %d\n", numEdges);
     for(eiter it = firstEdge(); it != lastEdge(); ++it){
       int numPhys = (*it)->physicals.size();
@@ -216,7 +265,10 @@ int GModel::writeMESH(const std::string &name, int elementTagType,
     }
   }
   if(numTriangles){
-    fprintf(fp, " Triangles\n");
+    if(CTX::instance()->mesh.order == 2)
+      fprintf(fp, " TrianglesP2\n");
+    else
+      fprintf(fp, " Triangles\n");
     fprintf(fp, " %d\n", numTriangles);
     for(fiter it = firstFace(); it != lastFace(); ++it){
       int numPhys = (*it)->physicals.size();
@@ -240,7 +292,10 @@ int GModel::writeMESH(const std::string &name, int elementTagType,
     }
   }
   if(numTetrahedra){
-    fprintf(fp, " Tetrahedra\n");
+    if(CTX::instance()->mesh.order == 2)
+      fprintf(fp, " TetrahedraP2\n");
+    else
+      fprintf(fp, " Tetrahedra\n");
     fprintf(fp, " %d\n", numTetrahedra);
     for(riter it = firstRegion(); it != lastRegion(); ++it){
       int numPhys = (*it)->physicals.size();

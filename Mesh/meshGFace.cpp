@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <sstream>
 #include <stdlib.h>
@@ -305,8 +305,9 @@ static void remeshUnrecoveredEdges(std::map<MVertex*, BDS_Point*> &recoverMapInv
 static bool algoDelaunay2D(GFace *gf)
 {
 
-  if(!noSeam(gf))
-    return false;
+  // FIXME  
+  //  if(!noSeam(gf))
+  //    return false;
 
   if(gf->getMeshingAlgo() == ALGO_2D_DELAUNAY ||
      gf->getMeshingAlgo() == ALGO_2D_BAMG ||
@@ -1762,6 +1763,36 @@ static bool meshGeneratorPeriodic(GFace *gf, bool debug = true)
     //    }
   }
 
+  /// This is a structure that we need only for periodic cases
+  /// We will duplicate the vertices (MVertex) that are on seams
+  /// 
+  /*
+  {
+    std::map<MVertex*, BDS_Point*> invertMap;
+    std::map<BDS_Point*, MVertex*>::iterator it = recoverMap.begin();
+    std::map<BDS_Point*, MVertex*>::iterator it = recoverMap.begin();
+    while(it != recoverMap.end()){
+      // we have twice vertex MVertex with 2 different coordinates
+      std::map<MVertex*, BDS_Point*>::iterator invIt = invertMap.find((*it)->second);
+      if (invIt != invertMap.end()){
+	BDS_Point* bds1 = (*invIt)->second; 	
+	BDS_Point* bds2 = (*it)->first;
+	MVertex  * mv1  =  (*it)->second;
+	// create a new "fake" vertex that will be destroyed afterwards
+	double t;
+	mv1->getParameter(0,t);
+	MVertex  * mv2  = new MEdgeVertex (mv1->x(),mv1->y(),mv1->z(),mv1->onWhat(), t);
+	(*it)->second = mv2;
+	std::map<BDS_Point*, MVertex*>::iterator itTemp = it;
+	++it;
+	recoverMap.erase(itTemp);	
+      }
+      else ++it;
+      invertMap[it->second] = it->first;
+    }
+  }
+  */
+
   // fill the small gmsh structures
   {
     std::set<BDS_Point*, PointLessThan>::iterator itp = m->points.begin();
@@ -1777,6 +1808,7 @@ static bool meshGeneratorPeriodic(GFace *gf, bool debug = true)
     }
   }
 
+  std::map<MTriangle*, BDS_Face*> invert_map;
   {
     std::list<BDS_Face*>::iterator itt = m->triangles.begin();
     while (itt != m->triangles.end()){
@@ -1791,8 +1823,12 @@ static bool meshGeneratorPeriodic(GFace *gf, bool debug = true)
           // when a singular point is present, degenerated triangles
           // may be created, for example on a sphere that contains one
           // pole
-          if(v1 != v2 && v1 != v3 && v2 != v3)
+          if(v1 != v2 && v1 != v3 && v2 != v3){
+	    // we are in the periodic case. if we aim at
+	    // using delaunay mesh generation in thoses cases, 
+	    // we should double some of the vertices
             gf->triangles.push_back(new MTriangle(v1, v2, v3));
+	  }
         }
         else{
           MVertex *v4 = recoverMap[n[3]];

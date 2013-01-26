@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #ifndef _PVIEW_DATA_GMODEL_H_
 #define _PVIEW_DATA_GMODEL_H_
@@ -154,7 +154,8 @@ class PViewDataGModel : public PViewData {
     NodeData = 1,
     ElementData = 2,
     ElementNodeData = 3,
-    GaussPointData = 4
+    GaussPointData = 4,
+    BeamData = 5
   };
  private:
   // the data, indexed by time step

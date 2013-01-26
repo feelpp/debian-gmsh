@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include "meshMetric.h"
 #include "meshGFaceOptimize.h"
@@ -75,6 +75,7 @@ meshMetric::meshMetric(std::vector<MElement*> elements)
   }
 
   _octree = new MElementOctree(_elements);
+  buildVertexToElement (_elements,_adj);
 }
 
 void meshMetric::addMetric(int technique, simpleFunction<double> *fct,
@@ -314,7 +315,7 @@ void meshMetric::computeHessian()
     dgrads[1][ver] = SVector3(d2udxy,d2udy2,d2udyz);
     dgrads[2][ver] = SVector3(d2udxz,d2udyz,d2udz2);
   }
-}
+ }
 
 void meshMetric::computeMetricLevelSet()
 {

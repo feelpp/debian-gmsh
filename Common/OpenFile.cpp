@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <sstream>
 #include <string.h>
@@ -399,6 +399,11 @@ int MergeFile(const std::string &fileName, bool warnIfMissing)
   else if(ext == ".ol"){
     // FIXME: this is a hack -- think about a better way
     status = metamodel_cb(fileName);
+  }
+  else if(ext == ".py"){
+    FlGui::instance()->onelab->addSolver("python", fileName, "", 1);
+    onelab_cb(0, (void*)"check");
+    status = 1;
   }
 #endif
   else {

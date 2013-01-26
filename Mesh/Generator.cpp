@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <stdlib.h>
 #include "GmshConfig.h"
@@ -33,6 +33,7 @@
 #include "Field.h"
 #include "Options.h"
 #include "simple3D.h"
+#include "yamakawa.h"
 
 #if defined(HAVE_POST)
 #include "PView.h"
@@ -188,7 +189,7 @@ static void GetQualityMeasure(std::vector<T*> &ele,
     rhoMin = std::min(rhoMin, r);
     rhoMax = std::max(rhoMax, r);
     double jmin,jmax; ele[i]->scaledJacRange(jmin,jmax);
-    double d = std::min(jmin,1./jmax);
+    double d = jmin;
     disto += d;
     distoMin = std::min(distoMin, d);
     distoMax = std::max(distoMax, d);
@@ -347,14 +348,14 @@ static bool CancelDelaunayHybrid(GModel *m)
 static void Mesh0D(GModel *m)
 {
   for(GModel::viter it = m->firstVertex(); it != m->lastVertex(); ++it){
-    GVertex *gv = *it;        
+    GVertex *gv = *it;
     if(gv->mesh_vertices.empty())
       gv->mesh_vertices.push_back(new MVertex(gv->x(), gv->y(), gv->z(), gv));
     if(gv->points.empty())
       gv->points.push_back(new MPoint(gv->mesh_vertices.back()));
   }
   for(GModel::viter it = m->firstVertex(); it != m->lastVertex(); ++it){
-    GVertex *gv = *it;        
+    GVertex *gv = *it;
     if (gv->meshMaster() != gv->tag()){
       if (gv->correspondingVertices.empty()){
 	GVertex *master = m->getVertexByTag(abs(gv->meshMaster()));
@@ -476,10 +477,8 @@ static void Mesh2D(GModel *m)
     int nIter = 0, nTot = m->getNumFaces();
     while(1){
       int nPending = 0;
-      
-      std::vector<GFace*> _temp; _temp.insert(_temp.begin(),f.begin(),f.end());
-      
-#pragma omp parallel for schedule (dynamic) 
+      std::vector<GFace*> _temp; _temp.insert(_temp.begin(), f.begin(), f.end());
+#pragma omp parallel for schedule (dynamic)
       for(size_t K = 0 ; K < _temp.size() ; K++){
 	if (_temp[K]->meshStatistics.status == GFace::PENDING){
 	  meshGFace mesher (true, CTX::instance()->mesh.multiplePasses);
@@ -489,10 +488,9 @@ static void Mesh2D(GModel *m)
 	    nPending++;
 	  }
 	}
+        if(!nIter) Msg::ProgressMeter(nPending, nTot, false, "Meshing 2D...");
       }
-#pragma omp master      
-      if(!nIter) Msg::ProgressMeter(nPending, nTot, false, "Meshing 2D...");
-      
+#pragma omp master
       for(std::set<GFace*>::iterator it = cf.begin(); it != cf.end(); ++it){
         if ((*it)->meshStatistics.status == GFace::PENDING){
 	  meshGFace mesher (true, CTX::instance()->mesh.multiplePasses);
@@ -514,10 +512,10 @@ static void Mesh2D(GModel *m)
 	smoothing smm(CTX::instance()->mesh.optimizeLloyd,6);
 	m->writeMSH("beforeLLoyd.msh");
 	smm.optimize_face(*it);
-	int rec = 1;//(CTX::instance()->mesh.recombineAll || (*it)->meshAttributes.recombine);
+	//int rec = 1;//(CTX::instance()->mesh.recombineAll || (*it)->meshAttributes.recombine);
 	m->writeMSH("afterLLoyd.msh");
-	if(rec) recombineIntoQuads(*it);
-	m->writeMSH("afterRecombine.msh");
+	//if(rec) recombineIntoQuads(*it);
+	//m->writeMSH("afterRecombine.msh");
       }
     }
     /*
@@ -576,11 +574,39 @@ static void Mesh3D(GModel *m)
   // quality reasons)
   std::vector<std::vector<GRegion*> > connected;
   FindConnectedRegions(delaunay, connected);
+
+  // remove quads elements for volumes that are recombined
   for(unsigned int i = 0; i < connected.size(); i++){
+    for(unsigned j=0;j<connected[i].size();j++){
+      GRegion *gr = connected[i][j];
+      if(CTX::instance()->mesh.recombine3DAll || gr->meshAttributes.recombine3D){
+	std::list<GFace*> f = gr->faces();
+	for (std::list<GFace*>::iterator it = f.begin();
+	     it != f.end() ; ++it) quadsToTriangles (*it,1000000);
+      }
+    }
+  }
+  
+  for(unsigned int i = 0; i < connected.size(); i++){    
     MeshDelaunayVolume(connected[i]);
-    if(CTX::instance()->mesh.algo3d == ALGO_3D_RTREE){
-      Filler f;
-      f.treat_region(connected[i][0]);
+
+    //Additional code for hex mesh begin
+    for(unsigned j=0;j<connected[i].size();j++){
+      GRegion *gr = connected[i][j];
+      //R-tree
+      if(CTX::instance()->mesh.algo3d == ALGO_3D_RTREE){
+	Filler f;
+	f.treat_region(gr);
+      }
+      //Recombine3D into hex
+      if(CTX::instance()->mesh.recombine3DAll || gr->meshAttributes.recombine3D){
+	Recombinator rec;
+	rec.execute();
+	Supplementary sup;
+	sup.execute();
+	PostOp post;
+	post.execute(0);
+      }
     }
   }
 

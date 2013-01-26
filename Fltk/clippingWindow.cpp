@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <FL/Fl_Tabs.H>
 #include <FL/Fl_Return_Button.H>
@@ -197,7 +197,7 @@ clippingWindow::clippingWindow(int deltaFontSize)
 
   browser = new Fl_Multi_Browser(0, 0, L, height);
   browser->callback(clip_update_cb);
-  browser->box(FL_FLAT_BOX);
+  browser->box(GMSH_SIMPLE_RIGHT_BOX);
 
   Fl_Tabs *o = new Fl_Tabs
     (L + WB, WB, width - L - 2 * WB, height - 3 * WB - 4 * BH);

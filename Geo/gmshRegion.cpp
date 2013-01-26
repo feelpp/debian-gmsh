@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <stdlib.h>
 #include "GModel.h"
@@ -43,6 +43,7 @@ gmshRegion::gmshRegion(GModel *m, ::Volume *volume)
 
 void gmshRegion::resetMeshAttributes()
 {
+  meshAttributes.recombine3D = v->Recombine3D;
   meshAttributes.Method = v->Method;
   meshAttributes.QuadTri = v->QuadTri;
   meshAttributes.extrude = v->Extrude;

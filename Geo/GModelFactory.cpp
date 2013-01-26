@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <stdlib.h>
 #include "GModelFactory.h"
@@ -198,6 +198,7 @@ GRegion* GeoFactory::addVolume (GModel *gm, std::vector<std::vector<GFace *> > f
   Tree_Add(gm->getGEOInternals()->Volumes, &v);
   v->Typ = MSH_VOLUME;
   v->Num = numv;
+  v->Recombine3D = 0;
 
   //gmsh volume
   GRegion *gr = new gmshRegion(gm,v);

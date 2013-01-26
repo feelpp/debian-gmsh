@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include "GmshConfig.h"
 #include "GmshMessage.h"
@@ -48,10 +48,8 @@ bool PViewDataGModel::addData(GModel *model, std::map<int, std::vector<double> >
 
 void PViewDataGModel::destroyData()
 {
-  for(unsigned int i=0;i<_steps.size();i++)
-  {
+  for(unsigned int i = 0; i < _steps.size(); i++)
     _steps[i]->destroyData();
-  }
 }
 
 bool PViewDataGModel::readMSH(const std::string &viewName, const std::string &fileName,

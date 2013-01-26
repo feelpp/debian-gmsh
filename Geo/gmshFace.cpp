@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <stdlib.h>
 #include "GModel.h"
@@ -15,6 +15,7 @@
 #include "Context.h"
 #include "MTriangle.h"
 #include "VertexArray.h"
+#include "Field.h"
 
 gmshFace::gmshFace(GModel *m, Surface *face)
   : GFace(m, face->Num), s(face)
@@ -23,33 +24,52 @@ gmshFace::gmshFace(GModel *m, Surface *face)
 
   edgeCounterparts = s->edgeCounterparts;
 
-  std::list<GEdge*> l_wire;
-  GVertex *first = 0;
+  std::vector<GEdge*> eds;
+  std::vector<int> nums;
   for(int i = 0; i < List_Nbr(s->Generatrices); i++){
     Curve *c;
     List_Read(s->Generatrices, i, &c);
     GEdge *e = m->getEdgeByTag(abs(c->Num));
     if(e){
-      GVertex *start = (c->Num > 0) ? e->getBeginVertex() : e->getEndVertex();
-      GVertex *next  = (c->Num > 0) ? e->getEndVertex() : e->getBeginVertex();
-      if (!first) first = start;
-      l_wire.push_back(e);
-      if (next == first){
-        edgeLoops.push_back(GEdgeLoop(l_wire));
-        l_wire.clear();
-        first = 0;
-      }
-
-      l_edges.push_back(e);
-      e->addFace(this);
-      l_dirs.push_back((c->Num > 0) ? 1 : -1);
-      if (List_Nbr(s->Generatrices) == 2){
-        e->meshAttributes.minimumMeshSegments =
-          std::max(e->meshAttributes.minimumMeshSegments, 2);
-      }
+      eds.push_back(e);
+      nums.push_back(c->Num);
     }
     else
       Msg::Error("Unknown curve %d", c->Num);
+  }
+  for(int i = 0; i < List_Nbr(s->GeneratricesByTag); i++){
+    int j;
+    List_Read(s->GeneratricesByTag, i, &j);
+    GEdge *e = m->getEdgeByTag(abs(j));
+    if(e){
+      eds.push_back(e);
+      nums.push_back(j);
+    }
+    else
+      Msg::Error("Unknown curve %d", j);
+  }
+
+  std::list<GEdge*> l_wire;
+  GVertex *first = 0;
+  for(unsigned int i = 0; i < eds.size(); i++){
+    GEdge *e = eds[i];
+    int num = nums[i];
+    GVertex *start = (num > 0) ? e->getBeginVertex() : e->getEndVertex();
+    GVertex *next  = (num > 0) ? e->getEndVertex() : e->getBeginVertex();
+    if (!first) first = start;
+    l_wire.push_back(e);
+    if (next == first){
+      edgeLoops.push_back(GEdgeLoop(l_wire));
+      l_wire.clear();
+      first = 0;
+    }
+    l_edges.push_back(e);
+    e->addFace(this);
+    l_dirs.push_back((num > 0) ? 1 : -1);
+    if (List_Nbr(s->Generatrices) == 2){
+      e->meshAttributes.minimumMeshSegments =
+        std::max(e->meshAttributes.minimumMeshSegments, 2);
+    }
   }
 
   // always compute and store the mean plane for plane surfaces (using
@@ -330,7 +350,7 @@ bool gmshFace::containsPoint(const SPoint3 &pt) const
 bool gmshFace::buildSTLTriangulation(bool force)
 {
   return false;
-  /*
+
   if(va_geom_triangles){
     if(force)
       delete va_geom_triangles;
@@ -341,31 +361,34 @@ bool gmshFace::buildSTLTriangulation(bool force)
   stl_vertices.clear();
   stl_triangles.clear();
 
-  contextMeshOptions _temp = CTX::instance()->mesh;
 
-  CTX::instance()->mesh.lcFromPoints = 0;
-  CTX::instance()->mesh.lcFromCurvature = 1;
-  CTX::instance()->mesh.lcExtendFromBoundary = 0;
-  CTX::instance()->mesh.scalingFactor = 1;
-  CTX::instance()->mesh.lcFactor = 1;
-  CTX::instance()->mesh.order = 1;
-  CTX::instance()->mesh.lcIntegrationPrecision = 1.e-5;
-  std::for_each(l_edges.begin(), l_edges.end(), meshGEdge(true));
-  meshGFace mesher (false,true);
-  mesher(this);
-  printf("%d triangles face %d\n",triangles_stl.size(),tag());
-  CTX::instance()->mesh = _temp;
+  if (!triangles.size()){
+    contextMeshOptions _temp = CTX::instance()->mesh;
+    FieldManager *fields = model()->getFields();
+    int BGM  = fields->getBackgroundField();
+    fields->setBackgroundField(0);
+    CTX::instance()->mesh.lcFromPoints = 0;
+    CTX::instance()->mesh.lcFromCurvature = 1;
+    CTX::instance()->mesh.lcExtendFromBoundary = 0;
+    CTX::instance()->mesh.scalingFactor = 1;
+    CTX::instance()->mesh.lcFactor = 1;
+    CTX::instance()->mesh.order = 1;
+    CTX::instance()->mesh.lcIntegrationPrecision = 1.e-3;
+    //  CTX::instance()->mesh.Algorithm = 5;
+    model()->mesh(2);
+    CTX::instance()->mesh = _temp;
+    fields->setBackgroundField(fields->get(BGM));
+  }
 
   std::map<MVertex*,int> _v;
   int COUNT =0;
-  for (int j = 0; j < triangles_stl.size(); j++){
-    int C[3];
+  for (int j = 0; j < triangles.size(); j++){
     for (int i=0;i<3;i++){
       std::map<MVertex*,int>::iterator it =
-        _v.find(triangles_stl[j]->getVertex(j));
+        _v.find(triangles[j]->getVertex(j));
       if (it != _v.end()){
         stl_triangles.push_back(COUNT);
-        _v[triangles_stl[j]->getVertex(j)] = COUNT++;
+        _v[triangles[j]->getVertex(j)] = COUNT++;
       }
       else stl_triangles.push_back(it->second);
     }
@@ -396,5 +419,5 @@ bool gmshFace::buildSTLTriangulation(bool force)
   }
   va_geom_triangles->finalize();
   return true;
-  */
+
 }

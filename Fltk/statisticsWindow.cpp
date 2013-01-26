@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <FL/Fl_Tabs.H>
 #include <FL/Fl_Box.H>
@@ -76,10 +76,8 @@ static void statistics_histogram_cb(Fl_Widget *w, void *data)
 	  d[e->getNum()].push_back(e->etaShapeMeasure());
 	else if(name == "Rho3D")
 	  d[e->getNum()].push_back(e->rhoShapeMeasure());
-	else{
-	  double jmin,jmax; e->scaledJacRange(jmin,jmax);
-	  d[e->getNum()].push_back(std::min(jmin,1./jmax));
-	}
+	else
+	  d[e->getNum()].push_back(e->distoShapeMeasure());
       }
     }
     name.resize(name.size() - 2);

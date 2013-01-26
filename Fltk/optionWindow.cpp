@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include "GmshConfig.h"
 #if !defined(HAVE_NO_STDINT_H)
@@ -30,6 +30,7 @@ typedef unsigned long intptr_t;
 #include "PViewOptions.h"
 #include "OS.h"
 #include "Context.h"
+#include "StringUtils.h"
 
 #if defined(HAVE_ONELAB)
 #include "onelab.h"
@@ -107,6 +108,7 @@ static Fl_Menu_Item menu_position[] = {
   {"Left",         0, 0, 0},
   {"Right",        0, 0, 0},
   {"Full",         0, 0, 0},
+  {"Top third",    0, 0, 0},
   {0}
 };
 
@@ -166,9 +168,20 @@ static void options_browser_cb(Fl_Widget *w, void *data)
   FlGui::instance()->options->showGroup(FlGui::instance()->options->browser->value());
 }
 
+static void options_show_file_cb(Fl_Widget *w, void *data)
+{
+  std::string what((const char*)data);
+  std::string file = CTX::instance()->homeDir;
+  if(what == "session")
+    file += CTX::instance()->sessionFileName;
+  else
+    file += CTX::instance()->optionsFileName;
+  Msg::Direct("%s", file.c_str());
+  FlGui::instance()->showMessages();
+}
+
 static void options_restore_defaults_cb(Fl_Widget *w, void *data)
 {
-  // not sure if we have to remove the file...
   UnlinkFile(CTX::instance()->homeDir + CTX::instance()->sessionFileName);
   UnlinkFile(CTX::instance()->homeDir + CTX::instance()->optionsFileName);
   ReInitOptions(0);
@@ -476,6 +489,7 @@ static void mesh_options_ok_cb(Fl_Widget *w, void *data)
   opt_mesh_smooth_normals(0, GMSH_SET, o->mesh.butt[19]->value());
   opt_mesh_light_lines(0, GMSH_SET, o->mesh.butt[20]->value());
   opt_mesh_nb_smoothing(0, GMSH_SET, o->mesh.value[0]->value());
+  opt_mesh_lloyd(0, GMSH_SET, o->mesh.value[27]->value());
   opt_mesh_lc_factor(0, GMSH_SET, o->mesh.value[2]->value());
   opt_mesh_lc_min(0, GMSH_SET, o->mesh.value[25]->value());
   opt_mesh_lc_max(0, GMSH_SET, o->mesh.value[26]->value());
@@ -492,8 +506,8 @@ static void mesh_options_ok_cb(Fl_Widget *w, void *data)
   opt_mesh_label_sampling(0, GMSH_SET, o->mesh.value[12]->value());
   opt_mesh_angle_smooth_normals(0, GMSH_SET, o->mesh.value[18]->value());
 
-  opt_mesh_point_type(0, GMSH_SET, o->mesh.choice[0]->value());
-  opt_mesh_algo2d(0, GMSH_SET,
+  opt_mesh_recombine3d_all(0, GMSH_SET, o->mesh.butt[22]->value());
+  opt_mesh_point_type(0, GMSH_SET, o->mesh.choice[0]->value());  opt_mesh_algo2d(0, GMSH_SET,
                   (o->mesh.choice[2]->value() == 1) ? ALGO_2D_MESHADAPT :
                   (o->mesh.choice[2]->value() == 2) ? ALGO_2D_DELAUNAY :
                   (o->mesh.choice[2]->value() == 3) ? ALGO_2D_FRONTAL :
@@ -509,6 +523,7 @@ static void mesh_options_ok_cb(Fl_Widget *w, void *data)
                   ALGO_3D_FRONTAL);
   opt_mesh_algo_recombine(0, GMSH_SET, o->mesh.choice[1]->value());
   opt_mesh_recombine_all(0, GMSH_SET, o->mesh.butt[21]->value());
+
   opt_mesh_algo_subdivide(0, GMSH_SET, o->mesh.choice[5]->value());
   opt_mesh_remesh_algo(0, GMSH_SET, o->mesh.choice[8]->value());
   opt_mesh_remesh_param(0, GMSH_SET, o->mesh.choice[9]->value());
@@ -1291,7 +1306,7 @@ optionWindow::optionWindow(int deltaFontSize)
 
   // Selection browser
   browser = new Fl_Hold_Browser(0, 0, L, height);
-  browser->box(FL_FLAT_BOX);
+  browser->box(GMSH_SIMPLE_RIGHT_BOX);
   browser->has_scrollbar(Fl_Browser_::VERTICAL);
   browser->add("General");
   browser->add("Geometry");
@@ -1405,14 +1420,18 @@ optionWindow::optionWindow(int deltaFontSize)
       general.butt[8]->type(FL_TOGGLE_BUTTON);
       general.butt[8]->callback(general_options_ok_cb);
 
+      Fl_Button *b0 = new Fl_Button
+        (L + width - 2 * WB - BW/3, 2 * WB + 4 * BH, BW/3, BH, "Show file path");
+      b0->callback(options_show_file_cb, (void*)"session");
+
       general.butt[9] = new Fl_Check_Button
         (L + 2 * WB, 2 * WB + 5 * BH, BW/2-WB, BH, "Save options on exit");
       general.butt[9]->type(FL_TOGGLE_BUTTON);
       general.butt[9]->callback(general_options_ok_cb);
 
-      Fl_Button *b0 = new Fl_Button
-        (L + width / 2, 2 * WB + 5 * BH, (int)(1.75*BB), BH, "Restore default options");
-      b0->callback(options_restore_defaults_cb);
+      Fl_Button *b1 = new Fl_Button
+        (L + width - 2 * WB - BW/3, 2 * WB + 5 * BH, BW/3, BH, "Show file path");
+      b1->callback(options_show_file_cb, (void*)"option");
 
       general.butt[14] = new Fl_Check_Button
         (L + 2 * WB, 2 * WB + 6 * BH, BW, BH,
@@ -1432,6 +1451,11 @@ optionWindow::optionWindow(int deltaFontSize)
         (L + 2 * WB, 2 * WB + 8 * BH, IW, BH, "Default file name");
       general.input[0]->align(FL_ALIGN_RIGHT);
       general.input[0]->callback(general_options_ok_cb);
+
+      Fl_Button *b2 = new Fl_Button
+        (L + 2 * WB, 2 * WB + 10 * BH, BW, BH, "Restore all options to default values");
+      b2->callback(options_restore_defaults_cb);
+      b2->labelcolor(FL_DARK_RED);
 
       o->end();
     }
@@ -2122,17 +2146,17 @@ optionWindow::optionWindow(int deltaFontSize)
         {"MeshAdapt", 0, 0, 0},
         {"Delaunay", 0, 0, 0},
         {"Frontal", 0, 0, 0},
-        {"Delaunay for quads", 0, 0, 0},
-        {"Packing Of Parallelograms", 0, 0, 0},
+        {"Delaunay for quads (experimental)", 0, 0, 0},
+        {"Packing of parallelograms (experimental)", 0, 0, 0},
         {0}
       };
       static Fl_Menu_Item menu_3d_algo[] = {
         {"Delaunay", 0, 0, 0},
         {"Frontal", 0, 0, 0},
-        {"Frontal Delaunay", 0, 0, 0},
-        {"Frontal Hex", 0, 0, 0},
-        {"MMG3D", 0, 0, 0},
-		{"R-tree", 0, 0, 0},
+        {"Frontal Delaunay (experimental)", 0, 0, 0},
+        {"Frontal Hex (experimental)", 0, 0, 0},
+        {"MMG3D (experimental)", 0, 0, 0},
+        {"R-tree (experimental)", 0, 0, 0},
         {0}
       };
       static Fl_Menu_Item menu_recombination_algo[] = {
@@ -2284,6 +2308,20 @@ optionWindow::optionWindow(int deltaFontSize)
         (L + 2 * WB, 2 * WB + 7 * BH, BW, BH, "Try to remove 4 triangles nodes (experimental)");
       mesh.butt[25]->type(FL_TOGGLE_BUTTON);
       mesh.butt[25]->callback(mesh_options_ok_cb);
+
+      mesh.butt[22] = new Fl_Check_Button
+         (L + 2 * WB, 2 * WB + 8 * BH, BW, BH, "Recombine tets into hex-dom mesh (experimental)");
+      mesh.butt[22]->type(FL_TOGGLE_BUTTON);
+      mesh.butt[22]->callback(mesh_options_ok_cb);
+
+
+      mesh.value[27] = new Fl_Value_Input
+        (L + 2 * WB, 2 * WB + 9 * BH, IW/2, BH, "LLoyd smoothing steps (experimental)");
+      mesh.value[27]->minimum(0);
+      mesh.value[27]->maximum(100);
+      mesh.value[27]->step(1);
+      mesh.value[27]->align(FL_ALIGN_RIGHT);
+      mesh.value[27]->callback(mesh_options_ok_cb);
 
       o->end();
     }

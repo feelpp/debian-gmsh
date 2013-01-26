@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <string>
 #include <string.h>
@@ -102,6 +102,8 @@ std::vector<std::string> GetUsage(const std::string &name)
   s.push_back("  -fontsize int         Specify the font size for the GUI");
   s.push_back("  -theme string         Specify FLTK GUI theme");
   s.push_back("  -display string       Specify display");
+  s.push_back("  -camera               Use camera mode view;");
+  s.push_back("  -stereo               OpenGL quad-buffered stereo rendering (requires special graphic card)");
 #endif
   s.push_back("Other options:");
   s.push_back("  -                     Parse input files, then exit");
@@ -779,6 +781,10 @@ void GetOptions(int argc, char *argv[])
             CTX::instance()->mesh.fileFormat = FORMAT_MSH;
             CTX::instance()->mesh.mshFileVersion = 2.0;
           }
+          else if(!strcmp(argv[i], "msh3")){
+            CTX::instance()->mesh.fileFormat = FORMAT_MSH;
+            CTX::instance()->mesh.mshFileVersion = 3.0;
+          }
           else{
             int format = GetFileFormatFromExtension(std::string(".") + argv[i]);
             if(format < 0){
@@ -801,26 +807,33 @@ void GetOptions(int argc, char *argv[])
         Msg::Exit(0);
       }
       else if(!strcmp(argv[i] + 1, "info") || !strcmp(argv[i] + 1, "-info")) {
-        fprintf(stderr, "Version        : %s\n", GMSH_VERSION);
+        fprintf(stderr, "Version          : %s\n", GMSH_VERSION);
 #if defined(HAVE_FLTK)
-        fprintf(stderr, "GUI toolkit    : FLTK %d.%d.%d\n", FL_MAJOR_VERSION,
+        fprintf(stderr, "GUI toolkit      : FLTK %d.%d.%d\n", FL_MAJOR_VERSION,
                 FL_MINOR_VERSION, FL_PATCH_VERSION);
 #else
-        fprintf(stderr, "GUI toolkit    : none\n");
+        fprintf(stderr, "GUI toolkit      : none\n");
 #endif
-        fprintf(stderr, "License        : %s\n", GMSH_SHORT_LICENSE);
-        fprintf(stderr, "Build OS       : %s\n", GMSH_OS);
-        fprintf(stderr, "Build options  :%s\n", GMSH_CONFIG_OPTIONS);
-        fprintf(stderr, "Build date     : %s\n", GMSH_DATE);
-        fprintf(stderr, "Build host     : %s\n", GMSH_HOST);
-        fprintf(stderr, "Packager       : %s\n", GMSH_PACKAGER);
-        fprintf(stderr, "Web site       : http://www.geuz.org/gmsh/\n");
-        fprintf(stderr, "Mailing list   : gmsh@geuz.org\n");
+#if defined(HAVE_PETSC)
+#if defined(PETSC_USE_COMPLEX)
+        fprintf(stderr, "PETSc arithmetic : Complex\n");
+#else
+        fprintf(stderr, "PETSc arithmetic : Real\n");
+#endif
+#endif
+        fprintf(stderr, "License          : %s\n", GMSH_SHORT_LICENSE);
+        fprintf(stderr, "Build OS         : %s\n", GMSH_OS);
+        fprintf(stderr, "Build options    :%s\n", GMSH_CONFIG_OPTIONS);
+        fprintf(stderr, "Build date       : %s\n", GMSH_DATE);
+        fprintf(stderr, "Build host       : %s\n", GMSH_HOST);
+        fprintf(stderr, "Packager         : %s\n", GMSH_PACKAGER);
+        fprintf(stderr, "Web site         : http://www.geuz.org/gmsh/\n");
+        fprintf(stderr, "Mailing list     : gmsh@geuz.org\n");
         Msg::Exit(0);
       }
       else if(!strcmp(argv[i] + 1, "help") || !strcmp(argv[i] + 1, "-help")) {
         fprintf(stderr, "Gmsh, a 3D mesh generator with pre- and post-processing facilities\n");
-        fprintf(stderr, "Copyright (C) 1997-2012 Christophe Geuzaine and Jean-Francois Remacle\n");
+        fprintf(stderr, "Copyright (C) 1997-2013 Christophe Geuzaine and Jean-Francois Remacle\n");
         PrintUsage(argv[0]);
         Msg::Exit(0);
       }
@@ -884,6 +897,15 @@ void GetOptions(int argc, char *argv[])
       }
       else if(!strcmp(argv[i] + 1, "nodb")) {
         CTX::instance()->db = 0;
+        i++;
+      }
+      else if(!strcmp(argv[i] + 1, "camera")) {
+        CTX::instance()->camera = 1;
+        i++;
+      }
+      else if(!strcmp(argv[i] + 1, "stereo")) {
+        CTX::instance()->camera = 1;
+	CTX::instance()->stereo = 1;
         i++;
       }
       else if(!strcmp(argv[i] + 1, "fontsize")) {

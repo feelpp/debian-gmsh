@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <sstream>
 #include "GmshConfig.h"
@@ -614,8 +614,6 @@ void GFace::computeMeshSizeFieldAccuracy(double &avg,double &max_e, double &min_
     min_e = std::min(min_e, lone);
   }
 #endif
-  //printf("Emi efficiency tau (%g) =%g nE=%d nT=%d \n", avg, 100*exp(avg/(double)nE), nE, getNumMeshElements());
-
 }
 
 double GFace::curvatureDiv(const SPoint2 &param) const
@@ -799,8 +797,8 @@ void GFace::XYZtoUV(double X, double Y, double Z, double &U, double &V,
   int iter;
   double mat[3][3], jac[3][3];
   double umin, umax, vmin, vmax;
-  double initu[NumInitGuess] = {0.487, 0.6, 0.4, 0.7, 0.3, 0.8, 0.2, 1., 0., 0., 1.};
-  double initv[NumInitGuess] = {0.487, 0.6, 0.4, 0.7, 0.3, 0.8, 0.2, 0., 1., 0., 1.};
+  double initu[NumInitGuess] = {0.5, 0.6, 0.4, 0.7, 0.3, 0.8, 0.2, 0.9, 0.1, 1., 0.};
+  double initv[NumInitGuess] = {0.5, 0.6, 0.4, 0.7, 0.3, 0.8, 0.2, 0.9, 0.1, 1., 0.};
 
   Range<double> ru = parBounds(0);
   Range<double> rv = parBounds(1);
@@ -808,6 +806,12 @@ void GFace::XYZtoUV(double X, double Y, double Z, double &U, double &V,
   umax = ru.high();
   vmin = rv.low();
   vmax = rv.high();
+
+  const double tol = Precision*(SQU(umax-umin)+SQU(vmax-vmin));
+  for(int i = 0; i < NumInitGuess; i++) {
+    initu[i] = umin + initu[i]*(umax-umin);
+    initv[i] = vmin + initv[i]*(vmax-vmin);
+  }
 
   for(int i = 0; i < NumInitGuess; i++){
     for(int j = 0; j < NumInitGuess; j++){
@@ -821,7 +825,7 @@ void GFace::XYZtoUV(double X, double Y, double Z, double &U, double &V,
       err2 = sqrt(SQU(X - P.x()) + SQU(Y - P.y()) + SQU(Z - P.z()));
       if (err2 < 1.e-8 * CTX::instance()->lc) return;
 
-      while(err > Precision && iter < MaxIter) {
+      while(err > tol && iter < MaxIter) {
         P = point(U, V);
         Pair<SVector3, SVector3> der = firstDer(SPoint2(U, V));
         mat[0][0] = der.left().x();
@@ -851,7 +855,7 @@ void GFace::XYZtoUV(double X, double Y, double Z, double &U, double &V,
         V = Vnew;
       }
 
-      if(iter < MaxIter && err <= Precision &&
+      if(iter < MaxIter && err <= tol &&
          Unew <= umax && Vnew <= vmax &&
          Unew >= umin && Vnew >= vmin){
         if (onSurface && err2 > 1.e-4 * CTX::instance()->lc)
@@ -896,7 +900,8 @@ class data_wrapper{
 };
 
 // Callback function for BFGS
-void bfgs_callback(const alglib::real_1d_array& x, double& func, alglib::real_1d_array& grad, void* ptr)
+void bfgs_callback(const alglib::real_1d_array& x, double& func,
+                   alglib::real_1d_array& grad, void* ptr)
 {
   data_wrapper* w = static_cast<data_wrapper*>(ptr);
   SPoint3 p = w->get_point();
@@ -944,9 +949,11 @@ GPoint GFace::closestPoint(const SPoint3 &queryPoint, const double initialGuess[
   //  fprintf(F,"View \" \" {\n");
   //  fprintf(F,"SP(%g,%g,%g) {%g};\n",queryPoint.x(),queryPoint.y(),queryPoint.z(),0.0);
   double initial_guesses = 10.0;
-  for(double u = uu.low(); u<=uu.high()+1.e-5; u+=(uu.high()-uu.low())/initial_guesses) {
+  for(double u = uu.low(); u <= uu.high() + 1.e-5;
+      u += (uu.high() - uu.low()) / initial_guesses) {
     //    printf("%f\n", u);
-    for(double v = vv.low(); v<=vv.high()+1.e-5; v+=(vv.high()-vv.low())/initial_guesses) {
+    for(double v = vv.low(); v <= vv.high() + 1.e-5;
+        v += (vv.high() - vv.low()) / initial_guesses) {
       GPoint pnt = point(u, v);
       SPoint3 spnt(pnt.x(), pnt.y(), pnt.z());
       double dist = queryPoint.distance(spnt);
@@ -987,19 +994,19 @@ GPoint GFace::closestPoint(const SPoint3 &queryPoint, const double initialGuess[
   double epsx = 0.0;
   alglib::ae_int_t maxits = 500;
 
-  minlbfgssetcond(state,epsg,epsf,epsx,maxits);
+  minlbfgssetcond(state, epsg, epsf, epsx, maxits);
 
   // Solving the problem
   data_wrapper w;
   w.set_point(queryPoint);
   w.set_face(this);
 
-  minlbfgsoptimize(state,bfgs_callback,NULL,&w);
+  minlbfgsoptimize(state, bfgs_callback, NULL, &w);
 
   // Getting the results
   alglib::minlbfgsreport rep;
 
-  minlbfgsresults(state,x,rep);
+  minlbfgsresults(state, x, rep);
 
   GPoint pntF = point(x[0], x[1]);
   if (rep.terminationtype != 4){
@@ -1280,7 +1287,6 @@ bool GFace::fillPointCloud(double maxDist,
 			   std::vector<SPoint2> *uvpoints,
                            std::vector<SVector3> *normals)
 {
-
   if(!points) return false;
 
   if (buildSTLTriangulation()){

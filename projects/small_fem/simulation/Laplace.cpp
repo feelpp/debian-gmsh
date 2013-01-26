@@ -7,6 +7,7 @@
 
 #include "FormulationLaplace.h"
 
+#include "Timer.h"
 #include "Gmsh.h"
 
 using namespace std;
@@ -24,35 +25,45 @@ int main(int argc, char** argv){
 
   // Writer //
   WriterMsh writer;
-  
+
   // Get Mesh //
   Mesh msh(argv[1]);
 
   // Get Order //
   unsigned int order = atoi(argv[2]);
- 
-  // Get Domain //
-  GroupOfElement domain = msh.getFromPhysical(7);
 
-  // Laplace //  
+  // Get Domain //
+  GroupOfElement domain    = msh.getFromPhysical(7);
+  GroupOfElement boundary0 = msh.getFromPhysical(6);
+  GroupOfElement boundary1 = msh.getFromPhysical(5);
+
+  // Laplace //
+  Timer timer;
+  timer.start();
+
   FormulationLaplace laplace(domain, order);
   System sysLaplace(laplace);
 
-  cout << "Laplace (" << order << "): " 
+  cout << "Laplace (" << order << "): "
        << sysLaplace.getSize() << endl;
 
-  sysLaplace.dirichlet(msh.getFromPhysical(6), f1);
-  sysLaplace.dirichlet(msh.getFromPhysical(5), f2);
+  sysLaplace.dirichlet(boundary0, f1);
+  sysLaplace.dirichlet(boundary1, f2);
 
   sysLaplace.assemble();
   sysLaplace.solve();
+
+  timer.stop();
+  cout << "Time: " << timer.time()
+       << " "      << timer.unit()
+       << endl;
 
   if(argc == 4){
     // Interpolated View //
     // Visu Mesh
     Mesh visuMesh(argv[3]);
     GroupOfElement visu = visuMesh.getFromPhysical(7);
-    
+
     Interpolator interp(sysLaplace, visu);
     interp.write("laplace", writer);
   }

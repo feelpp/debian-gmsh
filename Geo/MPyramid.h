@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #ifndef _MPYRAMID_H_
 #define _MPYRAMID_H_
@@ -221,18 +221,17 @@ class MPyramidN : public MPyramid {
  protected:
   std::vector<MVertex*> _vs;
   const char _order;
-  double _disto;
  public:
   MPyramidN(MVertex* v0, MVertex* v1, MVertex* v2, MVertex* v3, MVertex* v4,
       const std::vector<MVertex*> &v, char order, int num=0, int part=0)
-    : MPyramid(v0, v1, v2, v3, v4, num, part), _vs(v), _order(order), _disto(-1e22)
+    : MPyramid(v0, v1, v2, v3, v4, num, part), _vs(v), _order(order)
   {
     for (unsigned int i = 0; i < _vs.size(); i++) _vs[i]->setPolynomialOrder(_order);
     getFunctionSpace(order);
   }
 
   MPyramidN(const std::vector<MVertex*> &v, char order, int num=0, int part=0)
-    : MPyramid(v[0], v[1], v[2], v[3], v[4], num, part), _order(order), _disto(-1e22)
+    : MPyramid(v[0], v[1], v[2], v[3], v[4], num, part), _order(order)
   {
     for (unsigned int i = 5; i < v.size(); i++ ) _vs.push_back(v[i]);
     for (unsigned int i = 0; i < _vs.size(); i++) _vs[i]->setPolynomialOrder(_order);

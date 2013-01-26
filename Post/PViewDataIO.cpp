@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <stdio.h>
 #include <string.h>
@@ -176,8 +176,8 @@ bool PViewData::writePOS(const std::string &fileName, bool binary, bool parsed,
   return true;
 }
 
-bool PViewData::writeMSH(const std::string &fileName, double version, bool binary, bool savemesh,
-                         bool multipleView)
+bool PViewData::writeMSH(const std::string &fileName, double version, bool binary,
+                         bool savemesh, bool multipleView)
 {
   Msg::Error("MSH export not implemented for this view type");
   return false;

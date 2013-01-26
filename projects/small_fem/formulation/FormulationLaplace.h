@@ -1,41 +1,37 @@
 #ifndef _FORMULATIONLAPLACE_H_
 #define _FORMULATIONLAPLACE_H_
 
-#include <vector>
+#include "FunctionSpaceScalar.h"
 
-#include "FunctionSpaceNode.h"
+#include "TermHCurl.h"
+
 #include "Formulation.h"
 
 /**
    @class FormulationLaplace
    @brief Formulation for the Laplace problem
 
-   Formulation for the @em Laplace problem.
-
-   @todo
-   Remove ALL const_cast%S by correcting MElement constness@n
-   Allow Hybrid Mesh
+   Formulation for the @em Laplace problem
  */
 
 class FormulationLaplace: public Formulation{
  private:
-  // Gaussian Quadrature Data //
-  int G;
-  fullMatrix<double>* gC;
-  fullVector<double>* gW;
+  // Function Space & Basis//
+  FunctionSpaceScalar* fspace;
+  Basis*               basis;
 
-  // Function Space //
-  FunctionSpaceNode* fspace;
+  // Local Terms //
+  TermHCurl* localTerms;
 
  public:
-  FormulationLaplace(const GroupOfElement& goe, unsigned int order);
+  FormulationLaplace(GroupOfElement& goe, unsigned int order);
 
   virtual ~FormulationLaplace(void);
 
-  virtual double weak(int nodeI, int nodeJ, 
+  virtual double weak(unsigned int dofI, unsigned int dofJ,
 		      const GroupOfDof& god) const;
 
-  virtual double rhs(int equationI,
+  virtual double rhs(unsigned int equationI,
 		     const GroupOfDof& god) const;
 
   virtual const FunctionSpace& fs(void) const;
@@ -48,7 +44,7 @@ class FormulationLaplace: public Formulation{
 
    Instantiates a new FormulationLaplace of the given order@n
 
-   The given GroupOfElement will be used as the 
+   The given GroupOfElement will be used as the
    geomtrical @em domain
    **
 
@@ -56,18 +52,5 @@ class FormulationLaplace: public Formulation{
    Deletes this FormulationLaplace
    **
 */
-
-//////////////////////
-// Inline Functions //
-//////////////////////
-
-inline double FormulationLaplace::rhs(int equationI,
-				      const GroupOfDof& god) const{
-  return 0;
-}
-
-inline const FunctionSpace& FormulationLaplace::fs(void) const{
-  return *fspace;
-}
 
 #endif

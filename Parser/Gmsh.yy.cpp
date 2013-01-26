@@ -66,6 +66,7 @@ typedef int16_t flex_int16_t;
 typedef uint16_t flex_uint16_t;
 typedef int32_t flex_int32_t;
 typedef uint32_t flex_uint32_t;
+typedef uint64_t flex_uint64_t;
 #else
 typedef signed char flex_int8_t;
 typedef short int flex_int16_t;
@@ -374,7 +375,7 @@ static void yy_fatal_error (yyconst char msg[]  );
  */
 #define YY_DO_BEFORE_ACTION \
 	(yytext_ptr) = yy_bp; \
-	gmsh_yyleng = (size_t) (yy_cp - yy_bp); \
+	gmsh_yyleng = (yy_size_t) (yy_cp - yy_bp); \
 	(yy_hold_char) = *yy_cp; \
 	*yy_cp = '\0'; \
 	(yy_c_buf_p) = yy_cp;
@@ -917,10 +918,10 @@ int gmsh_yy_flex_debug = 0;
 char *gmsh_yytext;
 #line 1 "Gmsh.l"
 #line 2 "Gmsh.l"
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -955,7 +956,7 @@ void   skipline(void);
 #define YY_NO_UNISTD_H
 #endif
 
-#line 959 "Gmsh.yy.cpp"
+#line 960 "Gmsh.yy.cpp"
 
 #define INITIAL 0
 
@@ -1140,7 +1141,7 @@ YY_DECL
 #line 49 "Gmsh.l"
 
 
-#line 1144 "Gmsh.yy.cpp"
+#line 1145 "Gmsh.yy.cpp"
 
 	if ( !(yy_init) )
 		{
@@ -2025,7 +2026,7 @@ YY_RULE_SETUP
 #line 237 "Gmsh.l"
 ECHO;
 	YY_BREAK
-#line 2029 "Gmsh.yy.cpp"
+#line 2030 "Gmsh.yy.cpp"
 case YY_STATE_EOF(INITIAL):
 	yyterminate();
 

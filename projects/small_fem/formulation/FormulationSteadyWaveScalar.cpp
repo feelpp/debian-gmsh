@@ -1,9 +1,8 @@
-#include "Exception.h"
-#include "fullMatrix.h"
+#include "BasisGenerator.h"
 #include "GaussIntegration.h"
-#include "Polynomial.h"
-#include "Mapper.h"
+#include "Jacobian.h"
 
+#include "Exception.h"
 #include "FormulationSteadyWaveScalar.h"
 
 using namespace std;
@@ -17,115 +16,73 @@ using namespace std;
 const double FormulationSteadyWaveScalar::mu  = 1;
 const double FormulationSteadyWaveScalar::eps = 1;
 
-FormulationSteadyWaveScalar::FormulationSteadyWaveScalar(const GroupOfElement& goe,
+FormulationSteadyWaveScalar::FormulationSteadyWaveScalar(GroupOfElement& goe,
 							 double k,
 							 unsigned int order){
   // Can't have 0th order //
   if(order == 0)
-    throw 
+    throw
       Exception("Can't have a Scalar SteadyWave formulation of order 0");
 
   // Wave Number Squared //
   kSquare = k * k;
 
-  // Function Space //
-  fspace = new FunctionSpaceNode(goe, order);
+  // Function Space & Basis//
+  basis  = BasisGenerator::generate(goe.get(0).getType(),
+                                    0, order, "hierarchical");
 
-  // Gaussian Quadrature Data (Term One) // 
+  fspace = new FunctionSpaceScalar(goe, *basis);
+
+  // Gaussian Quadrature Data (Term One) //
   // NB: We need to integrad a grad * grad !
   //     and order(rot f) = order(f) - 1
-  gC1 = new fullMatrix<double>();
-  gW1 = new fullVector<double>();
+  fullMatrix<double> gC1;
+  fullVector<double> gW1;
 
   // Gaussian Quadrature Data (Term Two) //
   // NB: We need to integrad a f * f !
-  gC2 = new fullMatrix<double>();
-  gW2 = new fullVector<double>();
+  fullMatrix<double> gC2;
+  fullVector<double> gW2;
 
   // Look for 1st element to get element type
   // (We suppose only one type of Mesh !!)
-  gaussIntegration::get(goe.get(0).getType(), 2 * (order - 1), *gC1, *gW1);
-  gaussIntegration::get(goe.get(0).getType(), 2 *  order     , *gC2, *gW2);
+  gaussIntegration::get(goe.get(0).getType(), 2 * (order - 1), gC1, gW1);
+  gaussIntegration::get(goe.get(0).getType(), 2 *  order     , gC2, gW2);
 
-  // Nbr of Gauss points
-  G1 = gW1->size(); 
-  G2 = gW2->size(); 
+  // Local Terms //
+  basis->preEvaluateDerivatives(gC1);
+  basis->preEvaluateFunctions(gC2);
+  goe.orientAllElements(*basis);
 
-  // PreEvaluate
-  fspace->preEvaluateGradLocalFunctions(*gC1);
-  fspace->preEvaluateLocalFunctions(*gC2);
+  Jacobian jac1(goe, gC1);
+  Jacobian jac2(goe, gC2);
+  jac1.computeInvertJacobians();
+  jac2.computeJacobians();
+
+  localTerms1 = new TermHCurl(jac1, *basis, gW1);
+  localTerms2 = new TermHOne(jac2, *basis, gW2);
 }
 
 FormulationSteadyWaveScalar::~FormulationSteadyWaveScalar(void){
-  delete gC1;
-  delete gW1;
-  delete gC2;
-  delete gW2;
+  delete basis;
   delete fspace;
+
+  delete localTerms1;
+  delete localTerms2;
 }
 
-double FormulationSteadyWaveScalar::weak(int dofI, int dofJ,
-					 const GroupOfDof& god) const{
-  // Init Some Stuff //
-  fullVector<double> gradPhiI(3);
-  fullVector<double> gradPhiJ(3);
-  double phiI;
-  double phiJ;
-        
-  fullMatrix<double> invJac(3, 3);       
+double FormulationSteadyWaveScalar::weak(unsigned int dofI, unsigned int dofJ,
+                                         const GroupOfDof& god) const{
+  return
+    localTerms1->getTerm(dofI, dofJ, god) / mu -
+    localTerms2->getTerm(dofI, dofJ, god) * eps * kSquare;
+}
 
-  double integral1 = 0;
-  double integral2 = 0;
-  double det;
+double FormulationSteadyWaveScalar::rhs(unsigned int equationI,
+					       const GroupOfDof& god) const{
+  return 0;
+}
 
-  // Get Element and Basis Functions (+ Grad) //
-  const MElement& element = god.getGeoElement();
-  MElement&      celement = const_cast<MElement&>(element);
-  
-  const fullMatrix<double>& eGradFun = 
-    fspace->getEvaluatedGradLocalFunctions(element);
-
-  const fullMatrix<double>& eFun = 
-    fspace->getEvaluatedLocalFunctions(element);
-
-  // Loop over Integration Point (Term 1) //
-  for(int g = 0; g < G1; g++){
-    det = celement.getJacobian((*gC1)(g, 0), 
-			       (*gC1)(g, 1), 
-			       (*gC1)(g, 2), 
-			       invJac);
-    
-    invJac.invertInPlace();
-
-    gradPhiI = Mapper::grad(eGradFun(dofI, g * 3),
-			    eGradFun(dofI, g * 3 + 1),
-			    eGradFun(dofI, g * 3 + 2),
-			    invJac);
-
-    gradPhiJ = Mapper::grad(eGradFun(dofJ, g * 3),
-			    eGradFun(dofJ, g * 3 + 1), 
-			    eGradFun(dofJ, g * 3 + 2), 
-			    invJac);
-
-    integral1 += 
-      ((gradPhiI * gradPhiJ) / mu) * fabs(det) * (*gW1)(g);
-  }
-
-
-  // Loop over Integration Point (Term 2) //
-  for(int g = 0; g < G2; g++){
-    det = celement.getJacobian((*gC2)(g, 0), 
-			       (*gC2)(g, 1), 
-			       (*gC2)(g, 2), 
-			       invJac);
-
-
-    phiI = eFun(dofI, g);
-    phiJ = eFun(dofJ, g);
-
-    integral2 += 
-      ((phiI * phiJ) * eps * kSquare) * fabs(det) * (*gW2)(g);
-  }
-
-  return integral1 - integral2;
+const FunctionSpace& FormulationSteadyWaveScalar::fs(void) const{
+  return *fspace;
 }

@@ -1,7 +1,7 @@
-// Gmsh - Copyright (C) 1997-2012 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
-// bugs and problems to <gmsh@geuz.org>.
+// bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <sstream>
 #include "GModel.h"
@@ -77,7 +77,7 @@ std::string gmshEdge::getAdditionalInfoString()
     std::ostringstream sstream;
     sstream << "{";
     for(int i = 0; i < List_Nbr(c->Control_Points); i++){
-      if(i) sstream << ",";
+      if(i) sstream << " ";
       Vertex *v;
       List_Read(c->Control_Points, i, &v);
       sstream << v->Num;
