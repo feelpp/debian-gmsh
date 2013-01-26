@@ -1,3 +1,10 @@
+gmsh (2.6.2~beta2~svn14562~dfsg-1~exp1) experimental; urgency=low
+
+  * [a7de476] Fix import of gmshpy. (Closes: #696420)
+  * [5746ffa] Imported Upstream version 2.6.2~beta2~svn14562~dfsg
+
+ -- Anton Gladky <gladk@debian.org>  Sat, 26 Jan 2013 10:53:20 +0100
+
 gmsh (2.6.2~beta2~svn14284~dfsg-1~exp1) experimental; urgency=low
 
   * [1a8b052] Imported Upstream version 2.6.2~beta2~svn14284~dfsg
