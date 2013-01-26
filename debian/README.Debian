@@ -41,15 +41,6 @@ in
 
  -- Christophe Prud'homme <prudhomm@debian.org>, Wed Nov 17 09:17:28 2004
 
-* Python-binding
-------------
-
-Using python-interface is experimental and requires workaround:
-export LD_PRELOAD=/usr/lib/libmpi.so
-
- -- Anton Gladky <gladky.anton@gmail.com>, Thu Jan 05 21:57:02 2012
- 
-* Compiling api_demos
 ------------
 
 to build api_demos go into the newly created directory:
