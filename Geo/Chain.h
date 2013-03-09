@@ -20,15 +20,8 @@
 
 #if defined(HAVE_KBIPACK)
 
-void updateFltkTree();
-
-template <class TTypeA, class TTypeB>
-  bool convert(const TTypeA& input, TTypeB& output ){
-  std::stringstream stream;
-  stream << input;
-  stream >> output;
-  return stream.good();
-}
+void updateFltk();
+std::string convertInt(int number);
 
 // Class whose derivative classes are to have partial or total order
 template <class Type>
@@ -171,6 +164,10 @@ class ElemChain : public PosetCat<ElemChain>
 
 };
 
+void findEntitiesInPhysicalGroups
+(GModel* m, const std::vector<int>& physicalGroups,
+std::vector<GEntity*>& entities);
+
 // Class to represent a chain, formal sum of elementary chains
 template <class C>
 class Chain : public VectorSpaceCat<Chain<C>, C>
@@ -182,6 +179,9 @@ private:
   std::map<ElemChain, C> _elemChains;
   // A name for the chain
   std::string _name;
+
+  Chain<C> _getTraceOrProject(const std::vector<GEntity*>& entities,
+                              bool trace) const;
 
 public:
   // Elementary chain iterators
@@ -229,42 +229,41 @@ public:
   Chain<C> getBoundary() const;
 
   // Get a chain which contains elementary chains that are
-  // fully in the given physical group or elementary entities
+  // in the given physical group or elementary entities
   Chain<C> getTrace(GModel* m, int physicalGroup) const;
   Chain<C> getTrace(GModel* m, const std::vector<int>& physicalGroups) const;
   Chain<C> getTrace(const std::vector<GEntity*>& entities) const;
+
+  // Get a chain which contains elementary chains that are *not*
+  // in the given physical group or elementary entities
+  Chain<C> getProject(GModel* m, int physicalGroup) const;
+  Chain<C> getProject(GModel* m, const std::vector<int>& physicalGroups) const;
+  Chain<C> getProject(const std::vector<GEntity*>& entities) const;
+
+  // The above two methods decompose a chain c so that
+  // (c - c.getTrace(...) - c.getProject(...)).isZero() == true
+  // holds
+
 
   // Add chain to Gmsh model as a physical group,
   // elementary chains are turned into mesh elements with
   // orientation and multiplicity given by elementary chain coefficient
   // (and create a post-processing view)
   // (and request a physical group number)
-  void addToModel(GModel* m, bool post=true, int physicalNumRequest=-1) const;
+  // returns physical group number of the chain
+  int addToModel(GModel* m, bool post=true, int physicalNumRequest=-1) const;
 };
 
 template <class C>
 Chain<C>::Chain(GModel* m, int physicalGroup)
 {
+  std::vector<int> groups(1, physicalGroup);
   std::vector<GEntity*> entities;
-  std::map<int, std::vector<GEntity*> > groups[4];
-  m->getPhysicalGroups(groups);
-  std::map<int, std::vector<GEntity*> >::iterator it;
+  findEntitiesInPhysicalGroups(m, groups, entities);
 
-  for(int j = 0; j < 4; j++){
-    it = groups[j].find(physicalGroup);
-    if(it != groups[j].end()){
-      _dim = j;
-      std::vector<GEntity*> physicalGroup = it->second;
-      for(unsigned int k = 0; k < physicalGroup.size(); k++){
-        entities.push_back(physicalGroup.at(k));
-      }
-    }
-  }
-  if(entities.empty()) {
-    Msg::Error("Physical group %d does not exist", physicalGroup);
-  }
   for(unsigned int i = 0; i < entities.size(); i++) {
     GEntity* e = entities.at(i);
+    _dim = e->dim();
     for(unsigned int j = 0; j < e->getNumMeshElements(); j++) {
       this->addMeshElement(e->getMeshElement(j));
     }
@@ -363,36 +362,35 @@ Chain<C> Chain<C>::getTrace(GModel* m, int physicalGroup) const
 }
 
 template <class C>
-Chain<C> Chain<C>::getTrace(GModel* m,
-                            const std::vector<int>& physicalGroups) const
+Chain<C> Chain<C>::getProject(GModel* m, int physicalGroup) const
 {
-  std::map<int, std::vector<GEntity*> > groups[4];
-  m->getPhysicalGroups(groups);
-  std::map<int, std::vector<GEntity*> >::iterator it;
-  std::vector<GEntity*> entities;
-  for(unsigned int i = 0; i < physicalGroups.size(); i++){
-    bool found = false;
-    for(int j = 0; j < 4; j++){
-      it = groups[j].find(physicalGroups.at(i));
-      if(it != groups[j].end()){
-        found = true;
-        std::vector<GEntity*> physicalGroup = it->second;
-        for(unsigned int k = 0; k < physicalGroup.size(); k++){
-          entities.push_back(physicalGroup.at(k));
-        }
-      }
-    }
-    if(!found) {
-      Msg::Error("Physical group %d does not exist",
-                 physicalGroups.at(i));
-    }
-  }
-  if(entities.empty()) return Chain<C>();
-  return getTrace(entities);
+  std::vector<int> groups(1, physicalGroup);
+  return this->getProject(m, groups);
 }
 
 template <class C>
-Chain<C> Chain<C>::getTrace(const std::vector<GEntity*>& entities) const
+Chain<C> Chain<C>::getTrace(GModel* m,
+                            const std::vector<int>& physicalGroups) const
+{
+  std::vector<GEntity*> entities;
+  findEntitiesInPhysicalGroups(m, physicalGroups, entities);
+  if(entities.empty()) return Chain<C>();
+  return this->_getTraceOrProject(entities, true);
+}
+
+template <class C>
+Chain<C> Chain<C>::getProject(GModel* m,
+                              const std::vector<int>& physicalGroups) const
+{
+  std::vector<GEntity*> entities;
+  findEntitiesInPhysicalGroups(m, physicalGroups, entities);
+  if(entities.empty()) return Chain<C>();
+  return this->_getTraceOrProject(entities, false);
+}
+
+template <class C>
+Chain<C> Chain<C>::_getTraceOrProject
+(const std::vector<GEntity*>& entities, bool trace) const
 {
   Chain<C> result;
   for(cecit it = _elemChains.begin(); it != _elemChains.end(); it++) {
@@ -403,9 +401,22 @@ Chain<C> Chain<C>::getTrace(const std::vector<GEntity*>& entities) const
         break;
       }
     }
-    if(inDomain) result.addElemChain(it->first, it->second);
+    if(inDomain && trace) result.addElemChain(it->first, it->second);
+    if(!inDomain && !trace) result.addElemChain(it->first, it->second);
   }
   return result;
+}
+
+template <class C>
+Chain<C> Chain<C>::getTrace(const std::vector<GEntity*>& entities) const
+{
+  return this->_getTraceOrProject(entities, true);
+}
+
+template <class C>
+Chain<C> Chain<C>::getProject(const std::vector<GEntity*>& entities) const
+{
+  return this->_getTraceOrProject(entities, false);
 }
 
 template <class C>
@@ -453,13 +464,13 @@ Chain<C>& Chain<C>::operator*=(const C& coeff)
 }
 
 template <class C>
-void Chain<C>::addToModel(GModel* m, bool post,
-                          int physicalNumRequest) const
+int Chain<C>::addToModel(GModel* m, bool post,
+                         int physicalNumRequest) const
 {
   if(this->isZero()) {
     Msg::Info("A chain is zero element of C%d, not added to the model",
               this->getDim());
-    return;
+    return -1;
   }
   std::vector<MElement*> elements;
   std::map<int, std::vector<double> > data;
@@ -478,10 +489,9 @@ void Chain<C>::addToModel(GModel* m, bool post,
       if(dim > 0 && coeff < 0) ecopy->revert();
       elements.push_back(ecopy);
     }
+    if(dim > 0) coeff = abs(coeff);
 
-    std::vector<double> coeffs;
-    if(dim > 0) coeffs.push_back(abs(coeff));
-    else coeffs.push_back(coeff);
+    std::vector<double> coeffs(1, coeff);
     data[e->getNum()] = coeffs;
   }
   int max[4];
@@ -508,19 +518,21 @@ void Chain<C>::addToModel(GModel* m, bool post,
 #if defined(HAVE_POST)
   if(post && CTX::instance()->batch == 0) {
     // create PView for instant visualization
-    std::string pnum = "";
-    convert(physicalNum, pnum);
-    std::string postname = pnum + ": " + _name;
-    PView* view = new PView(postname, "ElementData", m, data, 0, 1);
+    std::string pnum = convertInt(physicalNum);
+    std::string postname = pnum + "=" + _name;
+    PView* view = new PView(postname, "ElementData", m, data, 0., 1);
     // the user should be interested about the orientations
     int size = 30;
     PViewOptions* opt = view->getOptions();
+    opt->visible = 0;
     if(opt->tangents == 0) opt->tangents = size;
     if(opt->normals == 0) opt->normals = size;
     view->setOptions(opt);
-    updateFltkTree();
+    updateFltk();
   }
 #endif
+
+  return physicalNum;
 }
 
 #endif

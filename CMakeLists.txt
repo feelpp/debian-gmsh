@@ -72,8 +72,8 @@ option(ENABLE_WRAP_JAVA "Build Java wrappers" OFF)
 option(ENABLE_WRAP_PYTHON "Build Python wrappers" OFF)
 
 set(GMSH_MAJOR_VERSION 2)
-set(GMSH_MINOR_VERSION 6)
-set(GMSH_PATCH_VERSION 2)
+set(GMSH_MINOR_VERSION 7)
+set(GMSH_PATCH_VERSION 0)
 set(GMSH_EXTRA_VERSION "" CACHE STRING "Gmsh extra version string")
 
 set(GMSH_VERSION "${GMSH_MAJOR_VERSION}.${GMSH_MINOR_VERSION}")
@@ -84,7 +84,8 @@ set(GMSH_API
   ${CMAKE_CURRENT_BINARY_DIR}/Common/GmshConfig.h 
   ${CMAKE_CURRENT_BINARY_DIR}/Common/GmshVersion.h
   Common/Gmsh.h Common/Context.h Common/GmshDefines.h Common/GmshMessage.h
-    Common/VertexArray.h Common/Octree.h Common/OctreeInternals.h
+    Common/VertexArray.h Common/Octree.h Common/OctreeInternals.h 
+    Common/OS.h Common/StringUtils.h Common/OpenFile.h
   Numeric/Numeric.h Numeric/GaussIntegration.h Numeric/polynomialBasis.h
     Numeric/JacobianBasis.h Numeric/fullMatrix.h
     Numeric/simpleFunction.h Numeric/cartesian.h
@@ -108,8 +109,10 @@ set(GMSH_API
   Solver/dofManager.h Solver/femTerm.h Solver/laplaceTerm.h Solver/elasticityTerm.h
     Solver/crossConfTerm.h Solver/orthogonalTerm.h
     Solver/linearSystem.h Solver/linearSystemGMM.h Solver/linearSystemCSR.h 
-    Solver/linearSystemFull.h Solver/elasticitySolver.h Solver/sparsityPattern.h 
-  Post/PView.h Post/PViewData.h Plugin/PluginManager.h Post/OctreePost.h
+    Solver/linearSystemFull.h Solver/elasticitySolver.h Solver/sparsityPattern.h    Solver/groupOfElements.h Solver/linearSystemPETSc.h
+  Post/PView.h Post/PViewData.h Plugin/PluginManager.h Post/OctreePost.h 
+  Post/PViewDataGModel.h Post/PViewOptions.h Post/ColorTable.h
+   Numeric/nodalBasis.h
   Graphics/drawContext.h
   contrib/kbipack/gmp_normal_form.h contrib/kbipack/gmp_matrix.h 
     contrib/kbipack/gmp_blas.h contrib/kbipack/mpz.h
@@ -528,15 +531,17 @@ endif(ENABLE_OPTHOM)
 
 
 if(ENABLE_KBIPACK)
+  set_config_option(HAVE_KBIPACK "Kbipack")
+  add_subdirectory(contrib/kbipack)
+  include_directories(contrib/kbipack)
   find_library(GMP_LIB gmp)
   find_path(GMP_INC "gmp.h" PATH_SUFFIXES src include)
   if(GMP_LIB AND GMP_INC)
     set_config_option(HAVE_GMP "GMP")
     list(APPEND EXTERNAL_LIBRARIES ${GMP_LIB})
     list(APPEND EXTERNAL_INCLUDES ${GMP_INC})
-    add_subdirectory(contrib/kbipack)
-    include_directories(contrib/kbipack)
-    set_config_option(HAVE_KBIPACK "Kbipack")
+  else(GMP_LIB AND GMP_INC)
+    message(STATUS "GMP not found: Kbipack uses long int")
   endif(GMP_LIB AND GMP_INC)
 endif(ENABLE_KBIPACK)
 
@@ -560,11 +565,13 @@ endif(ENABLE_MPI)
 if(ENABLE_POPPLER)
   find_library(POPPLER_LIB poppler)
   find_library(POPPLER_CPP_LIB poppler-cpp)
-  if(POPPLER_LIB)
+  find_path(POPPLER_INC "poppler/cpp/poppler-document.h" PATH_SUFFIXES src include)
+  if(POPPLER_LIB AND POPPLER_INC)
      set_config_option(HAVE_POPPLER "Poppler")
      list(APPEND EXTERNAL_LIBRARIES ${POPPLER_LIB})
      list(APPEND EXTERNAL_LIBRARIES ${POPPLER_CPP_LIB})
-  endif(POPPLER_LIB)
+     list(APPEND EXTERNAL_INCLUDES ${POPPLER_INC})
+  endif(POPPLER_LIB AND POPPLER_INC)
 endif(ENABLE_POPPLER)
 
 if(HAVE_MESH OR HAVE_SOLVER)
@@ -1054,6 +1061,9 @@ endif(ENABLE_BUILD_LIB)
 if(ENABLE_BUILD_SHARED OR ENABLE_WRAP_PYTHON OR ENABLE_WRAP_JAVA)
   add_library(shared SHARED ${GMSH_SRC})
   set_target_properties(shared PROPERTIES OUTPUT_NAME Gmsh)
+  set_target_properties(shared PROPERTIES 
+                        VERSION ${GMSH_MAJOR_VERSION}.${GMSH_MINOR_VERSION}.${GMSH_PATCH_VERSION}
+                        SOVERSION ${GMSH_MAJOR_VERSION}.${GMSH_MINOR_VERSION})
   if(HAVE_LAPACK AND LAPACK_FLAGS)
     set_target_properties(shared PROPERTIES LINK_FLAGS ${LAPACK_FLAGS})
   endif(HAVE_LAPACK AND LAPACK_FLAGS)

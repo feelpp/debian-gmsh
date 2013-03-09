@@ -23,6 +23,7 @@
 #include "MathEval.h"
 #include "ExtractElements.h"
 #include "SimplePartition.h"
+#include "Crack.h"
 #include "HarmonicToTime.h"
 #include "ModulusPhase.h"
 #include "Integrate.h"
@@ -47,7 +48,6 @@
 #include "Lambda2.h"
 #include "ModifyComponent.h"
 #include "Probe.h"
-#include "GSHHS.h"
 #include "HomologyComputation.h"
 #include "HomologyPostProcessing.h"
 #include "ExtractEdges.h"
@@ -108,8 +108,11 @@ void PluginManager::action(std::string pluginName, std::string action, void *dat
   GMSH_Plugin *plugin = find(pluginName);
   if(!plugin) throw "Unknown plugin name";
 
-  if(action == "Run")
+  if(action == "Run"){
+    Msg::Info("Running Plugin(%s)...", pluginName.c_str());
     plugin->run();
+    Msg::Info("Done running Plugin(%s)", pluginName.c_str());
+  }
   else
     throw "Unknown plugin action";
 }
@@ -228,8 +231,6 @@ void PluginManager::registerDefaultPlugins()
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("Triangulate", GMSH_RegisterTriangulatePlugin()));
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
-                      ("GSHHS", GMSH_RegisterGSHHSPlugin()));
-    allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("ExtractEdges", GMSH_RegisterExtractEdgesPlugin()));
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("FieldFromAmplitudePhase", GMSH_RegisterFieldFromAmplitudePhasePlugin()));
@@ -245,6 +246,8 @@ void PluginManager::registerDefaultPlugins()
                       ("NewView", GMSH_RegisterNewViewPlugin()));
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("SimplePartition", GMSH_RegisterSimplePartitionPlugin()));
+    allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
+                      ("Crack", GMSH_RegisterCrackPlugin()));
 #if defined(HAVE_TETGEN)
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("Tetrahedralize", GMSH_RegisterTetrahedralizePlugin()));

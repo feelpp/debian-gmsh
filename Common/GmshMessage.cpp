@@ -49,6 +49,8 @@ int Msg::_progressMeterCurrent = 0;
 std::map<std::string, double> Msg::_timers;
 int Msg::_warningCount = 0;
 int Msg::_errorCount = 0;
+std::string Msg::_firstWarning;
+std::string Msg::_firstError;
 GmshMessage *Msg::_callback = 0;
 std::string Msg::_commandLine;
 std::string Msg::_launchDate;
@@ -222,7 +224,8 @@ void Msg::Fatal(const char *fmt, ...)
     FlGui::instance()->check();
     std::string tmp = std::string("@C1@.") + "Fatal   : " + str;
     FlGui::instance()->addMessage(tmp.c_str());
-    FlGui::instance()->showMessages();
+    if(_firstError.empty()) _firstError = str;
+    FlGui::instance()->setLastStatus(FL_RED);
     FlGui::instance()->saveMessages
       ((CTX::instance()->homeDir + CTX::instance()->errorFileName).c_str());
     fl_alert("A fatal error has occurred which will force Gmsh to abort.\n"
@@ -267,7 +270,8 @@ void Msg::Error(const char *fmt, ...)
     FlGui::instance()->check();
     std::string tmp = std::string("@C1@.") + "Error   : " + str;
     FlGui::instance()->addMessage(tmp.c_str());
-    FlGui::instance()->showMessages();
+    if(_firstError.empty()) _firstError = str;
+    FlGui::instance()->setLastStatus(FL_RED);
   }
 #endif
 
@@ -304,6 +308,8 @@ void Msg::Warning(const char *fmt, ...)
     FlGui::instance()->check();
     std::string tmp = std::string("@C5@.") + "Warning : " + str;
     FlGui::instance()->addMessage(tmp.c_str());
+    if(_firstWarning.empty()) _firstWarning = str;
+    FlGui::instance()->setLastStatus();
   }
 #endif
 
@@ -357,19 +363,6 @@ void Msg::Direct(const char *fmt, ...)
   vsnprintf(str, sizeof(str), fmt, args);
   va_end(args);
 
-  Direct(3, str);
-}
-
-void Msg::Direct(int level, const char *fmt, ...)
-{
-  if(_commRank || _verbosity < level) return;
-
-  char str[5000];
-  va_list args;
-  va_start(args, fmt);
-  vsnprintf(str, sizeof(str), fmt, args);
-  va_end(args);
-
   if(_callback) (*_callback)("Direct", str);
   if(_client) _client->Info(str);
 
@@ -378,16 +371,8 @@ void Msg::Direct(int level, const char *fmt, ...)
   {
     if(FlGui::available()){
       FlGui::instance()->check();
-      std::string tmp;
-      if(level < 2)
-	tmp = std::string("@C1@.") + str;
-      else if(level < 3)
-	tmp = std::string("@C5@.") + str;
-      else
-	tmp = std::string("@C4@.") + str;
+      std::string tmp = std::string("@C4@.") + str;
       FlGui::instance()->addMessage(tmp.c_str());
-      if(level == 1)
-	FlGui::instance()->showMessages();
     }
   }
 #endif
@@ -536,6 +521,15 @@ void Msg::PrintTimers()
   }
 }
 
+void Msg::ResetErrorCounter()
+{
+  _warningCount = 0; _errorCount = 0;
+  _firstWarning.clear(); _firstError.clear();
+#if defined(HAVE_FLTK)
+  if(FlGui::available()) FlGui::instance()->setLastStatus();
+#endif
+}
+
 void Msg::PrintErrorCounter(const char *title)
 {
   if(_commRank || _verbosity < 1) return;
@@ -550,24 +544,22 @@ void Msg::PrintErrorCounter(const char *title)
 
 #if defined(HAVE_FLTK)
   if(FlGui::available()){
-    std::string red("@C1@.");
-    FlGui::instance()->addMessage((red + prefix + line).c_str());
-    FlGui::instance()->addMessage((red + prefix + title).c_str());
-    FlGui::instance()->addMessage((red + prefix + warn).c_str());
-    FlGui::instance()->addMessage((red + prefix + err).c_str());
-    FlGui::instance()->addMessage((red + prefix + help).c_str());
-    FlGui::instance()->addMessage((red + prefix + line).c_str());
-    if(_errorCount){
-      FlGui::instance()->showMessages();
-      fl_beep();
-    }
+    std::string col = _errorCount ? "@C1@." : "@C5@.";
+    FlGui::instance()->addMessage((col + prefix + line).c_str());
+    FlGui::instance()->addMessage((col + prefix + title).c_str());
+    FlGui::instance()->addMessage((col + prefix + warn).c_str());
+    FlGui::instance()->addMessage((col + prefix + err).c_str());
+    FlGui::instance()->addMessage((col + prefix + help).c_str());
+    FlGui::instance()->addMessage((col + prefix + line).c_str());
+    if(_errorCount) fl_beep();
   }
 #endif
 
   if(CTX::instance()->terminal){
     const char *c0 = "", *c1 = "";
     if(!streamIsFile(stderr) && streamIsVT100(stderr)){
-      c0 = "\33[31m"; c1 = "\33[0m";  // red
+      c0 = _errorCount ? "\33[1m\33[31m" : "\33[35m"; // bold red or magenta
+      c1 = "\33[0m";
     }
     fprintf(stderr, "%s%s\n%s\n%s\n%s\n%s\n%s%s\n", c0, (prefix + line).c_str(),
             (prefix + title).c_str(), (prefix + warn).c_str(),
@@ -705,15 +697,15 @@ public:
   // redefinition of virtual onelab_client::sendMergeFileRequest
   void sendMergeFileRequest(const std::string &name)
   {
-    if(name.find(".geo")!= std::string::npos){
+    if(name.find(".geo") != std::string::npos){
       MergePostProcessingFile(name, CTX::instance()->solver.autoShowLastStep,
 			      CTX::instance()->solver.autoHideNewViews, true);
       GModel::current()->setFileName(name);
     }
-    else if((name.find(".opt")!= std::string::npos)){
+    else if((name.find(".opt") != std::string::npos)){
       MergeFile(name);
     }
-    else if((name.find(".macro")!= std::string::npos)){
+    else if((name.find(".macro") != std::string::npos)){
       MergeFile(name);
     }
     else
@@ -798,15 +790,24 @@ static void _setStandardOptions(onelab::parameter *p,
                                 std::map<std::string, std::vector<double> > &fopt,
                                 std::map<std::string, std::vector<std::string> > &copt)
 {
+  // strings
   if(copt.count("Label")) p->setLabel(copt["Label"][0]);
-  if(copt.count("ShortHelp")) p->setLabel(copt["ShortHelp"][0]);
+  if(copt.count("ShortHelp")) // for backward compatibility
+    p->setLabel(copt["ShortHelp"][0]);
   if(copt.count("Help")) p->setHelp(copt["Help"][0]);
-  if(fopt.count("Visible")) p->setVisible(fopt["Visible"][0] ? true : false);
-  if(fopt.count("ReadOnly")) p->setReadOnly(fopt["ReadOnly"][0] ? true : false);
   if(copt.count("Highlight")) p->setAttribute("Highlight", copt["Highlight"][0]);
-  if(copt.count("AutoCheck")) p->setAttribute("AutoCheck", copt["AutoCheck"][0]);
   if(copt.count("Macro")) p->setAttribute("Macro", copt["Macro"][0]);
   if(copt.count("GmshOption")) p->setAttribute("GmshOption", copt["GmshOption"][0]);
+  if(copt.count("AutoCheck")) // for backward compatibility
+    p->setAttribute("AutoCheck", copt["AutoCheck"][0]);
+
+  // numbers
+  if(fopt.count("Visible")) p->setVisible(fopt["Visible"][0] ? true : false);
+  if(fopt.count("ReadOnly")) p->setReadOnly(fopt["ReadOnly"][0] ? true : false);
+  if(fopt.count("ReadOnlyRange"))
+    p->setAttribute("ReadOnlyRange", fopt["ReadOnlyRange"][0] ? "1" : "0");
+  if(fopt.count("AutoCheck"))
+    p->setAttribute("AutoCheck", fopt["AutoCheck"][0] ? "1" : "0");
 }
 
 static std::string _getParameterName(const std::string &key,
@@ -846,11 +847,15 @@ void Msg::ExchangeOnelabParameter(const std::string &key,
       ps[0].setValue(val[0]); // use local value
     else
       val[0] = ps[0].getValue(); // use value from server
-    // keep track of these attributes, which can be changed server-side
-    if(ps[0].getMin() != -onelab::parameter::maxNumber() ||
-       ps[0].getMax() != onelab::parameter::maxNumber() ||
-       ps[0].getStep() != 0.) noRange = false;
-    if(ps[0].getChoices().size()) noChoices = false;
+    // keep track of these attributes, which can be changed server-side (unless,
+    // for the range/choices, when explicitely setting these attributes as
+    // ReadOnly)
+    if(!(fopt.count("ReadOnlyRange") && fopt["ReadOnlyRange"][0])){
+      if(ps[0].getMin() != -onelab::parameter::maxNumber() ||
+         ps[0].getMax() != onelab::parameter::maxNumber() ||
+         ps[0].getStep() != 0.) noRange = false;
+      if(ps[0].getChoices().size()) noChoices = false;
+    }
     if(ps[0].getAttribute("Loop").size()) noLoop = false;
     if(ps[0].getAttribute("Graph").size()) noGraph = false;
     if(ps[0].getAttribute("Closed").size()) noClosed = false;
@@ -902,7 +907,10 @@ void Msg::ExchangeOnelabParameter(const std::string &key,
   }
   if(noLoop && copt.count("Loop")) ps[0].setAttribute("Loop", copt["Loop"][0]);
   if(noGraph && copt.count("Graph")) ps[0].setAttribute("Graph", copt["Graph"][0]);
-  if(noClosed && copt.count("Closed")) ps[0].setAttribute("Closed", copt["Closed"][0]);
+  if(noClosed && copt.count("Closed")) // for backward compatibility
+    ps[0].setAttribute("Closed", copt["Closed"][0]);
+  if(noClosed && fopt.count("Closed"))
+    ps[0].setAttribute("Closed", fopt["Closed"][0] ? "1" : "0");
   _setStandardOptions(&ps[0], fopt, copt);
   _onelabClient->set(ps[0]);
 #endif
@@ -920,7 +928,7 @@ void Msg::ExchangeOnelabParameter(const std::string &key,
 
   std::vector<onelab::string> ps;
   _onelabClient->get(ps, name);
-  bool noChoices = true, noClosed = true;
+  bool noChoices = true, noClosed = true, noMultipleSelection = true;
   if(ps.size()){
     if(fopt.count("ReadOnly") && fopt["ReadOnly"][0])
       ps[0].setValue(val); // use local value
@@ -929,6 +937,7 @@ void Msg::ExchangeOnelabParameter(const std::string &key,
     // keep track of these attributes, which can be changed server-side
     if(ps[0].getChoices().size()) noChoices = false;
     if(ps[0].getAttribute("Closed").size()) noClosed = false;
+    if(ps[0].getAttribute("MultipleSelection").size()) noMultipleSelection = false;
   }
   else{
     ps.resize(1);
@@ -937,7 +946,12 @@ void Msg::ExchangeOnelabParameter(const std::string &key,
   }
   if(copt.count("Kind")) ps[0].setKind(copt["Kind"][0]);
   if(noChoices && copt.count("Choices")) ps[0].setChoices(copt["Choices"]);
-  if(noClosed && copt.count("Closed")) ps[0].setAttribute("Closed", copt["Closed"][0]);
+  if(noClosed && copt.count("Closed")) // for backward compatibility
+    ps[0].setAttribute("Closed", copt["Closed"][0]);
+  if(noClosed && fopt.count("Closed"))
+    ps[0].setAttribute("Closed", fopt["Closed"][0] ? "1" : "0");
+  if(noMultipleSelection && copt.count("MultipleSelection"))
+    ps[0].setAttribute("MultipleSelection", copt["MultipleSelection"][0]);
   _setStandardOptions(&ps[0], fopt, copt);
   _onelabClient->set(ps[0]);
 #endif

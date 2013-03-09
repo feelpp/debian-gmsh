@@ -15,6 +15,7 @@ typedef unsigned long intptr_t;
 #include <FL/Fl_Tooltip.H>
 #include <FL/Fl_Shared_Image.H>
 #include <FL/Fl_File_Icon.H>
+#include <FL/fl_draw.H>
 #include "FlGui.h"
 #include "drawContextFltk.h"
 #include "graphicWindow.h"
@@ -28,7 +29,7 @@ typedef unsigned long intptr_t;
 #include "manipWindow.h"
 #include "contextWindow.h"
 #include "onelabGroup.h"
-#include "aboutWindow.h"
+#include "helpWindow.h"
 #include "colorbarWindow.h"
 #include "fileDialogs.h"
 #include "GmshDefines.h"
@@ -69,19 +70,137 @@ static int globalShortcut(int event)
 
 static void simple_right_box_draw(int x, int y, int w, int h, Fl_Color c)
 {
-  fl_color(c);
-  fl_rectf(x, y, w, h);
-  fl_color(FL_DARK2);
-  fl_line(x + w - 1, y, x + w - 1, y + h);
+  fl_color(c); fl_rectf(x, y, w, h);
+  fl_color(FL_DARK2); fl_line(x + w - 1, y, x + w - 1, y + h);
 }
 
 static void simple_top_box_draw(int x, int y, int w, int h, Fl_Color c)
 {
-  fl_color(c);
-  fl_rectf(x, y, w, h);
-  fl_color(FL_DARK2);
-  fl_line(x, y, x + w, y);
+  fl_color(c); fl_rectf(x, y, w, h);
+  fl_color(FL_DARK2); fl_line(x, y, x + w, y);
+  //fl_color(FL_LIGHT2); fl_line(x, y+1, x + w, y+1);
 }
+
+// Icons for the satus bar
+#define vv(x,y) fl_vertex(x,y)
+#define bl fl_begin_loop()
+#define el fl_end_loop()
+
+static void gmsh_play(Fl_Color c)
+{
+  fl_color(c);
+  bl; vv(-0.3,0.8); vv(0.5,0.0); vv(-0.3,-0.8); el;
+}
+
+static void gmsh_pause(Fl_Color c)
+{
+  fl_color(c);
+  bl; vv(-0.8,-0.8); vv(-0.3,-0.8); vv(-0.3,0.8); vv(-0.8,0.8); el;
+  bl; vv(0.0,-0.8); vv(0.5,-0.8); vv(0.5,0.8); vv(0.0,0.8); el;
+}
+
+static void gmsh_rewind(Fl_Color c)
+{
+  fl_color(c);
+  bl; vv(-0.8,-0.8); vv(-0.3,-0.8); vv(-0.3,0.8); vv(-0.8,0.8); el;
+  bl; vv(-0.3,0.0); vv(0.5,-0.8); vv(0.5,0.8); el;
+}
+
+static void gmsh_forward(Fl_Color c)
+{
+  fl_color(c);
+  bl; vv(0.0,0.8); vv(0.8,0.0); vv(0.0,-0.8); el;
+  bl; vv(-0.8,0.8); vv(-0.3,0.8); vv(-0.3,-0.8); vv(-0.8,-0.8); el;
+}
+
+static void gmsh_back(Fl_Color c)
+{
+  fl_rotate(180);
+  gmsh_forward(c);
+}
+
+static void gmsh_ortho(Fl_Color c)
+{
+  fl_color(c);
+  bl; vv(-0.8,0.8); vv(0.3,0.8); vv(0.3,-0.3); vv(-0.8,-0.3); el;
+  bl; vv(-0.3,0.3); vv(0.8,0.3); vv(0.8,-0.8); vv(-0.3,-0.8); el;
+  fl_begin_line(); vv(-0.8,0.8); vv(-0.3,0.3); fl_end_line();
+  fl_begin_line(); vv(0.3,0.8); vv(0.8,0.3); fl_end_line();
+  fl_begin_line(); vv(0.3,-0.3); vv(0.8,-0.8); fl_end_line();
+  fl_begin_line(); vv(-0.8,-0.3); vv(-0.3,-0.8); fl_end_line();
+}
+
+static void gmsh_rotate(Fl_Color c)
+{
+  fl_color(c);
+  fl_begin_line(); fl_arc(0.0, -0.1, 0.7, 0.0, 270.0); fl_end_line();
+  fl_begin_polygon(); vv(0.5,0.6); vv(-0.1,0.9); vv(-0.1,0.3); fl_end_polygon();
+}
+
+static void gmsh_models(Fl_Color c)
+{
+  fl_color(c);
+  bl; vv(-0.8,-0.7); vv(0.8,-0.7); el;
+  bl; vv(-0.8,-0.2); vv(0.8,-0.2); el;
+  bl; vv(-0.8,0.3); vv(0.8,0.3); el;
+  bl; vv(-0.8,0.8); vv(0.8,0.8); el;
+}
+
+static void gmsh_clscale(Fl_Color c)
+{
+  fl_color(c);
+  bl; vv(-0.8,0.8); vv(-0.1,0.8); vv(-0.8,0.1); el;
+  bl; vv(-0.2,0.2); vv(0.9,0.2); vv(-0.2,-0.9); el;
+}
+
+static void gmsh_gear(Fl_Color c)
+{
+  fl_color(c);
+  double w = 0.12;
+  double h1 = 0.5;
+#if defined(WIN32)
+  double h2 = 1.0;
+#else
+  double h2 = 1.05;
+#endif
+  fl_line_style(FL_SOLID, 3);
+  fl_begin_line();
+  fl_circle(0, 0, 0.5);
+  fl_end_line();
+  fl_line_style(FL_SOLID);
+  for(int i = 0; i < 8; i++){
+    fl_rotate(45);
+    fl_begin_polygon();
+    fl_vertex(h1, -w);
+    fl_vertex(h2, -w);
+    fl_vertex(h2, w);
+    fl_vertex(h1, w);
+    fl_end_polygon();
+  }
+}
+
+static void gmsh_graph(Fl_Color c)
+{
+  fl_color(c);
+  fl_begin_line(); vv(-0.8,-0.8); vv(-0.8,0.8); vv(0.8,0.8); fl_end_line();
+  fl_begin_line(); vv(-0.8,0.3); vv(-0.2,-0.2); vv(0.3,0.1); vv(0.8,-0.4); fl_end_line();
+}
+
+static void gmsh_search(Fl_Color col)
+{
+  double e = 0.5;
+  fl_color(col);
+  fl_begin_polygon();
+  vv(.6-e, .33); vv(1.2-e, .93); vv(.93-e, 1.2); vv(.33-e, .6);
+  fl_end_polygon();
+  fl_line_style(FL_SOLID, 2);
+  fl_begin_loop(); fl_circle(0-e, 0, .6); fl_end_loop();
+  fl_line_style(FL_SOLID);
+}
+
+#undef vv
+#undef bl
+#undef el
 
 FlGui::FlGui(int argc, char **argv)
 {
@@ -96,7 +215,7 @@ FlGui::FlGui(int argc, char **argv)
   //Fl::set_color(FL_SELECTION_COLOR, 50, 50, 0);
 #endif
 
-  // add new box types used in graphic window (dx dy dw dh)
+  // add new box types (dx dy dw dh)
   Fl::set_boxtype(GMSH_SIMPLE_RIGHT_BOX, simple_right_box_draw, 0, 0, 1, 0);
   Fl::set_boxtype(GMSH_SIMPLE_TOP_BOX, simple_top_box_draw, 0, 1, 0, 1);
 
@@ -117,6 +236,20 @@ FlGui::FlGui(int argc, char **argv)
   // register image formats not in core fltk library (jpeg/png)
   fl_register_images();
 
+  // add our own icons
+  fl_add_symbol("gmsh_rewind", gmsh_rewind, 1);
+  fl_add_symbol("gmsh_back", gmsh_back, 1);
+  fl_add_symbol("gmsh_play", gmsh_play, 1);
+  fl_add_symbol("gmsh_pause", gmsh_pause, 1);
+  fl_add_symbol("gmsh_forward", gmsh_forward, 1);
+  fl_add_symbol("gmsh_ortho", gmsh_ortho, 1);
+  fl_add_symbol("gmsh_rotate", gmsh_rotate, 1);
+  fl_add_symbol("gmsh_models", gmsh_models, 1);
+  fl_add_symbol("gmsh_clscale", gmsh_clscale, 1);
+  fl_add_symbol("gmsh_gear", gmsh_gear, 1);
+  fl_add_symbol("gmsh_graph", gmsh_graph, 1);
+  fl_add_symbol("gmsh_search", gmsh_search, 1);
+
   // load default system icons (for file browser)
   Fl_File_Icon::load_system_icons();
 
@@ -127,15 +260,11 @@ FlGui::FlGui(int argc, char **argv)
   fl_mac_set_about(help_about_cb, 0);
 #endif
 
-  // all the windows are contructed (even if some are not displayed) since the
-  // shortcuts should be valid even for hidden windows, and we don't want to
-  // test for widget existence every time
+  // create main graphic window (note that we create all the windows even if
+  // some are not displayed, since the shortcuts should be valid even for hidden
+  // windows, and we don't want to test for widget existence every time)
   graph.push_back(new graphicWindow(true, CTX::instance()->numTiles,
                                     CTX::instance()->detachedMenu ? true : false));
-
-  // FIXME: make this cleaner ;-)
-  onelab = graph.back()->getMenu();
-
 #if defined(WIN32)
   graph[0]->getWindow()->icon
     ((const void*)LoadIcon(fl_display, MAKEINTRESOURCE(IDI_ICON)));
@@ -168,6 +297,9 @@ FlGui::FlGui(int argc, char **argv)
   //graph[0]->gl[0]->take_focus();
   Fl::focus(graph[0]->gl[0]);
 
+  // get onelab tree group (FIXME: should clean this up)
+  onelab = graph.back()->getMenu();
+
   // create additional graphic windows
   for(int i = 1; i < CTX::instance()->numWindows; i++){
     graphicWindow *g = new graphicWindow(false, CTX::instance()->numTiles);
@@ -179,6 +311,19 @@ FlGui::FlGui(int argc, char **argv)
     graph.push_back(g);
   }
 
+  // create fullscreen window
+  fullscreen = new openglWindow(100, 100, 100, 100);
+  int mode = FL_RGB | FL_DEPTH | (CTX::instance()->db ? FL_DOUBLE : FL_SINGLE);
+  if(CTX::instance()->antialiasing) mode |= FL_MULTISAMPLE;
+  if(CTX::instance()->stereo) {
+    mode |= FL_DOUBLE;
+    mode |= FL_STEREO;
+  }
+  fullscreen->mode(mode);
+  fullscreen->end();
+  fullscreen->fullscreen();
+
+  // create all other windows
   options = new optionWindow(CTX::instance()->deltaFontSize);
   fields = new fieldWindow(CTX::instance()->deltaFontSize);
   plugins = new pluginWindow(CTX::instance()->deltaFontSize);
@@ -189,7 +334,7 @@ FlGui::FlGui(int argc, char **argv)
   manip = new manipWindow(CTX::instance()->deltaFontSize);
   geoContext = new geometryContextWindow(CTX::instance()->deltaFontSize);
   meshContext = new meshContextWindow(CTX::instance()->deltaFontSize);
-  about = new aboutWindow();
+  help = new helpWindow();
 
   // init solver plugin stuff
   callForSolverPlugin(-1);
@@ -327,19 +472,25 @@ int FlGui::testGlobalShortcuts(int event)
           Fl::test_shortcut(FL_SHIFT + FL_Escape) ||
           Fl::test_shortcut(FL_CTRL + FL_Escape) ||
           Fl::test_shortcut(FL_ALT + FL_Escape)) {
-    bool lasso = false;
-    for(unsigned int i = 0; i < graph.size(); i++)
-      for(unsigned int j = 0; j < graph[i]->gl.size(); j++)
-        if(graph[i]->gl[j]->lassoMode) lasso = true;
-    if(lasso){
-      for(unsigned int i = 0; i < graph.size(); i++)
-        for(unsigned int j = 0; j < graph[i]->gl.size(); j++)
-          graph[i]->gl[j]->lassoMode = false;
-      status = 2;
+    if(fullscreen->shown()){
+      window_cb(0, (void*)"fullscreen");
+      status = 1;
     }
     else{
-      status_options_cb(0, (void *)"S");
-      status = 1;
+      bool lasso = false;
+      for(unsigned int i = 0; i < graph.size(); i++)
+        for(unsigned int j = 0; j < graph[i]->gl.size(); j++)
+          if(graph[i]->gl[j]->lassoMode) lasso = true;
+      if(lasso){
+        for(unsigned int i = 0; i < graph.size(); i++)
+          for(unsigned int j = 0; j < graph[i]->gl.size(); j++)
+            graph[i]->gl[j]->lassoMode = false;
+        status = 2;
+      }
+      else{
+        status_options_cb(0, (void *)"S");
+        status = 1;
+      }
     }
   }
   else if(Fl::test_shortcut(FL_SHIFT + 'a')) {
@@ -660,8 +811,19 @@ char FlGui::selectEntity(int type)
 void FlGui::setStatus(const std::string &msg, bool opengl)
 {
   if(!opengl){
+    _lastStatus = msg;
     static char buff[1024];
     std::string tmp = std::string(" ") + msg;
+    int ne = Msg::GetErrorCount(), nw = Msg::GetWarningCount();
+    if((ne || nw) && graph[0]->getMessageHeight() < FL_NORMAL_SIZE){
+      tmp += "  -  ";
+      char n[128]; sprintf(n, "%d", ne ? ne : nw);
+      tmp += n;
+      tmp += (ne > 1) ? " Errors" : ne ? " Error" : (nw > 1) ? " Warnings" : " Warning";
+      tmp += " : Click to show messages [ ... ";
+      tmp += (ne ? Msg::GetFirstError() : Msg::GetFirstWarning());
+      tmp += " ... ]";
+    }
     strncpy(buff, tmp.c_str(), sizeof(buff) - 1);
     buff[sizeof(buff) - 1] = '\0';
     for(unsigned int i = 0; i < graph.size(); i++){
@@ -683,6 +845,17 @@ void FlGui::setStatus(const std::string &msg, bool opengl)
       gl->screenMessage[1].clear();
     drawContext::global()->draw();
   }
+}
+
+void FlGui::setLastStatus(int col)
+{
+  for(unsigned int i = 0; i < graph.size(); i++){
+    if(col >= 0 && graph[0]->getMessageHeight() < FL_NORMAL_SIZE)
+      graph[i]->getProgress()->labelcolor(col);
+    else
+      graph[i]->getProgress()->labelcolor(FL_FOREGROUND_COLOR);
+  }
+  setStatus(_lastStatus);
 }
 
 void FlGui::setProgress(const std::string &msg, double val, double min, double max)
@@ -710,7 +883,8 @@ void FlGui::storeCurrentWindowsInfo()
   CTX::instance()->glPosition[1] = graph[0]->getWindow()->y();
   CTX::instance()->glSize[0] = graph[0]->getGlWidth();
   CTX::instance()->glSize[1] = graph[0]->getGlHeight();
-  CTX::instance()->msgSize = graph[0]->getMessageHeight();
+  CTX::instance()->msgSize = graph[0]->getMessageHeight() ?
+    graph[0]->getMessageHeight() : CTX::instance()->msgSize;
   CTX::instance()->menuSize[0] = graph[0]->getMenuWidth();
   if(graph[0]->isMenuDetached()){
     CTX::instance()->detachedMenu = 1;
@@ -765,7 +939,8 @@ void redraw_cb(Fl_Widget *w, void *data)
 
 void window_cb(Fl_Widget *w, void *data)
 {
-  static int oldx = 0, oldy = 0, oldw = 0, oldh = 0, zoom = 1;
+  static int oldx = 0, oldy = 0, oldw = 0, oldh = 0, zoom = 0, fullscreen = 0;
+
   std::string str((const char*)data);
 
   if(str == "minimize"){
@@ -790,30 +965,39 @@ void window_cb(Fl_Widget *w, void *data)
       FlGui::instance()->stats->win->iconize();
   }
   else if(str == "zoom"){
-    if(zoom){
+    if(!zoom){
       oldx = FlGui::instance()->graph[0]->getWindow()->x();
       oldy = FlGui::instance()->graph[0]->getWindow()->y();
       oldw = FlGui::instance()->graph[0]->getWindow()->w();
       oldh = FlGui::instance()->graph[0]->getWindow()->h();
-//#define FS
-#ifndef FS
       FlGui::instance()->graph[0]->getWindow()->resize(Fl::x(), Fl::y(), Fl::w(), Fl::h());
-      FlGui::instance()->graph[0]->hideMessages();
-      FlGui::instance()->check();
-#else
-      FlGui::instance()->graph[0]->getWindow()->fullscreen();
-      FlGui::instance()->graph[0]->hideMessages();
-#endif
-      zoom = 0;
+      zoom = 1;
     }
     else{
-#ifndef FS
       FlGui::instance()->graph[0]->getWindow()->resize(oldx, oldy, oldw, oldh);
-      FlGui::instance()->check();
-#else
-      FlGui::instance()->graph[0]->getWindow()->fullscreen_off();
-#endif
-      zoom = 1;
+      zoom = 0;
+    }
+  }
+  else if(str == "fullscreen"){
+    if(!fullscreen){
+      FlGui::instance()->fullscreen->show();
+      FlGui::instance()->fullscreen->getDrawContext()->copyViewAttributes
+        (FlGui::instance()->getCurrentOpenglWindow()->getDrawContext());
+      openglWindow::setLastHandled(FlGui::instance()->fullscreen);
+      for(unsigned int i = 0; i < FlGui::instance()->graph.size(); i++)
+        FlGui::instance()->graph[i]->getWindow()->hide();
+      drawContext::global()->draw();
+      fullscreen = 1;
+    }
+    else{
+      for(unsigned int i = 0; i < FlGui::instance()->graph.size(); i++)
+        FlGui::instance()->graph[i]->getWindow()->show();
+      FlGui::instance()->graph[0]->gl[0]->getDrawContext()->copyViewAttributes
+        (FlGui::instance()->getCurrentOpenglWindow()->getDrawContext());
+      openglWindow::setLastHandled(FlGui::instance()->graph[0]->gl[0]);
+      FlGui::instance()->fullscreen->hide();
+      drawContext::global()->draw();
+      fullscreen = 0;
     }
   }
   else if(str == "front"){
@@ -849,12 +1033,6 @@ void FlGui::addMessage(const char *msg)
     FlGui::instance()->graph[i]->addMessage(msg);
 }
 
-void FlGui::showMessages()
-{
-  for(unsigned int i = 0; i < FlGui::instance()->graph.size(); i++)
-    FlGui::instance()->graph[i]->showMessages();
-}
-
 void FlGui::saveMessages(const char *fileName)
 {
   FlGui::instance()->graph[0]->saveMessages(fileName);
@@ -867,6 +1045,6 @@ void FlGui::rebuildTree()
 
 void FlGui::openModule(const std::string &name)
 {
-  if(!onelab->isManuallyClosed("0Gmsh modules/" + name))
-    onelab->openTreeItem("0Gmsh modules/" + name);
+  if(!onelab->isManuallyClosed("0Modules/" + name))
+    onelab->openTreeItem("0Modules/" + name);
 }

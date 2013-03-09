@@ -4,7 +4,7 @@
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
 //
 // Contributor(s):
-//   Tristan Carrier
+//   Tristan Carrier François Henrotte
 
 #include "simple3D.h"
 #include "GModel.h"
@@ -345,8 +345,25 @@ void Filler::treat_region(GRegion* gr){
   std::set<MVertex*> temp;
   std::set<MVertex*>::iterator it;
   RTree<Node*,double,3,double> rtree;
-
+  
   Frame_field::init_region(gr);
+
+  int NumSmooth = CTX::instance()->mesh.smoothCrossField;
+  if(NumSmooth){
+    Frame_field::init(gr);
+    Frame_field::save(gr,"cross_init.pos");
+    double enew = Frame_field::smooth(gr);
+    int NumIter = 0;
+    double eold = 0;
+    do{
+      std::cout << "Smoothing: energy(" << NumIter << ") = " << enew << std::endl;
+      eold = enew;
+      enew = Frame_field::smooth(gr);
+    } while((eold > enew) && (NumIter++ < NumSmooth));
+    Frame_field::save(gr,"cross_smooth.pos");
+    Frame_field::fillTreeVolume(gr);
+  }
+
   Size_field::init_region(gr);
   Size_field::solve(gr);
   octree = new MElementOctree(gr->model());
@@ -368,6 +385,8 @@ void Filler::treat_region(GRegion* gr){
 	  boundary_vertices.push_back(*it);
 	}
   }
+  //std::ofstream file("nodes.pos");
+  //file << "View \"test\" {\n";	
 
   for(i=0;i<boundary_vertices.size();i++){
     x = boundary_vertices[i]->x();
@@ -378,10 +397,8 @@ void Filler::treat_region(GRegion* gr){
 	compute_parameters(node,gr);
 	rtree.Insert(node->min,node->max,node);
 	fifo.push(node);
+	//print_node(node,file);
   }
-  
-  //std::ofstream file("nodes.pos");
-  //file << "View \"test\" {\n";	
   
   count = 1;
   while(!fifo.empty()){
@@ -458,8 +475,10 @@ void Filler::treat_region(GRegion* gr){
 Metric Filler::get_metric(double x,double y,double z){
   Metric m;
   Matrix m2;
-
-  m2 = Frame_field::search(x,y,z);
+  if(!CTX::instance()->mesh.smoothCrossField)
+    m2 = Frame_field::search(x,y,z);
+  else
+    m2 = Frame_field::findNearestCross(x,y,z);
 
   m.set_m11(m2.get_m11());
   m.set_m21(m2.get_m21());
@@ -473,6 +492,40 @@ Metric Filler::get_metric(double x,double y,double z){
   m.set_m23(m2.get_m23());
   m.set_m33(m2.get_m33());
 
+  return m;
+}
+
+Metric Filler::get_metric(double x,double y,double z,GEntity* ge){
+  Metric m;
+  SMetric3 temp;
+  SVector3 v1,v2,v3;
+  Field* field;
+  FieldManager* manager;
+	
+  v1 = SVector3(1.0,0.0,0.0);
+  v2 = SVector3(0.0,1.0,0.0);
+  v3 = SVector3(0.0,0.0,1.0);
+	
+  manager = ge->model()->getFields();
+  if(manager->getBackgroundField()>0){
+    field = manager->get(manager->getBackgroundField());
+    if(field){
+      (*field)(x,y,z,temp,ge);
+    }
+  }
+	
+  m.set_m11(v1.x());
+  m.set_m21(v1.y());
+  m.set_m31(v1.z());
+	
+  m.set_m12(v2.x());
+  m.set_m22(v2.y());
+  m.set_m32(v2.z());
+	
+  m.set_m13(v3.x());
+  m.set_m23(v3.y());
+  m.set_m33(v3.z());
+	
   return m;
 }
 

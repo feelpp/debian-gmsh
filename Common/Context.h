@@ -19,7 +19,7 @@ struct contextMeshOptions {
   int points, lines, triangles, quadrangles, tetrahedra, hexahedra, prisms, pyramids;
   int surfacesEdges, surfacesFaces, volumesEdges, volumesFaces, numSubEdges;
   int pointsNum, linesNum, surfacesNum, volumesNum, qualityType, labelType;
-  int optimize, optimizeNetgen, optimizeLloyd, refineSteps, remove4triangles;
+  int optimize, optimizeNetgen, optimizeLloyd, smoothCrossField, refineSteps, remove4triangles;
   double normals, tangents, explode, angleSmoothNormals, allowSwapEdgeAngle;
   double mshFileVersion, mshFilePartitioned, pointSize, lineWidth;
   double qualityInf, qualitySup, radiusInf, radiusSup;
@@ -52,7 +52,8 @@ struct contextGeometryOptions {
   int pointsNum, linesNum, surfacesNum, volumesNum, labelType;
   double pointSize, lineWidth, selectedPointSize, selectedLineWidth;
   int pointType, lineType, surfaceType, numSubEdges;
-  int oldCircle, extrudeSplinePoints, extrudeReturnLateral, oldNewreg;
+  int oldCircle, oldNewreg, oldRuledSurface;
+  int extrudeSplinePoints, extrudeReturnLateral;
   double normals, tangents, scalingFactor;
   int autoCoherence, highlightOrphans, clip, useTransform;
   double tolerance, snap[3], transform[3][3], offset[3];
@@ -96,8 +97,8 @@ class CTX {
   int terminal;
   // number of graphical windows/tiles
   int numWindows, numTiles;
-  // text editor and web browser command (with included '%s')
-  std::string editor, webBrowser;
+  // text editor command (with included '%s')
+  std::string editor;
   // pattern of files to watch out for
   std::string watchFilePattern;
   // show tootips in the GUI?

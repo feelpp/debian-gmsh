@@ -291,13 +291,13 @@ bool onelab::localNetworkClient::run()
       Msg::StatusBar(false, "%s %s", _name.c_str(), message.c_str());
       break;
     case GmshSocket::GMSH_INFO:
-      Msg::Direct("%-8.8s: %s", _name.c_str(), message.c_str());
+      Msg::Direct("Info    : %s - %s", _name.c_str(), message.c_str());
       break;
     case GmshSocket::GMSH_WARNING:
-      Msg::Direct(2, "%-8.8s: %s", _name.c_str(), message.c_str());
+      Msg::Warning("%s - %s", _name.c_str(), message.c_str());
       break;
     case GmshSocket::GMSH_ERROR:
-      Msg::Direct(1, "%-8.8s: %s", _name.c_str(), message.c_str());
+      Msg::Error("%s - %s", _name.c_str(), message.c_str());
       break;
     case GmshSocket::GMSH_MERGE_FILE:
       if(CTX::instance()->solver.autoMergeFile){
@@ -474,6 +474,7 @@ static void loadDb(const std::string &name)
 void onelab_cb(Fl_Widget *w, void *data)
 {
   if(!data) return;
+
   std::string action((const char*)data);
 
   if(action == "refresh"){
@@ -552,6 +553,8 @@ void onelab_cb(Fl_Widget *w, void *data)
     return;
   }
 
+  Msg::ResetErrorCounter();
+
   FlGui::instance()->onelab->setButtonMode("", "stop");
 
   if(action == "compute") initializeLoops();
@@ -579,7 +582,6 @@ void onelab_cb(Fl_Widget *w, void *data)
         OpenProject(GModel::current()->getFileName());
         drawContext::global()->draw();
       }
-      Msg::ResetErrorCounter();
 #endif
     }
     else{
@@ -921,7 +923,7 @@ void onelabGroup::_addMenu(const std::string &path, Fl_Callback *callback, void 
 void onelabGroup::_addViewMenu(int num)
 {
   std::ostringstream path;
-  path << "0Gmsh modules/Post-processing/View" << num;
+  path << "0Modules/Post-processing/View" << num;
   Fl_Tree_Item *n = _tree->add(path.str().c_str());
   int ww = _baseWidth - (n->depth() + 1) * _indent;
   _tree->begin();
@@ -934,7 +936,7 @@ void onelabGroup::_addViewMenu(int num)
 viewButton *onelabGroup::getViewButton(int num)
 {
   char tmp[256];
-  sprintf(tmp, "0Gmsh modules/Post-processing/View%d", num);
+  sprintf(tmp, "0Modules/Post-processing/View%d", num);
   Fl_Tree_Item *n = _tree->find_item(tmp);
   if(n) return (viewButton*)n->widget();
   return 0;
@@ -1072,6 +1074,7 @@ Fl_Widget *onelabGroup::_addParameterWidget(onelab::number &p, Fl_Tree_Item *n,
   // check box (boolean choice)
   if(p.getChoices().size() == 2 &&
      p.getChoices()[0] == 0 && p.getChoices()[1] == 1){
+    n->labelsize(FL_NORMAL_SIZE + 2);
     Fl_Check_Button *but = new Fl_Check_Button(1, 1, 2 * ww, 1);
     but->box(FL_FLAT_BOX);
     but->color(_tree->color());
@@ -1082,7 +1085,8 @@ Fl_Widget *onelabGroup::_addParameterWidget(onelab::number &p, Fl_Tree_Item *n,
   }
 
   // general number input
-  inputRange *but = new inputRange(1, 1, ww, 1, onelab::parameter::maxNumber());
+  inputRange *but = new inputRange(1, 1, ww, 1, onelab::parameter::maxNumber(),
+                                   p.getAttribute("ReadOnlyRange") == "1");
   but->value(p.getValue());
   but->minimum(p.getMin());
   but->maximum(p.getMax());
@@ -1112,6 +1116,21 @@ static void onelab_string_button_cb(Fl_Widget *w, void *data)
   }
 }
 
+static void onelab_string_input_cb(Fl_Widget *w, void *data)
+{
+  if(!data) return;
+  std::string name = FlGui::instance()->onelab->getPath((Fl_Tree_Item*)data);
+  std::vector<onelab::string> strings;
+  onelab::server::instance()->get(strings, name);
+  if(strings.size()){
+    Fl_Input *o = (Fl_Input*)w;
+    onelab::string old = strings[0];
+    strings[0].setValue(o->value());
+    onelab::server::instance()->set(strings[0]);
+    autoCheck(old, strings[0]);
+  }
+}
+
 static void onelab_string_input_choice_cb(Fl_Widget *w, void *data)
 {
   if(!data) return;
@@ -1122,6 +1141,17 @@ static void onelab_string_input_choice_cb(Fl_Widget *w, void *data)
     Fl_Input_Choice *o = (Fl_Input_Choice*)w;
     onelab::string old = strings[0];
     strings[0].setValue(o->value());
+    std::string choices;
+    for(int i = 0; i < o->menubutton()->menu()->size(); i++){
+      if(o->menubutton()->menu()[i].flags & FL_MENU_TOGGLE){
+        if(o->menubutton()->menu()[i].flags & FL_MENU_VALUE)
+          choices += "1";
+        else
+          choices += "0";
+      }
+    }
+    if(choices.size())
+      strings[0].setAttribute("MultipleSelection", choices);
     onelab::server::instance()->set(strings[0]);
     autoCheck(old, strings[0]);
   }
@@ -1150,6 +1180,22 @@ static void onelab_input_choice_file_merge_cb(Fl_Widget *w, void *data)
   std::string file = FixWindowsPath(but->value());
   MergeFile(file);
   drawContext::global()->draw();
+}
+
+static void multiple_selection_menu_cb(Fl_Widget *w, void *data)
+{
+  Fl_Menu_Button *menu = (Fl_Menu_Button*)w;
+  std::string val;
+  for (int i = 0; i < menu->size() - 1; i++) {
+    const Fl_Menu_Item &item = menu->menu()[i];
+    if(item.value() && item.label()){
+      if(val.size()) val += ", ";
+      val += item.label();
+    }
+  }
+  Fl_Input_Choice *but = (Fl_Input_Choice*)data;
+  but->value(val.c_str());
+  but->do_callback();
 }
 
 Fl_Widget *onelabGroup::_addParameterWidget(onelab::string &p, Fl_Tree_Item *n,
@@ -1181,15 +1227,32 @@ Fl_Widget *onelabGroup::_addParameterWidget(onelab::string &p, Fl_Tree_Item *n,
     return but;
   }
 
+  // simple string (no menu)
+  if(p.getChoices().empty() && p.getKind() != "file"){
+    Fl_Input *but = new Fl_Input(1, 1, ww, 1);
+    but->value(p.getValue().c_str());
+    but->callback(onelab_string_input_cb, (void*)n);
+    but->when(FL_WHEN_ENTER_KEY);
+    but->align(FL_ALIGN_RIGHT);
+    if(highlight) but->color(c);
+    return but;
+  }
+
   // general string input
   Fl_Input_Choice *but = new Fl_Input_Choice(1, 1, ww, 1);
+  std::string multipleSelection = p.getAttribute("MultipleSelection");
+  if(multipleSelection.size())
+    but->menubutton()->callback(multiple_selection_menu_cb, but);
   std::vector<Fl_Menu_Item> menu;
   for(unsigned int j = 0; j < p.getChoices().size(); j++){
     char *str = strdup(p.getChoices()[j].c_str());
     _treeStrings.push_back(str);
     bool divider = (p.getKind() == "file" &&
                     j == p.getChoices().size() - 1);
-    Fl_Menu_Item it = {str, 0, 0, 0, divider ? FL_MENU_DIVIDER : 0};
+    int choice = multipleSelection.size() ? FL_MENU_TOGGLE : 0;
+    if(multipleSelection.size() > j && multipleSelection[j] == '1')
+      choice |= FL_MENU_VALUE;
+    Fl_Menu_Item it = {str, 0, 0, 0, divider ? FL_MENU_DIVIDER : choice};
     menu.push_back(it);
   }
   if(p.getKind() == "file"){
@@ -1233,6 +1296,7 @@ Fl_Widget *onelabGroup::_addParameterWidget(onelab::region &p, Fl_Tree_Item *n,
 {
   n->labelsize(FL_NORMAL_SIZE + 5);
   int ww = _baseWidth - (n->depth() + 1) * _indent;
+  ww /= 2;
 
   // non-editable value
   if(p.getReadOnly()){
@@ -1256,6 +1320,7 @@ Fl_Widget *onelabGroup::_addParameterWidget(onelab::function &p, Fl_Tree_Item *n
 {
   n->labelsize(FL_NORMAL_SIZE + 5);
   int ww = _baseWidth - (n->depth() + 1) * _indent;
+  ww /= 2;
 
   // non-editable value
   if(1 || p.getReadOnly()){
@@ -1275,6 +1340,8 @@ void onelabGroup::rebuildTree()
 
   std::set<std::string> closed = _getClosedGmshMenus();
 
+  _tree->take_focus(); // make sure we remove the focus from any widget that
+                       // will be deleted; this can crash fltk
   _tree->clear();
   _tree->sortorder(FL_TREE_SORT_ASCENDING);
   _tree->selectmode(FL_TREE_SELECT_NONE);
@@ -1363,7 +1430,6 @@ void onelabGroup::openTreeItem(const std::string &name)
 void onelabGroup::checkForErrors(const std::string &client)
 {
   if(Msg::GetErrorCount() > 0 && !CTX::instance()->expertMode){
-    Msg::ResetErrorCounter();
     std::string msg
       (client + " reported an error: do you really want to continue?\n\n"
        "(To disable this warning in the future, select `Enable expert mode'\n"
@@ -1565,8 +1631,6 @@ void onelabGroup::removeSolver(const std::string &name)
 
 void solver_cb(Fl_Widget *w, void *data)
 {
-  Msg::ResetErrorCounter();
-
   int num = (intptr_t)data;
   if(num >= 0){
     std::string name = opt_solver_name(num, GMSH_GET, "");
@@ -1653,7 +1717,6 @@ void flgui_wait_cb(double time)
 int metamodel_cb(const std::string &name, const std::string &action)
 {
 #if defined(HAVE_ONELAB_METAMODEL)
-  Msg::ResetErrorCounter();
   if(FlGui::instance()->onelab->isBusy())
     FlGui::instance()->onelab->show();
   else{

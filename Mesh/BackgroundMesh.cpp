@@ -400,75 +400,47 @@ double BGM_MeshSize(GEntity *ge, double U, double V,
 }
 
 
-// anisotropic version of the background field - for now, only works
-// with bamg in 2D, work in progress
-
+// anisotropic version of the background field
 SMetric3 BGM_MeshMetric(GEntity *ge,
                         double U, double V,
                         double X, double Y, double Z)
 {
-  // default lc (mesh size == size of the model)
-  double l1 = CTX::instance()->lc;
-  const double max_lc =  CTX::instance()->mesh.lcMax;
 
-  // lc from points
-  double l2 = max_lc;
-  if(CTX::instance()->mesh.lcFromPoints && ge->dim() < 2)
-    l2 = LC_MVertex_PNTS(ge, U, V);
-
-  // lc from curvature
-  SMetric3 l3(1./(max_lc*max_lc));
-  if(CTX::instance()->mesh.lcFromCurvature && ge->dim() < 3)
-    l3 = LC_MVertex_CURV_ANISO(ge, U, V);
-
-  // lc from fields
-  SMetric3 l4(1./(max_lc*max_lc));
-  FieldManager *fields = ge->model()->getFields();
-  if(fields->getBackgroundField() > 0){
-    Field *f = fields->get(fields->getBackgroundField());
-    if(f){
-      if (!f->isotropic()){
-        (*f)(X, Y, Z, l4,ge);
-      }
-      else{
-        double L = (*f)(X, Y, Z, ge);
-        l4 = SMetric3(1/(L*L));
-      }
-    }
-  }
-
-  // take the minimum, then constrain by lcMin and lcMax
-  double lc = std::min(l1, l2);
+  // Metrics based on element size
+  // Element size  = min. between default lc and lc from point (if applicable), constrained by lcMin and lcMax
+  double lc = CTX::instance()->lc;
+  if(CTX::instance()->mesh.lcFromPoints && ge->dim() < 2) lc = std::min(lc, LC_MVertex_PNTS(ge, U, V));
   lc = std::max(lc, CTX::instance()->mesh.lcMin);
   lc = std::min(lc, CTX::instance()->mesh.lcMax);
-
-
   if(lc <= 0.){
     Msg::Error("Wrong mesh element size lc = %g (lcmin = %g, lcmax = %g)",
                lc, CTX::instance()->mesh.lcMin, CTX::instance()->mesh.lcMax);
-    lc = l1;
+    lc = CTX::instance()->lc;
   }
+  SMetric3 m0(1./(lc*lc));
 
-  SMetric3 LC(1./(lc*lc));
-  //SMetric3 m = intersection_conserveM1(intersection_conserveM1 (l4, LC),l3);
-  SMetric3 m = intersection(intersection (l4, LC),l3);
-  //printf("%g %g %g %g %g %g\n",m(0,0),m(1,1),m(2,2),m(0,1),m(0,2),m(1,2));
-  {
-    fullMatrix<double> V(3,3);
-    fullVector<double> S(3);
-    m.eig(V,S,true);
-    if (S(0) < 0 || S(1) < 0 || S(2) < 0){
-      printf("%g %g %g\n",S(0),S(1),S(2));
-      l3.eig(V,S,true);
-      printf("%g %g %g\n",S(0),S(1),S(2));
-      l4.eig(V,S,true);
-      printf("%g %g %g\n",S(0),S(1),S(2));
+  // Intersect with metrics from fields if applicable
+  FieldManager *fields = ge->model()->getFields();
+  SMetric3 m1 = m0;
+  if(fields->getBackgroundField() > 0){
+    Field *f = fields->get(fields->getBackgroundField());
+    if(f) {
+      SMetric3 l4;
+      if (!f->isotropic()) (*f)(X, Y, Z, l4, ge);
+      else {
+        const double L = (*f)(X, Y, Z, ge);
+        l4 = SMetric3(1/(L*L));
+      }
+      m1 = intersection(l4, m0);
     }
   }
 
+  // Intersect with metrics from curvature if applicable
+  SMetric3 m = (CTX::instance()->mesh.lcFromCurvature && ge->dim() < 3) ?
+      intersection(m1, LC_MVertex_CURV_ANISO(ge, U, V)) : m1;
 
   return m;
-  //  return lc * CTX::instance()->mesh.lcFactor;
+
 }
 
 bool Extend1dMeshIn2dSurfaces()
@@ -560,8 +532,9 @@ backgroundMesh::backgroundMesh(GFace *_gf, bool cfd)
   _octree = new MElementOctree(_triangles);
 
   // compute the mesh sizes at nodes
-  if (CTX::instance()->mesh.lcFromPoints)
+  if (CTX::instance()->mesh.lcFromPoints){
     propagate1dMesh(_gf);
+  }
   else {
     std::map<MVertex*, MVertex*>::iterator itv2 = _2Dto3D.begin();
     for ( ; itv2 != _2Dto3D.end(); ++itv2){
@@ -650,7 +623,9 @@ static void propagateValuesOnFace(GFace *_gf,
   }
 
   // Solve
-  _lsys->systemSolve();
+  if (myAssembler.sizeOfR()){
+    _lsys->systemSolve();
+  }
 
   // save solution
   for (std::set<MVertex*>::iterator it = vs.begin(); it != vs.end(); ++it){
@@ -679,18 +654,19 @@ void backgroundMesh::propagate1dMesh(GFace *_gf)
       for(unsigned int i = 0; i < (*it)->lines.size(); i++ ){
         MVertex *v1 = (*it)->lines[i]->getVertex(0);
         MVertex *v2 = (*it)->lines[i]->getVertex(1);
-        // printf("%g %g %g\n",v1->x(),v1->y(),v1->z());
-        double d = sqrt((v1->x() - v2->x()) * (v1->x() - v2->x()) +
-                        (v1->y() - v2->y()) * (v1->y() - v2->y()) +
-                        (v1->z() - v2->z()) * (v1->z()  -v2->z()));
-        for (int k=0;k<2;k++){
-          MVertex *v = (*it)->lines[i]->getVertex(k);
-          std::map<MVertex*, double>::iterator itv = sizes.find(v);
-          if (itv == sizes.end())
-            sizes[v] = log(d);
-          else
-            itv->second = 0.5 * (itv->second + log(d));
-        }
+	if (v1 != v2){
+	  double d = sqrt((v1->x() - v2->x()) * (v1->x() - v2->x()) +
+			  (v1->y() - v2->y()) * (v1->y() - v2->y()) +
+			  (v1->z() - v2->z()) * (v1->z()  -v2->z()));
+	  for (int k=0;k<2;k++){
+	    MVertex *v = (*it)->lines[i]->getVertex(k);
+	    std::map<MVertex*, double>::iterator itv = sizes.find(v);
+	    if (itv == sizes.end())
+	      sizes[v] = log(d);
+	    else
+	      itv->second = 0.5 * (itv->second + log(d));
+	  }
+	}
       }
     }
   }
@@ -737,19 +713,26 @@ void backgroundMesh::propagateCrossFieldByDistance(GFace *_gf)
         v[1] = (*it)->lines[i]->getVertex(1);
         SPoint2 p1,p2;
         reparamMeshEdgeOnFace(v[0],v[1],_gf,p1,p2);
-        double angle = atan2 ( p1.y()-p2.y() , p1.x()-p2.x() );
-        crossField2d::normalizeAngle (angle);
+	/* a correct way of computing angles  */
+	Pair<SVector3, SVector3> der = _gf->firstDer((p1+p2)*.5);
+	SVector3 t1 = der.first();
+	SVector3 t2 (v[1]->x()-v[0]->x(),v[1]->y()-v[0]->y(),v[1]->z()-v[0]->z());
+	t1.normalize();
+	t2.normalize();
+	double _angle = angle (t1,t2);	
+	//        double angle = atan2 ( p1.y()-p2.y() , p1.x()-p2.x() );
+        crossField2d::normalizeAngle (_angle);
         for (int i=0;i<2;i++){
           std::map<MVertex*,double>::iterator itc = _cosines4.find(v[i]);
           std::map<MVertex*,double>::iterator its = _sines4.find(v[i]);
           if (itc != _cosines4.end()){
-            itc->second  = 0.5*(itc->second + cos(4*angle));
-            its->second  = 0.5*(its->second + sin(4*angle));
+            itc->second  = 0.5*(itc->second + cos(4*_angle));
+            its->second  = 0.5*(its->second + sin(4*_angle));
           }
           else {
 	    _param[v[i]] = (i==0) ? p1 : p2;
-            _cosines4[v[i]] = cos(4*angle);
-            _sines4[v[i]] = sin(4*angle);
+            _cosines4[v[i]] = cos(4*_angle);
+            _sines4[v[i]] = sin(4*_angle);
           }
         }
       }
@@ -780,8 +763,16 @@ void backgroundMesh::propagateCrossFieldByDistance(GFace *_gf)
 #endif
 }
 
+inline double myAngle (const SVector3 &a, const SVector3 &b, const SVector3 &d){
+  double cosTheta = dot(a,b);
+  double sinTheta = dot(crossprod(a,b),d);
+  return atan2 (sinTheta,cosTheta);  
+}
+
+
 void backgroundMesh::propagatecrossField(GFace *_gf)
 {
+
   std::map<MVertex*,double> _cosines4,_sines4;
 
   std::list<GEdge*> e;
@@ -797,51 +788,36 @@ void backgroundMesh::propagatecrossField(GFace *_gf)
         v[1] = (*it)->lines[i]->getVertex(1);
         SPoint2 p1,p2;
         reparamMeshEdgeOnFace(v[0],v[1],_gf,p1,p2);
-        double angle = atan2 ( p1.y()-p2.y() , p1.x()-p2.x() );
+	Pair<SVector3, SVector3> der = _gf->firstDer((p1+p2)*.5);
+	SVector3 t1 = der.first();
+	SVector3 s2 = der.second();
+	SVector3 n = crossprod(t1,s2);
+	n.normalize();
+	SVector3 t2 (v[1]->x()-v[0]->x(),v[1]->y()-v[0]->y(),v[1]->z()-v[0]->z());
+	t1.normalize();
+	t2.normalize();
+	double _angle = myAngle (t1,t2,n);	
+	//	printf("GFACE %d %g %g %g %g\n",_gf->tag(),t1.x(),t1.y(),t1.z(),_angle*180/M_PI);
+	//	printf("angle = %12.5E\n",_angle);
+	//	angle_ = atan2 ( p1.y()-p2.y() , p1.x()-p2.x() );
         //double angle = atan2 ( v[0]->y()-v[1]->y() , v[0]->x()- v[1]->x() );
         //double angle = atan2 ( v0->y()-v1->y() , v0->x()- v1->x() );
-        crossField2d::normalizeAngle (angle);
+        crossField2d::normalizeAngle (_angle);
+	//	SVector3 s2 = der.second();
+	//	s2.normalize();
+	SVector3 x = t1 * cos (_angle) + crossprod(n,t1) * sin (_angle);
+	//	printf("angle = %g --> %g %g %g vs %g %g %g\n",_angle,x.x(),x.y(),x.z(),t2.x(),t2.y(),t2.z());
+	//	printf("GFACE %d GEDGE %d %g %g %g %g\n",_gf->tag(),(*it)->tag(),t1.x(),t1.y(),t1.z(),_angle*180/M_PI);
         for (int i=0;i<2;i++){
           std::map<MVertex*,double>::iterator itc = _cosines4.find(v[i]);
           std::map<MVertex*,double>::iterator its = _sines4.find(v[i]);
           if (itc != _cosines4.end()){
-            itc->second  = 0.5*(itc->second + cos(4*angle));
-            its->second  = 0.5*(its->second + sin(4*angle));
+            itc->second  = 0.5*(itc->second + cos(4*_angle));
+            its->second  = 0.5*(its->second + sin(4*_angle));
           }
           else {
-            _cosines4[v[i]] = cos(4*angle);
-            _sines4[v[i]] = sin(4*angle);
-          }
-        }
-      }
-    }
-  }
-
-  // force smooth transition
-  const int nbSmooth = 0;
-  const double threshold_angle = 2. * M_PI/180.;
-  for (int SMOOTH_ITER = 0 ; SMOOTH_ITER < nbSmooth ; SMOOTH_ITER++){
-    it = e.begin();
-    for( ; it != e.end(); ++it ){
-      if (!(*it)->isSeam(_gf)){
-        for(unsigned int i = 0; i < (*it)->lines.size(); i++ ){
-          MVertex *v[2];
-          v[0] = (*it)->lines[i]->getVertex(0);
-          v[1] = (*it)->lines[i]->getVertex(1);
-          double cos40 = _cosines4[v[0]];
-          double cos41 = _cosines4[v[1]];
-          double sin40 = _sines4[v[0]];
-          double sin41 = _sines4[v[1]];
-          double angle0 = atan2 (sin40,cos40)/4.;
-          double angle1 = atan2 (sin41,cos41)/4.;
-          if (fabs(angle0 - angle1) >  threshold_angle ){
-            double angle0_new = angle0 - (angle0-angle1) * 0.1;
-            double angle1_new = angle1 + (angle0-angle1) * 0.1;
-            // printf("%g %g -- %g %g\n",angle0,angle1,angle0_new,angle1_new);
-            _cosines4[v[0]] = cos(4*angle0_new);
-            _sines4[v[0]] = sin(4*angle0_new);
-            _cosines4[v[1]] = cos(4*angle1_new);
-            _sines4[v[1]] = sin(4*angle1_new);
+            _cosines4[v[i]] = cos(4*_angle);
+            _sines4[v[i]] = sin(4*_angle);
           }
         }
       }
@@ -1039,7 +1015,7 @@ void backgroundMesh::print(const std::string &filename, GFace *gf,
       */
     }
     else {
-      /*
+      
       GPoint p1 = gf->point(SPoint2(v1->x(),v1->y()));
       GPoint p2 = gf->point(SPoint2(v2->x(),v2->y()));
       GPoint p3 = gf->point(SPoint2(v3->x(),v3->y()));
@@ -1047,12 +1023,13 @@ void backgroundMesh::print(const std::string &filename, GFace *gf,
               p1.x(),p1.y(),p1.z(),
               p2.x(),p2.y(),p2.z(),
               p3.x(),p3.y(),p3.z(),itv1->second,itv2->second,itv3->second);
-      */
+      /*
       fprintf(f,"ST(%g,%g,%g,%g,%g,%g,%g,%g,%g) {%g,%g,%g};\n",
               v1->x(),v1->y(),v1->z(),
               v2->x(),v2->y(),v2->z(),
               v3->x(),v3->y(),v3->z(),
               itv1->second,itv2->second,itv3->second);
+      */
     }
   }
   fprintf(f,"};\n");

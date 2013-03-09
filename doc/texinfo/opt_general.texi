@@ -119,11 +119,6 @@ Temporary file used by the geometry module@*
 Default value: @code{".gmsh-tmp"}@*
 Saved in: @code{General.SessionFileName}
 
-@item General.WebBrowser
-System command to launch a web browser@*
-Default value: @code{"open %s"}@*
-Saved in: @code{General.OptionsFileName}
-
 @item General.WatchFilePattern
 Pattern of files to merge as they become available@*
 Default value: @code{""}@*
@@ -516,12 +511,12 @@ Saved in: @code{General.SessionFileName}
 
 @item General.FieldHeight
 Height (in pixels) of the field window@*
-Default value: @code{300}@*
+Default value: @code{320}@*
 Saved in: @code{General.SessionFileName}
 
 @item General.FieldWidth
 Width (in pixels) of the field window@*
-Default value: @code{300}@*
+Default value: @code{420}@*
 Saved in: @code{General.SessionFileName}
 
 @item General.FileChooserPositionX
@@ -541,12 +536,12 @@ Saved in: @code{General.OptionsFileName}
 
 @item General.GraphicsFontSize
 Size of the font in the graphic window@*
-Default value: @code{17}@*
+Default value: @code{15}@*
 Saved in: @code{General.OptionsFileName}
 
 @item General.GraphicsFontSizeTitle
 Size of the font in the graphic window for titles@*
-Default value: @code{19}@*
+Default value: @code{18}@*
 Saved in: @code{General.OptionsFileName}
 
 @item General.GraphicsHeight
@@ -775,7 +770,7 @@ Default value: @code{400}@*
 Saved in: @code{General.SessionFileName}
 
 @item General.MessageHeight
-Height (in pixels) of the message console@*
+Height (in pixels) of the message console when it is visible (should be > 0)@*
 Default value: @code{300}@*
 Saved in: @code{General.SessionFileName}
 
@@ -841,12 +836,12 @@ Saved in: @code{General.SessionFileName}
 
 @item General.PluginHeight
 Height (in pixels) of the plugin window@*
-Default value: @code{300}@*
+Default value: @code{320}@*
 Saved in: @code{General.SessionFileName}
 
 @item General.PluginWidth
 Width (in pixels) of the plugin window@*
-Default value: @code{300}@*
+Default value: @code{420}@*
 Saved in: @code{General.SessionFileName}
 
 @item General.PointSize
@@ -980,7 +975,7 @@ Default value: @code{150}@*
 Saved in: @code{General.SessionFileName}
 
 @item General.Stereo
-Use stereo rendering : use command line gmsh -string ``General.Stereo=1;''@*
+Use stereo rendering@*
 Default value: @code{0}@*
 Saved in: @code{General.OptionsFileName}
 
