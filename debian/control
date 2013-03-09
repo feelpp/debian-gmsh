@@ -47,6 +47,7 @@ Description: Three-dimensional finite element mesh generator
 
 Package: libgmsh2
 Architecture: any
+Section: libs
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Replaces: gmsh (<< 2.6.0.dfsg-3)
 Breaks: gmsh (<< 2.6.0.dfsg-3)
