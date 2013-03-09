@@ -4,7 +4,7 @@ Last-Update: 2012-11-28
 
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -1085,7 +1085,7 @@
+@@ -1087,7 +1087,7 @@
      message(STATUS "Note: By enabling ENABLE_MSVC_STATIC_RUNTIME, shared library "
              "won't link. In MSVC change /MT to /MD in the shared project properties")
    endif(MSVC AND ENABLE_MSVC_STATIC_RUNTIME)		  

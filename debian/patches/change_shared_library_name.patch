@@ -19,27 +19,21 @@ Last-Update: 2012-11-28
  POST_BUILD # do the rest of the command after the build period
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -1043,7 +1043,10 @@
+@@ -1048,7 +1048,7 @@
  # static library target
  if(ENABLE_BUILD_LIB)
    add_library(lib STATIC ${GMSH_SRC})
 -  set_target_properties(lib PROPERTIES OUTPUT_NAME Gmsh)
-+  set_target_properties(lib PROPERTIES 
-+      OUTPUT_NAME gmsh
-+      SOVERSION "${GMSH_MAJOR_VERSION}"
-+      )
++  set_target_properties(lib PROPERTIES OUTPUT_NAME gmsh)
    if(MSVC)
      set_target_properties(lib PROPERTIES DEBUG_POSTFIX d) 
      if(ENABLE_MSVC_STATIC_RUNTIME)
-@@ -1055,7 +1058,10 @@
+@@ -1060,7 +1060,7 @@
  # shared library target
  if(ENABLE_BUILD_SHARED OR ENABLE_WRAP_PYTHON OR ENABLE_WRAP_JAVA)
    add_library(shared SHARED ${GMSH_SRC})
 -  set_target_properties(shared PROPERTIES OUTPUT_NAME Gmsh)
-+  set_target_properties(shared PROPERTIES 
-+      OUTPUT_NAME gmsh
-+      SOVERSION "${GMSH_MAJOR_VERSION}"
-+      )
-   if(HAVE_LAPACK AND LAPACK_FLAGS)
-     set_target_properties(shared PROPERTIES LINK_FLAGS ${LAPACK_FLAGS})
-   endif(HAVE_LAPACK AND LAPACK_FLAGS)
++  set_target_properties(shared PROPERTIES OUTPUT_NAME gmsh)
+   set_target_properties(shared PROPERTIES 
+                         VERSION ${GMSH_MAJOR_VERSION}.${GMSH_MINOR_VERSION}.${GMSH_PATCH_VERSION}
+                         SOVERSION ${GMSH_MAJOR_VERSION}.${GMSH_MINOR_VERSION})

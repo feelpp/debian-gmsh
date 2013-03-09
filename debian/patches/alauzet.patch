@@ -196,7 +196,7 @@
      }
      return v;
    }
-@@ -2038,6 +2184,7 @@
+@@ -2015,6 +2161,7 @@
  #endif
    map_type_name["Box"] = new FieldFactoryT<BoxField>();
    map_type_name["Cylinder"] = new FieldFactoryT<CylinderField>();
@@ -204,7 +204,7 @@
    map_type_name["Frustum"] = new FieldFactoryT<FrustumField>();
    map_type_name["LonLat"] = new FieldFactoryT<LonLatField>();
  #if defined(HAVE_POST)
-@@ -2047,6 +2194,7 @@
+@@ -2024,6 +2171,7 @@
    map_type_name["Restrict"] = new FieldFactoryT<RestrictField>();
    map_type_name["Min"] = new FieldFactoryT<MinField>();
    map_type_name["MinAniso"] = new FieldFactoryT<MinAnisoField>();
@@ -225,7 +225,7 @@
                          const double t);
 --- a/Geo/STensor3.cpp
 +++ b/Geo/STensor3.cpp
-@@ -40,6 +40,27 @@
+@@ -48,6 +48,27 @@
    return iv;
  }
  
