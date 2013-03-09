@@ -83,6 +83,8 @@ class CellComplex
   int coreduction(Cell* startCell, int omit,
 		  std::vector<Cell*>& omittedCells);
 
+  static double _patience;
+
  public:
   CellComplex(GModel* model,
 	      std::vector<MElement*>& domainElements,
@@ -167,6 +169,9 @@ class CellComplex
   //              -1 -> omit 0-cell in smallest element)
   int reduceComplex(int combine=1, bool omit=true, bool homseq=false);
   int coreduceComplex(int combine=1, bool omit=true, int heuristic=0);
+
+  // compute Betti numbers of the cell complex using coreduction
+  std::vector<int> bettiCoreduceComplex();
 
   bool isReduced() const { return _reduced; }
 

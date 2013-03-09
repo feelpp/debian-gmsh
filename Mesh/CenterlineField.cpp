@@ -302,7 +302,9 @@ Centerline::Centerline(std::string fileName): kdtree(0), kdtreeR(0), nodes(0), n
   buildKdTree();
   nbPoints = 25;
   hLayer = 0.3;
+  hSecondLayer = 0.3;
   nbElemLayer = 3;
+  nbElemSecondLayer = 0;
 
   update_needed = false;
   is_cut = 0;
@@ -320,7 +322,9 @@ Centerline::Centerline(): kdtree(0), kdtreeR(0), nodes(0), nodesR(0)
   fileName = "centerlines.vtk";//default
   nbPoints = 25;
   hLayer = 0.3;
+  hSecondLayer = 0.3;
   nbElemLayer = 3;
+  nbElemSecondLayer = 0;
   is_cut = 0;
   is_closed = 0;
   is_extruded = 0;
@@ -343,6 +347,10 @@ Centerline::Centerline(): kdtree(0), kdtreeR(0), nodes(0), nodesR(0)
     (nbElemLayer, "Number of mesh elements the extruded layer");
   options["hLayer"] = new FieldOptionDouble
     (hLayer, "Thickness (% of radius) of the extruded layer");
+  options["nbElemSecondLayer"] = new FieldOptionInt
+    (nbElemSecondLayer, "Number of mesh elements the second extruded layer");
+  options["hSecondLayer"] = new FieldOptionDouble
+    (hSecondLayer, "Thickness (% of radius) of the second extruded layer");
 }
 
 Centerline::~Centerline()
@@ -382,6 +390,7 @@ void Centerline::importFile(std::string fileName)
   mod->load(fileName);
   mod->removeDuplicateMeshVertices(1.e-8);
   current->setAsCurrent();
+  current->setVisibility(1);
 
   int maxN = 0.0;
   std::vector<GEdge*> modEdges = mod->bindingsGetEdges();
@@ -616,7 +625,7 @@ void Centerline::createSplitCompounds()
   NR = current->getMaxElementaryNumber(3);
 
   // Remesh new faces (Compound Lines and Compound Surfaces)
-  Msg::Info("Centerline: creates split compounds");
+  Msg::Info("Centerline: creating split compounds ...");
 
   //Parametrize Compound Lines
   for (int i=0; i < NE; i++){
@@ -774,10 +783,23 @@ void Centerline::extrudeBoundaryLayerWall(GEdge* gin, std::vector<GEdge*> boundE
       (gfc, nbElemLayer,  hLayer, dir, -5);
     GFace *eFace = (GFace*) extrudedE[0];
     eFace->addPhysicalEntity(5);
-    current->setPhysicalName("outerWall", 2, 5);//tag 5
+    current->setPhysicalName("outerWall", 2, 5);//dim 2 tag 5
     GRegion *eRegion = (GRegion*) extrudedE[1];
     eRegion->addPhysicalEntity(6);
-    current->setPhysicalName("wallVolume", 3, 6);//tag 6
+    current->setPhysicalName("wallVolume", 3, 6);//dim 3 tag 6
+
+    //if double extruded layer
+    if (nbElemSecondLayer > 0){
+      std::vector<GEntity*> extrudedESec = current->extrudeBoundaryLayer
+      	(gfc, nbElemSecondLayer,  hSecondLayer, dir ? 0 : 1, -5);
+      GFace *eFaceSec = (GFace*) extrudedESec[0];
+      eFaceSec->addPhysicalEntity(9);                    //tag 9
+      current->setPhysicalName("outerSecondWall", 2, 9);//dim 2 tag 9
+      GRegion *eRegionSec = (GRegion*) extrudedESec[1];
+      eRegionSec->addPhysicalEntity(10);             //tag 10
+      current->setPhysicalName("wallVolume", 3, 10);//dim 3 tag 10
+    }
+
     for (unsigned int j = 2; j < extrudedE.size(); j++){
       GFace *elFace = (GFace*) extrudedE[j];
       std::list<GEdge*> l_edges = elFace->edges();
@@ -863,16 +885,13 @@ void Centerline::cutMesh()
   for(unsigned int i = 0; i < edges.size(); i++){
     std::vector<MLine*> lines = edges[i].lines;
     double L = edges[i].length;
-    double D = 2.*edges[i].minRad;  //(edges[i].minRad+edges[i].maxRad); //
+    double D = 2.*edges[i].minRad;  //(edges[i].minRad+edges[i].maxRad);
     double AR = L/D;
-    printf("*** Centerline branch %d (AR=%.1f) \n", edges[i].tag, AR);
-    //if ( edges[i].children.size()) printf("children (%d) = ", edges[i].children.size());
-    //for (int k= 0; k< edges[i].children.size() ; k++) printf("%d ", edges[i].children[k].tag);
-    //printf("\n");
+    // printf("*** Centerline branch %d (AR=%.1f) \n", edges[i].tag, AR);
 
     int nbSplit = (int)floor(AR/2 + 0.9); //AR/2 + 0.9
     if( nbSplit > 1 ){
-      printf("->> cut branch in %d parts \n",  nbSplit);
+      //printf("->> cut branch in %d parts \n",  nbSplit);
       double li  = L/nbSplit;
       double lc = 0.0;
       for (unsigned int j= 0; j < lines.size(); j++){
@@ -897,7 +916,7 @@ void Centerline::cutMesh()
       else v2 = lines[lines.size()-1]->getVertex(0);
       SVector3 pt(v1->x(), v1->y(), v1->z());
       SVector3 dir(v2->x()-v1->x(),v2->y()-v1->y(),v2->z()-v1->z());
-      printf("-->> cut branch at bifurcation \n");
+      //printf("-->> cut branch at bifurcation \n");
       std::map<MLine*,double>::iterator itr = radiusl.find(lines[lines.size()-1]);
       //bool cutted =
       cutByDisk(pt, dir, itr->second);
@@ -920,13 +939,13 @@ void Centerline::cutMesh()
   current->exportDiscreteGEOInternals();
 
   //write
-  Msg::Info("Writing splitted mesh 'myPARTS.msh'");
+  Msg::Info("Centerline: writing splitted mesh 'myPARTS.msh'");
   current->writeMSH("myPARTS.msh", 2.2, false, false);
 
   //create compounds
   createSplitCompounds();
 
-  Msg::Info("Splitting mesh by centerlines done ");
+  Msg::Info("Done splitting mesh by centerlines");
 }
 
 bool Centerline::cutByDisk(SVector3 &PT, SVector3 &NORM, double &maxRad)
@@ -935,7 +954,6 @@ bool Centerline::cutByDisk(SVector3 &PT, SVector3 &NORM, double &maxRad)
   double b = NORM.y();
   double c = NORM.z();
   double d = -a * PT.x() - b * PT.y() - c * PT.z();
-  //printf("cut disk (R=%g)= %g %g %g %g \n", maxRad, a, b, c, d);
 
   int maxStep = 20;
   const double EPS = 0.007;
@@ -1090,7 +1108,7 @@ void  Centerline::operator() (double x, double y, double z, SMetric3 &metr, GEnt
    }
 
 
-   //take xyz = closest point on boundary in case we are on 
+   //take xyz = closest point on boundary in case we are on
    //the planar IN/OUT FACES or in VOLUME
    double xyz[3] = {x,y,z};
    bool onTubularSurface = true;
@@ -1139,45 +1157,43 @@ void  Centerline::operator() (double x, double y, double z, SMetric3 &metr, GEnt
    }
    double curv, cMin, cMax;
    SVector3 dMin, dMax;
-   int isAbs = 1.0; 
+   int isAbs = 1.0;
    curvature.vertexNodalValuesAndDirections(vertices[index[0]],&dMax, &dMin, &cMax, &cMin, isAbs);
    curvature.vertexNodalValues(vertices[index[0]], curv, 1);
    if (cMin == 0) cMin =1.e-12;
    if (cMax == 0) cMax =1.e-12;
    double rhoMin = 1./cMin;
    double rhoMax = 1./cMax;
-   double signMin = (rhoMin > 0.0) ? -1.0: 1.0;
-   double signMax = (rhoMax > 0.0) ? -1.0: 1.0;
-     
+   //double signMin = (rhoMin > 0.0) ? -1.0: 1.0;
+   //double signMax = (rhoMax > 0.0) ? -1.0: 1.0;
+
    //user-defined parameters
    //define h_n, h_t1, and h_t2
    double thickness = radMax/3.;
    double h_far = radMax/5.;
-   double beta = (ds <= thickness) ? 1.2 : 2.1; //CTX::instance()->mesh.smoothRatio; 
-   double dist = (ds <= thickness) ? ds: thickness; 
+   double beta = (ds <= thickness) ? 1.2 : 2.1; //CTX::instance()->mesh.smoothRatio;
+   double dist = (ds <= thickness) ? ds: thickness;
 
    double h_n_0 = thickness/20.;
-   double h_n   = std::min( (h_n_0+ds*log(beta)), h_far); 
+   double h_n   = std::min( (h_n_0+ds*log(beta)), h_far);
 
-   double betaMin = 10.0; 
-   double betaMax = 3.1; 
+   double betaMin = 10.0;
+   double betaMax = 3.1;
    double oneOverD2_min = 1./(2.*rhoMin*rhoMin*(betaMin*betaMin-1)) *
-     (sqrt(1+ (4.*rhoMin*rhoMin*(betaMin*betaMin-1))/(h_n*h_n))-1.); 
+     (sqrt(1+ (4.*rhoMin*rhoMin*(betaMin*betaMin-1))/(h_n*h_n))-1.);
    double oneOverD2_max = 1./(2.*rhoMax*rhoMax*(betaMax*betaMax-1)) *
     (sqrt(1+ (4.*rhoMax*rhoMax*(betaMax*betaMax-1))/(h_n*h_n))-1.);
-   double l_t1 = ((2 * M_PI) /(cMin*nbPoints));
-   double l_t2 = ((2 * M_PI) /(cMax*nbPoints));
    double h_t1_0 = sqrt(1./oneOverD2_min);
    double h_t2_0 = sqrt(1./oneOverD2_max);
    //double h_t1 =  h_t1_0*(rhoMin+signMin*dist)/rhoMin ;
-   //double h_t2 =  h_t2_0*(rhoMax+signMax*dist)/rhoMax ;  
+   //double h_t2 =  h_t2_0*(rhoMax+signMax*dist)/rhoMax ;
    double h_t1  = std::min( (h_t1_0+(dist*log(beta))), radMax);
    double h_t2  = std::min( (h_t2_0+(dist*log(beta))), h_far);
 
    double dCenter = radMax-ds;
    double h_a_0 = 0.5*radMax;
-   double h_a = h_a_0 - (h_a_0-h_t1_0)/(radMax)*dCenter; 
-      
+   double h_a = h_a_0 - (h_a_0-h_t1_0)/(radMax)*dCenter;
+
    //length between min and max
    double lcMin = ((2 * M_PI *radMax) /( 50*nbPoints )); //CTX::instance()->mesh.lcMin;
    double lcMax =  lcMin*2000.; //CTX::instance()->mesh.lcMax;
@@ -1197,10 +1213,10 @@ void  Centerline::operator() (double x, double y, double z, SMetric3 &metr, GEnt
        metr = metricBasedOnSurfaceCurvature(dMin, dMax, cMin, cMax, h_n, h_t1, h_t2);
      }
      //in volume
-     else {       
+     else {
        //curvMetric = metricBasedOnSurfaceCurvature(dMin, dMax, cMin, cMax, h_n, h_t1, h_t2);
        metr = SMetric3( 1./(h_a*h_a), 1./(h_n*h_n), 1./(h_n*h_n), dir_a, dir_n, dir_cross);
-       
+
        //metr = intersection_conserveM1_bis(metr, curvMetric);
        //metr = intersection_conserveM1(metr,curvMetric);
        //metr = intersection_conserve_mostaniso(metr, curvMetric);
@@ -1213,12 +1229,12 @@ void  Centerline::operator() (double x, double y, double z, SMetric3 &metr, GEnt
 }
 
 SMetric3 Centerline::metricBasedOnSurfaceCurvature(SVector3 dirMin, SVector3 dirMax,
-                                                   double cmin, double cmax, 
+                                                   double cmin, double cmax,
 						   double h_n, double h_t1, double h_t2)
 {
 
   SVector3 dirNorm = crossprod(dirMax,dirMin);
-  SMetric3 curvMetric (1./(h_t1*h_t1),1./(h_t2*h_t2),1./(h_n*h_n), dirMin, dirMax, dirNorm); 
+  SMetric3 curvMetric (1./(h_t1*h_t1),1./(h_t2*h_t2),1./(h_n*h_n), dirMin, dirMax, dirNorm);
 
   return curvMetric;
 }

@@ -36,6 +36,7 @@ class Msg {
   static std::map<std::string, double> _timers;
   // counters
   static int _warningCount, _errorCount;
+  static std::string _firstWarning, _firstError;
   // callback
   static GmshMessage *_callback;
   // command-line and startup time
@@ -68,7 +69,6 @@ class Msg {
   static void Warning(const char *fmt, ...);
   static void Info(const char *fmt, ...);
   static void Direct(const char *fmt, ...);
-  static void Direct(int level, const char *fmt, ...);
   static void StatusBar(bool log, const char *fmt, ...);
   static void StatusGl(const char *fmt, ...);
   static void Debug(const char *fmt, ...);
@@ -78,9 +78,12 @@ class Msg {
   static void ResetProgressMeter(){ if(!_commRank) _progressMeterCurrent = 0; }
   static double &Timer(std::string str){ return _timers[str]; }
   static void PrintTimers();
-  static void ResetErrorCounter(){ _warningCount = 0; _errorCount = 0; }
-  static int GetErrorCount(){ return _errorCount; }
+  static void ResetErrorCounter();
   static void PrintErrorCounter(const char *title);
+  static int GetWarningCount(){ return _warningCount; }
+  static int GetErrorCount(){ return _errorCount; }
+  static std::string GetFirstWarning(){ return _firstWarning; }
+  static std::string GetFirstError(){ return _firstError; }
   static double GetValue(const char *text, double defaultval);
   static std::string GetString(const char *text, std::string defaultval);
   static int GetAnswer(const char *question, int defaultval, const char *zero,

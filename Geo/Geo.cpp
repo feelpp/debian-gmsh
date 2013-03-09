@@ -1341,8 +1341,8 @@ void VisibilityShape(int Type, int Num, int Mode)
   case MSH_POINT:
   case MSH_POINT_FROM_GMODEL:
     {
-      if((v = FindPoint(Num))) v->Visible = Mode;
-      GVertex *gv = GModel::current()->getVertexByTag(Num);
+      if((v = FindPoint(abs(Num)))) v->Visible = Mode;
+      GVertex *gv = GModel::current()->getVertexByTag(abs(Num));
       if(gv) gv->setVisibility(Mode);
     }
     break;
@@ -1359,8 +1359,8 @@ void VisibilityShape(int Type, int Num, int Mode)
   case MSH_SEGM_COMPOUND:
   case MSH_SEGM_FROM_GMODEL:
     {
-      if((c = FindCurve(Num))) c->Visible = Mode;
-      GEdge *ge = GModel::current()->getEdgeByTag(Num);
+      if((c = FindCurve(abs(Num)))) c->Visible = Mode;
+      GEdge *ge = GModel::current()->getEdgeByTag(abs(Num));
       if(ge) ge->setVisibility(Mode);
     }
     break;
@@ -1371,8 +1371,8 @@ void VisibilityShape(int Type, int Num, int Mode)
   case MSH_SURF_COMPOUND:
   case MSH_SURF_FROM_GMODEL:
     {
-      if((s = FindSurface(Num))) s->Visible = Mode;
-      GFace *gf = GModel::current()->getFaceByTag(Num);
+      if((s = FindSurface(abs(Num)))) s->Visible = Mode;
+      GFace *gf = GModel::current()->getFaceByTag(abs(Num));
       if(gf) gf->setVisibility(Mode);
     }
     break;
@@ -1381,8 +1381,8 @@ void VisibilityShape(int Type, int Num, int Mode)
   case MSH_VOLUME_COMPOUND:
   case MSH_VOLUME_FROM_GMODEL:
     {
-      if((V = FindVolume(Num))) V->Visible = Mode;
-      GRegion *gr = GModel::current()->getRegionByTag(Num);
+      if((V = FindVolume(abs(Num)))) V->Visible = Mode;
+      GRegion *gr = GModel::current()->getRegionByTag(abs(Num));
       if(gr) gr->setVisibility(Mode);
     }
     break;
@@ -2901,13 +2901,12 @@ static void MaxNumSurface(void *a, void *b)
 
 static void ReplaceDuplicatePoints()
 {
-  // FIXME: This routine is in fact logically wrong (the
-  // compareTwoPoints function used in the avl tree is not a
-  // appropriate comparison function). The fix is simple (use a multi
-  // dimensional tree, e.g., MVertexPositionSet), but fixing the
-  // routine would break backward compatibility with old .geo
-  // files. This will be fixed in the new abstract GModel CAD creation
-  // routines.
+  // FIXME: This routine is in fact logically wrong (the compareTwoPoints
+  // function used in the avl tree is not a appropriate comparison
+  // function). The fix is simple (use a multi dimensional tree, e.g.,
+  // MVertexPositionSet), but fixing the routine would break backward
+  // compatibility with old .geo files. This will be fixed in the new abstract
+  // GModel CAD creation routines.
   Vertex *v, *v2, **pv, **pv2;
   Curve *c;
   Surface *s;
@@ -3534,9 +3533,9 @@ bool IntersectCurvesWithSurface(List_T *curve_ids, int surface_id, List_T *shape
 void sortEdgesInLoop(int num, List_T *edges, bool orient)
 {
   // This function sorts the edges in an EdgeLoop and detects any
-  // subloops. Warning: the input edges are supposed to be *oriented*
-  // (Without this sort, it is very difficult to write general
-  // scriptable surface generation in complex cases)
+  // subloops. Warning: the input edges are supposed to be *oriented* (Without
+  // this sort, it is very difficult to write general scriptable surface
+  // generation in complex cases)
   Curve *c, *c0, *c1, *c2;
   int nbEdges = List_Nbr(edges);
   List_T *temp = List_Create(nbEdges, 1, sizeof(Curve *));
@@ -3553,8 +3552,10 @@ void sortEdgesInLoop(int num, List_T *edges, bool orient)
       }
     }
     else{
+      Msg::Debug("Unknown curve %d, aborting line loop sort: hope you know "
+                 "what you're doing ;-)", j);
+      List_Delete(temp);
       return;
-      Msg::Error("Unknown curve %d in line loop %d", j, num);
     }
   }
   List_Reset(edges);
@@ -3638,6 +3639,7 @@ void setSurfaceGeneratrices(Surface *s, List_T *loops)
     int iLoop;
     List_Read(loops, i, &iLoop);
     EdgeLoop *el;
+    std::vector<int> fromModel;
     if(!(el = FindEdgeLoop(abs(iLoop)))) {
       Msg::Error("Unknown line loop %d", iLoop);
       List_Delete(s->Generatrices);
@@ -3653,11 +3655,8 @@ void setSurfaceGeneratrices(Surface *s, List_T *loops)
           List_Read(el->Curves, j, &ic);
           ic *= sign(iLoop);
           if(i != 0) ic *= -1; // hole
-          if(!(c = FindCurve(ic))) {
-            List_Delete(s->Generatrices);
-            s->Generatrices = NULL;
-            break;
-          }
+          if(!(c = FindCurve(ic)))
+            fromModel.push_back(ic);
           else
             List_Add(s->Generatrices, &c);
         }
@@ -3667,27 +3666,21 @@ void setSurfaceGeneratrices(Surface *s, List_T *loops)
           List_Read(el->Curves, j, &ic);
           ic *= sign(iLoop);
           if(i != 0) ic *= -1; // hole
-          if(!(c = FindCurve(ic))) {
-            Msg::Error("Unknown curve %d", ic);
-            List_Delete(s->Generatrices);
-            s->Generatrices = NULL;
-            break;
-          }
+          if(!(c = FindCurve(ic)))
+            fromModel.push_back(ic);
           else
             List_Add(s->Generatrices, &c);
         }
       }
-      if(!s->Generatrices){
-        for(int j = 0; j < List_Nbr(el->Curves); j++) {
-          List_Read(el->Curves, j, &ic);
-          GEdge *ge = GModel::current()->getEdgeByTag(abs(ic));
-          if(ge) {
-            List_Add(s->GeneratricesByTag, &ic);
-          }
-          else{
-            Msg::Error("Unknown curve %d", ic);
-            return;
-          }
+      for(unsigned int j = 0; j < fromModel.size(); j++) {
+        ic = fromModel[j];
+        GEdge *ge = GModel::current()->getEdgeByTag(abs(ic));
+        if(ge) {
+          List_Add(s->GeneratricesByTag, &ic);
+        }
+        else{
+          Msg::Error("Unknown curve %d", ic);
+          return;
         }
       }
     }

@@ -24,7 +24,7 @@ StringXNumber HomologyComputationOptions_Number[] = {
   {GMSH_FULLRC, "CohomologyPhysicalGroupsBegin", NULL, -1.},
   {GMSH_FULLRC, "CreatePostProcessingViews", NULL, 1.},
   {GMSH_FULLRC, "ReductionOmit", NULL, 1.},
-  {GMSH_FULLRC, "ReductionCombine", NULL, 2.},
+  {GMSH_FULLRC, "ReductionCombine", NULL, 3.},
   {GMSH_FULLRC, "PostProcessSimplify", NULL, 1.},
   {GMSH_FULLRC, "ReductionHeuristic", NULL, 1.}
 };
@@ -138,6 +138,9 @@ PView *GMSH_HomologyComputationPlugin::execute(PView *v)
       homology->addChainsToModel(dim, pviews, hompg);
       if(hompg != -1) hompg += homology->betti(dim);
     }
+  }
+  for(unsigned int i = 0; i < dimsave.size(); i++) {
+    int dim = dimsave.at(i);
     if(dim > -1 && dim < 4 && coh != 0) {
       homology->addCochainsToModel(dim, pviews, cohpg);
       if(cohpg != -1) cohpg += homology->betti(dim);

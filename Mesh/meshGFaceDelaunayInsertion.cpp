@@ -322,6 +322,7 @@ MTri3::MTri3(MTriangle *t, double lc, SMetric3 *metric, bidimMeshData * data, GF
       const double dy = base->getVertex(0)->y() - center[1];
       const double dz = base->getVertex(0)->z() - center[2];
       circum_radius = sqrt(dx * dx + dy * dy + dz * dz);
+      //      printf("%p %p %p %g %g %g %g %g %g %g %g %g circ %g lc %g\n",base->getVertex(0),base->getVertex(1),base->getVertex(2),pa[0],pa[1],pa[2],pb[0], pb[1],pb[2],pc[0],pc[1],pc[2],circum_radius,lc);
       circum_radius /= lc;
     }
     else {
@@ -489,15 +490,18 @@ void recurFindCavityAniso(GFace *gf,
 
   for (int i = 0; i < 3; i++){
     MTri3 *neigh = t->getNeigh(i) ;
-    if (!neigh)
-      shell.push_back(edgeXface(t, i));
+    edgeXface exf (t, i);
+    // take care of untouchable internal edges
+    std::set<MEdge,Less_Edge>::iterator it = data.internalEdges.find(MEdge(exf.v[0],exf.v[1])); 
+    if (!neigh || it != data.internalEdges.end())
+      shell.push_back(exf);
     else  if (!neigh->isDeleted()){
       //      int circ =  inCircumCircleAniso(gf, neigh->tri(), param, metric, data);
       int circ =  inCircumCircleAniso(gf, neigh->tri(), param, metric, data);
       if (circ)
         recurFindCavityAniso(gf, shell, cavity,metric, param, neigh, data);
       else
-        shell.push_back(edgeXface(t, i));
+        shell.push_back(exf);
     }
   }
 }
@@ -790,29 +794,25 @@ static bool insertAPoint(GFace *gf, std::set<MTri3*,compareTri3Ptr>::iterator it
   double uv[2];
 
   // if the point is able to break the bad triangle "worst"
-  if (1){
-    if (inCircumCircleAniso(gf, worst->tri(), center, metric, data)){
-      //      double t1 = Cpu();
-      recurFindCavityAniso(gf, shell, cavity, metric, center, worst, data);
-      //      __DT1 += Cpu() - t1 ;
-      for (std::list<MTri3*>::iterator itc = cavity.begin(); itc != cavity.end(); ++itc){
-	if (invMapUV((*itc)->tri(), center, data, uv, 1.e-8)) {
-	  ptin = *itc;
-	  break;
-	}
-      }
-    }
-    // else look for it
-    else {
-      //      printf("cocuou\n");
-      ptin = search4Triangle (worst, center, data, AllTris,uv, oneNewTriangle ? true : false);
-      if (ptin) {
-	recurFindCavityAniso(gf, shell, cavity, metric, center, ptin, data);    
+  if (inCircumCircleAniso(gf, worst->tri(), center, metric, data)){
+    //      double t1 = Cpu();
+    recurFindCavityAniso(gf, shell, cavity, metric, center, worst, data);
+    //      __DT1 += Cpu() - t1 ;
+    for (std::list<MTri3*>::iterator itc = cavity.begin(); itc != cavity.end(); ++itc){
+      if (invMapUV((*itc)->tri(), center, data, uv, 1.e-8)) {
+	ptin = *itc;
+	break;
       }
     }
   }
-
-  //  ptin = search4Triangle (worst, center, Us, Vs, AllTris,uv, oneNewTriangle ? true : false);
+  // else look for it
+  else {
+    //      printf("cocuou\n");
+    ptin = search4Triangle (worst, center, data, AllTris,uv, oneNewTriangle ? true : false);
+      if (ptin) {
+	recurFindCavityAniso(gf, shell, cavity, metric, center, ptin, data);    
+      }
+  }
 
   if (ptin) {
     // we use here local coordinates as real coordinates
@@ -867,14 +867,16 @@ static bool insertAPoint(GFace *gf, std::set<MTri3*,compareTri3Ptr>::iterator it
   }
 }
 
-void bowyerWatson(GFace *gf, int MAXPNT)
+void bowyerWatson(GFace *gf, int MAXPNT,
+		  std::map<MVertex* , MVertex*>* equivalence,  
+		  std::map<MVertex*, SPoint2> * parametricCoordinates)
 {
   std::set<MTri3*,compareTri3Ptr> AllTris;
-  bidimMeshData DATA;
+  bidimMeshData DATA(equivalence,parametricCoordinates);
 
   buildMeshGenerationDataStructures(gf, AllTris, DATA);
 
-  // _printTris ("before.pos", AllTris, Us,Vs);
+  //  if (equivalence)_printTris ("before.pos", AllTris.begin(), AllTris.end(), DATA);
   int nbSwaps = edgeSwapPass(gf, AllTris, SWCR_DEL, DATA);
   // _printTris ("after2.pos", AllTris, Us,Vs);
   Msg::Debug("Delaunization of the initial mesh done (%d swaps)", nbSwaps);
@@ -939,7 +941,7 @@ void bowyerWatson(GFace *gf, int MAXPNT)
     }
   }
 #endif
-  transferDataStructure(gf, AllTris, DATA);
+  transferDataStructure(gf, AllTris, DATA);  
 }
 
 /*
@@ -1151,11 +1153,13 @@ void optimalPointFrontalB (GFace *gf,
   }
 }
 
-void bowyerWatsonFrontal(GFace *gf)
+void bowyerWatsonFrontal(GFace *gf,
+		  std::map<MVertex* , MVertex*>* equivalence,  
+		  std::map<MVertex*, SPoint2> * parametricCoordinates)
 {
   std::set<MTri3*,compareTri3Ptr> AllTris;
   std::set<MTri3*,compareTri3Ptr> ActiveTris;
-  bidimMeshData DATA;
+  bidimMeshData DATA(equivalence,parametricCoordinates);
 
   buildMeshGenerationDataStructures(gf, AllTris, DATA);
 
@@ -1324,7 +1328,9 @@ void optimalPointFrontalQuadB (GFace *gf,
   return;
 }
 
-void buildBackGroundMesh (GFace *gf)
+void buildBackGroundMesh (GFace *gf,
+		  std::map<MVertex* , MVertex*>* equivalence,  
+		  std::map<MVertex*, SPoint2> * parametricCoordinates)
 {
   //  printf("build bak mesh\n");
   quadsToTriangles(gf, 100000);
@@ -1351,7 +1357,7 @@ void buildBackGroundMesh (GFace *gf)
     int CurvControl = CTX::instance()->mesh.lcFromCurvature;
     CTX::instance()->mesh.lcFromCurvature = 0;
     //  Do a background mesh
-    bowyerWatson(gf,4000);
+    bowyerWatson(gf,4000, equivalence,parametricCoordinates);
     //  Re-enable curv control if asked
     CTX::instance()->mesh.lcFromCurvature = CurvControl;
     // apply this to the BGM
@@ -1371,12 +1377,14 @@ void buildBackGroundMesh (GFace *gf)
 
 }
 
-void bowyerWatsonFrontalLayers(GFace *gf, bool quad)
+void bowyerWatsonFrontalLayers(GFace *gf, bool quad,
+		  std::map<MVertex* , MVertex*>* equivalence,  
+		  std::map<MVertex*, SPoint2> * parametricCoordinates)
 {
 
   std::set<MTri3*,compareTri3Ptr> AllTris;
   std::set<MTri3*,compareTri3Ptr> ActiveTris;
-  bidimMeshData DATA;
+  bidimMeshData DATA(equivalence, parametricCoordinates);
 
   if (quad){
     LIMIT_ = sqrt(2.) * .99;
@@ -1496,10 +1504,12 @@ void bowyerWatsonFrontalLayers(GFace *gf, bool quad)
   backgroundMesh::unset();
 }
 
-void bowyerWatsonParallelograms(GFace *gf)
+void bowyerWatsonParallelograms(GFace *gf,
+		  std::map<MVertex* , MVertex*>* equivalence,  
+		  std::map<MVertex*, SPoint2> * parametricCoordinates)
 {
   std::set<MTri3*,compareTri3Ptr> AllTris;
-  bidimMeshData DATA;
+  bidimMeshData DATA(equivalence, parametricCoordinates);
   std::vector<MVertex*> packed;
   std::vector<SMetric3> metrics;
 

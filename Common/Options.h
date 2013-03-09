@@ -9,9 +9,11 @@
 #include <string>
 #include "ColorTable.h"
 
-#define GMSH_SET       (1<<0)
-#define GMSH_GET       (1<<1)
-#define GMSH_GUI       (1<<2)
+#define GMSH_SET         (1<<0)
+#define GMSH_GET         (1<<1)
+#define GMSH_GUI         (1<<2)
+#define GMSH_SET_DEFAULT (1<<3)
+#define GMSH_GET_DEFAULT (1<<4)
 
 #define GMSH_SESSIONRC (1<<0)
 #define GMSH_OPTIONSRC (1<<1)
@@ -45,7 +47,6 @@ std::string opt_general_recent_file2(OPT_ARGS_STR);
 std::string opt_general_recent_file3(OPT_ARGS_STR);
 std::string opt_general_recent_file4(OPT_ARGS_STR);
 std::string opt_general_editor(OPT_ARGS_STR);
-std::string opt_general_web_browser(OPT_ARGS_STR);
 std::string opt_general_watch_file_pattern(OPT_ARGS_STR);
 std::string opt_general_gui_theme(OPT_ARGS_STR);
 std::string opt_general_graphics_font(OPT_ARGS_STR);
@@ -329,6 +330,7 @@ double opt_geometry_occ_sew_faces(OPT_ARGS_NUM);
 double opt_geometry_occ_connect_faces(OPT_ARGS_NUM);
 double opt_geometry_old_circle(OPT_ARGS_NUM);
 double opt_geometry_old_newreg(OPT_ARGS_NUM);
+double opt_geometry_old_ruled_surface(OPT_ARGS_NUM);
 double opt_geometry_num_sub_edges(OPT_ARGS_NUM);
 double opt_geometry_extrude_spline_points(OPT_ARGS_NUM);
 double opt_geometry_extrude_return_lateral(OPT_ARGS_NUM);
@@ -404,6 +406,7 @@ double opt_mesh_partition_tri_weight(OPT_ARGS_NUM);
 double opt_mesh_binary(OPT_ARGS_NUM);
 double opt_mesh_bunin(OPT_ARGS_NUM);
 double opt_mesh_lloyd(OPT_ARGS_NUM);
+double opt_mesh_smooth_cross_field(OPT_ARGS_NUM);
 double opt_mesh_bdf_field_format(OPT_ARGS_NUM);
 double opt_mesh_nb_smoothing(OPT_ARGS_NUM);
 double opt_mesh_algo2d(OPT_ARGS_NUM);
@@ -746,7 +749,8 @@ typedef struct {
 void InitOptions(int num);
 void InitOptionsGUI(int num);
 void ReInitOptions(int num);
-void PrintOptions(int num, int level, int diff, int help, const char *filename);
+void PrintOptions(int num, int level, int diff, int help, const char *filename,
+                  std::vector<std::string> *vec=0);
 void PrintOptionsDoc();
 
 bool StringOption(int action, const char *category, int num,

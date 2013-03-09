@@ -109,16 +109,6 @@ StringXString GeneralOptions_String[] = {
 #endif
     "Temporary file used by the geometry module" },
 
-  { F|O, "WebBrowser" , opt_general_web_browser ,
-#if defined(WIN32)
-    "explorer.exe %s" ,
-#elif defined(__APPLE__)
-    "open %s" ,
-#else
-    "sensible-browser %s" ,
-#endif
-    "System command to launch a web browser" },
-
   { F, "WatchFilePattern", opt_general_watch_file_pattern , "" ,
      "Pattern of files to merge as they become available"},
 
@@ -414,9 +404,9 @@ StringXNumber GeneralOptions_Number[] = {
     "Horizontal position (in pixels) of the upper left corner of the field window" },
   { F|S, "FieldPositionY" , opt_general_field_position1 , 550. ,
     "Vertical position (in pixels) of the upper left corner of the field window" },
-  { F|S, "FieldHeight" , opt_general_field_size1 , 300. ,
+  { F|S, "FieldHeight" , opt_general_field_size1 , 320. ,
     "Height (in pixels) of the field window" },
-  { F|S, "FieldWidth" , opt_general_field_size0 , 300. ,
+  { F|S, "FieldWidth" , opt_general_field_size0 , 420. ,
     "Width (in pixels) of the field window" },
   { F|S, "FileChooserPositionX" , opt_general_file_chooser_position0 , 200. ,
     "Horizontal position (in pixels) of the upper left corner of the file chooser "
@@ -536,7 +526,7 @@ StringXNumber GeneralOptions_Number[] = {
   { F|S, "MenuPositionY" , opt_general_menu_position1 , 400. ,
     "Vertical position (in pixels) of the (detached) menu tree" },
   { F|S, "MessageHeight" , opt_general_message_size , 300. ,
-    "Height (in pixels) of the message console" },
+    "Height (in pixels) of the message console when it is visible (should be > 0)" },
   { F,   "MinX" , opt_general_xmin , 0. ,
     "Minimum model coordinate along the X-axis (read-only)" },
   { F,   "MinY" , opt_general_ymin , 0. ,
@@ -568,9 +558,9 @@ StringXNumber GeneralOptions_Number[] = {
     "window" },
   { F|S, "PluginPositionY" , opt_general_plugin_position1 , 550. ,
     "Vertical position (in pixels) of the upper left corner of the plugin window" },
-  { F|S, "PluginHeight" , opt_general_plugin_size1 , 300. ,
+  { F|S, "PluginHeight" , opt_general_plugin_size1 , 320. ,
     "Height (in pixels) of the plugin window" },
-  { F|S, "PluginWidth" , opt_general_plugin_size0 , 300. ,
+  { F|S, "PluginWidth" , opt_general_plugin_size0 , 420. ,
     "Width (in pixels) of the plugin window" },
   { F|O, "PointSize" , opt_general_point_size , 3. ,
     "Display size of points (in pixels)" },
@@ -691,7 +681,7 @@ StringXNumber GeometryOptions_Number[] = {
   { F,   "Clip" , opt_geometry_clip , 0.,
     "Enable clipping planes? (Plane[i]=2^i, i=0,...,5)" },
   { F|O, "CopyMeshingMethod" , opt_geometry_copy_meshing_method, 0. ,
-    "Copy meshing method when duplicating geometrical entities?" },
+    "Copy meshing method (unstructured or transfinite) when duplicating geometrical entities?" },
 
   { F|O, "ExactExtrusion" , opt_geometry_exact_extrusion, 1. ,
     "Use exact extrusion formula in interpolations (set to 0 to allow "
@@ -750,6 +740,8 @@ StringXNumber GeometryOptions_Number[] = {
     "Model display offset along Z-axis (in model coordinates)" },
   { F|O, "OldCircle" , opt_geometry_old_circle , 0. ,
     "Use old circle description (compatibility option for old Gmsh geometries)" },
+  { F|O, "OldRuledSurface" , opt_geometry_old_ruled_surface , 0. ,
+    "Use old 3-sided ruled surface interpolation (compatibility option for old Gmsh geometries)" },
   { F|O, "OldNewReg" , opt_geometry_old_newreg , 1. ,
     "Use old newreg definition for geometrical transformations (compatibility "
     "option for old Gmsh geometries)" },
@@ -841,6 +833,8 @@ StringXNumber MeshOptions_Number[] = {
     "Apply Bunin optimization on quad meshes (the parameter is the maximal size of a cavity that may be remeshed)" },
   { F|O, "Lloyd" , opt_mesh_lloyd , 0. ,
     "Apply lloyd optimization on surface meshes" },
+  { F|O, "SmoothCrossField" , opt_mesh_smooth_cross_field , 0. ,
+    "Apply n barycentric smoothing passes to the cross field" },
 
   { F|O, "CgnsImportOrder" , opt_mesh_cgns_import_order , 1. ,
    "Enable the creation of high-order mesh from CGNS structured meshes."
@@ -1497,7 +1491,7 @@ StringXNumber PrintOptions_Number[] = {
 
   { F|O, "GeoLabels" , opt_print_geo_labels , 1. ,
     "Save labels in unrolled Gmsh geometries" },
-  { F|O, "GeoOnlyPhysicals" , opt_print_geo_only_physicals , 1. ,
+  { F|O, "GeoOnlyPhysicals" , opt_print_geo_only_physicals , 0. ,
     "Only save entities that belong to physical groups" },
   { F|O, "GifDither" , opt_print_gif_dither , 0. ,
     "Apply dithering to GIF output" },

@@ -17,7 +17,6 @@ typedef unsigned long intptr_t;
 #include <FL/Fl_Box.H>
 #include <FL/fl_ask.H>
 #include <FL/filename.H>
-#include <FL/fl_draw.H>
 #include <FL/Fl_Tree.H>
 #include "FlGui.h"
 #include "mainWindow.h"
@@ -32,7 +31,7 @@ typedef unsigned long intptr_t;
 #include "manipWindow.h"
 #include "fieldWindow.h"
 #include "pluginWindow.h"
-#include "aboutWindow.h"
+#include "helpWindow.h"
 #include "onelabGroup.h"
 #include "fileDialogs.h"
 #include "extraDialogs.h"
@@ -526,18 +525,17 @@ void file_watch_cb(Fl_Widget *w, void *data)
 
 static void help_online_cb(Fl_Widget *w, void *data)
 {
-  std::string prog = FixWindowsPath(CTX::instance()->webBrowser);
-  SystemCall(ReplaceSubString("%s", "http://geuz.org/gmsh/doc/texinfo/", prog));
+  fl_open_uri("http://geuz.org/gmsh/doc/texinfo/");
 }
 
 static void help_basic_cb(Fl_Widget *w, void *data)
 {
-  FlGui::instance()->about->winhelp->show();
+  FlGui::instance()->help->basic->show();
 }
 
 void help_about_cb(Fl_Widget *w, void *data)
 {
-  FlGui::instance()->about->win->show();
+  FlGui::instance()->help->about->show();
 }
 
 static void geometry_edit_cb(Fl_Widget *w, void *data)
@@ -551,8 +549,11 @@ void geometry_reload_cb(Fl_Widget *w, void *data)
 {
   std::string fileName = GModel::current()->getFileName();
   ClearProject();
-  // TODO: we should probably reset the onelab DB here, too
-  OpenProject(fileName);
+
+  GModel::current()->setFileName(fileName);
+  //OpenProject(fileName);
+  onelab_cb(0, (void*)"reset"); // this will call OpenProject
+
   drawContext::global()->draw();
 }
 
@@ -1645,8 +1646,6 @@ static void mesh_inspect_cb(Fl_Widget *w, void *data)
             str += info[i] + "\n";
           FlGui::instance()->getCurrentOpenglWindow()->drawTooltip(str);
         }
-        else
-          FlGui::instance()->showMessages();
       }
     }
     if(ib == 'q') {
@@ -1958,7 +1957,8 @@ static Fl_Menu_Item bar_table[] = {
     {"Split Vertically",   0, (Fl_Callback *)file_window_cb, (void*)"split_v"},
     {"Unsplit",            0, (Fl_Callback *)file_window_cb, (void*)"split_u", FL_MENU_DIVIDER},
     {"Minimize",           FL_CTRL+'m', (Fl_Callback *)window_cb, (void*)"minimize"},
-    {"Zoom",               0, (Fl_Callback *)window_cb, (void*)"zoom", FL_MENU_DIVIDER},
+    {"Zoom",               0, (Fl_Callback *)window_cb, (void*)"zoom"},
+    {"Enter Full Screen",  FL_CTRL+'f', (Fl_Callback *)window_cb, (void*)"fullscreen", FL_MENU_DIVIDER},
     {"Attach/Detach Menu", FL_CTRL+'d', (Fl_Callback *)attach_detach_menu_cb, 0, FL_MENU_DIVIDER},
     {"Bring All to Front", 0, (Fl_Callback *)window_cb, (void*)"front"},
     {0},
@@ -2020,7 +2020,8 @@ static Fl_Menu_Item sysbar_table[] = {
     {"Split Vertically",   0, (Fl_Callback *)file_window_cb, (void*)"split_v"},
     {"Unsplit",            0, (Fl_Callback *)file_window_cb, (void*)"split_u", FL_MENU_DIVIDER},
     {"Minimize",           FL_META+'m', (Fl_Callback *)window_cb, (void*)"minimize"},
-    {"Zoom",               0, (Fl_Callback *)window_cb, (void*)"zoom", FL_MENU_DIVIDER},
+    {"Zoom",               0, (Fl_Callback *)window_cb, (void*)"zoom"},
+    {"Enter Full Screen",  FL_META+'f', (Fl_Callback *)window_cb, (void*)"fullscreen", FL_MENU_DIVIDER},
     {"Attach/Detach Menu", FL_META+'d', (Fl_Callback *)attach_detach_menu_cb, 0, FL_MENU_DIVIDER},
     {"Bring All to Front", 0, (Fl_Callback *)window_cb, (void*)"front"},
     {0},
@@ -2033,115 +2034,6 @@ static Fl_Menu_Item sysbar_table[] = {
 };
 
 #endif
-
-// Icons for the satus bar
-#define vv(x,y) fl_vertex(x,y)
-#define bl fl_begin_loop()
-#define el fl_end_loop()
-
-static void gmsh_play(Fl_Color c)
-{
-  fl_color(c);
-  bl; vv(-0.3,0.8); vv(0.5,0.0); vv(-0.3,-0.8); el;
-}
-
-static void gmsh_pause(Fl_Color c)
-{
-  fl_color(c);
-  bl; vv(-0.8,-0.8); vv(-0.3,-0.8); vv(-0.3,0.8); vv(-0.8,0.8); el;
-  bl; vv(0.0,-0.8); vv(0.5,-0.8); vv(0.5,0.8); vv(0.0,0.8); el;
-}
-
-static void gmsh_rewind(Fl_Color c)
-{
-  fl_color(c);
-  bl; vv(-0.8,-0.8); vv(-0.3,-0.8); vv(-0.3,0.8); vv(-0.8,0.8); el;
-  bl; vv(-0.3,0.0); vv(0.5,-0.8); vv(0.5,0.8); el;
-}
-
-static void gmsh_forward(Fl_Color c)
-{
-  fl_color(c);
-  bl; vv(0.0,0.8); vv(0.8,0.0); vv(0.0,-0.8); el;
-  bl; vv(-0.8,0.8); vv(-0.3,0.8); vv(-0.3,-0.8); vv(-0.8,-0.8); el;
-}
-
-static void gmsh_back(Fl_Color c)
-{
-  fl_rotate(180);
-  gmsh_forward(c);
-}
-
-static void gmsh_ortho(Fl_Color c)
-{
-  fl_color(c);
-  bl; vv(-0.8,0.8); vv(0.3,0.8); vv(0.3,-0.3); vv(-0.8,-0.3); el;
-  bl; vv(-0.3,0.3); vv(0.8,0.3); vv(0.8,-0.8); vv(-0.3,-0.8); el;
-  fl_begin_line(); vv(-0.8,0.8); vv(-0.3,0.3); fl_end_line();
-  fl_begin_line(); vv(0.3,0.8); vv(0.8,0.3); fl_end_line();
-  fl_begin_line(); vv(0.3,-0.3); vv(0.8,-0.8); fl_end_line();
-  fl_begin_line(); vv(-0.8,-0.3); vv(-0.3,-0.8); fl_end_line();
-}
-
-static void gmsh_rotate(Fl_Color c)
-{
-  fl_color(c);
-  fl_begin_line(); fl_arc(0.0, -0.1, 0.7, 0.0, 270.0); fl_end_line();
-  fl_begin_polygon(); vv(0.5,0.6); vv(-0.1,0.9); vv(-0.1,0.3); fl_end_polygon();
-}
-
-static void gmsh_models(Fl_Color c)
-{
-  fl_color(c);
-  bl; vv(-0.8,-0.7); vv(0.8,-0.7); el;
-  bl; vv(-0.8,-0.2); vv(0.8,-0.2); el;
-  bl; vv(-0.8,0.3); vv(0.8,0.3); el;
-  bl; vv(-0.8,0.8); vv(0.8,0.8); el;
-}
-
-static void gmsh_clscale(Fl_Color c)
-{
-  fl_color(c);
-  bl; vv(-0.8,0.8); vv(-0.1,0.8); vv(-0.8,0.1); el;
-  bl; vv(-0.2,0.2); vv(0.9,0.2); vv(-0.2,-0.9); el;
-}
-
-static void gmsh_gear(Fl_Color c)
-{
-  fl_color(c);
-  double w = 0.12;
-  double h1 = 0.5;
-#if defined(WIN32)
-  double h2 = 1.0;
-#else
-  double h2 = 1.05;
-#endif
-  fl_line_style(FL_SOLID, 3);
-  fl_begin_line();
-  fl_circle(0, 0, 0.5);
-  fl_end_line();
-  fl_line_style(FL_SOLID);
-  for(int i = 0; i < 8; i++){
-    fl_rotate(45);
-    fl_begin_polygon();
-    fl_vertex(h1, -w);
-    fl_vertex(h2, -w);
-    fl_vertex(h2, w);
-    fl_vertex(h1, w);
-    fl_end_polygon();
-  }
-}
-
-static void gmsh_graph(Fl_Color c)
-{
-  fl_color(c);
-  fl_begin_line(); vv(-0.8,-0.8); vv(-0.8,0.8); vv(0.8,0.8); fl_end_line();
-  fl_begin_line(); vv(-0.8,0.3); vv(-0.2,-0.2); vv(0.3,0.1); vv(0.8,-0.4); fl_end_line();
-}
-
-#undef vv
-#undef bl
-#undef el
 
 static graphicWindow *getGraphicWindow(Fl_Widget *w)
 {
@@ -2276,8 +2168,8 @@ void status_options_cb(Fl_Widget *w, void *data)
     modelChooser();
   }
   else if(!strcmp(str, "?")){ // display options
-    PrintOptions(0, GMSH_FULLRC, 0, 1, NULL);
-    FlGui::instance()->showMessages();
+    help_options_cb(0, 0);
+    FlGui::instance()->help->options->show();
   }
   else if(!strcmp(str, "p")){ // toggle projection mode
     if(!Fl::event_state(FL_SHIFT)){
@@ -2555,25 +2447,26 @@ class mainWindowSpecialResize : public mainWindow {
   }
 };
 
+class mainWindowProgress : public Fl_Progress{
+public:
+  mainWindowProgress(int x, int y, int w, int h, const char *l=0) :
+    Fl_Progress(x, y, w, h, l){}
+  int handle(int event)
+  {
+    if(event == FL_PUSH){
+      if(FlGui::available()){
+        for(unsigned int i = 0; i < FlGui::instance()->graph.size(); i++)
+          FlGui::instance()->graph[i]->showHideMessages();
+      }
+      return 1;
+    }
+    return Fl_Progress::handle(event);
+  }
+};
+
 graphicWindow::graphicWindow(bool main, int numTiles, bool detachedMenu)
   : _autoScrollMessages(true)
 {
-  static bool first = true;
-  if(first){
-    fl_add_symbol("gmsh_rewind", gmsh_rewind, 1);
-    fl_add_symbol("gmsh_back", gmsh_back, 1);
-    fl_add_symbol("gmsh_play", gmsh_play, 1);
-    fl_add_symbol("gmsh_pause", gmsh_pause, 1);
-    fl_add_symbol("gmsh_forward", gmsh_forward, 1);
-    fl_add_symbol("gmsh_ortho", gmsh_ortho, 1);
-    fl_add_symbol("gmsh_rotate", gmsh_rotate, 1);
-    fl_add_symbol("gmsh_models", gmsh_models, 1);
-    fl_add_symbol("gmsh_clscale", gmsh_clscale, 1);
-    fl_add_symbol("gmsh_gear", gmsh_gear, 1);
-    fl_add_symbol("gmsh_graph", gmsh_graph, 1);
-    first = false;
-  }
-
   int mh = main ? BH : 0; // menu bar height
 #if defined(__APPLE__)
   if(CTX::instance()->systemMenuBar) mh = 0;
@@ -2588,7 +2481,7 @@ graphicWindow::graphicWindow(bool main, int numTiles, bool detachedMenu)
   if(height > Fl::h()){
     height = Fl::h();
     glheight = height - mh - mheight - sh;
-    CTX::instance()->glSize[1] = glheight;
+    CTX::instance()->glSize[1] = glheight + mheight;
   }
 
   int twidth = (main && !detachedMenu) ? 14 * sw : 0;
@@ -2598,7 +2491,7 @@ graphicWindow::graphicWindow(bool main, int numTiles, bool detachedMenu)
   if(width > Fl::w()){
     width = Fl::w();
     glwidth = width - twidth;
-    CTX::instance()->glSize[0] = glwidth;
+    CTX::instance()->glSize[0] = glwidth + twidth;
   }
 
   // the graphic window should be a "normal" window (neither modal nor
@@ -2712,7 +2605,7 @@ graphicWindow::graphicWindow(bool main, int numTiles, bool detachedMenu)
   }
 
   x += 4;
-  _label = new Fl_Progress(x, mh + glheight + mheight + 2, width - x, sht);
+  _label = new mainWindowProgress(x, mh + glheight + mheight + 2, width - x - WB, sht);
   _label->box(FL_FLAT_BOX);
   _label->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE | FL_ALIGN_CLIP);
   _label->color(FL_BACKGROUND_COLOR, FL_DARK2); // FL_DARK_GREEN
@@ -3123,9 +3016,10 @@ void graphicWindow::setMessageHeight(int h)
 void graphicWindow::showMessages()
 {
   if(!_browser || !_win->shown()) return;
+  Msg::ResetErrorCounter();
   if(_browser->h() < FL_NORMAL_SIZE){
     int height = CTX::instance()->msgSize;
-    if(height < FL_NORMAL_SIZE) height = 5 * FL_NORMAL_SIZE;
+    if(height < FL_NORMAL_SIZE) height = 10 * FL_NORMAL_SIZE;
     int maxh = _win->h() - _bottom->h();
     if(height > maxh) height = maxh / 2;
     setMessageHeight(height);
@@ -3158,7 +3052,7 @@ void graphicWindow::addMessage(const char *msg)
 {
   if(!_browser) return;
   _browser->add(msg, 0);
-  if(_autoScrollMessages && _win->shown() && _browser->h() >= 10)
+  if(_autoScrollMessages && _win->shown() && _browser->h() >= FL_NORMAL_SIZE)
     _browser->bottomline(_browser->size());
 }
 
@@ -3242,189 +3136,189 @@ typedef struct{
 } menuItem;
 
 static menuItem static_modules[] = {
-  {"0Gmsh modules/Geometry/Elementary entities/Add/Parameter",
+  {"0Modules/Geometry/Elementary entities/Add/Parameter",
    (Fl_Callback *)geometry_elementary_add_new_cb, (void*)"Parameter"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Add/Point",
+  {"0Modules/Geometry/Elementary entities/Add/Point",
    (Fl_Callback *)geometry_elementary_add_new_cb, (void*)"Point"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Add/Straight line",
+  {"0Modules/Geometry/Elementary entities/Add/Straight line",
    (Fl_Callback *)geometry_elementary_add_new_cb, (void*)"Line"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Add/Spline",
+  {"0Modules/Geometry/Elementary entities/Add/Spline",
    (Fl_Callback *)geometry_elementary_add_new_cb, (void*)"Spline"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Add/B-Spline",
+  {"0Modules/Geometry/Elementary entities/Add/B-Spline",
    (Fl_Callback *)geometry_elementary_add_new_cb, (void*)"BSpline"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Add/Circle arc",
+  {"0Modules/Geometry/Elementary entities/Add/Circle arc",
    (Fl_Callback *)geometry_elementary_add_new_cb, (void*)"Circle"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Add/Ellipse arc",
+  {"0Modules/Geometry/Elementary entities/Add/Ellipse arc",
    (Fl_Callback *)geometry_elementary_add_new_cb, (void*)"Ellipse"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Add/Plane surface",
+  {"0Modules/Geometry/Elementary entities/Add/Plane surface",
    (Fl_Callback *)geometry_elementary_add_new_cb, (void*)"Plane Surface"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Add/Ruled surface",
+  {"0Modules/Geometry/Elementary entities/Add/Ruled surface",
    (Fl_Callback *)geometry_elementary_add_new_cb, (void*)"Ruled Surface"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Add/Volume",
+  {"0Modules/Geometry/Elementary entities/Add/Volume",
    (Fl_Callback *)geometry_elementary_add_new_cb, (void*)"Volume"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Translate/Point",
+  {"0Modules/Geometry/Elementary entities/Translate/Point",
    (Fl_Callback *)geometry_elementary_translate_cb, (void*)"Point"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Translate/Line",
+  {"0Modules/Geometry/Elementary entities/Translate/Line",
    (Fl_Callback *)geometry_elementary_translate_cb, (void*)"Line"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Translate/Surface",
+  {"0Modules/Geometry/Elementary entities/Translate/Surface",
    (Fl_Callback *)geometry_elementary_translate_cb, (void*)"Surface"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Translate/Volume",
+  {"0Modules/Geometry/Elementary entities/Translate/Volume",
    (Fl_Callback *)geometry_elementary_translate_cb, (void*)"Volume"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Translate/Duplicate point",
+  {"0Modules/Geometry/Elementary entities/Translate/Duplicate point",
    (Fl_Callback *)geometry_elementary_add_translate_cb, (void*)"Point"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Translate/Duplicate line",
+  {"0Modules/Geometry/Elementary entities/Translate/Duplicate line",
    (Fl_Callback *)geometry_elementary_add_translate_cb, (void*)"Line"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Translate/Duplicate surface",
+  {"0Modules/Geometry/Elementary entities/Translate/Duplicate surface",
    (Fl_Callback *)geometry_elementary_add_translate_cb, (void*)"Surface"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Translate/Duplicate volume",
+  {"0Modules/Geometry/Elementary entities/Translate/Duplicate volume",
    (Fl_Callback *)geometry_elementary_add_translate_cb, (void*)"Volume"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Translate/Extrude point",
+  {"0Modules/Geometry/Elementary entities/Translate/Extrude point",
    (Fl_Callback *)geometry_elementary_extrude_translate_cb, (void*)"Point"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Translate/Extrude line",
+  {"0Modules/Geometry/Elementary entities/Translate/Extrude line",
    (Fl_Callback *)geometry_elementary_extrude_translate_cb, (void*)"Line"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Translate/Extrude surface",
+  {"0Modules/Geometry/Elementary entities/Translate/Extrude surface",
    (Fl_Callback *)geometry_elementary_extrude_translate_cb, (void*)"Surface"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Rotate/Point",
+  {"0Modules/Geometry/Elementary entities/Rotate/Point",
    (Fl_Callback *)geometry_elementary_rotate_cb, (void*)"Point"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Rotate/Line",
+  {"0Modules/Geometry/Elementary entities/Rotate/Line",
    (Fl_Callback *)geometry_elementary_rotate_cb, (void*)"Line"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Rotate/Surface",
+  {"0Modules/Geometry/Elementary entities/Rotate/Surface",
    (Fl_Callback *)geometry_elementary_rotate_cb, (void*)"Surface"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Rotate/Volume",
+  {"0Modules/Geometry/Elementary entities/Rotate/Volume",
    (Fl_Callback *)geometry_elementary_rotate_cb, (void*)"Volume"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Rotate/Duplicate point",
+  {"0Modules/Geometry/Elementary entities/Rotate/Duplicate point",
    (Fl_Callback *)geometry_elementary_add_rotate_cb, (void*)"Point"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Rotate/Duplicate line",
+  {"0Modules/Geometry/Elementary entities/Rotate/Duplicate line",
    (Fl_Callback *)geometry_elementary_add_rotate_cb, (void*)"Line"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Rotate/Duplicate surface",
+  {"0Modules/Geometry/Elementary entities/Rotate/Duplicate surface",
    (Fl_Callback *)geometry_elementary_add_rotate_cb, (void*)"Surface"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Rotate/Duplicate volume",
+  {"0Modules/Geometry/Elementary entities/Rotate/Duplicate volume",
    (Fl_Callback *)geometry_elementary_add_rotate_cb, (void*)"Volume"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Rotate/Extrude point",
+  {"0Modules/Geometry/Elementary entities/Rotate/Extrude point",
    (Fl_Callback *)geometry_elementary_extrude_rotate_cb, (void*)"Point"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Rotate/Extrude line",
+  {"0Modules/Geometry/Elementary entities/Rotate/Extrude line",
    (Fl_Callback *)geometry_elementary_extrude_rotate_cb, (void*)"Line"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Rotate/Extrude surface",
+  {"0Modules/Geometry/Elementary entities/Rotate/Extrude surface",
    (Fl_Callback *)geometry_elementary_extrude_rotate_cb, (void*)"Surface"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Scale/Point",
+  {"0Modules/Geometry/Elementary entities/Scale/Point",
    (Fl_Callback *)geometry_elementary_scale_cb, (void*)"Point"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Scale/Line",
+  {"0Modules/Geometry/Elementary entities/Scale/Line",
    (Fl_Callback *)geometry_elementary_scale_cb, (void*)"Line"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Scale/Surface",
+  {"0Modules/Geometry/Elementary entities/Scale/Surface",
    (Fl_Callback *)geometry_elementary_scale_cb, (void*)"Surface"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Scale/Volume",
+  {"0Modules/Geometry/Elementary entities/Scale/Volume",
    (Fl_Callback *)geometry_elementary_scale_cb, (void*)"Volume"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Scale/Duplicate point",
+  {"0Modules/Geometry/Elementary entities/Scale/Duplicate point",
    (Fl_Callback *)geometry_elementary_add_scale_cb, (void*)"Point"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Scale/Duplicate line",
+  {"0Modules/Geometry/Elementary entities/Scale/Duplicate line",
    (Fl_Callback *)geometry_elementary_add_scale_cb, (void*)"Line"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Scale/Duplicate surface",
+  {"0Modules/Geometry/Elementary entities/Scale/Duplicate surface",
    (Fl_Callback *)geometry_elementary_add_scale_cb, (void*)"Surface"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Scale/Duplicate volume",
+  {"0Modules/Geometry/Elementary entities/Scale/Duplicate volume",
    (Fl_Callback *)geometry_elementary_add_scale_cb, (void*)"Volume"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Symmetry/Point",
+  {"0Modules/Geometry/Elementary entities/Symmetry/Point",
    (Fl_Callback *)geometry_elementary_symmetry_cb, (void*)"Point"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Symmetry/Line",
+  {"0Modules/Geometry/Elementary entities/Symmetry/Line",
    (Fl_Callback *)geometry_elementary_symmetry_cb, (void*)"Line"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Symmetry/Surface",
+  {"0Modules/Geometry/Elementary entities/Symmetry/Surface",
    (Fl_Callback *)geometry_elementary_symmetry_cb, (void*)"Surface"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Symmetry/Volume",
+  {"0Modules/Geometry/Elementary entities/Symmetry/Volume",
    (Fl_Callback *)geometry_elementary_symmetry_cb, (void*)"Volume"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Symmetry/Duplicate point",
+  {"0Modules/Geometry/Elementary entities/Symmetry/Duplicate point",
    (Fl_Callback *)geometry_elementary_add_symmetry_cb, (void*)"Point"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Symmetry/Duplicate line",
+  {"0Modules/Geometry/Elementary entities/Symmetry/Duplicate line",
    (Fl_Callback *)geometry_elementary_add_symmetry_cb, (void*)"Line"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Symmetry/Duplicate surface",
+  {"0Modules/Geometry/Elementary entities/Symmetry/Duplicate surface",
    (Fl_Callback *)geometry_elementary_add_symmetry_cb, (void*)"Surface"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Symmetry/Duplicate volume",
+  {"0Modules/Geometry/Elementary entities/Symmetry/Duplicate volume",
    (Fl_Callback *)geometry_elementary_add_symmetry_cb, (void*)"Volume"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Split/Line",
+  {"0Modules/Geometry/Elementary entities/Split/Line",
    (Fl_Callback *)geometry_elementary_split_cb,(void*)"Line"},
-  {"0Gmsh modules/Geometry/Elementary entities/Delete/Point",
+  {"0Modules/Geometry/Elementary entities/Delete/Point",
    (Fl_Callback *)geometry_elementary_delete_cb, (void*)"Point"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Delete/Line",
+  {"0Modules/Geometry/Elementary entities/Delete/Line",
    (Fl_Callback *)geometry_elementary_delete_cb, (void*)"Line"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Delete/Surface",
+  {"0Modules/Geometry/Elementary entities/Delete/Surface",
    (Fl_Callback *)geometry_elementary_delete_cb, (void*)"Surface"} ,
-  {"0Gmsh modules/Geometry/Elementary entities/Delete/Volume",
+  {"0Modules/Geometry/Elementary entities/Delete/Volume",
    (Fl_Callback *)geometry_elementary_delete_cb, (void*)"Volume"} ,
-  {"0Gmsh modules/Geometry/Physical groups/Add/Point",
+  {"0Modules/Geometry/Physical groups/Add/Point",
    (Fl_Callback *)geometry_physical_add_cb, (void*)"Point" } ,
-  {"0Gmsh modules/Geometry/Physical groups/Add/Line",
+  {"0Modules/Geometry/Physical groups/Add/Line",
    (Fl_Callback *)geometry_physical_add_cb, (void*)"Line" } ,
-  {"0Gmsh modules/Geometry/Physical groups/Add/Surface",
+  {"0Modules/Geometry/Physical groups/Add/Surface",
    (Fl_Callback *)geometry_physical_add_cb, (void*)"Surface" } ,
-  {"0Gmsh modules/Geometry/Physical groups/Add/Volume",
+  {"0Modules/Geometry/Physical groups/Add/Volume",
    (Fl_Callback *)geometry_physical_add_cb, (void*)"Volume" } ,
-  {"0Gmsh modules/Geometry/Coherence",
+  {"0Modules/Geometry/Coherence",
    (Fl_Callback *)geometry_elementary_coherence_cb} ,
-  {"0Gmsh modules/Geometry/Reload",
+  {"0Modules/Geometry/Reload",
    (Fl_Callback *)geometry_reload_cb} ,
-  {"0Gmsh modules/Geometry/Edit file",
+  {"0Modules/Geometry/Edit file",
    (Fl_Callback *)geometry_edit_cb} ,
-  {"0Gmsh modules/Mesh/Define/Size fields",
+  {"0Modules/Mesh/Define/Size fields",
    (Fl_Callback *)field_cb},
-  {"0Gmsh modules/Mesh/Define/Element size at points",
+  {"0Modules/Mesh/Define/Element size at points",
    (Fl_Callback *)mesh_define_length_cb  } ,
-  {"0Gmsh modules/Mesh/Define/Embedded points",
+  {"0Modules/Mesh/Define/Embedded points",
    (Fl_Callback *)mesh_define_embedded_cb, (void*)"point" } ,
-  {"0Gmsh modules/Mesh/Define/Recombine",
+  {"0Modules/Mesh/Define/Recombine",
    (Fl_Callback *)mesh_define_recombine_cb  } ,
-  {"0Gmsh modules/Mesh/Define/Transfinite/Line",
+  {"0Modules/Mesh/Define/Transfinite/Line",
    (Fl_Callback *)mesh_define_transfinite_line_cb} ,
-  {"0Gmsh modules/Mesh/Define/Transfinite/Surface",
+  {"0Modules/Mesh/Define/Transfinite/Surface",
    (Fl_Callback *)mesh_define_transfinite_surface_cb} ,
-  {"0Gmsh modules/Mesh/Define/Transfinite/Volume",
+  {"0Modules/Mesh/Define/Transfinite/Volume",
    (Fl_Callback *)mesh_define_transfinite_volume_cb} ,
-  {"0Gmsh modules/Mesh/Define/Compound/Line",
+  {"0Modules/Mesh/Define/Compound/Line",
    (Fl_Callback *)mesh_define_compound_entity_cb, (void*)"Line"} ,
-  {"0Gmsh modules/Mesh/Define/Compound/Surface",
+  {"0Modules/Mesh/Define/Compound/Surface",
    (Fl_Callback *)mesh_define_compound_entity_cb, (void*)"Surface"} ,
-  {"0Gmsh modules/Mesh/Define/Compound/Volume",
+  {"0Modules/Mesh/Define/Compound/Volume",
    (Fl_Callback *)mesh_define_compound_entity_cb, (void*)"Volume"} ,
-  {"0Gmsh modules/Mesh/1D",
+  {"0Modules/Mesh/1D",
    (Fl_Callback *)mesh_1d_cb} ,
-  {"0Gmsh modules/Mesh/2D",
+  {"0Modules/Mesh/2D",
    (Fl_Callback *)mesh_2d_cb} ,
-  {"0Gmsh modules/Mesh/3D",
+  {"0Modules/Mesh/3D",
    (Fl_Callback *)mesh_3d_cb} ,
-  {"0Gmsh modules/Mesh/Optimize 3D",
+  {"0Modules/Mesh/Optimize 3D",
    (Fl_Callback *)mesh_optimize_cb} ,
 #if defined(HAVE_NETGEN)
-  {"0Gmsh modules/Mesh/Optimize 3D (Netgen)",
+  {"0Modules/Mesh/Optimize 3D (Netgen)",
    (Fl_Callback *)mesh_optimize_netgen_cb} ,
 #endif
-  {"0Gmsh modules/Mesh/Set order 1",
+  {"0Modules/Mesh/Set order 1",
    (Fl_Callback *)mesh_degree_cb, (void*)1},
-  {"0Gmsh modules/Mesh/Set order 2",
+  {"0Modules/Mesh/Set order 2",
    (Fl_Callback *)mesh_degree_cb, (void*)2},
-  {"0Gmsh modules/Mesh/Set order 3",
+  {"0Modules/Mesh/Set order 3",
    (Fl_Callback *)mesh_degree_cb, (void*)3},
-  {"0Gmsh modules/Mesh/Optimize high order",
+  {"0Modules/Mesh/Optimize high order",
    (Fl_Callback *)highordertools_cb},
-  {"0Gmsh modules/Mesh/Inspect",
+  {"0Modules/Mesh/Inspect",
    (Fl_Callback *)mesh_inspect_cb} ,
-  {"0Gmsh modules/Mesh/Refine by splitting",
+  {"0Modules/Mesh/Refine by splitting",
    (Fl_Callback *)mesh_refine_cb} ,
 #if defined(HAVE_METIS) || defined(HAVE_CHACO)
-  {"0Gmsh modules/Mesh/Partition",
+  {"0Modules/Mesh/Partition",
    (Fl_Callback *)mesh_partition_cb} ,
 #endif
-  {"0Gmsh modules/Mesh/Reclassify 2D",
+  {"0Modules/Mesh/Reclassify 2D",
    (Fl_Callback *)mesh_classify_cb} ,
 #if defined(HAVE_FOURIER_MODEL)
-  {"0Gmsh modules/Mesh/Reparameterize 2D",
+  {"0Modules/Mesh/Reparameterize 2D",
    (Fl_Callback *)mesh_parameterize_cb} ,
 #endif
-  {"0Gmsh modules/Mesh/Delete/Elements",
+  {"0Modules/Mesh/Delete/Elements",
    (Fl_Callback *)mesh_delete_parts_cb, (void*)"elements"} ,
-  {"0Gmsh modules/Mesh/Delete/Lines",
+  {"0Modules/Mesh/Delete/Lines",
    (Fl_Callback *)mesh_delete_parts_cb, (void*)"lines"} ,
-  {"0Gmsh modules/Mesh/Delete/Surfaces",
+  {"0Modules/Mesh/Delete/Surfaces",
    (Fl_Callback *)mesh_delete_parts_cb, (void*)"surfaces"} ,
-  {"0Gmsh modules/Mesh/Delete/Volumes",
+  {"0Modules/Mesh/Delete/Volumes",
    (Fl_Callback *)mesh_delete_parts_cb, (void*)"volumes"} ,
-  {"0Gmsh modules/Mesh/Save",
+  {"0Modules/Mesh/Save",
    (Fl_Callback *)mesh_save_cb} ,
 };
 
@@ -3439,7 +3333,7 @@ void onelabGroup::_addGmshMenus()
   // add dynamic solver module items
   for(int i = 0; i < 5; i++){
     std::string name = opt_solver_name(i, GMSH_GET, "");
-    if(name.size()) _addMenu("0Gmsh modules/Solver/" + name, solver_cb, (void*)i);
+    if(name.size()) _addMenu("0Modules/Solver/" + name, solver_cb, (void*)i);
   }
 
   // add dynamic post-processing module items
@@ -3450,7 +3344,7 @@ void onelabGroup::_addGmshMenus()
   static bool first = true;
   if(first){
     first = false;
-    Fl_Tree_Item *n0 = _tree->find_item("0Gmsh modules");
+    Fl_Tree_Item *n0 = _tree->find_item("0Modules");
     for(Fl_Tree_Item *n = n0; n; n = n->next()){
       if(!n->is_root() && n->has_children() && n->depth() > 1)
         n->close();
@@ -3461,7 +3355,7 @@ void onelabGroup::_addGmshMenus()
 std::set<std::string> onelabGroup::_getClosedGmshMenus()
 {
   std::set<std::string> closed;
-  Fl_Tree_Item *n0 = _tree->find_item("0Gmsh modules");
+  Fl_Tree_Item *n0 = _tree->find_item("0Modules");
   for(Fl_Tree_Item *n = n0; n; n = n->next()){
     if(!n->is_root() && n->has_children() && n->is_close()){
       char path[1024];

@@ -60,8 +60,10 @@ std::vector<GModel*> GModel::list;
 int GModel::_current = -1;
 
 GModel::GModel(std::string name)
-  : _name(name), _visible(1), _octree(0),
-    _geo_internals(0), _occ_internals(0), _acis_internals(0), _fm_internals(0),
+  : _maxVertexNum(0), _maxElementNum(0),
+    _checkPointedMaxVertexNum(0), _checkPointedMaxElementNum(0),
+    _name(name), _visible(1), _octree(0), _geo_internals(0),
+    _occ_internals(0), _acis_internals(0), _fm_internals(0),
     _factory(0), _fields(0), _currentMeshEntity(0), normals(0)
 {
   partitionSize[0] = 0; partitionSize[1] = 0;
@@ -140,17 +142,22 @@ void GModel::setFactory(std::string name)
   }
 }
 
-GModel *GModel::findByName(std::string name)
+GModel *GModel::findByName(const std::string &name, const std::string &fileName)
 {
   // return last mesh with given name
   for(int i = list.size() - 1; i >= 0; i--)
-    if(list[i]->getName() == name) return list[i];
+    if(list[i]->getName() == name &&
+       (fileName.empty() || !list[i]->hasFileName(fileName))) return list[i];
   return 0;
 }
 
 void GModel::destroy()
 {
   _name.clear();
+  _fileNames.clear();
+
+  _maxVertexNum = _maxElementNum = 0;
+  _checkPointedMaxVertexNum = _checkPointedMaxElementNum = 0;
 
   for(riter it = firstRegion(); it != lastRegion(); ++it)
     delete *it;
@@ -177,9 +184,6 @@ void GModel::destroy()
   vertices.clear();
 
   destroyMeshCaches();
-
-  MVertex::resetGlobalNumber();
-  MElement::resetGlobalNumber();
 
   if(normals) delete normals;
   normals = 0;
@@ -771,13 +775,13 @@ MVertex *GModel::getMeshVertexByTag(int n)
     Msg::Debug("Rebuilding mesh vertex cache");
     _vertexVectorCache.clear();
     _vertexMapCache.clear();
-    bool dense = (getNumMeshVertices() == MVertex::getGlobalNumber());
+    bool dense = (getNumMeshVertices() == _maxVertexNum);
     std::vector<GEntity*> entities;
     getEntities(entities);
     if(dense){
       Msg::Debug("Good: we have a dense vertex numbering in the cache");
       // numbering starts at 1
-      _vertexVectorCache.resize(MVertex::getGlobalNumber() + 1);
+      _vertexVectorCache.resize(_maxVertexNum + 1);
       for(unsigned int i = 0; i < entities.size(); i++)
         for(unsigned int j = 0; j < entities[i]->mesh_vertices.size(); j++)
           _vertexVectorCache[entities[i]->mesh_vertices[j]->getNum()] =
@@ -828,13 +832,13 @@ MElement *GModel::getMeshElementByTag(int n)
     Msg::Debug("Rebuilding mesh element cache");
     _elementVectorCache.clear();
     _elementMapCache.clear();
-    bool dense = (getNumMeshElements() == MElement::getGlobalNumber());
+    bool dense = (getNumMeshElements() == _maxElementNum);
     std::vector<GEntity*> entities;
     getEntities(entities);
     if(dense){
       Msg::Debug("Good: we have a dense element numbering in the cache");
       // numbering starts at 1
-      _elementVectorCache.resize(MElement::getGlobalNumber() + 1);
+      _elementVectorCache.resize(_maxElementNum + 1);
       for(unsigned int i = 0; i < entities.size(); i++)
         for(unsigned int j = 0; j < entities[i]->getNumMeshElements(); j++){
           MElement *e = entities[i]->getMeshElement(j);
@@ -3212,31 +3216,38 @@ void GModel::computeHomology()
     for(std::multimap<dpair, tpair>::iterator itt = itp.first;
         itt != itp.second; itt++){
       std::string type = itt->second.first;
-      std::vector<int> dim = itt->second.second;
-      if(dim.empty()) for(int i = 0; i < 4; i++) dim.push_back(i);
+      std::vector<int> dim0 = itt->second.second;
+      std::vector<int> dim;
 
       std::stringstream ss;
-      for(unsigned int i = 0; i < dim.size(); i++) {
-        int d = dim.at(i);
+      for(unsigned int i = 0; i < dim0.size(); i++) {
+        int d = dim0.at(i);
         if(d >= 0 && d <= getDim()) {
+          dim.push_back(d);
           ss << "H";
           if(type == "Homology") ss << "_";
           if(type == "Cohomology") ss << "^";
           ss << d;
-          if(i < dim.size()-1 && dim.at(i+1) >=0 && dim.at(i+1) <= getDim())
+          if(i < dim0.size()-1 && dim0.at(i+1) >=0 && dim0.at(i+1) <= getDim())
             ss << ", ";
         }
       }
       std::string dims = ss.str();
 
-      if(type == "Homology" && !homology->isHomologyComputed(dim)) {
+      if(type != "Homology" && type != "Cohomology" && type != "Betti") {
+        Msg::Error("Unknown type of homology computation: %s", type.c_str());
+      }
+      else if(dim.empty() || type == "Betti") {
+        homology->findBettiNumbers();
+      }
+      else if(type == "Homology" && !homology->isHomologyComputed(dim)) {
 
         homology->findHomologyBasis(dim);
 
         Msg::Info("Homology space basis chains to save: %s.", dims.c_str());
-        for(unsigned int i = 0; i < dim.size(); i++)
-          if(dim.at(i) >= 0 && dim.at(i) <= getDim())
-            homology->addChainsToModel(dim.at(i));
+        for(unsigned int i = 0; i < dim.size(); i++) {
+          homology->addChainsToModel(dim.at(i));
+        }
 
       }
       else if(type == "Cohomology" && !homology->isCohomologyComputed(dim)) {
@@ -3244,17 +3255,17 @@ void GModel::computeHomology()
         homology->findCohomologyBasis(dim);
 
         Msg::Info("Cohomology space basis cochains to save: %s.", dims.c_str());
-        for(unsigned int i = 0; i < dim.size(); i++)
-          if(dim.at(i) >= 0 && dim.at(i) <= getDim())
-            homology->addCochainsToModel(dim.at(i));
+        for(unsigned int i = 0; i < dim.size(); i++) {
+          homology->addCochainsToModel(dim.at(i));
+        }
 
       }
-      else
-        Msg::Error("Unknown type of homology computation: %s", type.c_str());
+
     }
     _pruneMeshVertexAssociations();
     delete homology;
   }
+  Msg::Info("");
 
   double t2 = Cpu();
   Msg::StatusBar(true, "Done homology and cohomology computation (%g s)",

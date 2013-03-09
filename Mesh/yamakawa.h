@@ -6,6 +6,10 @@
 // Contributor(s):
 //   Tristan Carrier
 
+#ifndef _YAMAKAWA_H_
+#define _YAMAKAWA_H_
+
+
 #include "GRegion.h"
 #include <set>
 
@@ -91,8 +95,6 @@ class Recombinator{
  private:
   std::vector<Hex> potential;
   std::map<MElement*,bool> markings;
-  std::map<MVertex*,std::set<MVertex*> > vertex_to_vertices;
-  std::map<MVertex*,std::set<MElement*> > vertex_to_elements;
   std::multiset<Facet> hash_tableA;
   std::multiset<Diagonal> hash_tableB;
   std::multiset<Diagonal> hash_tableC;
@@ -101,6 +103,9 @@ class Recombinator{
  public:
   Recombinator();
   ~Recombinator();
+
+  std::map<MVertex*,std::set<MVertex*> > vertex_to_vertices;
+  std::map<MVertex*,std::set<MElement*> > vertex_to_elements;
 
   void execute();
   void execute(GRegion*);
@@ -149,6 +154,9 @@ class Recombinator{
   bool conformityA(MVertex*,MVertex*,MVertex*,MVertex*);
   bool conformityB(Hex);
   bool conformityC(Hex);
+
+  bool faces_statuquo(Hex);
+  bool faces_statuquo(MVertex*,MVertex*,MVertex*,MVertex*);
 
   void build_vertex_to_vertices(GRegion*);
   void build_vertex_to_elements(GRegion*);
@@ -246,6 +254,9 @@ class Supplementary{
   bool conformityB(Prism);
   bool conformityC(Prism);
 
+  bool faces_statuquo(Prism);
+  bool faces_statuquo(MVertex*,MVertex*,MVertex*,MVertex*);	
+	
   void build_vertex_to_vertices(GRegion*);
   void build_vertex_to_tetrahedra(GRegion*);
   void build_hash_tableA(Prism);
@@ -315,3 +326,5 @@ class PostOp{
   void build_vertex_to_pyramids(MElement*);
   void erase_vertex_to_pyramids(MElement*);
 };
+
+#endif

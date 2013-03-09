@@ -29,12 +29,15 @@ class SVector3 {
   inline double y(void) const { return P.y(); }
   inline double z(void) const { return P.z(); }
   inline double norm() const { return sqrt(P[0] * P[0] + P[1] * P[1] + P[2] * P[2]); }
-  inline double normSq() { return (P[0] * P[0] + P[1] * P[1] + P[2] * P[2]); }
-  double normalize()
-  {
+  inline double normSq() const{ return (P[0] * P[0] + P[1] * P[1] + P[2] * P[2]); }
+  // Beware that " w = v.normalize() " produces the vector 
+  // w = (v.norm(), v.norm(), v.norm()), which is NOT a unit vector!
+  // Use " w = v.unit() " to affect to "w" the unit vector parallel to "v". 
+  double normalize(){
     double n = norm(); if(n){ P[0] /= n; P[1] /= n; P[2] /= n; }
     return n;
   }
+  SVector3 unit() const{ SVector3 y(*this); y.normalize(); return y; }
   void negate() { P[0] = -P[0]; P[1] = -P[1]; P[2] = -P[2]; }
   // why both [] and (), why not
   double &operator[](int i){ return P[i]; }
@@ -89,6 +92,13 @@ inline SVector3 crossprod(const SVector3 &a, const SVector3 &b)
                   -(a.x() * b.z() - b.x() * a.z()),
                   a.x() * b.y() - b.x() * a.y()); }
 
+inline double angle (const SVector3 &a, const SVector3 &b){
+  double cosTheta = dot(a,b);
+  double sinTheta = norm(crossprod(a,b));
+  return atan2 (sinTheta,cosTheta);  
+}
+
+
 inline SVector3 operator*(double m,const SVector3 &v)
 { return SVector3(v[0] * m, v[1] * m, v[2] * m); }
 
@@ -103,6 +113,7 @@ inline SVector3 operator+(const SVector3 &a,const SVector3 &b)
 
 inline SVector3 operator-(const SVector3 &a,const SVector3 &b)
 { return SVector3(a[0] - b[0], a[1] - b[1], a[2] - b[2]); }
+
 
 inline void buildOrthoBasis_naive(SVector3 &dir, SVector3 &dir1, SVector3 &dir2)
 {

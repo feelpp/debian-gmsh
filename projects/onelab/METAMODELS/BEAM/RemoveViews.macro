@@ -1,7 +1,0 @@
-k=PostProcessing.NbViews; 
-Printf("%g views in Remove", k);
-For ii In {1:k}
-Delete View[k-ii]; 
-EndFor
-
-
