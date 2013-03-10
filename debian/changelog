@@ -1,3 +1,12 @@
+gmsh (2.7.0.dfsg-1~exp1) experimental; urgency=low
+
+  * [ca65d5c] Add libgmsh2 into depends of python-gmsh.
+  * [92fcc4f] Imported Upstream version 2.7.0.dfsg
+  * [b4bf2b9] Add section for libgmsh2
+  * [ac7e1f8] Refresh patches.
+
+ -- Anton Gladky <gladky.anton@gmail.com>  Sun, 10 Mar 2013 10:00:13 +0100
+
 gmsh (2.6.2~beta2~svn14562~dfsg-1~exp1) experimental; urgency=low
 
   * [a7de476] Fix import of gmshpy. (Closes: #696420)
