@@ -52,6 +52,8 @@ Depends: ${shlibs:Depends}, ${misc:Depends}
 Replaces: gmsh (<< 2.6.0.dfsg-3)
 Breaks: gmsh (<< 2.6.0.dfsg-3)
 Recommends: gmsh
+Multi-Arch: same
+Pre-Depends: multiarch-support
 Description: Three-dimensional finite element mesh generator. Shared library
  Gmsh is an automatic 3D finite element mesh generator (primarily
  Delaunay) with build-in CAD and post-processing facilities. Its
@@ -75,6 +77,7 @@ Breaks: gmsh (<< 2.6.0.dfsg-3)
 Recommends: gmsh
 Depends: libgmsh2 (= ${binary:Version}), libjava-gmsh2 (= ${binary:Version}),
  ${misc:Depends}
+Multi-Arch: foreign
 Description: Three-dimensional finite element mesh generator. Development files
  Gmsh is an automatic 3D finite element mesh generator (primarily
  Delaunay) with build-in CAD and post-processing facilities. Its
@@ -97,6 +100,7 @@ Replaces: gmsh (<< 2.6.0.dfsg-3)
 Breaks: gmsh (<< 2.6.0.dfsg-3)
 Recommends: gmsh
 Depends: ${misc:Depends} 
+Multi-Arch: foreign
 Description: Three-dimensional finite element mesh generator. Documentation
  Gmsh is an automatic 3D finite element mesh generator (primarily
  Delaunay) with build-in CAD and post-processing facilities. Its
@@ -118,6 +122,7 @@ Architecture: any
 Replaces: gmsh (<< 2.6.0.dfsg-3)
 Breaks: gmsh (<< 2.6.0.dfsg-3)
 Recommends: gmsh
+Multi-Arch: foreign
 Depends: ${shlibs:Depends}, ${misc:Depends}, python (>= 2.7), python (<<2.8), 
   libgmsh2 (= ${binary:Version})
 Description: Three-dimensional finite element mesh generator. Documentation
@@ -141,6 +146,8 @@ Package: libjava-gmsh2
 Section: java
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
+Multi-Arch: same
+Pre-Depends: multiarch-support
 Recommends: gmsh
 Description: Three-dimensional finite element mesh generator. Documentation
  Gmsh is an automatic 3D finite element mesh generator (primarily

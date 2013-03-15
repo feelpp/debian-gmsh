@@ -1,1 +1,1 @@
-usr/lib/libgmsh.so.*
+usr/lib/*/libgmsh.so.*

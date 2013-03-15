@@ -30,6 +30,7 @@ extra_flags += \
 -DENABLE_ONELAB:BOOL=ON \
 -DCMAKE_INCLUDE_PATH:STRING="/usr/include/mpi" \
 -DCMAKE_INSTALL_PREFIX:STRING="/usr" \
+-DINSTALL_LIB_DIR:STRING="/usr/lib/$(DEB_HOST_MULTIARCH)" \
 
 ifeq (,$(filter $(DEB_HOST_ARCH),$(disable_mpi_archs)))
 	extra_flags += \

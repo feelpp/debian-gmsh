@@ -6,3 +6,4 @@ switch_from_opencascade_to_oce.patch
 fix_FTBFS_linking.patch
 alauzet.patch
 fix_gmshpy_import.patch
+fix_libdir.patch

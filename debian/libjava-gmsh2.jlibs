@@ -1,1 +1,1 @@
-debian/tmp/usr/lib/*.jar
+debian/tmp/usr/lib/*/*.jar
