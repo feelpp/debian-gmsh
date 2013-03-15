@@ -1,3 +1,10 @@
+gmsh (2.7.0.dfsg-1~exp2) experimental; urgency=low
+
+  * [16c9a14] Implement multiarch-support.
+  * [1662134] Install libs into ${INSTALL_LIB_DIR} patch, needed for multiarch.
+
+ -- Anton Gladky <gladk@debian.org>  Fri, 15 Mar 2013 22:57:42 +0100
+
 gmsh (2.7.0.dfsg-1~exp1) experimental; urgency=low
 
   * [ca65d5c] Add libgmsh2 into depends of python-gmsh.
