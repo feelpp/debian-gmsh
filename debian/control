@@ -53,7 +53,7 @@ Replaces: gmsh (<< 2.6.0.dfsg-3)
 Breaks: gmsh (<< 2.6.0.dfsg-3)
 Recommends: gmsh
 Multi-Arch: same
-Pre-Depends: multiarch-support
+Pre-Depends: ${misc:Pre-Depends}
 Description: Three-dimensional finite element mesh generator. Shared library
  Gmsh is an automatic 3D finite element mesh generator (primarily
  Delaunay) with build-in CAD and post-processing facilities. Its
@@ -147,7 +147,7 @@ Section: java
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Multi-Arch: same
-Pre-Depends: multiarch-support
+Pre-Depends: ${misc:Pre-Depends}
 Recommends: gmsh
 Description: Three-dimensional finite element mesh generator. Documentation
  Gmsh is an automatic 3D finite element mesh generator (primarily
