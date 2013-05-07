@@ -68,6 +68,8 @@ Description: Three-dimensional finite element mesh generator. Shared library
  .
  See Gmsh's reference manual for a more thorough overview of Gmsh's
  capabilities.
+ .
+ The package contains a shared library.
 
 Package: libgmsh-dev
 Architecture: any
@@ -92,6 +94,8 @@ Description: Three-dimensional finite element mesh generator. Development files
  .
  See Gmsh's reference manual for a more thorough overview of Gmsh's
  capabilities.
+ .
+ The package contains development files.
 
 Package: gmsh-doc
 Section: doc
@@ -115,6 +119,8 @@ Description: Three-dimensional finite element mesh generator. Documentation
  .
  See Gmsh's reference manual for a more thorough overview of Gmsh's
  capabilities.
+ .
+ The package contains documentation and examples.
  
 Package: python-gmsh
 Section: python
@@ -125,7 +131,7 @@ Recommends: gmsh
 Multi-Arch: foreign
 Depends: ${shlibs:Depends}, ${misc:Depends}, python (>= 2.7), python (<<2.8), 
   libgmsh2 (= ${binary:Version})
-Description: Three-dimensional finite element mesh generator. Documentation
+Description: Three-dimensional finite element mesh generator. Python wrapper
  Gmsh is an automatic 3D finite element mesh generator (primarily
  Delaunay) with build-in CAD and post-processing facilities. Its
  design goal is to provide a simple meshing tool for academic test
@@ -140,7 +146,7 @@ Description: Three-dimensional finite element mesh generator. Documentation
  See Gmsh's reference manual for a more thorough overview of Gmsh's
  capabilities.
  .
- This package contains the python wrappers for gmsh
+ This package contains the Python wrappers for gmsh
  
 Package: libjava-gmsh2
 Section: java
@@ -149,7 +155,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends}
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Recommends: gmsh
-Description: Three-dimensional finite element mesh generator. Documentation
+Description: Three-dimensional finite element mesh generator. Java wrapper
  Gmsh is an automatic 3D finite element mesh generator (primarily
  Delaunay) with build-in CAD and post-processing facilities. Its
  design goal is to provide a simple meshing tool for academic test
