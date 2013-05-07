@@ -1,3 +1,10 @@
+gmsh (2.7.0.dfsg-1) unstable; urgency=low
+
+  * [1dd1d65] Description update in control file.
+  * [deeb35a] Update dates in copyright file.
+
+ -- Anton Gladky <gladk@debian.org>  Tue, 07 May 2013 19:57:27 +0200
+
 gmsh (2.7.0.dfsg-1~exp2) experimental; urgency=low
 
   * [16c9a14] Implement multiarch-support.
