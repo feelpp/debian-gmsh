@@ -1,6 +1,6 @@
 --- a/Mesh/Field.cpp
 +++ b/Mesh/Field.cpp
-@@ -479,6 +479,55 @@
+@@ -531,6 +531,55 @@
    }
  };
  
@@ -56,7 +56,7 @@
  class FrustumField : public Field
  {
    double x1,y1,z1;
-@@ -1280,17 +1329,21 @@
+@@ -1332,17 +1381,21 @@
    }
    virtual void operator() (double x, double y, double z, SMetric3 &metr, GEntity *ge=0)
    {
@@ -78,7 +78,7 @@
  	}
  	v = intersection_conserve_mostaniso(v,ff);
        }
-@@ -1328,6 +1381,77 @@
+@@ -1380,6 +1433,77 @@
    }
  };
  
@@ -156,7 +156,7 @@
  class MinField : public Field
  {
    std::list<int> idlist;
-@@ -1346,7 +1470,18 @@
+@@ -1398,7 +1522,18 @@
      double v = MAX_LC;
      for(std::list<int>::iterator it = idlist.begin(); it != idlist.end(); it++) {
        Field *f = (GModel::current()->getFields()->get(*it));
@@ -176,7 +176,7 @@
      }
      return v;
    }
-@@ -1374,7 +1509,18 @@
+@@ -1426,7 +1561,18 @@
      double v = -MAX_LC;
      for(std::list<int>::iterator it = idlist.begin(); it != idlist.end(); it++) {
        Field *f = (GModel::current()->getFields()->get(*it));
@@ -196,15 +196,15 @@
      }
      return v;
    }
-@@ -2015,6 +2161,7 @@
+@@ -2112,6 +2258,7 @@
  #endif
    map_type_name["Box"] = new FieldFactoryT<BoxField>();
    map_type_name["Cylinder"] = new FieldFactoryT<CylinderField>();
 +  map_type_name["Sphere"] = new FieldFactoryT<SphereField>();
    map_type_name["Frustum"] = new FieldFactoryT<FrustumField>();
    map_type_name["LonLat"] = new FieldFactoryT<LonLatField>();
- #if defined(HAVE_POST)
-@@ -2024,6 +2171,7 @@
+   map_type_name["XY2d2LonLat"] = new FieldFactoryT<XY2d2LonLatField>();
+@@ -2122,6 +2269,7 @@
    map_type_name["Restrict"] = new FieldFactoryT<RestrictField>();
    map_type_name["Min"] = new FieldFactoryT<MinField>();
    map_type_name["MinAniso"] = new FieldFactoryT<MinAnisoField>();
@@ -214,7 +214,7 @@
    map_type_name["Laplacian"] = new FieldFactoryT<LaplacianField>();
 --- a/Geo/STensor3.h
 +++ b/Geo/STensor3.h
-@@ -172,6 +172,8 @@
+@@ -173,6 +173,8 @@
  // compute the largest inscribed ellipsoid...
  SMetric3 intersection (const SMetric3 &m1,
                         const SMetric3 &m2);

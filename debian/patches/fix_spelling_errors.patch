@@ -39,7 +39,7 @@ Last-Update: 2011-12-09
           * beta*y
 --- a/doc/texinfo/gmsh.texi
 +++ b/doc/texinfo/gmsh.texi
-@@ -1402,7 +1402,7 @@
+@@ -1093,7 +1093,7 @@
  etc.). The eigth case permits to use the value of a @var{char-option} as
  a @var{char-expression}. The ninth case gets the value of an environment
  variable from the operating system. The last case in the definition
@@ -48,7 +48,7 @@ Last-Update: 2011-12-09
  @w{@var{char-option}s} are listed in @ref{Options}.
  
  Character expressions are mostly used to specify non-numeric options and
-@@ -2935,7 +2935,7 @@
+@@ -2628,7 +2628,7 @@
  @item Extrude @{ Surface @{ @var{expression-list} @}; @var{layers} < Using Index[@var{expr}]; > < Using View[@var{expr}]; > @}
  Extrudes a boundary layer from the specified surfaces. If no view is
  specified, the boundary layer is created using gouraud-shaped (smoothed)

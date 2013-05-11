@@ -14,12 +14,12 @@ Last-Update: 2012-11-28
    gl2png.cpp
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -1087,7 +1087,7 @@
-   add_executable(gmsh_dynamic EXCLUDE_FROM_ALL Common/Main.cpp)
-   target_link_libraries(gmsh_dynamic shared)
+@@ -1157,7 +1157,7 @@
+     add_executable(gmsh Common/Main.cpp ${GMSH_SRC})
+   endif(ENABLE_BUILD_DYNAMIC)
  endif(HAVE_FLTK)
 -target_link_libraries(gmsh ${LINK_LIBRARIES})
 +target_link_libraries(gmsh ${LINK_LIBRARIES} -lgl2ps -lGL -lglut)
  
- # increase stack to 16Mb on Windows to avoid overflows in recursive
- # tet classification for large 3D Delaunay grids + force static
+ # Windows specific linker options
+ if(WIN32 AND NOT MSVC OR CYGWIN)
