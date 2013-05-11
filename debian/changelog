@@ -1,3 +1,10 @@
+gmsh (2.7.1.dfsg-1) unstable; urgency=low
+
+  * [b5f0971] Imported Upstream version 2.7.1.dfsg
+  * [d01d02d] Change Multi-Arch to foreign for libjava-gmsh2. (Closes: #707749)
+
+ -- Anton Gladky <gladk@debian.org>  Sat, 11 May 2013 23:01:00 +0200
+
 gmsh (2.7.0.dfsg-1) unstable; urgency=low
 
   * [1dd1d65] Description update in control file.
