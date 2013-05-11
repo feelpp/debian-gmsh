@@ -43,13 +43,13 @@
 #include "Context.h"
 #include "multiscalePartition.h"
 #include "meshGFaceLloyd.h"
-#include "meshGFaceBoundaryLayers.h"
+#include "boundaryLayersData.h"
 
-inline double myAngle (const SVector3 &a, const SVector3 &b, const SVector3 &d)
+inline double myAngle(const SVector3 &a, const SVector3 &b, const SVector3 &d)
 {
-  double cosTheta = dot(a,b);
-  double sinTheta = dot(crossprod(a,b),d);
-  return atan2 (sinTheta,cosTheta);
+  double cosTheta = dot(a, b);
+  double sinTheta = dot(crossprod(a, b), d);
+  return atan2(sinTheta, cosTheta);
 }
 
 struct myPlane {
@@ -74,7 +74,7 @@ struct myLine {
   myLine() : p(0,0,0) , t (0,0,1) {}
   myLine(myPlane &p1, myPlane &p2)
   {
-    t = crossprod(p1.n,p2.n);
+    t = crossprod(p1.n, p2.n);
     if (t.norm() == 0.0){
       Msg::Error("parallel planes do not intersect");
     }
@@ -175,7 +175,10 @@ static void copyMesh(GFace *source, GFace *target)
     else {
       SVector3 DX2 = DX - SVector3 (vt->x() - vs->x(), vt->y() - vs->y(),
                                     vt->z() - vs->z());
-      if (DX2.norm() > DX.norm() * 1.e-8) translation = false;
+      if (DX2.norm() > DX.norm() * 1.e-8) {
+	//	translation = false;
+	printf("%12.5E vs %12.5E\n",DX2.norm() , DX.norm());
+      }
     }
     count ++;
   }
@@ -186,12 +189,12 @@ static void copyMesh(GFace *source, GFace *target)
   if (!translation){
     count = 0;
     rotation = true;
-    std::vector<SPoint3> mps,mpt;
+    std::vector<SPoint3> mps, mpt;
     for (std::map<MVertex*, MVertex*>::iterator it = vs2vt.begin();
          it != vs2vt.end() ; ++it){
       MVertex *vs = it->first;
       MVertex *vt = it->second;
-      mps.push_back(SPoint3(vs->x(),vs->y(),vs->z()));
+      mps.push_back(SPoint3(vs->x(), vs->y(), vs->z()));
       mpt.push_back(SPoint3(vt->x(), vt->y(), vt->z()));
     }
     mean_plane mean_source, mean_target;
@@ -203,6 +206,8 @@ static void copyMesh(GFace *source, GFace *target)
                          SVector3(mean_target.a,mean_target.b,mean_target.c));
     LINE = myLine(PLANE_SOURCE, PLANE_TARGET);
 
+    // FIXME: this fails when the 2 planes have a common edge (= rotation axis)
+
     // LINE is the axis of rotation
     // let us compute the angle of rotation
     count = 0;
@@ -213,8 +218,8 @@ static void copyMesh(GFace *source, GFace *target)
       // project both points on the axis: that should be the same point !
       SPoint3 ps = SPoint3(vs->x(), vs->y(), vs->z());
       SPoint3 pt = SPoint3(vt->x(), vt->y(), vt->z());
-      SPoint3 p_ps = LINE.orthogonalProjection (ps);
-      SPoint3 p_pt = LINE.orthogonalProjection (pt);
+      SPoint3 p_ps = LINE.orthogonalProjection(ps);
+      SPoint3 p_pt = LINE.orthogonalProjection(pt);
       SVector3 dist1 = ps - pt;
       SVector3 dist2 = p_ps - p_pt;
       if (dist2.norm() > 1.e-8 * dist1.norm()){
@@ -224,10 +229,12 @@ static void copyMesh(GFace *source, GFace *target)
       SVector3 t2 = pt - p_pt;
       if (t1.norm() > 1.e-8 * dist1.norm()){
 	if (count == 0)
-          ANGLE = myAngle (t1, t2, LINE.t);
+          ANGLE = myAngle(t1, t2, LINE.t);
 	else {
 	  double ANGLE2 = myAngle(t1, t2, LINE.t);
-	  if (fabs (ANGLE2-ANGLE) > 1.e-8) rotation = false;
+	  if (fabs (ANGLE2 - ANGLE) > 1.e-8){
+            rotation = false;
+          }
 	}
 	count++;
       }
@@ -448,6 +455,7 @@ static bool algoDelaunay2D(GFace *gf)
   if(gf->getMeshingAlgo() == ALGO_2D_DELAUNAY ||
      gf->getMeshingAlgo() == ALGO_2D_BAMG ||
      gf->getMeshingAlgo() == ALGO_2D_FRONTAL ||
+     gf->getMeshingAlgo() == ALGO_2D_RUPPERT ||
      gf->getMeshingAlgo() == ALGO_2D_FRONTAL_QUAD ||
      gf->getMeshingAlgo() == ALGO_2D_PACK_PRLGRMS ||
      gf->getMeshingAlgo() == ALGO_2D_BAMG)
@@ -614,7 +622,7 @@ void filterOverlappingElements(int dim, std::vector<MElement*> &e,
       }
     }
     if (intersection){
-      printf("intersection found\n");
+      //      printf("intersection found\n");
       einter.push_back(el);
     }
     else {
@@ -625,9 +633,9 @@ void filterOverlappingElements(int dim, std::vector<MElement*> &e,
 
 void modifyInitialMeshForTakingIntoAccountBoundaryLayers(GFace *gf)
 {
-  BoundaryLayerColumns *_columns = buildAdditionalPoints2D (gf);
+  BoundaryLayerColumns* _columns = gf->model()->getColumns();
+  if (!buildAdditionalPoints2D (gf, _columns))return;
 
-  if (!_columns)return;
 
   std::set<MEdge,Less_Edge> bedges;
 
@@ -667,7 +675,7 @@ void modifyInitialMeshForTakingIntoAccountBoundaryLayers(GFace *gf)
 	  MEdge dv2 (v21,v22);
 
 	  //avoid convergent errors
-	  if (dv2.length() < 0.5 * dv.length())break;
+	  if (dv2.length() < 0.03 * dv.length())break;
 	  blQuads.push_back(new MQuadrangle(v11,v21,v22,v12));
 	  fprintf(ff2,"SQ (%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g){1,1,1,1};\n",
 		  v11->x(),v11->y(),v11->z(),
@@ -1020,19 +1028,19 @@ bool meshGenerator(GFace *gf, int RECUR_ITER,
         remeshUnrecoveredEdges(recoverMapInv, edgesNotRecovered, facesToRemesh);
       else{
         std::set<EdgeToRecover>::iterator itr = edgesNotRecovered.begin();
-        int *_error = new int[3 * edgesNotRecovered.size()];
+        //int *_error = new int[3 * edgesNotRecovered.size()];
         int I = 0;
         for(; itr != edgesNotRecovered.end(); ++itr){
           int p1 = itr->p1;
           int p2 = itr->p2;
           int tag = itr->ge->tag();
-	  printf("%d %d %d\n",p1,p2,tag);
-          _error[3 * I + 0] = p1;
-          _error[3 * I + 1] = p2;
-          _error[3 * I + 2] = tag;
+          Msg::Error("Edge not recovered: %d %d %d", p1, p2, tag);
+          //_error[3 * I + 0] = p1;
+          //_error[3 * I + 1] = p2;
+          //_error[3 * I + 2] = tag;
           I++;
         }
-        throw _error;
+        //throw _error;
       }
 
       // delete the mesh
@@ -1290,6 +1298,8 @@ bool meshGenerator(GFace *gf, int RECUR_ITER,
     else if(gf->getMeshingAlgo() == ALGO_2D_DELAUNAY ||
             gf->getMeshingAlgo() == ALGO_2D_AUTO)
       bowyerWatson(gf);
+    else if(gf->getMeshingAlgo() == ALGO_2D_RUPPERT)
+      gmshRuppert(gf,.5);
     else {
       bowyerWatson(gf,15000);
       meshGFaceBamg(gf);
@@ -1598,7 +1608,7 @@ static bool meshGeneratorElliptic(GFace *gf, bool debug = true)
     center = dynamic_cast<Centerline*> (myField);
   }
 
-  bool recombine =  (CTX::instance()->mesh.recombineAll);
+  bool recombine =  (CTX::instance()->mesh.recombineAll) ;
   int nbBoundaries = gf->edges().size();
 
   if (center && recombine && nbBoundaries == 2) {
@@ -1910,28 +1920,29 @@ static bool meshGeneratorPeriodic(GFace *gf, bool debug = true)
     std::map<BDS_Point*, MVertex*>::iterator it = recoverMap.begin();
     while(it != recoverMap.end()){
       // we have twice vertex MVertex with 2 different coordinates
-      MVertex  * mv1  =  it->second;
-      BDS_Point* bds = it->first;
+      MVertex *mv1 = it->second;
+      BDS_Point *bds = it->first;
       std::map<MVertex*, BDS_Point*>::iterator invIt = invertMap.find(mv1);
       if (invIt != invertMap.end()){
 	// create a new "fake" vertex that will be destroyed afterwards
-	MVertex  * mv2 ;
+	MVertex *mv2 = 0;
 	if (mv1->onWhat()->dim() == 1) {
 	  double t;
 	  mv1->getParameter(0,t);
-	  mv2  = new MEdgeVertex (mv1->x(),mv1->y(),mv1->z(),mv1->onWhat(), t,
-                                  ((MEdgeVertex*)mv1)->getLc());
+	  mv2 = new MEdgeVertex(mv1->x(),mv1->y(),mv1->z(),mv1->onWhat(), t,
+				((MEdgeVertex*)mv1)->getLc());
 	}
 	else if (mv1->onWhat()->dim() == 0) {
-	  mv2  = new MVertex (mv1->x(),mv1->y(),mv1->z(),mv1->onWhat());
+	  mv2 = new MVertex (mv1->x(),mv1->y(),mv1->z(),mv1->onWhat());
 	}
 	else
-	  Msg::Error("error in seam reconstruction");
-
-	it->second = mv2;
-	equivalence[mv2] = mv1;
-	parametricCoordinates[mv2] = SPoint2(bds->u,bds->v);
-	invertMap[mv2] = bds;
+	  Msg::Error("Could not reconstruct seam");
+	if(mv2){
+	  it->second = mv2;
+	  equivalence[mv2] = mv1;
+	  parametricCoordinates[mv2] = SPoint2(bds->u,bds->v);
+	  invertMap[mv2] = bds;
+	}
       }
       else {
 	parametricCoordinates[mv1] = SPoint2(bds->u,bds->v);
@@ -1939,9 +1950,9 @@ static bool meshGeneratorPeriodic(GFace *gf, bool debug = true)
       }
       ++it;
     }
-    //    recoverMap.insert(new_relations.begin(), new_relations.end());
+    // recoverMap.insert(new_relations.begin(), new_relations.end());
   }
-  Msg::Info("%d points that are duplicated for delaunay meshing",equivalence.size());
+  Msg::Info("%d points that are duplicated for Delaunay meshing", equivalence.size());
 
   // fill the small gmsh structures
   {
@@ -2017,6 +2028,8 @@ static bool meshGeneratorPeriodic(GFace *gf, bool debug = true)
     else if(gf->getMeshingAlgo() == ALGO_2D_DELAUNAY ||
             gf->getMeshingAlgo() == ALGO_2D_AUTO)
       bowyerWatson(gf,1000000000, &equivalence, &parametricCoordinates);
+    else if(gf->getMeshingAlgo() == ALGO_2D_RUPPERT)
+      gmshRuppert(gf,.4,10000, &equivalence, &parametricCoordinates);
     else
       meshGFaceBamg(gf);
     if (!infty || !(CTX::instance()->mesh.recombineAll || gf->meshAttributes.recombine))
@@ -2063,7 +2076,7 @@ void meshGFace::operator() (GFace *gf, bool print)
 
   if(gf->geomType() == GEntity::DiscreteSurface) return;
   if(gf->geomType() == GEntity::ProjectionFace) return;
-  if(gf->meshAttributes.Method == MESH_NONE) return;
+  if(gf->meshAttributes.method == MESH_NONE) return;
   if(CTX::instance()->mesh.meshOnlyVisible && !gf->getVisibility()) return;
 
   // destroy the mesh if it exists
@@ -2098,6 +2111,7 @@ void meshGFace::operator() (GFace *gf, bool print)
   case ALGO_2D_DELAUNAY : algo = "Delaunay"; break;
   case ALGO_2D_MESHADAPT_OLD : algo = "MeshAdapt (old)"; break;
   case ALGO_2D_BAMG : algo = "Bamg"; break;
+  case ALGO_2D_RUPPERT : algo = "Ruppert"; break;
   case ALGO_2D_PACK_PRLGRMS : algo = "Square Packing"; break;
   case ALGO_2D_AUTO :
     algo = (gf->geomType() == GEntity::Plane) ? "Delaunay" : "MeshAdapt";
@@ -2394,19 +2408,17 @@ void partitionAndRemesh(GFaceCompound *gf)
 
 void orientMeshGFace::operator()(GFace *gf)
 {
+  if(!gf->getNumMeshElements()) return;
+  if(gf->geomType() == GEntity::ProjectionFace) return;
+
   gf->model()->setCurrentMeshEntity(gf);
 
-  if(gf->geomType() == GEntity::DiscreteSurface) return;
-  if(gf->geomType() == GEntity::ProjectionFace) return;
-  if(gf->geomType() == GEntity::BoundaryLayerSurface) return;
-
-  if(!gf->getNumMeshElements()) return;
-
-  //if(gf->geomType() == GEntity::CompoundSurface ) return;
-  //do sthg for compound face
-  if(gf->geomType() == GEntity::CompoundSurface ) {
+  if(gf->geomType() == GEntity::DiscreteSurface ||
+     gf->geomType() == GEntity::BoundaryLayerSurface){
+    // don't do anything
+  }
+  else if(gf->geomType() == GEntity::CompoundSurface){
     GFaceCompound *gfc = (GFaceCompound*) gf;
-
     std::list<GFace*> comp = gfc->getCompounds();
     MTriangle *lt = (*comp.begin())->triangles[0];
     SPoint2 c0 = gfc->getCoordinates(lt->getVertex(0));
@@ -2416,9 +2428,8 @@ void orientMeshGFace::operator()(GFace *gf)
     double p1[2] = {c1[0],c1[1]};
     double p2[2] = {c2[0],c2[1]};
     double normal =  robustPredicates::orient2d(p0, p1, p2);
-
     MElement *e = gfc->getMeshElement(0);
-    SPoint2 v1,v2,v3;
+    SPoint2 v1, v2, v3;
     reparamMeshVertexOnFace(e->getVertex(0), gf, v1, false);
     reparamMeshVertexOnFace(e->getVertex(1), gf, v2, false);
     reparamMeshVertexOnFace(e->getVertex(2), gf, v3, false);
@@ -2426,79 +2437,82 @@ void orientMeshGFace::operator()(GFace *gf)
     SVector3 C2(v2.x(), v2.y(), 0.0);
     SVector3 C3(v3.x(), v3.y(), 0.0);
     SVector3 n1 = crossprod(C2-C1,C3-C1);
-
     if(normal*n1.z() < 0){
-      Msg::Debug("Reverting orientation of mesh in compound face %d", gf->tag());
+      Msg::Debug("Reversing orientation of mesh in compound face %d", gf->tag());
       for(unsigned int k = 0; k < gf->getNumMeshElements(); k++)
-    	gfc->getMeshElement(k)->revert();
-     }
-    return;
-
+    	gfc->getMeshElement(k)->reverse();
+    }
   }
+  else{
+    // in old versions we checked the orientation by comparing the orientation
+    // of a line element on the boundary w.r.t. its connected surface
+    // element. This is probably better than what follows, but
+    // * it failed when the 3D Delaunay changes the 1D mesh (since we don't
+    //    recover it yet)
+    // * it failed with OpenCASCADE geometries, where surface orientions do not
+    //   seem to be consistent with the orientation of the bounding edges
 
-
-  // In old versions we did not reorient transfinite surface meshes;
-  // we could add the following to provide backward compatibility:
-  // if(gf->meshAttributes.Method == MESH_TRANSFINITE) return;
-
-  // In old versions we checked the orientation by comparing the
-  // orientation of a line element on the boundary w.r.t. its
-  // connected surface element. This is probably better than what
-  // follows, but
-  // * it failed when the 3D Delaunay changes the 1D mesh (since we
-  //    don't recover it yet)
-  // * it failed with OpenCASCADE geometries, where surface orientions
-  //   do not seem to be consistent with the orientation of the
-  //   bounding edges
-
-  // first, try to find an element with one vertex categorized on the
-  // surface and for which we have valid surface parametric
-  // coordinates
-  for(unsigned int i = 0; i < gf->getNumMeshElements(); i++){
-    MElement *e = gf->getMeshElement(i);
-    for(int j = 0; j < e->getNumVertices(); j++){
-      MVertex *v = e->getVertex(j);
-      SPoint2 param;
-      if(v->onWhat() == gf && v->getParameter(0, param[0]) &&
-         v->getParameter(1, param[1])){
-        SVector3 nf = gf->normal(param);
-        SVector3 ne = e->getFace(0).normal();
-        if(dot(ne, nf) < 0){
-          Msg::Debug("Reverting orientation of mesh in face %d", gf->tag());
-          for(unsigned int k = 0; k < gf->getNumMeshElements(); k++)
-            gf->getMeshElement(k)->revert();
+    bool done = false;
+    // first, try to find an element with one vertex categorized on the
+    // surface and for which we have valid surface parametric
+    // coordinates
+    for(unsigned int i = 0; i < gf->getNumMeshElements(); i++){
+      MElement *e = gf->getMeshElement(i);
+      for(int j = 0; j < e->getNumVertices(); j++){
+        MVertex *v = e->getVertex(j);
+        SPoint2 param;
+        if(v->onWhat() == gf && v->getParameter(0, param[0]) &&
+           v->getParameter(1, param[1])){
+          SVector3 nf = gf->normal(param);
+          SVector3 ne = e->getFace(0).normal();
+          if(dot(ne, nf) < 0){
+            Msg::Debug("Reversing orientation of mesh in face %d", gf->tag());
+            for(unsigned int k = 0; k < gf->getNumMeshElements(); k++)
+              gf->getMeshElement(k)->reverse();
+          }
+          done = true;
+          break;
         }
-        return;
+      }
+      if(done) break;
+    }
+
+    if(!done){
+      // if we could not find such an element, just try to evaluate the
+      // normal at the barycenter of an element on the surface
+      for(unsigned int i = 0; i < gf->getNumMeshElements(); i++){
+        MElement *e = gf->getMeshElement(i);
+        SPoint2 param(0., 0.);
+        bool ok = true;
+        for(int j = 0; j < e->getNumVertices(); j++){
+          SPoint2 p;
+          // FIXME: use inexact reparam because some vertices might not be
+          // exactly on the surface after the 3D Delaunay
+          ok = reparamMeshVertexOnFace(e->getVertex(j), gf, p, false);
+          if(!ok) break;
+          param += p;
+        }
+        if(ok){
+          param *= 1. / e->getNumVertices();
+          SVector3 nf = gf->normal(param);
+          SVector3 ne = e->getFace(0).normal();
+          if(dot(ne, nf) < 0){
+            Msg::Debug("Reversing 2 orientation of mesh in face %d", gf->tag());
+            for(unsigned int k = 0; k < gf->getNumMeshElements(); k++)
+              gf->getMeshElement(k)->reverse();
+          }
+          done = true;
+          break;
+        }
       }
     }
+
+    if(!done)
+      Msg::Warning("Could not orient mesh in face %d", gf->tag());
   }
 
-  // if we could not find such an element, just try to evaluate the
-  // normal at the barycenter of an element on the surface
-  for(unsigned int i = 0; i < gf->getNumMeshElements(); i++){
-    MElement *e = gf->getMeshElement(i);
-    SPoint2 param(0., 0.);
-    bool ok = true;
-    for(int j = 0; j < e->getNumVertices(); j++){
-      SPoint2 p;
-      // FIXME: use inexact reparam because some vertices might not be
-      // exactly on the surface after the 3D Delaunay
-      bool ok = reparamMeshVertexOnFace(e->getVertex(j), gf, p, false);
-      if(!ok) break;
-      param += p;
-    }
-    if(ok){
-      param *= 1. / e->getNumVertices();
-      SVector3 nf = gf->normal(param);
-      SVector3 ne = e->getFace(0).normal();
-      if(dot(ne, nf) < 0){
-        Msg::Debug("Reverting 2 orientation of mesh in face %d", gf->tag());
-        for(unsigned int k = 0; k < gf->getNumMeshElements(); k++)
-          gf->getMeshElement(k)->revert();
-      }
-      return;
-    }
-  }
-
-  Msg::Warning("Could not orient mesh in face %d", gf->tag());
+  // apply user-specified mesh orientation constraints
+  if(gf->meshAttributes.reverseMesh)
+    for(unsigned int k = 0; k < gf->getNumMeshElements(); k++)
+      gf->getMeshElement(k)->reverse();
 }

@@ -44,20 +44,22 @@ class MSubTetrahedron : public MTetrahedron
   virtual const nodalBasis* getFunctionSpace(int order=-1) const;
   virtual const JacobianBasis* getJacobianFuncSpace(int order=-1) const;
   // the parametric coordinates are the coordinates in the local parent element
-  virtual void getShapeFunctions(double u, double v, double w, double s[], int order=-1);
-  virtual void getGradShapeFunctions(double u, double v, double w, double s[][3], int order=-1);
-  virtual void getHessShapeFunctions(double u, double v, double w, double s[][3][3], int order=-1);
-  virtual void getThirdDerivativeShapeFunctions(double u, double v, double w, double s[][3][3][3], int order=-1);
-  virtual double getJacobian(const fullMatrix<double> &gsf, double jac[3][3]);
-  virtual double getJacobian(const std::vector<SVector3> &gsf, double jac[3][3]);
-  virtual double getJacobian(double u, double v, double w, double jac[3][3]);
+  virtual void getShapeFunctions(double u, double v, double w, double s[], int order=-1) const;
+  virtual void getGradShapeFunctions(double u, double v, double w, double s[][3], int order=-1) const;
+  virtual void getHessShapeFunctions(double u, double v, double w, double s[][3][3], int order=-1) const;
+  virtual void getThirdDerivativeShapeFunctions(double u, double v, double w, double s[][3][3][3], int order=-1) const;
+  virtual double getJacobian(const fullMatrix<double> &gsf, double jac[3][3]) const;
+  virtual double getJacobian(const std::vector<SVector3> &gsf, double jac[3][3])const;
+  virtual double getJacobian(double u, double v, double w, double jac[3][3]) const;
   virtual double getPrimaryJacobian(double u, double v, double w, double jac[3][3]);
-  virtual int getNumShapeFunctions();
+  virtual int getNumShapeFunctions() const;
   virtual int getNumPrimaryShapeFunctions();
+  virtual const MVertex* getShapeFunctionNode(int i) const;
   virtual MVertex* getShapeFunctionNode(int i);
-  virtual void movePointFromParentSpaceToElementSpace(double &u, double &v, double &w);
-  virtual void movePointFromElementSpaceToParentSpace(double &u, double &v, double &w);
-  virtual bool isInside(double u, double v, double w);
+  virtual void xyz2uvw(double xyz[3], double uvw[3]) const;
+  virtual void movePointFromParentSpaceToElementSpace(double &u, double &v, double &w) const;
+  virtual void movePointFromElementSpaceToParentSpace(double &u, double &v, double &w) const;
+  virtual bool isInside(double u, double v, double w) const;
   virtual void getIntegrationPoints(int pOrder, int *npts, IntPt **pts);
 
   virtual MElement *getParent() const { return _orig; }
@@ -100,21 +102,24 @@ class MSubTriangle : public MTriangle
   virtual const nodalBasis* getFunctionSpace(int order=-1) const;
   virtual const JacobianBasis* getJacobianFuncSpace(int order=-1) const;
   // the parametric coordinates are the coordinates in the local parent element
-  virtual void getShapeFunctions(double u, double v, double w, double s[], int order=-1);
-  virtual void getGradShapeFunctions(double u, double v, double w, double s[][3], int order=-1);
-  virtual void getHessShapeFunctions(double u, double v, double w, double s[][3][3], int order=-1);
-  virtual void getThirdDerivativeShapeFunctions(double u, double v, double w, double s[][3][3][3], int order=-1);
-  virtual double getJacobian(const fullMatrix<double> &gsf, double jac[3][3]);
-  virtual double getJacobian(const std::vector<SVector3> &gsf, double jac[3][3]);
-  virtual double getJacobian(double u, double v, double w, double jac[3][3]);
+  virtual void getShapeFunctions(double u, double v, double w, double s[], int order=-1) const;
+  virtual void getGradShapeFunctions(double u, double v, double w, double s[][3], int order=-1) const;
+  virtual void getHessShapeFunctions(double u, double v, double w, double s[][3][3], int order=-1) const;
+  virtual void getThirdDerivativeShapeFunctions(double u, double v, double w, double s[][3][3][3], int order=-1) const;
+  virtual double getJacobian(const fullMatrix<double> &gsf, double jac[3][3]) const;
+  virtual double getJacobian(const std::vector<SVector3> &gsf, double jac[3][3])const;
+  virtual double getJacobian(double u, double v, double w, double jac[3][3])const;
   virtual double getPrimaryJacobian(double u, double v, double w, double jac[3][3]);
-  virtual int getNumShapeFunctions();
+  virtual int getNumShapeFunctions() const;
   virtual int getNumPrimaryShapeFunctions();
+  virtual const MVertex* getShapeFunctionNode(int i) const;
   virtual MVertex* getShapeFunctionNode(int i);
-  virtual void movePointFromParentSpaceToElementSpace(double &u, double &v, double &w);
-  virtual void movePointFromElementSpaceToParentSpace(double &u, double &v, double &w);
-  virtual bool isInside(double u, double v, double w);
+  virtual void xyz2uvw(double xyz[3], double uvw[3]) const;
+  virtual void movePointFromParentSpaceToElementSpace(double &u, double &v, double &w) const;
+  virtual void movePointFromElementSpaceToParentSpace(double &u, double &v, double &w) const;
+  virtual bool isInside(double u, double v, double w) const;
   virtual void getIntegrationPoints(int pOrder, int *npts, IntPt **pts);
+
   virtual MElement *getParent() const { return _orig; }
   virtual void setParent(MElement *p, bool owner = false) { _orig = p; _owner = owner; }
   virtual bool ownsParent() const { return _owner; }
@@ -155,20 +160,22 @@ class MSubLine : public MLine
   virtual const nodalBasis* getFunctionSpace(int order=-1) const;
   virtual const JacobianBasis* getJacobianFuncSpace(int order=-1) const;
   // the parametric coordinates are the coordinates in the local parent element
-  virtual void getShapeFunctions(double u, double v, double w, double s[], int order=-1);
-  virtual void getGradShapeFunctions(double u, double v, double w, double s[][3], int order=-1);
-  virtual void getHessShapeFunctions(double u, double v, double w, double s[][3][3], int order=-1);
-  virtual void getThirdDerivativeShapeFunctions(double u, double v, double w, double s[][3][3][3], int order=-1);
-  virtual double getJacobian(const fullMatrix<double> &gsf, double jac[3][3]);
-  virtual double getJacobian(const std::vector<SVector3> &gsf, double jac[3][3]);
-  virtual double getJacobian(double u, double v, double w, double jac[3][3]);
+  virtual void getShapeFunctions(double u, double v, double w, double s[], int order=-1) const;
+  virtual void getGradShapeFunctions(double u, double v, double w, double s[][3], int order=-1) const;
+  virtual void getHessShapeFunctions(double u, double v, double w, double s[][3][3], int order=-1) const;
+  virtual void getThirdDerivativeShapeFunctions(double u, double v, double w, double s[][3][3][3], int order=-1) const;
+  virtual double getJacobian(const fullMatrix<double> &gsf, double jac[3][3]) const;
+  virtual double getJacobian(const std::vector<SVector3> &gsf, double jac[3][3])const;
+  virtual double getJacobian(double u, double v, double w, double jac[3][3]) const;
   virtual double getPrimaryJacobian(double u, double v, double w, double jac[3][3]);
-  virtual int getNumShapeFunctions();
+  virtual int getNumShapeFunctions() const;
   virtual int getNumPrimaryShapeFunctions();
+  virtual const MVertex* getShapeFunctionNode(int i) const;
   virtual MVertex* getShapeFunctionNode(int i);
-  virtual void movePointFromParentSpaceToElementSpace(double &u, double &v, double &w);
-  virtual void movePointFromElementSpaceToParentSpace(double &u, double &v, double &w);
-  virtual bool isInside(double u, double v, double w);
+  virtual void xyz2uvw(double xyz[3], double uvw[3]) const;
+  virtual void movePointFromParentSpaceToElementSpace(double &u, double &v, double &w) const;
+  virtual void movePointFromElementSpaceToParentSpace(double &u, double &v, double &w) const;
+  virtual bool isInside(double u, double v, double w) const;
   virtual void getIntegrationPoints(int pOrder, int *npts, IntPt **pts);
 
   virtual MElement *getParent() const { return _orig; }
@@ -179,7 +186,6 @@ class MSubLine : public MLine
   {
     _parents = parents; _orig = _parents[0]; _owner = owner;
   }
-
   virtual const MElement *getBaseElement() const {if(!_base) _base=new MLine(*this); return _base;}
   virtual MElement *getBaseElement() {if(!_base) _base=new MLine(*this); return _base;}
 };
@@ -212,21 +218,24 @@ class MSubPoint : public MPoint
   virtual const nodalBasis* getFunctionSpace(int order=-1) const;
   virtual const JacobianBasis* getJacobianFuncSpace(int order=-1) const;
   // the parametric coordinates are the coordinates in the local parent element
-  virtual void getShapeFunctions(double u, double v, double w, double s[], int order=-1);
-  virtual void getGradShapeFunctions(double u, double v, double w, double s[][3], int order=-1);
-  virtual void getHessShapeFunctions(double u, double v, double w, double s[][3][3], int order=-1);
-  virtual void getThirdDerivativeShapeFunctions(double u, double v, double w, double s[][3][3][3], int order=-1);
-  virtual double getJacobian(const fullMatrix<double> &gsf, double jac[3][3]);
-  virtual double getJacobian(const std::vector<SVector3> &gsf, double jac[3][3]);
-  virtual double getJacobian(double u, double v, double w, double jac[3][3]);
+  virtual void getShapeFunctions(double u, double v, double w, double s[], int order=-1) const;
+  virtual void getGradShapeFunctions(double u, double v, double w, double s[][3], int order=-1) const;
+  virtual void getHessShapeFunctions(double u, double v, double w, double s[][3][3], int order=-1) const;
+  virtual void getThirdDerivativeShapeFunctions(double u, double v, double w, double s[][3][3][3], int order=-1) const;
+  virtual double getJacobian(const fullMatrix<double> &gsf, double jac[3][3]) const;
+  virtual double getJacobian(const std::vector<SVector3> &gsf, double jac[3][3])const;
+  virtual double getJacobian(double u, double v, double w, double jac[3][3]) const;
   virtual double getPrimaryJacobian(double u, double v, double w, double jac[3][3]);
-  virtual int getNumShapeFunctions();
+  virtual int getNumShapeFunctions() const;
   virtual int getNumPrimaryShapeFunctions();
+  virtual const MVertex* getShapeFunctionNode(int i) const;
   virtual MVertex* getShapeFunctionNode(int i);
-  virtual void movePointFromParentSpaceToElementSpace(double &u, double &v, double &w);
-  virtual void movePointFromElementSpaceToParentSpace(double &u, double &v, double &w);
-  virtual bool isInside(double u, double v, double w);
+  virtual void xyz2uvw(double xyz[3], double uvw[3]) const;
+  virtual void movePointFromParentSpaceToElementSpace(double &u, double &v, double &w) const;
+  virtual void movePointFromElementSpaceToParentSpace(double &u, double &v, double &w) const;
+  virtual bool isInside(double u, double v, double w) const;
   virtual void getIntegrationPoints(int pOrder, int *npts, IntPt **pts);
+
   virtual MElement *getParent() const { return _orig; }
   virtual void setParent(MElement *p, bool owner = false) { _orig = p; _owner = owner; }
   virtual bool ownsParent() const { return _owner; }

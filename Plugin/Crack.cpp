@@ -122,7 +122,7 @@ PView *GMSH_CrackPlugin::execute(PView *view)
           bnd.erase(ed);
       }
     }
-    for(std::set<EdgeData>::iterator it = bnd.begin(); it != bnd.end(); it++)
+    for(std::set<EdgeData, Less_EdgeData>::iterator it = bnd.begin(); it != bnd.end(); it++)
       bndVertices.insert(it->data.begin(), it->data.end());
   }
   for(std::set<MVertex*>::iterator it = bndVertices.begin();
@@ -156,7 +156,7 @@ PView *GMSH_CrackPlugin::execute(PView *view)
   m->getEntities(allentities);
   for(unsigned int ent = 0; ent < allentities.size(); ent++){
     if(allentities[ent]->dim() != dim + 1) continue;
-    for(int i = 0; i < allentities[ent]->getNumMeshElements(); i++){
+    for(unsigned int i = 0; i < allentities[ent]->getNumMeshElements(); i++){
       MElement *e = allentities[ent]->getMeshElement(i);
       for(int j = 0; j < e->getNumVertices(); j++){
         MVertex *v = e->getVertex(j);

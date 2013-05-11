@@ -112,9 +112,13 @@ std::vector<std::pair<std::string, std::string> > GetUsage()
   s.push_back(mp("-camera",            "Use camera mode view;"));
   s.push_back(mp("-stereo",            "OpenGL quad-buffered stereo rendering (requires "
                                        "special graphic card)"));
+  s.push_back(mp("-gamepad",           "Use gamepad controller if available"));
 #endif
   s.push_back(mp("Other options:", ""));
   s.push_back(mp("-",                  "Parse input files, then exit"));
+  s.push_back(mp("-new",               "Create new model before merge next file"));
+  s.push_back(mp("-merge",             "Merge next files"));
+  s.push_back(mp("-open",              "Open next files"));
 #if defined(HAVE_FLTK)
   s.push_back(mp("-a, -g, -m, -s, -p", "Start in automatic, geometry, mesh, solver or "
                                        "post-processing mode"));
@@ -394,6 +398,14 @@ void GetOptions(int argc, char *argv[])
       }
       else if(!strcmp(argv[i] + 1, "new")) {
         CTX::instance()->files.push_back("-new");
+        i++;
+      }
+      else if(!strcmp(argv[i] + 1, "open")) {
+        CTX::instance()->files.push_back("-open");
+        i++;
+      }
+      else if(!strcmp(argv[i] + 1, "merge")) {
+        CTX::instance()->files.push_back("-merge");
         i++;
       }
       else if(!strcmp(argv[i] + 1, "pid")) {
@@ -782,6 +794,8 @@ void GetOptions(int argc, char *argv[])
             CTX::instance()->mesh.algo2d = ALGO_2D_FRONTAL_QUAD;
           else if(!strncmp(argv[i], "pack", 4))
             CTX::instance()->mesh.algo2d = ALGO_2D_PACK_PRLGRMS;
+          else if(!strncmp(argv[i], "ruppert", 7))
+            CTX::instance()->mesh.algo2d = ALGO_2D_RUPPERT;
           else if(!strncmp(argv[i], "front2d", 7) || !strncmp(argv[i], "frontal", 7))
             CTX::instance()->mesh.algo2d = ALGO_2D_FRONTAL;
           else if(!strncmp(argv[i], "bamg",4))
@@ -938,12 +952,18 @@ void GetOptions(int argc, char *argv[])
         i++;
       }
       else if(!strcmp(argv[i] + 1, "camera")) {
-        CTX::instance()->camera = 1;
+        opt_general_camera_mode(0, GMSH_SET, 1.);
+	//        CTX::instance()->camera = 1;
         i++;
       }
       else if(!strcmp(argv[i] + 1, "stereo")) {
-        CTX::instance()->camera = 1;
-	CTX::instance()->stereo = 1;
+        opt_general_stereo_mode(0, GMSH_SET, 1.);
+	//        CTX::instance()->camera = 1;
+	//	CTX::instance()->stereo = 1;
+        i++;
+      }
+      else if(!strcmp(argv[i] + 1, "gamepad")) {
+        opt_general_gamepad(0, GMSH_SET, 1.);
         i++;
       }
       else if(!strcmp(argv[i] + 1, "fontsize")) {

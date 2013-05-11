@@ -3,8 +3,8 @@
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
 
-#ifndef _MESHGFACE_BNDRYLR_
-#define _MESHGFACE_BNDRYLR_
+#ifndef _BNDRYLRDATA_
+#define _BNDRYLRDATA_
 
 #include "SVector3.h"
 #include "STensor3.h"
@@ -48,6 +48,7 @@ class BoundaryLayerColumns
   std::multimap<MVertex*, BoundaryLayerData>  _data;
   std::map<MVertex*, BoundaryLayerFan> _fans;
 public:
+  size_t size () const {return _data.size();}
   typedef std::multimap<MVertex*,BoundaryLayerData>::iterator iter;
   typedef std::map<MVertex*, BoundaryLayerFan>::iterator iterf;
   std::multimap<MVertex*, MVertex*> _non_manifold_edges;
@@ -84,83 +85,7 @@ public:
     static BoundaryLayerData error;
     return error;
   }
-  inline edgeColumn getColumns(MVertex *v1, MVertex *v2 , int side)
-  {
-    Equal_Edge aaa;
-    MEdge e(v1, v2);
-    std::map<MVertex*,BoundaryLayerFan>::const_iterator it1 = _fans.find(v1);
-    std::map<MVertex*,BoundaryLayerFan>::const_iterator it2 = _fans.find(v2);
-    int N1 = getNbColumns(v1) ;
-    int N2 = getNbColumns(v2) ;
-
-    int nbSides = _normals.count(e);
-
-    // if (nbSides != 1)printf("I'm here %d sides\n",nbSides);
-    // Standard case, only two extruded columns from the two vertices
-    if (N1 == 1 && N2 == 1) return edgeColumn(getColumn(v1,0),getColumn(v2,0));
-    // one fan on
-    if (nbSides == 1){
-      if (it1 != _fans.end() && it2 == _fans.end() ){
-	if (aaa(it1->second._e1,e))
-	  return edgeColumn(getColumn (v1,0),getColumn(v2,0));
-	else
-	  return edgeColumn(getColumn (v1,N1-1),getColumn(v2,0));
-      }
-      if (it2 != _fans.end() && it1 == _fans.end() ){
-	if (aaa(it2->second._e1,e))
-	  return edgeColumn(getColumn (v1,0),getColumn(v2,0));
-	else
-	  return edgeColumn(getColumn (v1,0),getColumn(v2,N2-1));
-      }
-
-      if (N1 == 1 || N2 == 2){
-	const BoundaryLayerData & c10 = getColumn(v1,0);
-	const BoundaryLayerData & c20 = getColumn(v2,0);
-	const BoundaryLayerData & c21 = getColumn(v2,1);
-	if (dot(c10._n,c20._n) > dot(c10._n,c21._n) ) return edgeColumn(c10,c20);
-	else return edgeColumn(c10,c21);
-      }
-      if (N1 == 2 || N2 == 1){
-	const BoundaryLayerData & c10 = getColumn(v1,0);
-	const BoundaryLayerData & c11 = getColumn(v1,1);
-	const BoundaryLayerData & c20 = getColumn(v2,0);
-	if (dot(c10._n,c20._n) > dot(c11._n,c20._n) ) return edgeColumn(c10,c20);
-	else return edgeColumn(c11,c20);
-      }
-
-      Msg::Error ("Impossible Boundary Layer Configuration : one side and no fans");
-      // FIXME WRONG
-      return N1 ? edgeColumn (getColumn (v1,0),getColumn(v1,0)) :
-        edgeColumn (getColumn (v2,0),getColumn(v2,0));
-    }
-    else if (nbSides == 2){
-      if (it1 == _fans.end() && it2 == _fans.end() ){
-	if (N1 != 2 || N2 != 2){
-	  Msg::Error ("Impossible Boundary Layer Configuration");
-	  // FIXME WRONG
-	  return N1 ? edgeColumn (getColumn (v1,0),getColumn(v1,0)) :
-            edgeColumn (getColumn (v2,0),getColumn(v2,0));
-	}
-	const BoundaryLayerData & c10 = getColumn(v1,0);
-	const BoundaryLayerData & c11 = getColumn(v1,1);
-	const BoundaryLayerData & c20 = getColumn(v2,0);
-	const BoundaryLayerData & c21 = getColumn(v2,1);
-	if (side == 0){
-	  if (dot(c10._n,c20._n) > dot(c10._n,c21._n) ) return edgeColumn(c10,c20);
-	  else return edgeColumn(c10,c21);
-	}
-	if (side == 1){
-	  if (dot(c11._n,c20._n) > dot(c11._n,c21._n) ) return edgeColumn(c11,c20);
-	  else return edgeColumn(c11,c21);
-	}
-      }
-    }
-
-    Msg::Error("Not yet Done in BoundaryLayerData");
-    static BoundaryLayerData error;
-    static edgeColumn error2(error, error);
-    return error2;
-  }
+  edgeColumn getColumns(MVertex *v1, MVertex *v2 , int side);
   inline int getNbColumns(MVertex *v) { return _data.count(v); }
   inline const BoundaryLayerData &getColumn(MVertex *v, int iColumn)
   {
@@ -175,8 +100,8 @@ public:
   void filterPoints();
 };
 
-BoundaryLayerColumns * buildAdditionalPoints2D (GFace *gf) ;
-BoundaryLayerColumns * buildAdditionalPoints3D (GRegion *gr) ;
+bool buildAdditionalPoints2D (GFace *gf, BoundaryLayerColumns * ) ;
+bool buildAdditionalPoints3D (GRegion *gr, BoundaryLayerColumns * ) ;
 void buildMeshMetric(GFace *gf, double *uv, SMetric3 &m, double metric[3]);
 
 #endif

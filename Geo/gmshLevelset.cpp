@@ -80,7 +80,7 @@ int removeBadChildCells(cartesianBox<double> *parent)
             (j != J - 1 && !parent->activeCellExists(parent->getCellIndex(i, j + 1, k))) ||
             (k != 0 && !parent->activeCellExists(parent->getCellIndex(i, j, k - 1))) ||
             (k != K - 1 && !parent->activeCellExists(parent->getCellIndex(i, j, k + 1)))))
-            for(int ii = 0; ii < 8; ii++) child->eraseActiveCell(idx[ii]);
+          for(int ii = 0; ii < 8; ii++) child->eraseActiveCell(idx[ii]);
       }
   return removeBadChildCells(child);
 }
@@ -120,29 +120,29 @@ void computeLevelset(GModel *gm, cartesianBox<double> &box)
   std::vector<double> dist, localdist;
   std::vector<SPoint3> dummy;
   for (GModel::fiter fit = gm->firstFace(); fit != gm->lastFace(); fit++){
-   if((*fit)->geomType() == GEntity::DiscreteSurface){
+    if((*fit)->geomType() == GEntity::DiscreteSurface){
       for(unsigned int k = 0; k < (*fit)->getNumMeshElements(); k++){
-	  std::vector<double> iDistances;
-	  std::vector<SPoint3> iClosePts;
-          std::vector<double> iDistancesE;
-	  MElement *e = (*fit)->getMeshElement(k);
-	  if(e->getType() == TYPE_TRI){
-	    MVertex *v1 = e->getVertex(0);
-	    MVertex *v2 = e->getVertex(1);
-	    MVertex *v3 = e->getVertex(2);
-	    SPoint3 p1(v1->x(),v1->y(),v1->z());
-	    SPoint3 p2(v2->x(),v2->y(),v2->z());
-	    SPoint3 p3(v3->x(),v3->y(),v3->z());
-	    //sign plus if in the direction of the normal
-	    signedDistancesPointsTriangle(localdist, dummy, nodes, p2, p1, p3);
-	  }
-	  if(dist.empty())
-	    dist = localdist;
-	  else{
-	    for (unsigned int j = 0; j < localdist.size(); j++){
-	      dist[j] = (fabs(dist[j]) < fabs(localdist[j])) ? dist[j] : localdist[j];
-	    }
-	  }
+        std::vector<double> iDistances;
+        std::vector<SPoint3> iClosePts;
+        std::vector<double> iDistancesE;
+        MElement *e = (*fit)->getMeshElement(k);
+        if(e->getType() == TYPE_TRI){
+          MVertex *v1 = e->getVertex(0);
+          MVertex *v2 = e->getVertex(1);
+          MVertex *v3 = e->getVertex(2);
+          SPoint3 p1(v1->x(),v1->y(),v1->z());
+          SPoint3 p2(v2->x(),v2->y(),v2->z());
+          SPoint3 p3(v3->x(),v3->y(),v3->z());
+          //sign plus if in the direction of the normal
+          signedDistancesPointsTriangle(localdist, dummy, nodes, p2, p1, p3);
+        }
+        if(dist.empty())
+          dist = localdist;
+        else{
+          for (unsigned int j = 0; j < localdist.size(); j++){
+            dist[j] = (fabs(dist[j]) < fabs(localdist[j])) ? dist[j] : localdist[j];
+          }
+        }
       }
     }
     else{
@@ -194,8 +194,8 @@ inline bool isPlanar(const double *pt1, const double *pt2, const double *pt3,
   return (n1[0] == n2[0] && n1[1] == n2[1] && n1[2] == n2[2]);
 }
 
-inline double evalRadialFnDer (int p, int index, double dx, double dy, double dz,
-                               double ep)
+inline double evalRadialFnDer(int p, int index, double dx, double dy, double dz,
+                              double ep)
 {
   double r2 = dx*dx+dy*dy+dz*dz; //r^2
   switch (index) {
@@ -224,9 +224,9 @@ inline void printNodes(fullMatrix<double> &myNodes, fullMatrix<double> &surf)
   for(int itv = 1; itv != myNodes.size1(); ++itv){
     fprintf(xyz,"SP(%g,%g,%g){%g};\n", myNodes(itv,0), myNodes(itv,1),
             myNodes(itv,2), surf(itv,0));
- }
- fprintf(xyz,"};\n");
- fclose(xyz);
+  }
+  fprintf(xyz,"};\n");
+  fclose(xyz);
 }
 
 // extrude a list of the primitive levelsets with a "Level-order traversal sequence"
@@ -312,6 +312,42 @@ void gLevelset::getRPN(std::vector<gLevelset *> &gLsRPN)
 gLevelset::gLevelset(const gLevelset &lv)
 {
   tag_ = lv.tag_;
+}
+
+gLevelsetSphere::gLevelsetSphere(const double &x, const double &y, const double &z,
+                                 const double &R, int tag=1)
+  : gLevelsetPrimitive(tag), xc(x), yc(y), zc(z), r(R)
+{
+  _hasDerivatives = true;
+}
+
+void gLevelsetSphere::gradient(double x, double y, double z,
+                               double & dfdx, double & dfdy, double & dfdz) const
+{
+  const double xx = x-xc, yy = y-yc, zz = z-zc, dist = sqrt(xx*xx+yy*yy+zz*zz);
+
+  dfdx = xx/dist;
+  dfdy = yy/dist;
+  dfdz = zz/dist;
+}
+
+void gLevelsetSphere::hessian(double x, double y, double z,
+                              double & dfdxx, double & dfdxy, double & dfdxz,
+                              double & dfdyx, double & dfdyy, double & dfdyz,
+                              double & dfdzx, double & dfdzy, double & dfdzz) const
+{
+  const double xx = x-xc, yy = y-yc, zz = z-zc;
+  const double distSq = xx*xx+yy*yy, fact = 1./(distSq*sqrt(distSq));
+
+  dfdxx = (zz*zz+yy*yy)*fact;
+  dfdxy = -xx*yy*fact;
+  dfdxz = -xx*zz*fact;
+  dfdyx = dfdxy;
+  dfdyy = (xx*xx+zz*zz)*fact;
+  dfdyz = -yy*zz*fact;
+  dfdzx = dfdxz;
+  dfdzy = dfdyz;
+  dfdzz = (xx*xx+yy*yy)*fact;
 }
 
 gLevelsetPlane::gLevelsetPlane(const std::vector<double>  &pt,
@@ -492,7 +528,7 @@ gLevelsetPoints::gLevelsetPoints(const gLevelsetPoints &lv)
   points = lv.points;
 }
 
-double gLevelsetPoints::operator()(const double x, const double y, const double z) const
+double gLevelsetPoints::operator()(double x, double y, double z) const
 {
   if(mapP.empty()) printf("Levelset Points : call computeLS() before calling operator()\n");
 
@@ -552,7 +588,7 @@ void gLevelsetQuadric::Ax(const double x[3], double res[3], double fact)
   for(int i = 0; i < 3; i++){
     res[i] = 0.;
     for(int j = 0; j < 3; j++){
-    res[i] += A[i][j] * x[j] * fact;
+      res[i] += A[i][j] * x[j] * fact;
     }
   }
 }
@@ -633,9 +669,9 @@ void gLevelsetQuadric::computeRotationMatrix(const double dir1[3],
 {
   double norm = sqrt((dir1[1] * dir2[2] - dir1[2] * dir2[1]) *
                      (dir1[1] * dir2[2] - dir1[2] * dir2[1])
-                   + (dir1[2] * dir2[0] - dir1[0] * dir2[2]) *
+                     + (dir1[2] * dir2[0] - dir1[0] * dir2[2]) *
                      (dir1[2] * dir2[0] - dir1[0] * dir2[2])
-                   + (dir1[0] * dir2[1] - dir1[1] * dir2[0]) *
+                     + (dir1[0] * dir2[1] - dir1[1] * dir2[0]) *
                      (dir1[0] * dir2[1] - dir1[1] * dir2[0]));
   double n[3] = {1., 0., 0.};
   double ct = 1., st = 0.;
@@ -667,7 +703,7 @@ void gLevelsetQuadric::init()
   C = 0.;
 }
 
-double gLevelsetQuadric::operator()(const double x, const double y, const double z) const
+double gLevelsetQuadric::operator()(double x, double y, double z) const
 {
   return(A[0][0] * x * x + 2. * A[0][1] * x * y + 2. * A[0][2] * x * z + A[1][1] * y * y
          + 2. * A[1][2] * y * z + A[2][2] * z * z + B[0] * x + B[1] * y + B[2] * z + C);
@@ -689,7 +725,7 @@ gLevelsetShamrock::gLevelsetShamrock(double _xmid, double _ymid, double _zmid,
   }
 }
 
-double gLevelsetShamrock::operator() (const double x, const double y, const double z) const
+double gLevelsetShamrock::operator()(double x, double y, double z) const
 {
   // computing distance to pre-defined (sampled) iso-zero
   double dx,dy,xi,yi,d;
@@ -745,7 +781,7 @@ gLevelsetPopcorn::gLevelsetPopcorn(double _xc, double _yc, double _zc, double _r
   zc = _zc;
 }
 
-double gLevelsetPopcorn::operator() (const double x, const double y, const double z) const
+double gLevelsetPopcorn::operator() (double x, double y, double z) const
 {
   double s2 = (sigma)*(sigma);
   double r = sqrt((x-xc)*(x-xc)+(y-yc)*(y-yc)+(z-zc)*(z-zc));
@@ -771,141 +807,173 @@ double gLevelsetPopcorn::operator() (const double x, const double y, const doubl
 gLevelsetMathEval::gLevelsetMathEval(std::string f, int tag)
   : gLevelsetPrimitive(tag)
 {
-    std::vector<std::string> expressions(1, f);
-    std::vector<std::string> variables(3);
-    variables[0] = "x";
-    variables[1] = "y";
-    variables[2] = "z";
-    _expr = new mathEvaluator(expressions, variables);
+  std::vector<std::string> expressions(1, f);
+  std::vector<std::string> variables(3);
+  variables[0] = "x";
+  variables[1] = "y";
+  variables[2] = "z";
+  _expr = new mathEvaluator(expressions, variables);
 }
 
-double gLevelsetMathEval::operator() (const double x, const double y, const double z) const
+double gLevelsetMathEval::operator() (double x, double y, double z) const
 {
-    std::vector<double> values(3), res(1);
-    values[0] = x;
-    values[1] = y;
-    values[2] = z;
-    if(_expr->eval(values, res)) return res[0];
-    return 1.;
+  std::vector<double> values(3), res(1);
+  values[0] = x;
+  values[1] = y;
+  values[2] = z;
+  if(_expr->eval(values, res)) return res[0];
+  return 1.;
 }
 
-gLevelsetDistGeom::gLevelsetDistGeom(std::string box, std::string geom, int tag)
-  : gLevelsetPrimitive(tag), _box(NULL)
+gLevelsetMathEvalAll::gLevelsetMathEvalAll(std::vector<std::string> expressions, int tag)
+  : gLevelsetPrimitive(tag)
 {
-  modelBox = new GModel();
-  modelBox->load(box+std::string(".msh"));
-  modelGeom = new GModel();
-  modelGeom->load(geom);
+  _hasDerivatives = true;
+  std::vector<std::string> variables(3);
+  variables[0] = "x";
+  variables[1] = "y";
+  variables[2] = "z";
+  _expr = new mathEvaluator(expressions, variables);
+}
 
-  //EMI FIXME THIS
-  int levels = 3;
-  // double rmax = 0.1;
-  // double sampling = std::min(rmax, std::min(lx, std::min(ly, lz)));
+double gLevelsetMathEvalAll::operator() (double x, double y, double z) const
+{
+  std::vector<double> values(3), res(13);
+  values[0] = x;
+  values[1] = y;
+  values[2] = z;
+  if(_expr->eval(values, res)) return res[0];
+  return 1.;
+}
+void gLevelsetMathEvalAll::gradient(double x, double y, double z,
+                                    double & dfdx, double & dfdy, double & dfdz) const
+{
+  std::vector<double> values(3), res(13);
+  values[0] = x;
+  values[1] = y;
+  values[2] = z;
+  if(_expr->eval(values, res)){
+    dfdx = res[1];
+    dfdy = res[2];
+    dfdz = res[3];
+  }
+}
 
-  //FILLING POINTS FROM GEOMBOX
-  std::vector<SPoint3> points;
-  std::vector<SPoint3> refinePoints;
-  for(GModel::viter vit = modelBox->firstVertex(); vit != modelBox->lastVertex(); vit++){
-    for(unsigned int k = 0; k < (*vit)->getNumMeshVertices(); k++){
-      MVertex  *v = (*vit)->getMeshVertex(k);
-       SPoint3 p(v->x(), v->y(), v->z());
-      points.push_back(p);
+void gLevelsetMathEvalAll::hessian(double x, double y, double z,
+                                   double & dfdxx, double & dfdxy, double & dfdxz,
+                                   double & dfdyx, double & dfdyy, double & dfdyz,
+                                   double & dfdzx, double & dfdzy, double & dfdzz) const
+{
+  std::vector<double> values(3), res(13);
+  values[0] = x;
+  values[1] = y;
+  values[2] = z;
+  if(_expr->eval(values, res)){
+    dfdxx = res[4];
+    dfdxy = res[5];
+    dfdxz = res[6];
+    dfdyx = res[7];
+    dfdyy = res[8];
+    dfdyz = res[9];
+    dfdzx = res[10];
+    dfdzy = res[11];
+    dfdzz = res[12];
+  }
+}
+
+#if defined(HAVE_ANN)
+gLevelsetDistMesh::gLevelsetDistMesh(GModel *gm, std::string physical, int nbClose)
+  :  _gm(gm), _nbClose(nbClose)
+{
+  std::map<int, std::vector<GEntity*> > groups [4];
+  gm->getPhysicalGroups(groups);
+  for (GModel::piter it = gm->firstPhysicalName() ;
+       it != gm->lastPhysicalName() ; ++it){
+    if (it->second == physical){
+      _entities = groups[it->first.first][it->first.second];
     }
   }
-  for (GModel::eiter eit = modelBox->firstEdge(); eit != modelBox->lastEdge(); eit++){
-    for(unsigned int k = 0; k < (*eit)->getNumMeshVertices(); k++){
-      MVertex  *ve = (*eit)->getMeshVertex(k);
-      SPoint3 pe(ve->x(), ve->y(), ve->z());
-      points.push_back(pe);
-    }
+  if (_entities.size() == 0){
+    Msg::Error("distanceToMesh: the physical name '%s' does not exist in the GModel", physical.c_str());
   }
 
-  //FILLING POINTS FROM STL
-  for (GModel::fiter fit = modelGeom->firstFace(); fit != modelGeom->lastFace(); fit++){
-    for(unsigned int k = 0; k < (*fit)->getNumMeshVertices(); k++){
-      MVertex  *vf = (*fit)->getMeshVertex(k);
-      SPoint3 pf(vf->x(), vf->y(), vf->z());
-      points.push_back(pf);
-    }
-    for(unsigned int k = 0; k < (*fit)->getNumMeshElements(); k++){
-      MElement *e =  (*fit)->getMeshElement(k);
-      if (e->getType() == TYPE_TRI){
-  	MVertex *v1 = e->getVertex(0);
-  	MVertex *v2 = e->getVertex(1);
-  	MVertex *v3 = e->getVertex(2);
-  	SPoint3 cg( (v1->x()+v2->x()+v3->x())/3.,
-  		    (v1->y()+v2->y()+v3->y())/3.,
-  		    (v1->z()+v2->z()+v3->z())/3.);
-  	refinePoints.push_back(cg);
+  //setup
+  std::set<MVertex *> _all;
+  for (unsigned int i=0;i<_entities.size();i++){
+    for (unsigned int k = 0; k < _entities[i]->getNumMeshElements(); k++) {
+      MElement *e = _entities[i]->getMeshElement(k);
+      for (int j = 0; j<  e->getNumVertices();j++){
+	MVertex *v = _entities[i]->getMeshElement(k)->getVertex(j);
+	_all.insert(v);
+	_v2e.insert (std::make_pair(v,e));
       }
     }
   }
-  //FOR CAD
-  //for (GModel::fiter fit = modelGeom->firstFace(); fit != modelGeom->lastFace(); fit++)
-  //   (*fit)->fillPointCloud(sampling, &points);
-
-  if (points.size() == 0) {Msg::Fatal("No points on surfaces \n"); };
-
-  SBoundingBox3d bb;
-  for(unsigned int i = 0; i < points.size(); i++) bb += points[i];
-  for(unsigned int i = 0; i < refinePoints.size(); i++) bb += refinePoints[i];
-  //bb.scale(1.01, 1.01, 1.01);
-  SVector3 range = bb.max() - bb.min();
-  double minLength = std::min( range.x(), std::min(range.y(), range.z()));
-  double hmin = minLength / 5;
-  int NX = range.x() / hmin;
-  int NY = range.y() / hmin;
-  int NZ = range.z() / hmin;
-  if(NX < 2) NX = 2;
-  if(NY < 2) NY = 2;
-  if(NZ < 2) NZ = 2;
-  double rtube = 2.*hmin; //std::max(lx, std::max(ly, lz))*2.;
-
-  Msg::Info("  bounding box min: %g %g %g -- max: %g %g %g",
-            bb.min().x(), bb.min().y(), bb.min().z(),
-            bb.max().x(), bb.max().y(), bb.max().z());
-  Msg::Info("  Nx=%d Ny=%d Nz=%d", NX, NY, NZ);
-
-  _box = new cartesianBox<double>(bb.min().x(), bb.min().y(), bb.min().z(),
-  				 SVector3(range.x(), 0, 0),
-  				 SVector3(0, range.y(), 0),
-  				 SVector3(0, 0, range.z()),
-  				 NX, NY, NZ, levels);
-   for (int i = 0; i < NX; i++)
-    for (int j = 0; j < NY; j++)
-      for (int k = 0; k < NZ; k++)
-        _box->insertActiveCell(_box->getCellIndex(i, j, k));
-
-  cartesianBox<double> *parent = _box, *child;
-  while((child = parent->getChildBox())){
-    //Msg::Info("  level %d ", child->getLevel());
-    for(unsigned int i = 0; i < refinePoints.size(); i++)
-      insertActiveCells(refinePoints[i].x(), refinePoints[i].y(), refinePoints[i].z(),
-                         rtube / pow(2., (levels - child->getLevel())), *child);
-    parent = child;
+  _nodes = annAllocPts(_all.size(), 3);
+  std::set<MVertex*>::iterator itp = _all.begin();
+  int ind = 0;
+  while (itp != _all.end()){
+    MVertex* pt = *itp;
+    _nodes[ind][0] = pt->x();
+    _nodes[ind][1] = pt->y();
+    _nodes[ind][2] = pt->z();
+    _vertices.push_back(pt);
+    itp++; ind++;
   }
-
-  //Msg::Info("Removing cells to match mesh topology constraints");
-  removeBadChildCells(_box);
-  removeParentCellsWithChildren(_box);
-
-  //Msg::Info("Initializing nodal values in the cartesian grid");
-  _box->createNodalValues();
-
-  //Msg::Info("Computing levelset on the cartesian grid");
-  computeLevelset(modelGeom, *_box);
-
-  //Msg::Info("Renumbering mesh vertices across levels");
-  _box->renumberNodes();
-
-  _box->writeMSH("yeah.msh", false);
+  _kdtree = new ANNkd_tree(_nodes, _all.size(), 3);
+  _index = new ANNidx[_nbClose];
+  _dist  = new ANNdist[_nbClose];
 }
 
-double gLevelsetDistGeom::operator() (const double x, const double y, const double z) const
+gLevelsetDistMesh::~gLevelsetDistMesh()
 {
-  double dist = _box->getValueContainingPoint(x,y,z);
-  return dist;
+  delete [] _index;
+  delete [] _dist;
+  if (_kdtree) delete _kdtree;
+  if (_nodes) annDeallocPts (_nodes);
+
 }
+
+double gLevelsetDistMesh::operator () (double x, double y, double z) const
+{
+  double point[3] = {x,y,z};
+  _kdtree->annkSearch(point, _nbClose, _index, _dist);
+  std::set<MElement*> elements;
+  for (int i=0;i<_nbClose;i++){
+    int iVertex = _index [i];
+    MVertex *v = _vertices[iVertex];
+    for (std::multimap<MVertex*,MElement*>::const_iterator itm =
+           _v2e.lower_bound(v); itm != _v2e.upper_bound(v); ++itm)
+      elements.insert (itm->second);
+  }
+  double minDistance = 1.e22;
+  SPoint3 closest;
+  for (std::set<MElement*>::iterator it = elements.begin();
+       it != elements.end();++it){
+    double distance;
+    MVertex *v1 = (*it)->getVertex(0);
+    MVertex *v2 = (*it)->getVertex(1);
+    SPoint3 p1(v1->x(), v1->y(), v1->z());
+    SPoint3 p2(v2->x(), v2->y(), v2->z());
+    SPoint3 pt;
+    if ((*it)->getDim() == 1){
+      signedDistancePointLine(p1, p2,SPoint3(x,y,z),distance,pt);
+    }
+    else if ((*it)->getDim() == 2){
+      MVertex *v3 = (*it)->getVertex(2);
+      SPoint3 p3(v3->x(), v3->y(), v3->z());
+      signedDistancePointTriangle(p1, p2, p3,SPoint3(x,y,z),distance,pt);
+    }
+    else if  ((*it)->getDim() == 2){
+      Msg::Error("Cannot compute a dsitance to an entity of dim \n");
+    }
+    if (fabs(distance) < fabs(minDistance)){
+      minDistance=distance;
+    }
+  }
+  return -1.0*minDistance;
+}
+#endif
 
 #if defined (HAVE_POST)
 gLevelsetPostView::gLevelsetPostView(int index, int tag)
@@ -921,7 +989,7 @@ gLevelsetPostView::gLevelsetPostView(int index, int tag)
   }
 }
 
-double gLevelsetPostView::operator () (const double x, const double y, const double z) const
+double gLevelsetPostView::operator () (double x, double y, double z) const
 {
   if(!_octree) return 1.;
   double val = 1.;
@@ -960,7 +1028,7 @@ gLevelsetEllipsoid::gLevelsetEllipsoid(const double *pt, const double *dir, cons
   translate(pt);
 }
 
-gLevelsetEllipsoid::gLevelsetEllipsoid (const gLevelsetEllipsoid& lv)
+gLevelsetEllipsoid::gLevelsetEllipsoid(const gLevelsetEllipsoid& lv)
   : gLevelsetQuadric(lv){}
 
 gLevelsetCone::gLevelsetCone(const double *pt, const double *dir, const double &angle,
@@ -975,7 +1043,7 @@ gLevelsetCone::gLevelsetCone(const double *pt, const double *dir, const double &
   translate(pt);
 }
 
-gLevelsetCone::gLevelsetCone (const gLevelsetCone& lv)
+gLevelsetCone::gLevelsetCone(const gLevelsetCone& lv)
   : gLevelsetQuadric(lv){}
 
 gLevelsetGeneralQuadric::gLevelsetGeneralQuadric(const double *pt, const double *dir,
@@ -995,7 +1063,7 @@ gLevelsetGeneralQuadric::gLevelsetGeneralQuadric(const double *pt, const double 
   translate(pt);
 }
 
-gLevelsetGeneralQuadric::gLevelsetGeneralQuadric (const gLevelsetGeneralQuadric& lv)
+gLevelsetGeneralQuadric::gLevelsetGeneralQuadric(const gLevelsetGeneralQuadric& lv)
   : gLevelsetQuadric(lv){}
 
 gLevelsetTools::gLevelsetTools(const gLevelsetTools &lv) : gLevelset(lv)
@@ -1158,44 +1226,104 @@ gLevelsetConrod::gLevelsetConrod(const double *pt, const double *dir1,
 gLevelsetConrod::gLevelsetConrod(const gLevelsetConrod &lv)
   : gLevelsetImproved(lv){}
 
-
 // Level-set for NACA0012 airfoil, last coeff. modified for zero-thickness trailing edge
 // cf. http://en.wikipedia.org/wiki/NACA_airfoil
-double gLevelsetNACA00::operator() (const double x, const double y, const double z) const
+gLevelsetNACA00::gLevelsetNACA00(double x0, double y0, double c, double t)
+  : _x0(x0), _y0(y0), _c(c), _t(t)
+{
+  _hasDerivatives = true;
+}
+
+void gLevelsetNACA00::getClosestBndPoint(double x, double y, double z,
+                                         double &xb, double &yb, double &curvRad, bool &in) const
 {
 
   static const int maxIter = 100;
   static const double tol = 1.e-8;
 
   const double tolr = tol/_c;                 // Tolerance (scaled bu chord)
-  double distSq;                              // Square of dist. between point and boundary
-  bool in = false;                            // Whether the point is inside the airfoil
+  in = false;                                 // Whether the point is inside the airfoil
 
   const double xt = x-_x0, yt = fabs(y-_y0);  // Point translated according to airfoil origin and symmetry
 
-  if (xt-_c > 1.21125*_t*yt)                  // Behind line normal to airfoil at trailing edge, closest
-    distSq = (xt-_c)*(xt-_c)+yt*yt;           // boundary point is trailing edge
-  else {                                      // Otherwise Newton-Raphson to find closest boundary point
+  if (xt-_c > 1.21125*_t*yt) {                // Behind line normal to airfoil at trailing edge, closest
+    xb = _x0+_c;                              // boundary point is trailing edge...
+    yb = _y0;
+    curvRad = 0.;
+  }
+  else {                                      // ...otherwise Newton-Raphson to find closest boundary point
     const double fact = 5.*_t*_c;
-    double xb = std::max(xt,tolr);
+    double xtb = std::max(xt,tolr), ytb;
+    double dyb, ddyb;
     for (int it=0; it<maxIter; it++) {
-      const double xbr = xb/_c, sxbr = sqrt(xbr), xbr32 = xbr*sxbr,
-                    xbr2 = xbr*xbr, xbr3 = xbr2*xbr, xbr4 = xbr2*xbr2;
-      double yb = fact*(0.2969*sxbr-0.1260*xbr-0.3516*xbr2+0.2843*xbr3-0.1036*xbr4);
-      const double dyb = fact*(0.14845/sxbr-0.4144*xbr3+0.8529*xbr2-0.7032*xbr-0.126)/_c;
-      const double ddyb = fact*(-0.074225/xbr32-1.2432*xbr2+1.7058*xbr-0.7032)/(_c*_c);
-      const double xx = xt-xb, yy = yt-yb;
+      const double xbr = xtb/_c, sxbr = sqrt(xbr), xbr32 = xbr*sxbr,
+        xbr2 = xbr*xbr, xbr3 = xbr2*xbr, xbr4 = xbr2*xbr2;
+      ytb = fact*(0.2969*sxbr-0.1260*xbr-0.3516*xbr2+0.2843*xbr3-0.1036*xbr4);
+      dyb = fact*(0.14845/sxbr-0.4144*xbr3+0.8529*xbr2-0.7032*xbr-0.126)/_c;
+      ddyb = fact*(-0.074225/xbr32-1.2432*xbr2+1.7058*xbr-0.7032)/(_c*_c);
+      const double xx = xt-xtb, yy = yt-ytb;
       in = (xt > 0) && (yy < 0);
-      distSq = xx*xx+yy*yy;
       const double dDistSq = -2.*(xx+dyb*yy);
       const double ddDistSq = 2.*(1.-ddyb*yy+dyb*dyb);
       const double mIncr = dDistSq/ddDistSq;
       if (fabs(mIncr) < tolr) break;
-      else xb -= mIncr;
-      if (xb < tolr) xb = tolr;
+      else xtb -= mIncr;
+      if (xtb < tolr) xtb = tolr;
     }
+    xb = _x0+xtb;
+    yb = (y >= _y0) ? _y0+ytb : -(_y0+ytb);
+    const double norm = sqrt(1.+dyb*dyb);
+    curvRad = norm*norm*norm/fabs(ddyb);
   }
+}
+
+double gLevelsetNACA00::operator() (double x, double y, double z) const
+{
+  double xb, yb, curvRadb;
+  bool in;
+
+  getClosestBndPoint(x, y, z, xb, yb, curvRadb, in);
+  const double xx = x-xb, yy = y-yb, distSq = xx*xx+yy*yy;
 
   return in ? -sqrt(distSq) : sqrt(distSq);
+}
 
+void gLevelsetNACA00::gradient (double x, double y, double z,
+                                double & dfdx, double & dfdy, double & dfdz) const
+{
+  double xb, yb, curvRadb;
+  bool in;
+
+  getClosestBndPoint(x, y, z, xb, yb, curvRadb, in);
+  const double xx = x-xb, yy = y-yb, distSq = xx*xx+yy*yy;
+  const double dist = in ? -sqrt(distSq) : sqrt(distSq);
+
+  dfdx = xx/dist;
+  dfdy = yy/dist;
+  dfdz = 0.;
+}
+
+void gLevelsetNACA00::hessian (double x, double y, double z,
+                               double & dfdxx, double & dfdxy, double & dfdxz,
+                               double & dfdyx, double & dfdyy, double & dfdyz,
+                               double & dfdzx, double & dfdzy, double & dfdzz) const
+{
+  double xb, yb, curvRadb;
+  bool in;
+
+  getClosestBndPoint(x, y, z, xb, yb, curvRadb, in);
+
+  const double xx = x-xb, yy = y-yb, distSq = xx*xx+yy*yy;
+  const double dist = in ? -sqrt(distSq) : sqrt(distSq);
+  const double curvRad = curvRadb+dist, fact = 1./(curvRad*curvRad*curvRad);
+
+  dfdxx = yy*yy*fact;
+  dfdxy = -xx*yy*fact;
+  dfdxz = 0.;
+  dfdyx = dfdxy;
+  dfdyy = xx*xx*fact;
+  dfdyz = 0.;
+  dfdzx = 0.;
+  dfdzy = 0.;
+  dfdzz = 0.;
 }

@@ -5,6 +5,9 @@
 
 cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 
+# do not warn about non-definition of WIN32 on cygwin
+set(CMAKE_LEGACY_CYGWIN_WIN32 0) 
+
 # if CMAKE_BUILD_TYPE is specified use it; otherwise set the default
 # build type to "RelWithDebInfo" ("-O2 -g" with gcc) prior to calling
 # project()
@@ -30,6 +33,9 @@ option(ENABLE_BLAS_LAPACK "Use BLAS and Lapack for linear algebra" ON)
 option(ENABLE_BLOSSOM "Enable Blossom algo (based on MATCH and concorde97)" ${DEFAULT})
 option(ENABLE_BUILD_LIB "Build static Gmsh library" OFF)
 option(ENABLE_BUILD_SHARED "Build shared Gmsh library" OFF)
+option(ENABLE_BUILD_DYNAMIC "Build dynamically linked Gmsh binary" OFF)
+option(ENABLE_BUILD_ANDROID "Build Gmsh library for Android NDK" OFF)
+option(ENABLE_BUILD_IOS "Build Gmsh library for iOS" OFF)
 option(ENABLE_CGNS "Enable CGNS mesh export" OFF)
 option(ENABLE_CHACO "Enable Chaco mesh partitioner" ${DEFAULT})
 option(ENABLE_DINTEGRATION "Enable discrete integration and levelsets" ${DEFAULT})
@@ -73,7 +79,7 @@ option(ENABLE_WRAP_PYTHON "Build Python wrappers" OFF)
 
 set(GMSH_MAJOR_VERSION 2)
 set(GMSH_MINOR_VERSION 7)
-set(GMSH_PATCH_VERSION 0)
+set(GMSH_PATCH_VERSION 1)
 set(GMSH_EXTRA_VERSION "" CACHE STRING "Gmsh extra version string")
 
 set(GMSH_VERSION "${GMSH_MAJOR_VERSION}.${GMSH_MINOR_VERSION}")
@@ -109,7 +115,8 @@ set(GMSH_API
   Solver/dofManager.h Solver/femTerm.h Solver/laplaceTerm.h Solver/elasticityTerm.h
     Solver/crossConfTerm.h Solver/orthogonalTerm.h
     Solver/linearSystem.h Solver/linearSystemGMM.h Solver/linearSystemCSR.h 
-    Solver/linearSystemFull.h Solver/elasticitySolver.h Solver/sparsityPattern.h    Solver/groupOfElements.h Solver/linearSystemPETSc.h
+    Solver/linearSystemFull.h Solver/elasticitySolver.h Solver/sparsityPattern.h
+    Solver/groupOfElements.h Solver/linearSystemPETSc.h
   Post/PView.h Post/PViewData.h Plugin/PluginManager.h Post/OctreePost.h 
   Post/PViewDataGModel.h Post/PViewOptions.h Post/ColorTable.h
    Numeric/nodalBasis.h
@@ -159,7 +166,7 @@ include(CheckCXXCompilerFlag)
 
 if(MSVC)
   # remove annoying warning about bool/int cast performance
-  set(GMSH_CONFIG_PRAGMAS "#pragma warning(disable:4800)")
+  set(GMSH_CONFIG_PRAGMAS "#pragma warning(disable:4800 4244 4267)")
   if(ENABLE_MSVC_STATIC_RUNTIME)
     foreach(VAR
             CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE
@@ -270,6 +277,10 @@ if(ENABLE_BLAS_LAPACK)
         if(LAPACK_LIBRARIES)
           set_config_option(HAVE_BLAS "Blas")
           set_config_option(HAVE_LAPACK "Lapack")
+          find_library(GFORTRAN_LIB gfortran)
+          if(GFORTRAN_LIB)
+            list(APPEND LAPACK_LIBRARIES ${GFORTRAN_LIB})
+          endif(GFORTRAN_LIB)
         endif(LAPACK_LIBRARIES)
       endif(LAPACK_LIBRARIES)
     endif(LAPACK_LIBRARIES)
@@ -284,6 +295,18 @@ if(ENABLE_BLAS_LAPACK)
     set_config_option(HAVE_BLAS "Blas(VecLib)")
     set_config_option(HAVE_LAPACK "Lapack(VecLib)")
   endif(MSVC)
+  if(BUILD_ANDROID)
+    find_library(BLAS_LIB f2cblas PATH_SUFFIXES lib)
+    find_library(LAPACK_LIB f2clapack PATH_SUFFIXES lib)
+    if(BLAS_LIB)
+      list(APPEND EXTERNAL_LIBRARIES ${BLAS_LIB})
+      set_config_option(HAVE_BLAS "Blas")
+    endif(BLAS_LIB)
+    if(LAPACK_LIB)
+      list(APPEND EXTERNAL_LIBRARIES ${LAPACK_LIB})
+      set_config_option(HAVE_LAPACK "Lapack")
+    endif(LAPACK_LIB)
+  endif(BUILD_ANDROID)
   if(NOT HAVE_BLAS OR NOT HAVE_LAPACK)
     # if we haven't found blas and lapack without using the standard
     # cmake tests, do it (this requires a working Fortran compiler)
@@ -425,6 +448,23 @@ if(ENABLE_ONELAB)
     set_config_option(HAVE_ONELAB_METAMODEL "OneLabMetamodel")
   endif(ENABLE_ONELAB_METAMODEL)
 endif(ENABLE_ONELAB)
+
+if(ENABLE_BUILD_IOS)
+ #TODO
+endif(ENABLE_BUILD_IOS)
+
+if(ENABLE_BUILD_ANDROID)
+  find_file(CMAKE_TOOLCHAIN_FILE "android.toolchain.cmake")
+  if(NOT CMAKE_TOOLCHAIN_FILE)
+    message(SEND_ERROR "Cannot compile Gmsh for android without android-cmake")
+  endif(NOT CMAKE_TOOLCHAIN_FILE)
+  set(CMAKE_BUILD_TYPE Release)
+  set(LIBRARY_OUTPUT_PATH_ROOT ${CMAKE_CURRENT_BINARY_DIR})
+  set(LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/libs/)
+  add_library(androidGmsh SHARED ${GMSH_SRC})
+  set_target_properties(androidGmsh PROPERTIES OUTPUT_NAME Gmsh)
+  target_link_libraries(androidGmsh ${EXTERNAL_LIBRARIES})
+endif(ENABLE_BUILD_ANDROID)
 
 if(HAVE_FLTK OR HAVE_QT OR ENABLE_GRAPHICS)
   if(NOT HAVE_MESH OR NOT HAVE_POST OR NOT HAVE_PLUGINS OR NOT HAVE_ONELAB)
@@ -751,7 +791,6 @@ if(HAVE_SOLVER)
     endif(PETSC_ARCH)
     if(EXISTS ${ENV_PETSC_DIR}/${ENV_PETSC_ARCH}/conf/petscvariables)
       # old-style PETSc installations (using PETSC_DIR and PETSC_ARCH)
-      set_config_option(HAVE_PETSC "PETSc")
       message(STATUS "Using PETSc dir: ${ENV_PETSC_DIR}")
       message(STATUS "Using PETSc arch: ${ENV_PETSC_ARCH}")
       file(STRINGS ${ENV_PETSC_DIR}/${ENV_PETSC_ARCH}/conf/petscvariables 
@@ -780,6 +819,9 @@ if(HAVE_SOLVER)
       if(NOT PETSC_LIBS)
         find_library(PETSC_LIBS petsc PATHS ${ENV_PETSC_DIR}/${ENV_PETSC_ARCH}/lib)
       endif(NOT PETSC_LIBS)
+      if(PETSC_LIBS)
+        set_config_option(HAVE_PETSC "PETSc")
+      endif(PETSC_LIBS)
       # find slepc (needs to be linked in before petsc)
       if(ENABLE_SLEPC)
         if(SLEPC_DIR)
@@ -792,8 +834,8 @@ if(HAVE_SOLVER)
           find_path(SLEPC_INC "slepc.h" PATHS ${ENV_SLEPC_DIR} PATH_SUFFIXES include 
                     ${ENV_PETSC_ARCH}/include include/slepc)
           if(SLEPC_INC)
-            set_config_option(HAVE_SLEPC "SLEPc")
             message(STATUS "Using SLEPc dir: ${ENV_SLEPC_DIR}")
+            set_config_option(HAVE_SLEPC "SLEPc")
             list(APPEND EXTERNAL_LIBRARIES ${SLEPC_LIB})
             list(APPEND EXTERNAL_INCLUDES ${SLEPC_INC}) 
             find_path(SLEPC_INC2 "slepcconf.h" PATHS ${ENV_SLEPC_DIR} 
@@ -954,6 +996,11 @@ if(DLFCN_H)
   list(APPEND EXTERNAL_LIBRARIES ${CMAKE_DL_LIBS})
 endif(DLFCN_H)
 
+check_include_file(linux/joystick.h LINUX_JOYSTICK_H)
+if(LINUX_JOYSTICK_H)
+  set_config_option(HAVE_LINUX_JOYSTICK "LinuxJoystick")
+endif(LINUX_JOYSTICK_H)
+
 if(MSVC)
   add_definitions(-D_USE_MATH_DEFINES -DNOMINMAX 
                   -D_CRT_SECURE_NO_DEPRECATE -D_SCL_SECURE_NO_DEPRECATE)
@@ -961,7 +1008,7 @@ if(MSVC)
 endif(MSVC)
 
 if(WIN32 OR CYGWIN)
-  list(APPEND EXTERNAL_LIBRARIES wsock32 ws2_32)
+  list(APPEND EXTERNAL_LIBRARIES winmm wsock32 ws2_32)
 endif(WIN32 OR CYGWIN)
 
 # disable compile optimization on some known problematic files
@@ -974,12 +1021,12 @@ endif(NOOPT)
 
 # force full warnings to encourage everybody to write clean(er) code
 check_cxx_compiler_flag("-Wall" WALL)
-if(WALL)
+if(WALL AND NOT MSVC)
   file(GLOB_RECURSE WALL_SRC Common/*.cpp Fltk/*.cpp FunctionSpace/*.cpp
        Geo/*.cpp Graphics/*.cpp Mesh/*.cpp Numeric/*.cpp Parser/*.cpp
        Plugin/*.cpp Post/*.cpp Qt/*.cpp Solver/*.cpp contrib/onelab/*.cpp)
   set_source_files_properties(${WALL_SRC} COMPILE_FLAGS "-Wall")
-endif(WALL)
+endif(WALL AND NOT MSVC)
 
 list(SORT CONFIG_OPTIONS)
 set(GMSH_CONFIG_OPTIONS "")
@@ -1029,6 +1076,21 @@ else(HAVE_FLTK)
   set(LINK_LIBRARIES ${EXTERNAL_LIBRARIES} ${LAPACK_LIBRARIES})
 endif(HAVE_FLTK)
 
+# try to use static gfortran on static Linux builds
+if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+  if(NOT ENABLE_BUILD_DYNAMIC)
+    find_library(GFORTRAN_STATIC libgfortran.a)
+    if(GFORTRAN_STATIC)
+      message(STATUS "Using static libgfortran")
+      foreach(STR ${LINK_LIBRARIES})
+        string(REPLACE "-lgfortran" ${GFORTRAN_STATIC} STR2 ${STR})
+        list(APPEND LINK_LIBRARIES2 ${STR2})
+      endforeach(STR)
+      set(LINK_LIBRARIES ${LINK_LIBRARIES2})
+    endif(GFORTRAN_STATIC)
+  endif(NOT ENABLE_BUILD_DYNAMIC)
+endif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+
 # we could specify include dirs more selectively, but this is simpler
 include_directories(Common Fltk Geo Graphics Mesh Solver Numeric Parser
   Plugin Post Qt ${EXTERNAL_INCLUDES} ${CMAKE_CURRENT_BINARY_DIR}/Common)
@@ -1036,7 +1098,7 @@ include_directories(Common Fltk Geo Graphics Mesh Solver Numeric Parser
 # set this for external codes that might include this CMakeList file
 set(GMSH_EXTERNAL_INCLUDE_DIRS ${EXTERNAL_INCLUDES} CACHE 
     STRING "External include directories" FORCE)
-set(GMSH_EXTERNAL_LIBRARIES ${EXTERNAL_LIBRARIES} CACHE 
+set(GMSH_EXTERNAL_LIBRARIES ${LINK_LIBRARIES} CACHE 
     STRING "External libraries" FORCE)
 
 # group sources for easier navigation in IDEs
@@ -1058,12 +1120,13 @@ if(ENABLE_BUILD_LIB)
 endif(ENABLE_BUILD_LIB)
 
 # shared library target
-if(ENABLE_BUILD_SHARED OR ENABLE_WRAP_PYTHON OR ENABLE_WRAP_JAVA)
+if(ENABLE_BUILD_SHARED OR ENABLE_BUILD_DYNAMIC OR 
+   ENABLE_WRAP_PYTHON OR ENABLE_WRAP_JAVA)
   add_library(shared SHARED ${GMSH_SRC})
   set_target_properties(shared PROPERTIES OUTPUT_NAME Gmsh)
   set_target_properties(shared PROPERTIES 
-                        VERSION ${GMSH_MAJOR_VERSION}.${GMSH_MINOR_VERSION}.${GMSH_PATCH_VERSION}
-                        SOVERSION ${GMSH_MAJOR_VERSION}.${GMSH_MINOR_VERSION})
+    VERSION ${GMSH_MAJOR_VERSION}.${GMSH_MINOR_VERSION}.${GMSH_PATCH_VERSION}
+    SOVERSION ${GMSH_MAJOR_VERSION}.${GMSH_MINOR_VERSION})
   if(HAVE_LAPACK AND LAPACK_FLAGS)
     set_target_properties(shared PROPERTIES LINK_FLAGS ${LAPACK_FLAGS})
   endif(HAVE_LAPACK AND LAPACK_FLAGS)
@@ -1072,38 +1135,51 @@ if(ENABLE_BUILD_SHARED OR ENABLE_WRAP_PYTHON OR ENABLE_WRAP_JAVA)
             "won't link. In MSVC change /MT to /MD in the shared project properties")
   endif(MSVC AND ENABLE_MSVC_STATIC_RUNTIME)		  
   target_link_libraries(shared ${LINK_LIBRARIES})
-endif(ENABLE_BUILD_SHARED OR ENABLE_WRAP_PYTHON OR ENABLE_WRAP_JAVA)
+endif(ENABLE_BUILD_SHARED OR ENABLE_BUILD_DYNAMIC OR 
+      ENABLE_WRAP_PYTHON OR ENABLE_WRAP_JAVA)
 
 # binary targets
 if(HAVE_FLTK)
-  add_executable(gmsh WIN32 Fltk/Main.cpp ${GMSH_SRC})
-  add_executable(gmsh_dynamic EXCLUDE_FROM_ALL Fltk/Main.cpp)
-  target_link_libraries(gmsh_dynamic shared)
+  if(ENABLE_BUILD_DYNAMIC)
+    add_executable(gmsh WIN32 Fltk/Main.cpp)
+    target_link_libraries(gmsh shared)
+  else(ENABLE_BUILD_DYNAMIC)
+    add_executable(gmsh WIN32 Fltk/Main.cpp ${GMSH_SRC})
+  endif(ENABLE_BUILD_DYNAMIC)
 elseif(HAVE_QT)
   qt4_wrap_cpp(GMSH_MOC_SRC ${GMSH_MOC_HDR})
   add_executable(gmsh WIN32 Qt/Main.cpp ${GMSH_SRC} ${GMSH_MOC_SRC})
 else(HAVE_FLTK)
-  add_executable(gmsh Common/Main.cpp ${GMSH_SRC})
-  add_executable(gmsh_dynamic EXCLUDE_FROM_ALL Common/Main.cpp)
-  target_link_libraries(gmsh_dynamic shared)
+  if(ENABLE_BUILD_DYNAMIC)
+    add_executable(gmsh Common/Main.cpp)
+    target_link_libraries(gmsh shared)
+  else(ENABLE_BUILD_DYNAMIC)
+    add_executable(gmsh Common/Main.cpp ${GMSH_SRC})
+  endif(ENABLE_BUILD_DYNAMIC)
 endif(HAVE_FLTK)
 target_link_libraries(gmsh ${LINK_LIBRARIES})
 
-# increase stack to 16Mb on Windows to avoid overflows in recursive
-# tet classification for large 3D Delaunay grids + force static
-# linking of system libraries with cygwin/mingw (to ease distribution 
-# andspeed up app startup time)
+# Windows specific linker options
 if(WIN32 AND NOT MSVC OR CYGWIN)
+  set(FLAGS "-Wl,--stack,16777216 -mwindows")
   if(HAVE_64BIT_SIZE_T)
-    set_target_properties(gmsh PROPERTIES LINK_FLAGS 
-      "-Wl,--stack,16777216 ${CMAKE_CURRENT_SOURCE_DIR}/Fltk/Win64Icon.res -mwindows -static")
+    set(FLAGS "${FLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/Fltk/Win64Icon.res")
   else(HAVE_64BIT_SIZE_T)
-    set_target_properties(gmsh PROPERTIES LINK_FLAGS 
-      "-Wl,--stack,16777216 ${CMAKE_CURRENT_SOURCE_DIR}/Fltk/Win32Icon.res -mwindows -static")
+    set(FLAGS "${FLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/Fltk/Win32Icon.res")
   endif(HAVE_64BIT_SIZE_T)
-  # remove stupid -Wl,-Bdynamic flags
-  set(CMAKE_EXE_LINK_DYNAMIC_C_FLAGS)
-  set(CMAKE_EXE_LINK_DYNAMIC_CXX_FLAGS)
+  if(ENABLE_BUILD_DYNAMIC)
+    set_target_properties(gmsh PROPERTIES 
+                          LINK_FLAGS "${FLAGS} -Wl,--enable-auto-import")
+    set_target_properties(shared PROPERTIES 
+                          PREFIX "lib"
+                          LINK_FLAGS "${FLAGS} -Wl,--export-all-symbols")
+  else(ENABLE_BUILD_DYNAMIC)
+    set_target_properties(gmsh PROPERTIES 
+                          LINK_FLAGS "${FLAGS} -static")
+    # remove -Wl,-Bdynamic flags
+    set(CMAKE_EXE_LINK_DYNAMIC_C_FLAGS)
+    set(CMAKE_EXE_LINK_DYNAMIC_CXX_FLAGS)
+  endif(ENABLE_BUILD_DYNAMIC)
 elseif(MSVC)
   set_target_properties(gmsh PROPERTIES LINK_FLAGS "/STACK:16777216")
 endif(WIN32 AND NOT MSVC OR CYGWIN)
@@ -1132,6 +1208,7 @@ endif(UNIX)
 set(WELCOME_FILE ${CMAKE_CURRENT_SOURCE_DIR}/doc/WELCOME.txt)
 set(LICENSE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/doc/LICENSE.txt)
 set(CREDITS_FILE ${CMAKE_CURRENT_SOURCE_DIR}/doc/CREDITS.txt)
+set(ONELAB_PY ${CMAKE_CURRENT_SOURCE_DIR}/contrib/onelab/python/onelab.py)
 file(GLOB TUTORIAL_FILES ${CMAKE_CURRENT_SOURCE_DIR}/tutorial/?*.*)
 file(GLOB DEMO_FILES ${CMAKE_CURRENT_SOURCE_DIR}/demos/?*.*)
 set(TEX_DIR ${CMAKE_CURRENT_SOURCE_DIR}/doc/texinfo)
@@ -1161,10 +1238,12 @@ endmacro(unix2dos)
 if(WIN32 OR CYGWIN)
   if(ENABLE_OS_SPECIFIC_INSTALL)
     set(GMSH_BIN .)
+    set(GMSH_LIB .)
     set(GMSH_DOC .)
     set(GMSH_MAN .)
   else(ENABLE_OS_SPECIFIC_INSTALL)
     set(GMSH_BIN bin)
+    set(GMSH_LIB lib)
     set(GMSH_DOC share/doc/gmsh)
     set(GMSH_MAN share/man/man1)
   endif(ENABLE_OS_SPECIFIC_INSTALL)
@@ -1180,10 +1259,12 @@ elseif(APPLE AND ENABLE_OS_SPECIFIC_INSTALL)
   # set these so that the files get installed nicely in the MacOSX
   # .app bundle
   set(GMSH_BIN ../MacOS)
+  set(GMSH_LIB ../MacOS)
   set(GMSH_DOC ../../..)
   set(GMSH_MAN ../../..)
 else(WIN32 OR CYGWIN)
   set(GMSH_BIN bin)
+  set(GMSH_LIB lib)
   set(GMSH_DOC share/doc/gmsh)
   set(GMSH_MAN share/man/man1)
 endif(WIN32 OR CYGWIN)
@@ -1192,11 +1273,13 @@ endif(WIN32 OR CYGWIN)
 # (e.g. "make lib" or "make shared" followed by "make install/fast")
 install(TARGETS gmsh DESTINATION ${GMSH_BIN} OPTIONAL)
 if(ENABLE_BUILD_LIB)
-  install(TARGETS lib DESTINATION lib OPTIONAL)
+  install(TARGETS lib DESTINATION ${GMSH_LIB} OPTIONAL)
 endif(ENABLE_BUILD_LIB)
-if(ENABLE_BUILD_SHARED)
-  install(TARGETS shared DESTINATION lib OPTIONAL)
-endif(ENABLE_BUILD_SHARED)
+if(ENABLE_BUILD_SHARED OR ENABLE_BUILD_DYNAMIC)
+  install(TARGETS shared DESTINATION ${GMSH_LIB} OPTIONAL)
+endif(ENABLE_BUILD_SHARED OR ENABLE_BUILD_DYNAMIC)
+
+install(FILES ${ONELAB_PY} DESTINATION ${GMSH_BIN})
 install(FILES ${GMSH_API} DESTINATION include/gmsh)
 install(FILES ${WELCOME_FILE} DESTINATION ${GMSH_DOC} RENAME README.txt)
 install(FILES ${LICENSE_FILE} DESTINATION ${GMSH_DOC})
@@ -1206,6 +1289,16 @@ install(FILES ${DEMO_FILES} DESTINATION ${GMSH_DOC}/demos)
 if(UNIX AND NOT CYGWIN)
   install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/doc/gmsh.1 DESTINATION ${GMSH_MAN})
 endif(UNIX AND NOT CYGWIN)
+
+add_custom_target(getHeaders
+  COMMAND ${CMAKE_COMMAND} -E remove_directory Headers
+  COMMAND ${CMAKE_COMMAND} -E make_directory Headers/gmsh
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+  foreach(FILE ${GMSH_API})
+    add_custom_command(TARGET getHeaders POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy
+        ${FILE} ${CMAKE_CURRENT_BINARY_DIR}/Headers/gmsh/
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+  endforeach(FILE)
 
 find_program(MAKEINFO makeinfo)
 if(MAKEINFO)
@@ -1372,5 +1465,9 @@ message(STATUS "")
 message(STATUS "Run 'ccmake ${CMAKE_CURRENT_SOURCE_DIR}' to fine-tune the configuration.")
 message(STATUS "")
 
-mark_as_advanced(BISON FLEX GMP_LIB GMSH_EXTRA_VERSION HDF5_LIB MAKEINFO 
-                 MED_LIB OCC_INC CGNS_INC SZ_LIB TAUCS_LIB ACIS_LIB TEXI2PDF)
+mark_as_advanced(GMSH_EXTRA_VERSION 
+                 ANN_INC ANN_LIB GMM_INC GMP_INC GMP_LIB MMG3D_INC MMG3D_LIB
+                 TAUCS_INC TAUCS_LIB HDF5_LIB ACIS_LIB MED_LIB OCC_INC OCC_CONFIG_H
+                 CGNS_INC SZ_LIB PETSC_LIBS SLEPC_INC SLEPC_INC2 SLEPC_LIB
+                 BISON FLEX MAKEINFO TEXI2PDF FLTK_CONFIG_SCRIPT
+                 GMSH_EXTERNAL_INCLUDE_DIRS GMSH_EXTERNAL_LIBRARIES)

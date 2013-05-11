@@ -57,6 +57,7 @@ class MHexahedron : public MElement {
   virtual int getDim() const { return 3; }
   virtual int getNumVertices() const { return 8; }
   virtual MVertex *getVertex(int num){ return _v[num]; }
+  virtual const MVertex *getVertex(int num) const { return _v[num]; }
   virtual void setVertex(int num,  MVertex *v){ _v[num] = v; }
   virtual const nodalBasis* getFunctionSpace(int o=-1) const;
   virtual const JacobianBasis* getJacobianFuncSpace(int o=-1) const;
@@ -66,7 +67,7 @@ class MHexahedron : public MElement {
     return getVertex(map[num]);
   }
   virtual int getNumEdges(){ return 12; }
-  virtual MEdge getEdge(int num)
+  virtual MEdge getEdge(int num) const
   {
     return MEdge(_v[edges_hexa(num, 0)], _v[edges_hexa(num, 1)]);
   }
@@ -120,14 +121,14 @@ class MHexahedron : public MElement {
   virtual const char *getStringForBDF() const { return "CHEXA"; }
   virtual const char *getStringForDIFF() const { return "ElmB8n3D"; }
   virtual const char *getStringForINP() const { return "C3D8"; }
-  virtual void revert()
+  virtual void reverse()
   {
     MVertex *tmp;
     tmp = _v[0]; _v[0] = _v[2]; _v[2] = tmp;
     tmp = _v[4]; _v[4] = _v[6]; _v[6] = tmp;
   }
   virtual int getVolumeSign();
-  virtual void getNode(int num, double &u, double &v, double &w)
+  virtual void getNode(int num, double &u, double &v, double &w) const
   {
     switch(num) {
     case 0 : u = -1.; v = -1.; w = -1.; break;
@@ -141,11 +142,11 @@ class MHexahedron : public MElement {
     default: u =  0.; v =  0.; w =  0.; break;
     }
   }
-  virtual SPoint3 barycenterUVW()
+  virtual SPoint3 barycenterUVW() const
   {
     return SPoint3(0., 0., 0.);
   }
-  virtual bool isInside(double u, double v, double w)
+  virtual bool isInside(double u, double v, double w) const
   {
     double tol = _isInsideTolerance;
     if(u < -(1. + tol) || v < -(1. + tol) || w < -(1. + tol) ||
@@ -228,6 +229,7 @@ class MHexahedron20 : public MHexahedron {
   virtual int getPolynomialOrder() const { return 2; }
   virtual int getNumVertices() const { return 20; }
   virtual MVertex *getVertex(int num){ return num < 8 ? _v[num] : _vs[num - 8]; }
+  virtual const MVertex *getVertex(int num) const { return num < 8 ? _v[num] : _vs[num - 8]; }
   virtual MVertex *getVertexUNV(int num)
   {
     static const int map[20] = {0, 8, 1, 11, 2, 13, 3, 9, 10, 12,
@@ -248,46 +250,16 @@ class MHexahedron20 : public MHexahedron {
     return getVertex(map[num]);
   }
   virtual int getNumEdgeVertices() const { return 12; }
-  virtual int getNumEdgesRep(){ return 24; }
-  virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n)
-  {
-    static const int e[24][2] = {
-      {0, 8}, {8, 1},
-      {0, 9}, {9, 3},
-      {0, 10}, {10, 4},
-      {1, 11}, {11, 2},
-      {1, 12}, {12, 5},
-      {2, 13}, {13, 3},
-      {2, 14}, {14, 6},
-      {3, 15}, {15, 7},
-      {4, 16}, {16, 5},
-      {4, 17}, {17, 7},
-      {5, 18}, {18, 6},
-      {6, 19}, {19, 7}
-    };
-    static const int f[12] = {0, 0, 1, 0, 1, 0, 3, 2, 1, 2, 3, 4};
-    _getEdgeRep(getVertex(e[num][0]), getVertex(e[num][1]), x, y, z, n, f[num / 2]);
-  }
+  virtual int getNumEdgesRep();
+  virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n);
   virtual void getEdgeVertices(const int num, std::vector<MVertex*> &v) const
   {
     v.resize(3);
     MHexahedron::_getEdgeVertices(num, v);
     v[2] = _vs[num];
   }
-  virtual int getNumFacesRep(){ return 36; }
-  virtual void getFaceRep(int num, double *x, double *y, double *z, SVector3 *n)
-  {
-    static const int f[36][3] = {
-      {0, 9, 8}, {3, 13, 9}, {2, 11, 13}, {1, 8, 11}, {8, 9, 13}, {8, 13, 11},
-      {0, 8, 10}, {1, 12, 8}, {5, 16, 12}, {4, 10, 16}, {8, 12, 16}, {8, 16, 10},
-      {0, 10, 9}, {4, 17, 10}, {7, 15, 17}, {3, 9, 7}, {9, 10, 17}, {9, 17, 15},
-      {1, 11, 12}, {2, 14, 11}, {6, 18, 14}, {5, 12, 18}, {11, 14, 18}, {11, 18, 12},
-      {2, 13, 14}, {3, 15, 13}, {7, 19, 15}, {6, 14, 19}, {13, 15, 19}, {13, 19, 14},
-      {4, 16, 17}, {5, 18, 16}, {6, 19, 18}, {7, 17, 19}, {16, 18, 19}, {16, 19, 17}
-    };
-    _getFaceRep(getVertex(f[num][0]), getVertex(f[num][1]), getVertex(f[num][2]),
-                x, y, z, n);
-  }
+  virtual int getNumFacesRep();
+  virtual void getFaceRep(int num, double *x, double *y, double *z, SVector3 *n);
   virtual void getFaceVertices(const int num, std::vector<MVertex*> &v) const
   {
     v.resize(8);
@@ -311,7 +283,7 @@ class MHexahedron20 : public MHexahedron {
   virtual const char *getStringForBDF() const { return "CHEXA"; }
   virtual const char *getStringForINP() const { return "C3D20"; }
   virtual const char *getStringForDIFF() const { return "ElmB20n3D"; }
-  virtual void revert()
+  virtual void reverse()
   {
     MVertex *tmp;
     tmp = _v[0]; _v[0] = _v[2]; _v[2] = tmp;
@@ -324,7 +296,7 @@ class MHexahedron20 : public MHexahedron {
     _vs[8] = old[10]; _vs[10] = old[8];
     _vs[9] = old[11]; _vs[11] = old[9];
   }
-  virtual void getNode(int num, double &u, double &v, double &w)
+  virtual void getNode(int num, double &u, double &v, double &w) const
   {
     num < 8 ? MHexahedron::getNode(num, u, v, w) : MElement::getNode(num, u, v, w);
   }
@@ -374,6 +346,8 @@ class MHexahedron27 : public MHexahedron {
   virtual int getPolynomialOrder() const { return 2; }
   virtual int getNumVertices() const { return 27; }
   virtual MVertex *getVertex(int num){ return num < 8 ? _v[num] : _vs[num - 8]; }
+  virtual const MVertex *getVertex(int num) const { return num < 8 ? _v[num] : _vs[num - 8]; }
+
   virtual MVertex *getVertexDIFF(int num)
   {
     static const int map[27] = {6, 8, 26, 24, 0, 2, 20, 18, 7, 15, 3, 17, 5, 25,
@@ -383,52 +357,16 @@ class MHexahedron27 : public MHexahedron {
   virtual int getNumEdgeVertices() const { return 12; }
   virtual int getNumFaceVertices() const { return 6; }
   virtual int getNumVolumeVertices() const { return 1; }
-  virtual int getNumEdgesRep(){ return 24; }
-  virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n)
-  {
-    static const int e[24][2] = {
-      {0, 8}, {8, 1},
-      {0, 9}, {9, 3},
-      {0, 10}, {10, 4},
-      {1, 11}, {11, 2},
-      {1, 12}, {12, 5},
-      {2, 13}, {13, 3},
-      {2, 14}, {14, 6},
-      {3, 15}, {15, 7},
-      {4, 16}, {16, 5},
-      {4, 17}, {17, 7},
-      {5, 18}, {18, 6},
-      {6, 19}, {19, 7}
-    };
-    static const int f[12] = {0, 0, 1, 0, 1, 0, 3, 2, 1, 2, 3, 4};
-    _getEdgeRep(getVertex(e[num][0]), getVertex(e[num][1]), x, y, z, n, f[num / 2]);
-  }
+  virtual int getNumEdgesRep();
+  virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n);
   virtual void getEdgeVertices(const int num, std::vector<MVertex*> &v) const
   {
     v.resize(3);
     MHexahedron::_getEdgeVertices(num, v);
     v[2] = _vs[num];
   }
-  virtual int getNumFacesRep(){ return 48; }
-  virtual void getFaceRep(int num, double *x, double *y, double *z, SVector3 *n)
-  {
-    static const int f[48][3] = {
-      {0, 9, 20}, {0, 20, 8}, {3, 13, 20}, {3, 20, 9},
-      {2, 11, 20}, {2, 20, 13}, {1, 8, 20}, {1, 20, 11},
-      {0, 8, 21}, {0, 21, 10}, {1, 12, 21}, {1, 21, 8},
-      {5, 16, 21}, {5, 21, 12}, {4, 10, 21}, {4, 21, 16},
-      {0, 10, 22}, {0, 22, 9}, {4, 17, 22}, {4, 22, 10},
-      {7, 15, 22}, {7, 22, 17}, {3, 9, 22}, {3, 22, 15},
-      {1, 11, 23}, {1, 23, 12}, {2, 14, 23}, {2, 23, 11},
-      {6, 18, 23}, {6, 23, 14}, {5, 12, 23}, {5, 23, 18},
-      {2, 13, 24}, {2, 24, 14}, {3, 15, 24}, {3, 24, 13},
-      {7, 19, 24}, {7, 24, 15}, {6, 14, 24}, {6, 24, 19},
-      {4, 16, 25}, {4, 25, 17}, {5, 18, 25}, {5, 25, 16},
-      {6, 19, 25}, {6, 25, 18}, {7, 17, 25}, {7, 25, 19}
-    };
-    _getFaceRep(getVertex(f[num][0]), getVertex(f[num][1]), getVertex(f[num][2]),
-                x, y, z, n);
-  }
+  virtual int getNumFacesRep();
+  virtual void getFaceRep(int num, double *x, double *y, double *z, SVector3 *n);
   virtual void getFaceVertices(const int num, std::vector<MVertex*> &v) const
   {
     v.resize(9);
@@ -450,7 +388,7 @@ class MHexahedron27 : public MHexahedron {
   virtual int getTypeForMSH() const { return MSH_HEX_27; }
   virtual const char *getStringForPOS() const { return "SH2"; }
   virtual const char *getStringForDIFF() const { return "ElmB27n3D"; }
-  virtual void revert()
+  virtual void reverse()
   {
     MVertex *tmp;
     tmp = _v[0]; _v[0] = _v[2]; _v[2] = tmp;
@@ -467,7 +405,7 @@ class MHexahedron27 : public MHexahedron {
     _vs[13] = old[15]; _vs[15] = old[13];
     _vs[14] = old[16]; _vs[16] = old[14];
   }
-  virtual void getNode(int num, double &u, double &v, double &w)
+  virtual void getNode(int num, double &u, double &v, double &w) const
   {
     num < 8 ? MHexahedron::getNode(num, u, v, w) : MElement::getNode(num, u, v, w);
   }
@@ -524,6 +462,8 @@ class MHexahedronN : public MHexahedron {
   virtual int getPolynomialOrder() const { return (int)_order; }
   virtual int getNumVertices() const { return 8 + _vs.size(); }
   virtual MVertex *getVertex(int num){ return num < 8 ? _v[num] : _vs[num - 8]; }
+  virtual const MVertex *getVertex(int num) const { return num < 8 ? _v[num] : _vs[num - 8]; }
+
   virtual int getNumEdgeVertices() const { return 12 * (_order - 1); }
   virtual int getNumFaceVertices() const { return 6 * (_order - 1)*(_order - 1); }
   virtual int getNumVolumeVertices() const
@@ -596,11 +536,11 @@ class MHexahedronN : public MHexahedron {
   }
   virtual int getNumFacesRep();
   virtual void getFaceRep(int num, double *x, double *y, double *z, SVector3 *n);
-  virtual void revert()
+  virtual void reverse()
   {
-    Msg::Error("Revert not implemented yet for MHexahedronN");
+    Msg::Error("Reverse not implemented yet for MHexahedronN");
   }
-  virtual void getNode(int num, double &u, double &v, double &w)
+  virtual void getNode(int num, double &u, double &v, double &w) const
   {
     num < 8 ? MHexahedron::getNode(num, u, v, w) : MElement::getNode(num, u, v, w);
   }

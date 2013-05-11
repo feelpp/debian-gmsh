@@ -194,8 +194,10 @@ Ruled                   return tRuled;
 Rand                    return tRand;
 RefineMesh              return tRefineMesh;
 Return                  return tReturn;
+Reverse                 return tReverse;
 
 Smoother                return tSmoother;
+SetOrder                return tSetOrder;
 Sqrt                    return tSqrt;
 Sin                     return tSin;
 Sinh                    return tSinh;
@@ -214,6 +216,7 @@ SyncModel               return tSyncModel;
 
 T2                      return tText2D;
 T3                      return tText3D;
+TextAttributes          return tTextAttributes;
 TIME                    return tTime;
 Transfinite             return tTransfinite;
 Transf[qQ]uad[tT]ri     return tTransfQuadTri;
@@ -222,6 +225,7 @@ Tanh                    return tTanh;
 Tan                     return tTan;
 Today                   return tToday;
 
+UndefineConstant        return tUndefineConstant;
 Using                   return tUsing;
 
 Volume                  return tVolume;

@@ -17,6 +17,7 @@
 #include "GRegion.h"
 #include "SPoint3.h"
 #include "SBoundingBox3d.h"
+#include "boundaryLayersData.h"
 template <class scalar> class simpleFunction;
 
 class FM_Internals;
@@ -151,9 +152,14 @@ class GModel
   std::set<int> meshPartitions;
   int partitionSize[2];
 
+  // boundary layer columns i.e. list of vertices that form columns
+  // in boundary layers
+  BoundaryLayerColumns _columns; 
+
  public:
   GModel(std::string name="");
   virtual ~GModel();
+
 
   // the static list of all loaded models
   static std::vector<GModel*> list;
@@ -266,6 +272,9 @@ class GModel
   std::vector<GEdge*> bindingsGetEdges();
   std::vector<GVertex*> bindingsGetVertices();
 
+  // get the boundary layer columns
+  BoundaryLayerColumns *getColumns () {return &_columns;}
+
   // add/remove an entity in the model
   void add(GRegion *r) { regions.insert(r); }
   void add(GFace *f) { faces.insert(f); }
@@ -280,7 +289,7 @@ class GModel
   void snapVertices();
 
   // fill a vector containing all the entities in the model
-  void getEntities(std::vector<GEntity*> &entities);
+  void getEntities(std::vector<GEntity*> &entities) const;
 
   // return the highest number associated with an elementary entity of
   // a given dimension (or the highest overall if dim < 0)
@@ -360,7 +369,7 @@ class GModel
   void setMeshElementIndex(MElement *e, int index);
 
   // return the total number of vertices in the mesh
-  int getNumMeshVertices();
+  int getNumMeshVertices() const;
 
   // access a mesh vertex by tag, using the vertex cache
   MVertex *getMeshVertexByTag(int n);
@@ -659,7 +668,7 @@ class GModel
 
   // Abaqus
   int writeINP(const std::string &name, bool saveAll=false,
-               double scalingFactor=1.0);
+               bool saveGroupsOfNodes=false, double scalingFactor=1.0);
 
   // Geomview mesh
   int readGEOM(const std::string &name);

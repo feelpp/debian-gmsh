@@ -979,6 +979,7 @@ parsing of the script file:
   @var{built-in-function} |
   @var{real-option} |
   StrFind(@var{char-expression}, @var{char-expression}) |
+  TextAttributes(@var{char-expression}<,@var{char-expression}@dots{}>)|
   GetValue("@var{string}", @var{expression})
 @end example
 
@@ -992,7 +993,8 @@ in @ref{Operators}. For the definition of @w{@var{built-in-function}s},
 see @ref{Built-in functions}. The various @w{@var{real-option}s} are
 listed in @ref{Options}. @code{StrFind} searches the first
 @var{char-expression} for any occurrence of the second
-@var{char-expression}.
+@var{char-expression}. @code{TextAttributes} creates attributes for text
+strings.
 
 The last case in the definition allows to ask the user for a value
 interactively. For example, inserting @code{GetValue("Value of parameter
@@ -1670,6 +1672,9 @@ Refines the current mesh by splitting all elements. If
 @code{Mesh.SecondOrderLinear} is set, the new vertices are inserted by
 linear interpolatinon. Otherwise they are snapped on the actual
 geometry.
+
+@item SetOrder @var{expression};
+Changes the order of the elements in the current mesh.
 
 @item Print @var{char-expression};
 Prints the graphic window in a file named @var{char-expression}, using
@@ -2511,7 +2516,7 @@ the GUI by selecting `Apply as background mesh' in the post-processing
 view option menu.)
 @item 
 A @code{Box} field specifies the size of the elements inside and outside
-of a parallelipipedic region.
+of a parallelepipedic region.
 @item 
 A @code{Threshold} field specifies the size of the mesh according to the
 distance to some geometrical entities. These entities can for example be
@@ -2705,6 +2710,9 @@ difference (in degrees) allowed between the largest angle of a
 quadrangle and a right angle (a value of 0 would only accept quadrangles
 with right angles; a value of 90 would allow degenerate quadrangles;
 default value is 45).
+
+@item Reverse Line | Surface @{ @var{expression-list} @} ;
+Reverses the mesh of the given line(s) or surface(s).
 
 @item Save @var{char-expression};
 Saves the mesh in a file named @var{char-expression}, using the current
@@ -3451,7 +3459,8 @@ entity to which the element belongs; the second is the number of the
 elementary geometrical entity to which the element belongs; the third is
 the number of mesh partitions to which the element belongs, followed by
 the partition ids (negative partition ids indicate ghost cells). A zero
-tag is equivalent to no tag.
+tag is equivalent to no tag. Gmsh and most codes using the MSH 2 format
+require at least the first two tags (physical and elementary tags).
 
 @item @var{node-number-list}
 is the list of the node numbers of the @var{n}-th element. The ordering of

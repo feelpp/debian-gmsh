@@ -17,6 +17,7 @@
 #include "Options.h"
 #include "Context.h"
 #include "OpenFile.h"
+#include "StringUtils.h"
 #include "OS.h"
 
 #if defined(HAVE_ONELAB)
@@ -112,6 +113,28 @@ void Msg::Init(int argc, char **argv)
     if(i) _commandLine += " ";
     _commandLine += argv[i];
   }
+
+  if(argc && argv){
+    CTX::instance()->argv0 = std::string(argv[0]);
+    std::vector<std::string> split = SplitFileName(CTX::instance()->argv0);
+
+    // add the directory where the binary is installed to the path where Python
+    // looks for modules
+    std::string path;
+    char *tmp = getenv("PYTHONPATH");
+    if(tmp){
+      path = tmp;
+#if defined(WIN32)
+      path += ";" + split[0];
+#else
+      path += ":" + split[0];
+#endif
+    }
+    else
+      path = split[0];
+    SetEnvironmentVar("PYTHONPATH", path.c_str());
+  }
+
   InitializeOnelab("Gmsh");
 }
 
@@ -352,6 +375,10 @@ void Msg::Info(const char *fmt, ...)
     fflush(stdout);
   }
 }
+void Msg::RequestRender()
+{
+  if(_callback) (*_callback)("RequestRender", "");
+}
 
 void Msg::Direct(const char *fmt, ...)
 {
@@ -487,7 +514,7 @@ void Msg::ProgressMeter(int n, int N, bool log, const char *fmt, ...)
       FlGui::instance()->setProgress(str, (n > N - 1) ? 0 : n, 0, N);
     }
 #endif
-
+    if(_callback) (*_callback)("Progress", str);
     if(!streamIsFile(stdout) && log && CTX::instance()->terminal){
       fprintf(stdout, "%s                                          \r",
               (n > N - 1) ? "" : str2);
@@ -954,6 +981,14 @@ void Msg::ExchangeOnelabParameter(const std::string &key,
     ps[0].setAttribute("MultipleSelection", copt["MultipleSelection"][0]);
   _setStandardOptions(&ps[0], fopt, copt);
   _onelabClient->set(ps[0]);
+#endif
+}
+
+void Msg::UndefineOnelabParameter(const std::string &name)
+{
+#if defined(HAVE_ONELAB)
+  if(!_onelabClient) return;
+  _onelabClient->clear(name);
 #endif
 }
 

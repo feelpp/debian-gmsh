@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <FL/Fl_Tooltip.H>
 #include "openglWindow.h"
 #include "graphicWindow.h"
 #include "manipWindow.h"
@@ -18,7 +19,26 @@
 #include "FlGui.h"
 #include "drawContext.h"
 #include "Context.h"
-#include <FL/Fl_Tooltip.H>
+#include "Trackball.h"
+#include "GamePad.h"
+
+// Navigator handler (read gamepad event if gamepad exists or question presence of gamepad)
+static void navigator_handler(void *data)
+{
+  openglWindow* gl_win = (openglWindow*)data;
+  if (CTX::instance()->gamepad && CTX::instance()->gamepad->active) {
+    if (gl_win->Nautilus ==0){
+      gl_win->Nautilus = new Navigator(CTX::instance()->gamepad->frequency,gl_win->getDrawContext());
+    }
+    gl_win->moveWithGamepad();
+    Fl::add_timeout(CTX::instance()->gamepad->frequency, navigator_handler, data);
+  }
+  else{
+    if (gl_win->Nautilus){ delete      gl_win->Nautilus;  gl_win->Nautilus=0; }
+    Fl::add_timeout(3., navigator_handler, data);
+  }
+}
+
 
 static void lassoZoom(drawContext *ctx, mousePosition &click1, mousePosition &click2)
 {
@@ -40,8 +60,8 @@ static void lassoZoom(drawContext *ctx, mousePosition &click1, mousePosition &cl
 }
 
 openglWindow::openglWindow(int x, int y, int w, int h)
-  : Fl_Gl_Window(x, y, w, h, "gl"), _lock(false),
-    _selection(ENT_NONE), _trySelection(0)
+  :  Fl_Gl_Window(x, y, w, h, "gl"), _lock(false), _drawn(false),
+     _selection(ENT_NONE), _trySelection(0), Nautilus(0)
 {
   _ctx = new drawContext();
   for(int i = 0; i < 3; i++) _point[i] = 0.;
@@ -50,11 +70,14 @@ openglWindow::openglWindow(int x, int y, int w, int h)
 
   addPointMode = lassoMode = selectionMode = false;
   endSelection = undoSelection = invertSelection = quitSelection = 0;
+
+  if(CTX::instance()->gamepad)   Fl::add_timeout(.5, navigator_handler, (void*)this);
 }
 
 openglWindow::~openglWindow()
 {
   delete _ctx;
+  if(Nautilus) delete Nautilus;
 }
 
 void openglWindow::_drawScreenMessage()
@@ -119,6 +142,7 @@ void openglWindow::draw()
   // that we don't fire draw() while we are already drawing, e.g. due to an
   // impromptu Fl::check(). The same lock is also used in _select to guarantee
   // that we don't mix GL_RENDER and GL_SELECT rendering passes.
+  _drawn = true;
   if(_lock) return;
   _lock = true;
 
@@ -217,8 +241,10 @@ void openglWindow::draw()
       cam->giveViewportDimension(_ctx->viewport[2],_ctx->viewport[3]);
       glMatrixMode(GL_PROJECTION);
       glLoadIdentity();
+
       glFrustum(cam->glFleft, cam->glFright, cam->glFbottom,
-                cam->glFtop, cam->glFnear, cam->glFfar);
+                cam->glFtop, cam->glFnear , cam->glFfar*cam->Lc );
+
       glMatrixMode(GL_MODELVIEW);
       glLoadIdentity();
       glDrawBuffer(GL_BACK);
@@ -229,12 +255,14 @@ void openglWindow::draw()
 		cam->up.x,cam->up.y,cam->up.z);
       _ctx->draw3d();
       _ctx->draw2d();
+      if(CTX::instance()->gamepad && CTX::instance()->gamepad->active && Nautilus) Nautilus->drawIcons();
+     
       _drawScreenMessage();
       _drawBorder();
     }
     else if(CTX::instance()->stereo){
       Camera *cam = &(_ctx->camera);
-      if(!cam->on) cam->init();
+      if(!cam->on ) cam->init();
       cam->giveViewportDimension(_ctx->viewport[2], _ctx->viewport[3]);
       XYZ eye = cam->eyesep / 2.0 * cam->right;
       // right eye
@@ -244,7 +272,7 @@ void openglWindow::draw()
       double right  =   cam->screenratio * cam->wd2 - 0.5 * cam->eyesep * cam->ndfl;
       double top    =   cam->wd2;
       double bottom = - cam->wd2;
-      glFrustum(left, right, bottom, top, cam->glFnear, cam->glFfar);
+      glFrustum(left, right, bottom, top, cam->glFnear, cam->glFfar*cam->Lc);
       glMatrixMode(GL_MODELVIEW);
       glDrawBuffer(GL_BACK_RIGHT);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -263,7 +291,7 @@ void openglWindow::draw()
       right  =   cam->screenratio * cam->wd2 + 0.5 * cam->eyesep * cam->ndfl;
       top    =   cam->wd2;
       bottom = - cam->wd2;
-      glFrustum(left, right, bottom, top, cam->glFnear, cam->glFfar);
+      glFrustum(left, right, bottom, top, cam->glFnear, cam->glFfar*cam->Lc);
 
       glMatrixMode(GL_MODELVIEW);
       glDrawBuffer(GL_BACK_LEFT);
@@ -709,4 +737,15 @@ void openglWindow::drawTooltip(const std::string &text)
   Fl_Tooltip::delay(d1);
   Fl_Tooltip::hoverdelay(d2);
   if(!enabled) Fl_Tooltip::disable();
+}
+
+void openglWindow::moveWithGamepad()
+{
+  if(CTX::instance()->gamepad && CTX::instance()->gamepad->active && Nautilus){
+    if(!(_ctx->camera.on)) _ctx->camera.init();
+    if(_drawn && (_lastHandled == this || _lastHandled == 0)){
+      Nautilus->move();
+      this->flush();
+    }
+  }
 }

@@ -174,7 +174,7 @@ class PViewData {
                            double &x, double &y, double &z, double &style){}
 
   // change the orientation of the ele-th element
-  virtual void revertElement(int step, int ent, int ele){}
+  virtual void reverseElement(int step, int ent, int ele){}
 
   // check if the view is empty
   virtual bool empty();
@@ -233,6 +233,9 @@ class PViewData {
 
   // is the view a list-based dataset
   virtual bool isListBased(){ return false; }
+
+  // get (approx) memry used by data in Mb
+  virtual double getMemoryInMb(){ return 0; }
 
   // get GModel (if view supports it)
   virtual GModel *getModel(int step);

@@ -118,32 +118,12 @@ struct swapquad{
     std::sort(v, v + 4);
   }
 };
-
-class Temporary{
-  private :
-        static double w1,w2,w3;
-        static std::vector<SVector3> gradients;
-        void read_data(std::string);
-        static SVector3 compute_normal(MElement*);
-        static SVector3 compute_other_vector(MElement*);
-        static SVector3 compute_gradient(MElement*);
-  public :
-        Temporary();
-        ~Temporary();
-        void quadrilaterize(std::string,double,double,double);
-        static double compute_total_cost(double,double);
-        static void select_weights(double,double,double);
-        static double compute_alignment(const MEdge&,MElement*,MElement*);
-};
       
 struct RecombineTriangle
 {
   MElement *t1, *t2;
   double angle;
-  double cost_quality; //addition for class Temporary
-  double cost_alignment; //addition for class Temporary
-  double total_cost; //addition for class Temporary
-  double total_gain;
+  double quality;
   MVertex *n1, *n2, *n3, *n4;
   RecombineTriangle(const MEdge &me, MElement *_t1, MElement *_t2)
     : t1(_t1), t2(_t2)
@@ -161,26 +141,44 @@ struct RecombineTriangle
     MQuadrangle q (n1,n3,n2,n4);
     angle = q.etaShapeMeasure();
 
-    /*
     double a1 = 180 * angle3Vertices(n1, n4, n2) / M_PI;
     double a2 = 180 * angle3Vertices(n4, n2, n3) / M_PI;
     double a3 = 180 * angle3Vertices(n2, n3, n1) / M_PI;
     double a4 = 180 * angle3Vertices(n3, n1, n4) / M_PI;
-    angle = fabs(90. - a1);
-    angle = std::max(fabs(90. - a2),angle);
-    angle = std::max(fabs(90. - a3),angle);
-    angle = std::max(fabs(90. - a4),angle);
-    */
-    cost_quality = 1.0 - std::max(1.0 - angle/90.0,0.0); //addition for class Temporary
-    cost_alignment = Temporary::compute_alignment(me,_t1,_t2); //addition for class Temporary
-    total_cost = Temporary::compute_total_cost(cost_quality,cost_alignment); //addition for class Temporary
-    total_cost = 100.0*cost_alignment; //addition for class Temporary
-    total_gain = 101. - total_cost;
+    quality = fabs(90. - a1);
+    quality = std::max(fabs(90. - a2),quality);
+    quality = std::max(fabs(90. - a3),quality);
+    quality = std::max(fabs(90. - a4),quality);
   }
   bool operator < (const RecombineTriangle &other) const
   {
-    //return angle < other.angle;
-    return total_cost < other.total_cost; //addition for class Temporary
+    return quality < other.quality;
   }
 };
+
+/***************************************************/
+/******************class Temporary******************/
+/***************************************************/
+
+class Temporary{ 	 	 
+ private : 	 	 
+  static double w1,w2,w3; 	 	 
+  static std::vector<SVector3> gradients; 	 	 
+  void read_data(std::string); 	 	 
+  static SVector3 compute_normal(MElement*); 	 	 
+  static SVector3 compute_other_vector(MElement*); 	 	 
+  static SVector3 compute_gradient(MElement*); 	 	 
+ public : 	 	 
+  Temporary(); 	 	 
+  ~Temporary(); 	 	 
+  void quadrilaterize(std::string,double,double,double); 	 	 
+  static double compute_total_cost(double,double); 	 	 
+  static void select_weights(double,double,double); 	 	 
+  static double compute_alignment(const MEdge&,MElement*,MElement*); 	 	 
+};
+
+/***************************************************/
+/***************************************************/
+/***************************************************/
+
 #endif

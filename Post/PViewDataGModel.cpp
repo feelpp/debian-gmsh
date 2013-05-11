@@ -632,9 +632,9 @@ int PViewDataGModel::getType(int step, int ent, int ele)
   return _getElement(step, ent, ele)->getType();
 }
 
-void PViewDataGModel::revertElement(int step, int ent, int ele)
+void PViewDataGModel::reverseElement(int step, int ent, int ele)
 {
-  if(!step) _getElement(step, ent, ele)->revert();
+  if(!step) _getElement(step, ent, ele)->reverse();
 }
 
 void PViewDataGModel::smooth()
@@ -677,6 +677,14 @@ void PViewDataGModel::smooth()
   _steps = _steps2;
   _type = NodeData;
   finalize();
+}
+
+double PViewDataGModel::getMemoryInMb()
+{
+  double m = 0.;
+  for(unsigned int i = 0; i < _steps.size(); i++)
+    m += _steps[i]->getMemoryInMb();
+  return m;
 }
 
 bool PViewDataGModel::combineTime(nameData &nd)

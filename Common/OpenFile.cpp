@@ -100,6 +100,7 @@ void SetBoundingBox(double xmin, double xmax,
                              SQU(CTX::instance()->max[2] - CTX::instance()->min[2]));
   for(int i = 0; i < 3; i++)
     CTX::instance()->cg[i] = 0.5 * (CTX::instance()->min[i] + CTX::instance()->max[i]);
+
 }
 
 void SetBoundingBox(bool aroundVisible)
@@ -116,7 +117,6 @@ void SetBoundingBox(bool aroundVisible)
           bb += PView::list[i]->getData()->getBoundingBox();
   }
 #endif
-
   if(bb.empty()){
     bb += SPoint3(-1., -1., -1.);
     bb += SPoint3(1., 1., 1.);
@@ -131,8 +131,8 @@ void SetBoundingBox(bool aroundVisible)
                              SQU(CTX::instance()->max[2] - CTX::instance()->min[2]));
   for(int i = 0; i < 3; i++)
     CTX::instance()->cg[i] = 0.5 * (CTX::instance()->min[i] + CTX::instance()->max[i]);
-}
 
+}
 // FIXME: this is necessary for now to have an approximate
 // CTX::instance()->lc *while* parsing input files (it's important
 // since some of the geometrical operations use a tolerance that
@@ -252,6 +252,15 @@ void ParseString(const std::string &str)
   }
 }
 
+static int defineSolver(const std::string &name)
+{
+  for(int i = 0; i < 5; i++){
+    if(opt_solver_name(i, GMSH_GET, "") == name) return i;
+  }
+  opt_solver_name(4, GMSH_SET|GMSH_GUI, name);
+  return 4;
+}
+
 int MergeFile(const std::string &fileName, bool warnIfMissing)
 {
   if(GModel::current()->getName() == ""){
@@ -274,7 +283,7 @@ int MergeFile(const std::string &fileName, bool warnIfMissing)
   }
 
   char header[256];
-  if(!fgets(header, sizeof(header), fp)) return 0;
+  if(!fgets(header, sizeof(header), fp)){ fclose(fp); return 0; }
   fclose(fp);
 
   Msg::StatusBar(true, "Reading '%s'...", fileName.c_str());
@@ -402,13 +411,14 @@ int MergeFile(const std::string &fileName, bool warnIfMissing)
     status = readFile3M(fileName);
   }
 #endif
-#if defined(HAVE_ONELAB) && defined(HAVE_FLTK)
-  else if(ext == ".pro" && opt_solver_name(0, GMSH_GET, "") == "GetDP"){
+#if defined(HAVE_ONELAB)
+  else if(ext == ".pro"){
+    int num = defineSolver("GetDP");
     std::vector<std::string> split = SplitFileName(fileName);
-    GModel::current()->setName("");
-    status = MergeFile(split[0] + split[1] + ".geo");
-    CTX::instance()->launchSolverAtStartup = 0;
-    return status;
+    GModel::current()->setName(split[1] + ".geo");
+    GModel::current()->setFileName(split[0] + split[1] + ".geo");
+    CTX::instance()->launchSolverAtStartup = num;
+    return 1;
   }
 #endif
 #if defined(HAVE_ONELAB_METAMODEL) && defined(HAVE_FLTK)
@@ -420,6 +430,12 @@ int MergeFile(const std::string &fileName, bool warnIfMissing)
     FlGui::instance()->onelab->addSolver("python", fileName, "", 1);
     onelab_cb(0, (void*)"check");
     status = 1;
+    /* tester ceci:
+    int num = defineSolver("python");
+    opt_solver_executable(num, GMSH_SET, fileName);
+    CTX::instance()->launchSolverAtStartup = num;
+    return 1;
+    */
   }
 #endif
   else {
@@ -462,7 +478,6 @@ int MergeFile(const std::string &fileName, bool warnIfMissing)
 
   ComputeMaxEntityNum();
   SetBoundingBox();
-
   CTX::instance()->geom.draw = 1;
   CTX::instance()->mesh.changed = ENT_ALL;
 
@@ -480,7 +495,7 @@ int MergeFile(const std::string &fileName, bool warnIfMissing)
 
   if(!status) Msg::Error("Error loading '%s'", fileName.c_str());
   Msg::StatusBar(true, "Done reading '%s'", fileName.c_str());
-
+  CTX::instance()->fileread=true;
    // merge the associated option file if there is one
   if(!StatFile(fileName + ".opt"))
     MergeFile(fileName + ".opt");
@@ -499,7 +514,7 @@ int MergePostProcessingFile(const std::string &fileName, bool showLastStep,
     return 0;
   }
   char header[256];
-  if(!fgets(header, sizeof(header), fp)) return 0;
+  if(!fgets(header, sizeof(header), fp)){ fclose(fp); return 0; }
   bool haveMesh = false;
   if(!strncmp(header, "$MeshFormat", 11)){
     while(!feof(fp) && fgets(header, sizeof(header), fp)){
@@ -542,7 +557,7 @@ int MergePostProcessingFile(const std::string &fileName, bool showLastStep,
         PView::list[i]->getOptions()->visible = 0;
     }
   }
-  else if(n != PView::list.size()){
+  else if(n < PView::list.size()){
     // if we created new views, assume we only want to see those (and the
     // onelab X-Y graphs)
     for(unsigned int i = 0; i < n; i++){
@@ -681,6 +696,8 @@ void OpenProjectMacFinder(const char *fileName)
     // Gmsh is running
     OpenProject(fileName);
     drawContext::global()->draw();
+    if(CTX::instance()->launchSolverAtStartup >= 0)
+      solver_cb(0, (void*)CTX::instance()->launchSolverAtStartup);
   }
 #endif
 }

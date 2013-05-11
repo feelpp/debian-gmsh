@@ -327,6 +327,8 @@ void callback(const alglib::real_1d_array& x,double& func,alglib::real_1d_array&
       obj.get_gauss();
       obj.eval(*pointer,gradients,energy,p);
       func = energy;
+	  //obj.print_voronoi1();
+	  //obj.print_voronoi2();
 	}
   }
 
@@ -349,7 +351,7 @@ void callback(const alglib::real_1d_array& x,double& func,alglib::real_1d_array&
   }
 
   if(start>0.0 && !error1 && !error2 && !error3){
-    printf("%d %.3f\n",iteration,100.0*(start-energy)/start);
+    printf("Lloyd: %d %.3f\n",iteration,100.0*(start-energy)/start);
 	w->set_iteration(iteration+1);
   }
   else if(!error1 && !error2 && !error3){
@@ -418,14 +420,15 @@ smoothing::smoothing(int param1,int param2){
 void smoothing::optimize_face(GFace* gf){
   std::set<MVertex*> all;
 
+  //do not optimize face if it has a compound
+  if(gf->getCompound()) return;
+
   // get all the points of the face ...
   for (unsigned int i = 0; i < gf->getNumMeshElements(); i++){
     MElement *e = gf->getMeshElement(i);
     for (int j = 0;j<e->getNumVertices(); j++){
       MVertex *v = e->getVertex(j);
-      //if (v->onWhat()->dim() < 2){
-	all.insert(v);
-	//}
+      all.insert(v);
     }
   }
 
@@ -600,7 +603,7 @@ void smoothing::optimize_model(){
   for(it=model->firstFace();it!=model->lastFace();it++)
   {
     gf = *it;
-	if(gf->getNumMeshElements()>0 /*&& gf->geomType()==GEntity::CompoundSurface*/){
+	if(gf->getNumMeshElements()>0 /*&& gf->tag()==114*/ /*&& gf->geomType()==GEntity::CompoundSurface*/){
 	  optimize_face(gf);
 	  //recombineIntoQuads(gf,1,1);
 	}
@@ -1232,7 +1235,14 @@ void lpcvt::print_voronoi1(){
 	p1 = v1.get_point();
 	p2 = v2.get_point();
 	p3 = v3.get_point();
-	print_segment(p2,p3,file);
+	//print_segment(p2,p3,file);
+	metric m = it->get_metric(); //Modification
+	double h = it->get_h(0,0); //Modification
+	double x = (p1.x() + p2.x() + p3.x())/3.0; //Modification
+	double y = (p1.y() + p2.y() + p3.y())/3.0; //Modification
+	double k = 0.4; //Modification
+	print_segment(SPoint2(x,y),SPoint2(x+k*h*m.get_a(),y+k*h*m.get_b()),file); //Modification
+	print_segment(SPoint2(x,y),SPoint2(x+k*h*m.get_c(),y+k*h*m.get_d()),file); //Modification
   }
   file << "};\n";
 }

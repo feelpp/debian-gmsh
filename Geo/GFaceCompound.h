@@ -13,7 +13,7 @@
 #include "GFace.h"
 template <class scalar> class simpleFunction;
 
-#if defined(HAVE_SOLVER)
+#if defined(HAVE_SOLVER) && defined(HAVE_ANN)
 
 #include "GEdge.h"
 #include "GEdgeCompound.h"
@@ -21,11 +21,8 @@ template <class scalar> class simpleFunction;
 #include "linearSystem.h"
 #include "GRbf.h"
 #include "MElementOctree.h"
-
-#if defined(HAVE_ANN)
 #include <ANN/ANN.h>
 class ANNkd_tree;
-#endif
 
 #define AR_MAX 5 //maximal geometrical aspect ratio
 
@@ -86,6 +83,7 @@ class GFaceCompound : public GFace {
   mutable v2t_cont adjv;
   mutable bool mapv2Tri;
   mutable std::map<MVertex*, SPoint3> coordinates;
+  mutable std::map<MVertex*, Pair<SVector3,SVector3> > firstDerivatives;
   mutable std::map<MVertex*, SVector3> xuu;
   mutable std::map<MVertex*, SVector3> xvv;
   mutable std::map<MVertex*, SVector3> xuv;
@@ -100,12 +98,12 @@ class GFaceCompound : public GFace {
   mutable std::vector<double> _coords;
   mutable std::map<MVertex*, int> _mapV;
   linearSystem <double> *_lsys;
-#if defined(HAVE_ANN)
-   mutable ANNkd_tree *uv_kdtree;
-   mutable ANNpointArray nodes;
-   ANNidxArray index;
-   ANNdistArray dist;
-#endif
+  mutable ANNkd_tree *uv_kdtree;
+  mutable ANNkd_tree *kdtree;
+  mutable ANNpointArray uv_nodes;
+  mutable ANNpointArray nodes;
+  ANNidxArray index;
+  ANNdistArray dist;
   void buildOct() const ;
   void buildAllNodes() const;
 
@@ -197,7 +195,6 @@ class GFaceCompound : public GFace {
 
 #else
 
-//define empty class ifndef HAVE_SOLVER
 template<class scalar> class linearSystem;
 class GFaceCompound : public GFace {
  public:
@@ -207,12 +204,12 @@ class GFaceCompound : public GFace {
   typedef enum {HARMONIC=0,CONFORMAL=1, RBF=2, CONVEX=3} typeOfMapping;
   typedef enum {UNITCIRCLE, MEANPLANE, SQUARE, ALREADYFIXED,SPECTRAL, FE} typeOfIsomorphism;
   GFaceCompound(GModel *m, int tag, std::list<GFace*> &compound,
-                std::list<GEdge*> &U0, typeOfMapping typ = HARMONIC,
+                std::list<GEdge*> &U0, typeOfCompound typ = HARMONIC_CIRCLE,
                 int allowPartition=1,
                 linearSystem<double>* lsys =0)
     : GFace(m, tag)
   {
-    Msg::Error("Gmsh has to be compiled with solver support to use GFaceCompounds");
+    Msg::Error("Gmsh has to be compiled with Solver and ANN support to use GFaceCompounds");
   }
   GFaceCompound(GModel *m, int tag, std::list<GFace*> &compound,
                 std::list<GEdge*> &U0, std::list<GEdge*> &V0,
@@ -222,7 +219,7 @@ class GFaceCompound : public GFace {
                 linearSystem<double>* lsys =0)
     : GFace(m, tag)
   {
-    Msg::Error("Gmsh has to be compiled with solver support to use GFaceCompounds");
+    Msg::Error("Gmsh has to be compiled with Solver and ANN support to use GFaceCompounds");
   }
   virtual ~GFaceCompound() {}
   GPoint point(double par1, double par2) const { return GPoint(); }
@@ -234,10 +231,11 @@ class GFaceCompound : public GFace {
   void secondDer(const SPoint2 &param,
                          SVector3 *dudu, SVector3 *dvdv, SVector3 *dudv) const{}
   virtual SPoint2 getCoordinates(MVertex *v) const { return SPoint2(); }
-  void parametrize() const {}
+  bool parametrize() const {return false;}
   virtual std::list<GFace*> getCompounds() const { return std::list<GFace*>(); }
   GPoint intersectionWithCircle (const SVector3 &n1, const SVector3 &n2, const SVector3 &p,
 				 const double &d, double uv[2]) const { return GPoint(); }
+  int allowPartition() const{ return 1; }
 };
 
 #endif

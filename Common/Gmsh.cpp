@@ -23,7 +23,7 @@
 #endif
 
 #if defined(HAVE_ONELAB)
-#include "onelab.h"
+#include "gmshLocalNetworkClient.h"
 #endif
 
 #if defined(HAVE_MESH)
@@ -91,42 +91,60 @@ int GmshSetBoundingBox(double xmin, double xmax,
   return 1;
 }
 
-int GmshSetOption(std::string category, std::string name, std::string value, int index)
+int GmshSetOption(const std::string &category, const std::string &name,
+                  std::string value, int index)
 {
   return StringOption(GMSH_SET|GMSH_GUI, category.c_str(), index, name.c_str(), value);
 }
 
-int GmshSetOption(std::string category, std::string name, double value, int index)
+int GmshSetOption(const std::string &category, const std::string &name,
+                  double value, int index)
 {
   return NumberOption(GMSH_SET|GMSH_GUI, category.c_str(), index, name.c_str(), value);
 }
 
-int GmshSetOption(std::string category, std::string name, unsigned int value, int index)
+int GmshSetOption(const std::string &category, const std::string &name,
+                  unsigned int value, int index)
 {
   return ColorOption(GMSH_SET|GMSH_GUI, category.c_str(), index, name.c_str(), value);
 }
 
-int GmshGetOption(std::string category, std::string name, std::string &value, int index)
+int GmshGetOption(const std::string &category, const std::string &name,
+                  std::string &value, int index)
 {
   return StringOption(GMSH_GET, category.c_str(), index, name.c_str(), value);
 }
 
-int GmshGetOption(std::string category, std::string name, double &value, int index)
+int GmshGetOption(const std::string &category, const std::string &name,
+                  double &value, int index)
 {
   return NumberOption(GMSH_GET, category.c_str(), index, name.c_str(), value);
 }
 
-int GmshGetOption(std::string category, std::string name, unsigned int &value, int index)
+int GmshGetOption(const std::string &category, const std::string &name,
+                  unsigned int &value, int index)
 {
   return ColorOption(GMSH_GET, category.c_str(), index, name.c_str(), value);
 }
 
-int GmshMergeFile(std::string fileName)
+int GmshOpenProject(const std::string &fileName)
+{
+  OpenProject(fileName);
+  return 1;
+}
+
+int GmshMergeFile(const std::string &fileName)
 {
   return MergeFile(fileName, true);
 }
 
-int GmshWriteFile(std::string fileName)
+int GmshMergePostProcessingFile(const std::string &fileName)
+{
+  return MergePostProcessingFile(fileName, CTX::instance()->solver.autoShowLastStep,
+                                 CTX::instance()->solver.autoHideNewViews, true);
+}
+
+int GmshWriteFile(const std::string &fileName)
 {
   CreateOutputFile(fileName, FORMAT_AUTO);
   return 1;
@@ -146,9 +164,17 @@ int GmshBatch()
   Msg::Info("Started on %s", Msg::GetLaunchDate().c_str());
 
   OpenProject(GModel::current()->getFileName());
-  for(unsigned int i = 1; i < CTX::instance()->files.size(); i++){
+  bool open = false;
+  for(unsigned int i = 0; i < CTX::instance()->files.size(); i++){
+    if(i == 0 && CTX::instance()->files[0][0] != '-') continue;
     if(CTX::instance()->files[i] == "-new")
       new GModel();
+    else if(CTX::instance()->files[i] == "-merge")
+      open = false;
+    else if(CTX::instance()->files[i] == "-open")
+      open = true;
+    else if(open)
+      OpenProject(CTX::instance()->files[i]);
     else
       MergeFile(CTX::instance()->files[i]);
   }
@@ -227,11 +253,19 @@ int GmshFLTK(int argc, char **argv)
   // open project file and merge all other input files
   if(FlGui::getOpenedThroughMacFinder().empty()){
     OpenProject(GModel::current()->getFileName());
-    for(unsigned int i = 1; i < CTX::instance()->files.size(); i++){
+    bool open = false;
+    for(unsigned int i = 0; i < CTX::instance()->files.size(); i++){
+      if(i == 0 && CTX::instance()->files[0][0] != '-') continue;
       if(CTX::instance()->files[i] == "-new"){
         GModel::current()->setVisibility(0);
         new GModel();
       }
+      else if(CTX::instance()->files[i] == "-merge")
+        open = false;
+      else if(CTX::instance()->files[i] == "-open")
+        open = true;
+      else if(open)
+        OpenProject(CTX::instance()->files[i]);
       else
         MergeFile(CTX::instance()->files[i]);
     }
@@ -267,7 +301,7 @@ int GmshFLTK(int argc, char **argv)
 
   // listen to external solvers
   if(CTX::instance()->solver.listen){
-    onelab::localNetworkClient *c = new onelab::localNetworkClient("Listen", "");
+    gmshLocalNetworkClient *c = new gmshLocalNetworkClient("Listen", "");
     c->run();
   }
 

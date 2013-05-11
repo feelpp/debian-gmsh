@@ -996,6 +996,7 @@ int GModel::readOCCSTEP(const std::string &fn)
   _occ_internals = new OCC_Internals;
   _occ_internals->loadSTEP(fn.c_str());
   _occ_internals->buildGModel(this);
+  //snapVertices();
   return 1;
 }
 

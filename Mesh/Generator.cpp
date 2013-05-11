@@ -415,7 +415,10 @@ static void PrintMesh2dStatistics(GModel *m)
     fprintf(statreport, "2D stats\tname\t\t#faces\t\t#fail\t\t"
             "#t\t\tQavg\t\tQbest\t\tQworst\t\t#Q>90\t\t#Q>90/#t\t"
             "#e\t\ttau\t\t#Egood\t\t#Egood/#e\tCPU\n");
-    if(m->empty()) return;
+    if(m->empty()){
+      fclose(statreport);
+      return;
+    }
   }
 
   for(GModel::fiter it = m->firstFace() ; it != m->lastFace(); ++it){
@@ -704,7 +707,10 @@ void GenerateMesh(GModel *m, int ask)
     Mesh3D(m);
   }
 
-  // Orient the surface mesh so that it matches the geometry
+  // Orient the line and surface meshes so that they match the orientation of
+  // the geometrical entities and/or the user orientation constraints
+  if(m->getMeshStatus() >= 1)
+    std::for_each(m->firstEdge(), m->lastEdge(), orientMeshGEdge());
   if(m->getMeshStatus() >= 2)
     std::for_each(m->firstFace(), m->lastFace(), orientMeshGFace());
 

@@ -20,6 +20,7 @@
 #include <FL/Fl_Box.H>
 #include "spherePositionWidget.h"
 #include "colorbarWindow.h"
+#include "gamepadWindow.h"
 
 #define NUM_FONTS 14
 extern Fl_Menu_Item menu_font_names[];
@@ -38,6 +39,7 @@ class optionWindow{
     Fl_Button *color[50];
     Fl_Input *input[20];
     Fl_Choice *choice[20];
+    Fl_Button *gamepadconfig;
     spherePositionWidget *sphere;
   } general;
   struct{
@@ -86,6 +88,7 @@ class optionWindow{
 
  public:
   optionWindow(int deltaFontSize=0);
+  gamepadWindow* gmpdoption ;
   void showGroup(int num, bool showWindow=true);
   void resetBrowser();
   void resetExternalViewList();
@@ -94,11 +97,13 @@ class optionWindow{
 };
 
 void options_cb(Fl_Widget *w, void *data);
+void options_restore_defaults_cb(Fl_Widget *w, void *data);
 void general_options_cb(Fl_Widget *w, void *data);
 void geometry_options_cb(Fl_Widget *w, void *data);
 void mesh_options_cb(Fl_Widget *w, void *data);
 void solver_options_cb(Fl_Widget *w, void *data);
 void post_options_cb(Fl_Widget *w, void *data);
 void view_options_cb(Fl_Widget *w, void *data);
-#endif
+void general_gmpdcf_cb(Fl_Widget *w, void *data);
 
+#endif

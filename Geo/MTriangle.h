@@ -57,8 +57,9 @@ class MTriangle : public MElement {
   virtual double angleShapeMeasure();
   virtual int getNumVertices() const { return 3; }
   virtual MVertex *getVertex(int num){ return _v[num]; }
+  virtual const MVertex *getVertex(int num) const { return _v[num]; }
   virtual void setVertex(int num,  MVertex *v){ _v[num] = v; }
-  virtual void xyz2uvw(double xyz[3], double uvw[3]);
+  virtual void xyz2uvw(double xyz[3], double uvw[3]) const;
   virtual MVertex *getOtherVertex(MVertex *v1, MVertex *v2)
   {
     if(_v[0] != v1 && _v[0] != v2) return _v[0];
@@ -67,7 +68,7 @@ class MTriangle : public MElement {
     return 0;
   }
   virtual int getNumEdges(){ return 3; }
-  virtual MEdge getEdge(int num)
+  virtual MEdge getEdge(int num) const
   {
     return MEdge(_v[edges_tri(num, 0)], _v[edges_tri(num, 1)]);
   }
@@ -118,14 +119,14 @@ class MTriangle : public MElement {
   virtual const char *getStringForPOS() const { return "ST"; }
   virtual const char *getStringForBDF() const { return "CTRIA3"; }
   virtual const char *getStringForDIFF() const { return "ElmT3n2D"; }
-  virtual const char *getStringForINP() const { return "C2D3"; }
-  virtual void revert()
+  virtual const char *getStringForINP() const { return "CPS3"/*"STRI3"*//*"C2D3"*/; }
+  virtual void reverse()
   {
     MVertex *tmp = _v[1]; _v[1] = _v[2]; _v[2] = tmp;
   }
   virtual const nodalBasis* getFunctionSpace(int o=-1) const;
   virtual const JacobianBasis* getJacobianFuncSpace(int o=-1) const;
-  virtual void getNode(int num, double &u, double &v, double &w)
+  virtual void getNode(int num, double &u, double &v, double &w) const
   {
     w = 0.;
     switch(num) {
@@ -135,11 +136,11 @@ class MTriangle : public MElement {
     default: u = 0.; v = 0.; break;
     }
   }
-  virtual SPoint3 barycenterUVW()
+  virtual SPoint3 barycenterUVW() const
   {
     return SPoint3(1/3., 1/3., 0.);
   }
-  virtual bool isInside(double u, double v, double w)
+  virtual bool isInside(double u, double v, double w) const
   {
     double tol = _isInsideTolerance;
     if(u < (-tol) || v < (-tol) || u > ((1. + tol) - v) || fabs(w) > tol)
@@ -193,12 +194,13 @@ class MTriangle6 : public MTriangle {
   virtual int getPolynomialOrder() const { return 2; }
   virtual int getNumVertices() const { return 6; }
   virtual MVertex *getVertex(int num){ return num < 3 ? _v[num] : _vs[num - 3]; }
+  virtual const MVertex *getVertex(int num) const { return num < 3 ? _v[num] : _vs[num - 3]; }
   virtual MVertex *getVertexUNV(int num)
   {
     static const int map[6] = {0, 3, 1, 4, 2, 5};
     return getVertex(map[num]);
   }
-  virtual void xyz2uvw(double xyz[3], double uvw[3]){ MElement::xyz2uvw(xyz, uvw); }
+  virtual void xyz2uvw(double xyz[3], double uvw[3]) const{ MElement::xyz2uvw(xyz, uvw); }
   virtual int getNumEdgeVertices() const { return 3; }
   virtual int getNumEdgesRep();
   virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n);
@@ -224,14 +226,14 @@ class MTriangle6 : public MTriangle {
   virtual const char *getStringForPOS() const { return "ST2"; }
   virtual const char *getStringForBDF() const { return "CTRIA6"; }
   virtual const char *getStringForDIFF() const { return "ElmT6n2D"; }
-  virtual const char *getStringForINP() const { return "C2D6"; }
-  virtual void revert()
+  virtual const char *getStringForINP() const { return "CPS6"/*"STRI65"*//*"C2D6"*/; }
+  virtual void reverse()
   {
     MVertex *tmp;
     tmp = _v[1]; _v[1] = _v[2]; _v[2] = tmp;
     tmp = _vs[0]; _vs[0] = _vs[2]; _vs[2] = tmp;
   }
-  virtual void getNode(int num, double &u, double &v, double &w)
+  virtual void getNode(int num, double &u, double &v, double &w) const
   {
     num < 3 ? MTriangle::getNode(num, u, v, w) : MElement::getNode(num, u, v, w);
   }
@@ -274,6 +276,7 @@ class MTriangleN : public MTriangle {
   virtual int getPolynomialOrder() const { return _order; }
   virtual int getNumVertices() const { return 3 + _vs.size(); }
   virtual MVertex *getVertex(int num){ return num < 3 ? _v[num] : _vs[num - 3]; }
+  virtual const MVertex *getVertex(int num) const { return num < 3 ? _v[num] : _vs[num - 3]; }
   virtual int getNumFaceVertices() const
   {
     if(_order == 3 && _vs.size() == 6) return 0;
@@ -294,7 +297,7 @@ class MTriangleN : public MTriangle {
     if(_order == 10  && _vs.size() == 27) return 0;
     return 0;
   }
-  virtual void xyz2uvw(double xyz[3], double uvw[3]){ MElement::xyz2uvw(xyz, uvw); }
+  virtual void xyz2uvw(double xyz[3], double uvw[3]) const { MElement::xyz2uvw(xyz, uvw); }
   virtual int getNumEdgeVertices() const { return 3 * (_order - 1); }
   virtual int getNumEdgesRep();
   virtual int getNumFacesRep();
@@ -331,7 +334,7 @@ class MTriangleN : public MTriangle {
     if(_order ==10 && _vs.size() == 63) return MSH_TRI_66;
     return 0;
   }
-  virtual void revert()
+  virtual void reverse()
   {
     MVertex *tmp;
     tmp = _v[1]; _v[1] = _v[2]; _v[2] = tmp;
@@ -339,7 +342,7 @@ class MTriangleN : public MTriangle {
     inv.insert(inv.begin(), _vs.rbegin(), _vs.rend());
     _vs = inv;
   }
-  virtual void getNode(int num, double &u, double &v, double &w)
+  virtual void getNode(int num, double &u, double &v, double &w) const
   {
     num < 3 ? MTriangle::getNode(num, u, v, w) : MElement::getNode(num, u, v, w);
   }

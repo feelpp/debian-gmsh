@@ -12,6 +12,8 @@
 #include "CGNSOptions.h"
 #include "meshPartitionOptions.h"
 
+class GamePad;
+
 // The interface-independent context.
 
 struct contextMeshOptions {
@@ -69,7 +71,7 @@ class CTX {
   static CTX *_instance;
  public:
   CTX();
-  ~CTX(){}
+  ~CTX();
   static CTX *instance();
  public:
   // files on the command line and various file names
@@ -77,6 +79,7 @@ class CTX {
   std::string bgmFileName, outputFileName, defaultFileName, tmpFileName;
   std::string sessionFileName, optionsFileName, errorFileName;
   std::string meshStatReportFileName;
+  std::string argv0;
   // the home directory
   std::string homeDir;
   // file history
@@ -129,6 +132,8 @@ class CTX {
   double displayBorderFactor;
   // do or do not use the trackball for rotations
   int useTrackball, trackballHyperbolicSheet;
+  // gamepad controller
+  GamePad *gamepad;
   // point around which to rotate the scene
   double rotationCenter[3];
   // rotate around the center of mass instead of rotationCenter[]
@@ -137,11 +142,12 @@ class CTX {
   double min[3], max[3];
   // "center of mass" of the current geometry, used for graphics only
   double cg[3];
-  // characteristic length for the whole problem (never used in mesh
+ // characteristic length for the whole problem (never used in mesh
   // generation ->only for geo/post)
   double lc;
   // double buffer/antialias/stereo graphics?
-  int db, antialiasing, stereo, camera;
+  int db, antialiasing, stereo, camera ;
+  bool fileread; ;
   double eye_sep_ratio,focallength_ratio,camera_aperture;
   // orthogonal projection?
   int ortho;

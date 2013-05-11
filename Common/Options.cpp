@@ -15,6 +15,7 @@
 #include "Options.h"
 #include "Colors.h"
 #include "CommandLine.h"
+#include "GamePad.h"
 #include "DefaultOptions.h"
 
 #if defined(HAVE_MESH)
@@ -3106,6 +3107,25 @@ double opt_general_trackball_hyperbolic_sheet(OPT_ARGS_NUM)
   return CTX::instance()->trackballHyperbolicSheet;
 }
 
+double opt_general_gamepad(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET){
+    if(val){
+      if(!CTX::instance()->gamepad){
+        CTX::instance()->gamepad = new GamePad();
+	if (CTX::instance()->gamepad->active)  opt_general_camera_mode(0, GMSH_SET , 1);
+      }
+    }
+    else{
+	if(CTX::instance()->gamepad) {
+	  delete CTX::instance()->gamepad;
+	  CTX::instance()->gamepad=0;
+	}
+    }
+  }
+  return CTX::instance()->gamepad ? 1 : 0;
+}
+
 double opt_general_rotation_center_cg(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
@@ -3143,12 +3163,15 @@ double opt_general_stereo_mode(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
     CTX::instance()->stereo = (int)val;
-  if (CTX::instance()->stereo) // when stereo mode is active camera mode is obligatory
-    opt_general_camera_mode(num, action, 1.);
+  if (CTX::instance()->stereo)    opt_general_camera_mode(num, action, 1.);
+  
 #if defined(HAVE_FLTK)
+  /*
   if(FlGui::available() && (action & GMSH_GUI))
-    FlGui::instance()->options->general.butt[17]->value(CTX::instance()->stereo);
+  FlGui::instance()->options->general.butt[17]->value(CTX::instance()->stereo);
+*/
 #endif
+  
   return CTX::instance()->stereo ;
 }
 
@@ -3157,9 +3180,11 @@ double opt_general_eye_sep_ratio(OPT_ARGS_NUM)
   if(action & GMSH_SET)
     CTX::instance()->eye_sep_ratio =  (double)val;
 #if defined(HAVE_FLTK)
+  /*
   if(FlGui::available() && (action & GMSH_GUI))
     FlGui::instance()->options->general.value[29]->value
       (CTX::instance()->eye_sep_ratio) ;
+  */
 #endif
   return CTX::instance()->eye_sep_ratio ;
 }
@@ -3168,10 +3193,10 @@ double opt_general_focallength_ratio(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
     CTX::instance()->focallength_ratio = (double) val;
-#if defined(HAVE_FLTK)
+#if defined(HAVE_FLTK)/*
   if(FlGui::available() && (action & GMSH_GUI))
     FlGui::instance()->options->general.value[30]->value
-      (CTX::instance()->focallength_ratio) ;
+    (CTX::instance()->focallength_ratio) ;*/
 #endif
   return CTX::instance()->focallength_ratio ;
 }
@@ -3180,10 +3205,10 @@ double opt_general_camera_aperture(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
     CTX::instance()->camera_aperture = (double)val;
-#if defined(HAVE_FLTK)
+#if defined(HAVE_FLTK)/*
   if(FlGui::available() && (action & GMSH_GUI))
     FlGui::instance()->options->general.value[31]->value
-      (CTX::instance()->camera_aperture);
+    (CTX::instance()->camera_aperture);*/
 #endif
   return CTX::instance()->camera_aperture;
 }
@@ -3193,14 +3218,18 @@ double opt_general_camera_mode(OPT_ARGS_NUM)
   if(action & GMSH_SET)
     CTX::instance()->camera = (int)val;
 #if defined(HAVE_FLTK)
+  /*
   if(FlGui::available() && (action & GMSH_GUI)){
     FlGui::instance()->options->general.butt[18]->value
       (CTX::instance()->camera);
     FlGui::instance()->options->activate("general_camera");
+  
   }
+  */
 #endif
   return CTX::instance()->camera ;
 }
+
 
 double opt_general_clip0a(OPT_ARGS_NUM)
 {

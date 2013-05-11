@@ -169,6 +169,7 @@ SMetric3 intersection_conserveM1 (const SMetric3 &m1,
 
 // preserve orientation of the most anisotropic metric
 SMetric3 intersection_conserve_mostaniso (const SMetric3 &m1, const SMetric3 &m2);
+SMetric3 intersection_conserve_mostaniso_2d (const SMetric3 &m1, const SMetric3 &m2);
 // compute the largest inscribed ellipsoid...
 SMetric3 intersection (const SMetric3 &m1,
                        const SMetric3 &m2);
@@ -199,6 +200,24 @@ class STensor3 {
     static int _index[3][3] = {{0,1,2},{3,4,5},{6,7,8}};
     return _index[i][j];
   }
+  inline void set_m11(double x){  _val[0] = x; }
+  inline void set_m21(double x){  _val[1] = x; }
+  inline void set_m31(double x){  _val[2] = x; }
+  inline void set_m12(double x){  _val[3] = x; }
+  inline void set_m22(double x){  _val[4] = x; }
+  inline void set_m32(double x){  _val[5] = x; }
+  inline void set_m13(double x){  _val[6] = x; }
+  inline void set_m23(double x){  _val[7] = x; }
+  inline void set_m33(double x){  _val[8] = x; }
+  inline double get_m11(){ return _val[0]; }
+  inline double get_m21(){ return _val[1]; }
+  inline double get_m31(){ return _val[2]; }
+  inline double get_m12(){ return _val[3]; }
+  inline double get_m22(){ return _val[4]; }
+  inline double get_m32(){ return _val[5]; }
+  inline double get_m13(){ return _val[6]; }
+  inline double get_m23(){ return _val[7]; }
+  inline double get_m33(){ return _val[8]; }
   void getMat(fullMatrix<double> &mat) const
   {
     for (int i = 0; i < 3; i++){
@@ -313,6 +332,13 @@ class STensor3 {
     return det;
   };
   void print(const char *) const;
+  double norm0() const{
+    double val = 0;
+    for (int i=0; i<9; i++)
+        if (fabs(_val[i])>val)
+          val = fabs(_val[i]);
+    return val;
+  };
 };
 
 // tensor product

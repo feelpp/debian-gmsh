@@ -46,10 +46,10 @@ struct surfacePointWithExclusionRegion {
 
 */
 
-  surfacePointWithExclusionRegion (MVertex *v, SPoint2 p[4][NUMDIR], SMetric3 & meshMetric, surfacePointWithExclusionRegion *father = 0){
+  surfacePointWithExclusionRegion (MVertex *v, SPoint2 p[4][NUMDIR], SPoint2 &_mp, SMetric3 & meshMetric, surfacePointWithExclusionRegion *father = 0){
     _v = v;
     _meshMetric = meshMetric;
-    _center = (p[0][0]+p[1][0]+p[2][0]+p[3][0])*.25;
+    _center = _mp;
     for (int i=0;i<4;i++)_q[i] = _center + (p[i][0]+p[(i+1)%4][0]-_center*2)*FACTOR;
     for (int i=0;i<4;i++)for (int j=0;j<NUMDIR;j++)_p[i][j] = p[i][j];
 
@@ -176,14 +176,18 @@ bool inExclusionZone (SPoint2 &p,
 
 bool compute4neighbors (GFace *gf,   // the surface
 			MVertex *v_center, // the wertex for which we wnt to generate 4 neighbors
+			SPoint2 &midpoint,
 			bool goNonLinear, // do we compute the position in the real surface which is nonlinear
 			SPoint2 newP[4][NUMDIR], // look into other directions 
 			SMetric3 &metricField, FILE *crossf = 0) // the mesh metric
 {
+
+  Range<double> rangeU = gf->parBounds(0);
+  Range<double> rangeV = gf->parBounds(1);
+
   // we assume that v is on surface gf
 
   // get the parameter of the point on the surface
-  SPoint2 midpoint;
   reparamMeshVertexOnFace(v_center, gf, midpoint);
 
   double L = backgroundMesh::current()->operator()(midpoint[0],midpoint[1],0.0);
@@ -192,16 +196,15 @@ bool compute4neighbors (GFace *gf,   // the surface
   FieldManager *fields = gf->model()->getFields();
   if(fields->getBackgroundField() > 0){
     Field *f = fields->get(fields->getBackgroundField());
-    if (!f->isotropic()){
-      (*f)(v_center->x(),v_center->y(),v_center->z(), metricField,gf);
-    }
-    else {
+     if (!f->isotropic()){
+       (*f)(v_center->x(),v_center->y(),v_center->z(), metricField,gf);
+     }
+     else {
       L = (*f)(v_center->x(),v_center->y(),v_center->z(), gf);
       metricField = SMetric3(1./(L*L));  
-    }    
+     }    
   }
 
-  //  printf("M = (%g %g %g)\n",metricField(0,0),metricField(1,1),metricField(0,1));
     
   // get the unit normal at that point
   Pair<SVector3, SVector3> der = gf->firstDer(SPoint2(midpoint[0],midpoint[1]));
@@ -230,17 +233,15 @@ bool compute4neighbors (GFace *gf,   // the surface
     // normalize vector t1 that is tangent to gf at midpoint
     SVector3 t1 = basis_u * cos (quadAngle) + basis_v * sin (quadAngle) ;
     t1.normalize();
-
-    //    printf("%d %g %g %g -- %g %g %g\n",gf->tag(),s1.x(),s1.y(),s1.z(),t1.x(),t1.y(),t1.z());
     
     // compute the second direction t2 and normalize (t1,t2,n) is the tangent frame
     SVector3 t2 = crossprod(n,t1);
     t2.normalize();
     if (DIR == 0 && crossf)fprintf(crossf,"VP(%g,%g,%g) {%g,%g,%g};\n",v_center->x(),v_center->y(),v_center->z(),t1.x(),t1.y(),t1.z());
     if (DIR == 0 && crossf)fprintf(crossf,"VP(%g,%g,%g) {%g,%g,%g};\n",v_center->x(),v_center->y(),v_center->z(),t2.x(),t2.y(),t2.z());
-    //    if (DIR == 0 && crossf)fprintf(crossf,"VP(%g,%g,%g) {%g,%g,%g};\n",v_center->x(),v_center->y(),v_center->z(),s1.x(),s1.y(),s1.z());
-    //    if (DIR == 0 && crossf)fprintf(crossf,"VP(%g,%g,%g) {%g,%g,%g};\n",v_center->x(),v_center->y(),v_center->z(),s2.x(),s2.y(),s2.z());
-    
+    if (DIR == 0 && crossf)fprintf(crossf,"VP(%g,%g,%g) {%g,%g,%g};\n",v_center->x(),v_center->y(),v_center->z(),-t1.x(),-t1.y(),-t1.z());
+    if (DIR == 0 && crossf)fprintf(crossf,"VP(%g,%g,%g) {%g,%g,%g};\n",v_center->x(),v_center->y(),v_center->z(),-t2.x(),-t2.y(),-t2.z());
+      
     double size_1 = sqrt(1. / dot(t1,metricField,t1));
     double size_2 = sqrt(1. / dot(t2,metricField,t2));
 
@@ -250,14 +251,17 @@ bool compute4neighbors (GFace *gf,   // the surface
     // t1 . s2 = a E + b N --> solve the 2 x 2 system
     // and get covariant coordinates a and b
     double rhs1[2] = {dot(t1,s1),dot(t1,s2)}, covar1[2];
+    bool singular = false;
     if (!sys2x2(metric,rhs1,covar1)){
-      Msg::Info("Argh");
+      Msg::Info("Argh surface %d %g %g %g -- %g %g %g -- %g %g",gf->tag(),s1.x(),s1.y(),s1.z(),s2.x(),s2.y(),s2.z(),size_1,size_2);
       covar1[1] = 1.0; covar1[0] = 0.0;
+      singular = true;
     }
     double rhs2[2] = {dot(t2,s1),dot(t2,s2)}, covar2[2];
     if (!sys2x2(metric,rhs2,covar2)){
-      Msg::Info("Argh");
+      Msg::Info("Argh surface %d %g %g %g -- %g %g %g",gf->tag(),s1.x(),s1.y(),s1.z(),s2.x(),s2.y(),s2.z());
       covar2[0] = 1.0; covar2[1] = 0.0;
+      singular = true;
     }
     
     // transform the sizes with respect to the metric
@@ -270,14 +274,21 @@ bool compute4neighbors (GFace *gf,   // the surface
     covar1[0] /= l1;covar1[1] /= l1;
     covar2[0] /= l2;covar2[1] /= l2;
 
-
-    const double size_param_1  = size_1 / sqrt (  M*covar1[0]*covar1[0]+
+    double size_param_1  = size_1 / sqrt (  M*covar1[0]*covar1[0]+
 						  2*E*covar1[1]*covar1[0]+
 						  N*covar1[1]*covar1[1]);
-    const double size_param_2  = size_2 / sqrt (  M*covar2[0]*covar2[0]+
-						  2*E*covar2[1]*covar2[0]+
+    double size_param_2  = size_2 / sqrt (  M*covar2[0]*covar2[0]+
+						  2*E*covar2[1]*covar2[0]+					    
 						  N*covar2[1]*covar2[1]);
+    if (singular){
+      size_param_1 = size_param_2 = std::min (size_param_1,size_param_2);
+    }
+
+    //    printf("%12.5E %12.5E\n", size_param_1, size_param_2);
+
     
+    //    if (v_center->onWhat() != gf && gf->tag() == 3)
+    //      printf("M = (%g %g %g) L = %g %g LP = %g %g\n",metricField(0,0),metricField(1,1),metricField(0,1),l1,l2,size_param_1,size_param_2);
     //if (l1 == 0.0 || l2 == 0.0) printf("bouuuuuuuuuuuuh %g %g %g %g --- %g %g %g %g %g %g\n",l1,l2,t1.norm(),t2.norm(),s1.x(),s1.y(),s1.z(),s2.x(),s2.y(),s2.z());
 
     /*    printf("%12.5E %12.5E %12.5E %12.5E %12.5E %12.5E %12.5E %12.5E %g %g %g %g %g %g %g %g %g %g %g\n",
@@ -290,7 +301,7 @@ bool compute4neighbors (GFace *gf,   // the surface
 	   ,covar1[0],covar1[1],covar2[0],covar2[1],l1,l2,size_1,size_2,size_param_1,size_param_2,M,N,E,s1.x(),s1.y(),s2.x(),s2.y());*/
 
     // this is the rectangle in the parameter plane.
-    const double EPS = 1.e-12;
+    const double EPS = 1.e-7;
     double r1 = EPS*(double)rand() / RAND_MAX;
     double r2 = EPS*(double)rand() / RAND_MAX;
     double r3 = EPS*(double)rand() / RAND_MAX;
@@ -312,6 +323,10 @@ bool compute4neighbors (GFace *gf,   // the surface
     // surface
     double ERR[4];
     for (int i=0;i<4;i++){                                              //
+      //      if (newPoint[i][0] < rangeU.low())newPoint[i][0] = rangeU.low(); 
+      //      if (newPoint[i][0] > rangeU.high())newPoint[i][0] = rangeU.high(); 
+      //      if (newPoint[i][1] < rangeV.low())newPoint[i][1] = rangeV.low(); 
+      //      if (newPoint[i][1] > rangeV.high())newPoint[i][1] = rangeV.high(); 
       GPoint pp = gf->point(SPoint2(newPoint[i][0], newPoint[i][1]));
       double D = sqrt ((pp.x() - v_center->x())*(pp.x() - v_center->x()) + 
 		       (pp.y() - v_center->y())*(pp.y() - v_center->y()) + 
@@ -320,7 +335,7 @@ bool compute4neighbors (GFace *gf,   // the surface
       //      printf("L = %12.5E D = %12.5E ERR = %12.5E\n",L,D,100*fabs(D-L)/(D+L));
     }
 
-    if (goNonLinear){//---------------------------------------------------//
+    if (1 && goNonLinear){//---------------------------------------------------//
       surfaceFunctorGFace ss (gf);                                        //
       SVector3 dirs[4] = {t1*(-1.0),t2*(-1.0),t1*(1.0),t2*(1.0)};                     //      
       for (int i=0;i<4;i++){                                              //
@@ -330,20 +345,28 @@ bool compute4neighbors (GFace *gf,   // the surface
 	  curveFunctorCircle cf (dirs[i],n,				 
 				 SVector3(v_center->x(),v_center->y(),v_center->z()),
 				 L);
-	  if (intersectCurveSurface (cf,ss,uvt,size_param_1*1.e-5)){          //
+	  if (intersectCurveSurface (cf,ss,uvt,size_param_1*1.e-3)){          //
 	    GPoint pp = gf->point(SPoint2(uvt[0],uvt[1]));
 	    double D = sqrt ((pp.x() - v_center->x())*(pp.x() - v_center->x()) + 
 			     (pp.y() - v_center->y())*(pp.y() - v_center->y()) + 
 			     (pp.z() - v_center->z())*(pp.z() - v_center->z()) );
+	    double DP = sqrt ((newPoint[i][0]-uvt[0])*(newPoint[i][0]-uvt[0]) + 
+			      (newPoint[i][1]-uvt[1])*(newPoint[i][1]-uvt[1]));
 	    double newErr = 100*fabs(D-L)/(D+L);
-	    if (newErr < 1){
+	    //	    if (v_center->onWhat() != gf && gf->tag() == 3){
+	    //	      crossField2d::normalizeAngle (uvt[2]);
+	    //	      printf("INTERSECT angle = %g DP %g\n",uvt[2],DP); 
+	    //	    }
+	    if (newErr < 1 && DP < .1){
 	      //	      printf("%12.5E vs %12.5E : %12.5E  %12.5E vs %12.5E  %12.5E \n",ERR[i],newErr,newPoint[i][0],newPoint[i][1],uvt[0],uvt[1]);
 	      newPoint[i][0] = uvt[0];                                        //
 	      newPoint[i][1] = uvt[1];                                        //
-	    }                                                                 //
+	    }                                                                 //	    
+	    //	    printf("OK\n");
 	  }
 	  else{
-	    Msg::Warning("Cannot put a new point on Surface %d",gf->tag());
+	    Msg::Debug("Cannot put a new point on Surface %d",gf->tag());
+	    //	    printf("NOT OK\n");
 	  }
 	}
       }                                                                   //
@@ -387,12 +410,14 @@ void packingOfParallelograms(GFace* gf,  std::vector<MVertex*> &packed, std::vec
   SPoint2 newp[4][NUMDIR];
   std::set<MVertex*>::iterator it =  bnd_vertices.begin() ;
 
-  FILE *crossf = 0 ; //fopen ("cross.pos","w");
+  char NAME[345]; sprintf(NAME,"crossReal%d.pos",gf->tag());
+  FILE *crossf = fopen (NAME,"w");
   if (crossf)fprintf(crossf,"View \"\"{\n");
   for (; it !=  bnd_vertices.end() ; ++it){
-    compute4neighbors (gf, *it, goNonLinear, newp, metricField,crossf);
+    SPoint2 midpoint;
+    compute4neighbors (gf, *it, midpoint, goNonLinear, newp, metricField,crossf);
     surfacePointWithExclusionRegion *sp = 
-      new surfacePointWithExclusionRegion (*it, newp, metricField);    
+      new surfacePointWithExclusionRegion (*it, newp, midpoint,metricField);    
     //    fifo.push(sp); 
     fifo.insert(sp); 
     vertices.push_back(sp); 
@@ -424,9 +449,10 @@ void packingOfParallelograms(GFace* gf,  std::vector<MVertex*> &packed, std::vec
 	  GPoint gp = gf->point(parent->_p[i][dir]);
 	  MFaceVertex *v = new MFaceVertex(gp.x(),gp.y(),gp.z(),gf,gp.u(),gp.v());
 	  //	  	printf(" %g %g %g %g\n",parent._center.x(),parent._center.y(),gp.u(),gp.v());
-	  compute4neighbors (gf, v, goNonLinear, newp, metricField,crossf);
+	  SPoint2 midpoint;
+	  compute4neighbors (gf, v, midpoint, goNonLinear, newp, metricField,crossf);
 	  surfacePointWithExclusionRegion *sp = 
-	    new surfacePointWithExclusionRegion (v, newp, metricField, parent);    
+	    new surfacePointWithExclusionRegion (v, newp, midpoint, metricField, parent);    
 	  //	  fifo.push(sp); 
 	  fifo.insert(sp); 
 	  vertices.push_back(sp); 
@@ -451,7 +477,8 @@ void packingOfParallelograms(GFace* gf,  std::vector<MVertex*> &packed, std::vec
   FILE *f = fopen(ccc,"w");
   fprintf(f,"View \"\"{\n");
   for (int i=0;i<vertices.size();i++){
-    vertices[i]->print(f,i);
+    //    if(vertices[i]->_v->onWhat() != gf) 
+      vertices[i]->print(f,i);
     if(vertices[i]->_v->onWhat() == gf) {
       packed.push_back(vertices[i]->_v);
       metrics.push_back(vertices[i]->_meshMetric);

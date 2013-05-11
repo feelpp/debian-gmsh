@@ -31,9 +31,10 @@ class MPoint : public MElement {
   virtual int getDim() const { return 0; }
   virtual int getNumVertices() const { return 1; }
   virtual MVertex *getVertex(int num){ return _v[0]; }
+  virtual const MVertex *getVertex(int num) const { return _v[0]; }
   virtual void setVertex(int num,  MVertex *v){ _v[0] = v; }
   virtual int getNumEdges(){ return 0; }
-  virtual MEdge getEdge(int num){ return MEdge(); }
+  virtual MEdge getEdge(int num) const{ return MEdge(); }
   virtual int getNumEdgesRep(){ return 0; }
   virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n){}
   virtual int getNumFaces(){ return 0; }
@@ -44,19 +45,19 @@ class MPoint : public MElement {
   virtual int getTypeForMSH() const { return MSH_PNT; }
   virtual int getTypeForVTK() const { return 1; }
   virtual const char *getStringForPOS() const { return "SP"; }
-  virtual void getNode(int num, double &u, double &v, double &w)
+  virtual void getNode(int num, double &u, double &v, double &w) const
   {
     u = v = w = 0.;
   }
-  virtual SPoint3 barycenterUVW()
+  virtual SPoint3 barycenterUVW() const
   {
     return SPoint3(0., 0., 0.);
   }
-  virtual void getShapeFunctions(double u, double v, double w, double s[], int o)
+  virtual void getShapeFunctions(double u, double v, double w, double s[], int o) const
   {
     s[0] = 1.;
   }
-  virtual void getGradShapeFunctions(double u, double v, double w, double s[][3], int o)
+  virtual void getGradShapeFunctions(double u, double v, double w, double s[][3], int o) const
   {
     s[0][0] = s[0][1] = s[0][2] = 0.;
   }
@@ -68,7 +69,7 @@ class MPoint : public MElement {
   {
     return JacobianBasis::find(MSH_PNT);
   }
-  virtual bool isInside(double u, double v, double w)
+  virtual bool isInside(double u, double v, double w) const
   {
     double tol = _isInsideTolerance;
     if(fabs(u) > tol || fabs(v) > tol || fabs(w) > tol)
