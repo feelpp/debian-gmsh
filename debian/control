@@ -152,7 +152,7 @@ Package: libjava-gmsh2
 Section: java
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Multi-Arch: same
+Multi-Arch: foreign
 Pre-Depends: ${misc:Pre-Depends}
 Recommends: gmsh
 Description: Three-dimensional finite element mesh generator. Java wrapper
