@@ -264,8 +264,7 @@ class fullMatrix
     if(resetValue)
       setAll(scalar(0.));
     return false; // no reallocation
-  }
-  void setAsProxy(const fullMatrix<scalar> &original)
+  }  void setAsProxy(const fullMatrix<scalar> &original)
   {
     if(_data && _own_data)
       delete [] _data;
@@ -488,14 +487,8 @@ class fullMatrix
   }
 #endif
   ;
-  bool invert(fullMatrix<scalar> &result) const
-#if !defined(HAVE_LAPACK)
-  {
-    Msg::Error("LU factorization requires LAPACK");
-    return false;
-  }
-#endif
-  ;
+  bool invert(fullMatrix<scalar> &result) const;
+
   fullMatrix<scalar> cofactor(int i, int j) const
   {
     int ni = size1();
@@ -507,14 +500,8 @@ class fullMatrix
           cof(I < i ? I : I - 1, J < j ? J : J - 1) = (*this)(I, J);
     return cof;
   }
-  scalar determinant() const
-#if !defined(HAVE_LAPACK)
-  {
-    Msg::Error("Determinant computation requires LAPACK");
-    return scalar(0.);
-  }
-#endif
-  ;
+  scalar determinant() const;
+
   bool svd(fullMatrix<scalar> &V, fullVector<scalar> &S)
 #if !defined(HAVE_LAPACK)
   {

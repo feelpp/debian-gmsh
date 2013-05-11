@@ -23,6 +23,7 @@ typedef unsigned long intptr_t;
 #include "paletteWindow.h"
 #include "graphicWindow.h"
 #include "optionWindow.h"
+#include "gamepadWindow.h"
 #include "statisticsWindow.h"
 #include "contextWindow.h"
 #include "visibilityWindow.h"
@@ -33,6 +34,7 @@ typedef unsigned long intptr_t;
 #include "pluginWindow.h"
 #include "helpWindow.h"
 #include "onelabGroup.h"
+#include "gmshLocalNetworkClient.h"
 #include "fileDialogs.h"
 #include "extraDialogs.h"
 #include "partitionDialog.h"
@@ -132,28 +134,20 @@ static const char *input_formats =
   "Image - PNM" TT "*.pnm" NN
   "Image - PPM" TT "*.ppm" NN;
 
-static void file_open_cb(Fl_Widget *w, void *data)
+static void file_open_merge_cb(Fl_Widget *w, void *data)
 {
+  if(!data) return;
+  std::string mode((char*)data);
   int n = PView::list.size();
-  if(fileChooser(FILE_CHOOSER_SINGLE, "Open", input_formats,
-                 GModel::current()->getFileName().c_str())) {
-    OpenProject(fileChooserGetName(1));
-    drawContext::global()->draw();
-  }
-  if(n != (int)PView::list.size())
-    FlGui::instance()->openModule("Post-processing");
-  if(CTX::instance()->launchSolverAtStartup >= 0)
-    solver_cb(0, (void*)CTX::instance()->launchSolverAtStartup);
-}
-
-static void file_merge_cb(Fl_Widget *w, void *data)
-{
-  int n = PView::list.size();
-  int f = fileChooser(FILE_CHOOSER_MULTI, "Merge", input_formats,
-                      GModel::current()->getFileName().c_str());
-  if(f) {
-    for(int i = 1; i <= f; i++)
-      MergeFile(fileChooserGetName(i));
+  int f = fileChooser(FILE_CHOOSER_MULTI, (mode == "open") ? "Open" : "Merge",
+                      input_formats, GModel::current()->getFileName().c_str());
+  if(f){
+    for(int i = 1; i <= f; i++){
+      if(mode == "open")
+        OpenProject(fileChooserGetName(i));
+      else
+        MergeFile(fileChooserGetName(i));
+    }
     drawContext::global()->draw();
   }
   if(n != (int)PView::list.size())
@@ -178,6 +172,7 @@ static void file_open_recent_cb(Fl_Widget *w, void *data)
 static void file_clear_cb(Fl_Widget *w, void *data)
 {
   ClearProject();
+  onelab_cb(0, (void*)"reset"); // this will call OpenProject
   drawContext::global()->draw();
 }
 
@@ -186,7 +181,7 @@ static void file_remote_cb(Fl_Widget *w, void *data)
   onelab::localNetworkClient *c;
   onelab::server::citer it = onelab::server::instance()->findClient("GmshRemote");
   if(it == onelab::server::instance()->lastClient()){
-    c = new onelab::localNetworkClient("GmshRemote", "");
+    c = new gmshLocalNetworkClient("GmshRemote", "");
     c->setSocketSwitch("-socket");
   }
   else
@@ -261,13 +256,14 @@ static int _save_geo(const char *name){ return geoFileDialog(name); }
 static int _save_brep(const char *name){ CreateOutputFile(name, FORMAT_BREP); return 1; }
 static int _save_step(const char *name){ CreateOutputFile(name, FORMAT_STEP); return 1; }
 static int _save_cgns(const char *name){ return cgnsFileDialog(name); }
-static int _save_unv(const char *name){ return unvFileDialog(name); }
+static int _save_unv(const char *name){ return unvinpFileDialog
+    (name, "UNV Options", FORMAT_UNV); }
 static int _save_vtk(const char *name){ return genericMeshFileDialog
     (name, "VTK Options", FORMAT_VTK, true, false); }
 static int _save_diff(const char *name){ return genericMeshFileDialog
     (name, "Diffpack Options", FORMAT_DIFF, true, false); }
-static int _save_inp(const char *name){ return genericMeshFileDialog
-    (name, "Abaqus INP Options", FORMAT_INP, false, false); }
+static int _save_inp(const char *name){ return unvinpFileDialog
+    (name, "Abaqus INP Options", FORMAT_INP); }
 static int _save_med(const char *name){ return genericMeshFileDialog
     (name, "MED Options", FORMAT_MED, false, false); }
 static int _save_mesh(const char *name){ return genericMeshFileDialog
@@ -1915,7 +1911,7 @@ static void mesh_define_compound_entity_cb(Fl_Widget *w, void *data)
 static Fl_Menu_Item bar_table[] = {
   {"&File", 0, 0, 0, FL_SUBMENU},
     {"&New...",     FL_CTRL+'n', (Fl_Callback *)file_new_cb, 0},
-    {"&Open...",    FL_CTRL+'o', (Fl_Callback *)file_open_cb, 0},
+    {"&Open...",    FL_CTRL+'o', (Fl_Callback *)file_open_merge_cb, (void*)"open"},
     {"Open Recent", 0, 0, 0, FL_SUBMENU},
       {"", 0, (Fl_Callback *)file_open_recent_cb, 0},
       {"", 0, (Fl_Callback *)file_open_recent_cb, 0},
@@ -1923,7 +1919,7 @@ static Fl_Menu_Item bar_table[] = {
       {"", 0, (Fl_Callback *)file_open_recent_cb, 0},
       {"", 0, (Fl_Callback *)file_open_recent_cb, 0},
       {0},
-    {"M&erge...",   FL_CTRL+FL_SHIFT+'o', (Fl_Callback *)file_merge_cb, 0},
+  {"M&erge...",   FL_CTRL+FL_SHIFT+'o', (Fl_Callback *)file_open_merge_cb, (void*)"merge"},
     {"Watch Pattern...",    0, (Fl_Callback *)file_watch_cb, 0},
     {"&Clear",      0, (Fl_Callback *)file_clear_cb, 0, FL_MENU_DIVIDER},
     {"Remote", 0, 0, 0, FL_MENU_DIVIDER | FL_SUBMENU},
@@ -1964,8 +1960,9 @@ static Fl_Menu_Item bar_table[] = {
     {0},
   {"&Help", 0, 0, 0, FL_SUBMENU},
     {"On&line Documentation", 0, (Fl_Callback *)help_online_cb, 0, FL_MENU_DIVIDER},
-    {"&Keyboard and Mouse Usage",    0, (Fl_Callback *)help_basic_cb, 0},
-    {"&Current Options",      0, (Fl_Callback *)status_options_cb, (void*)"?", FL_MENU_DIVIDER},
+    {"&Keyboard and Mouse Usage",    0, (Fl_Callback *)help_basic_cb, 0, FL_MENU_DIVIDER},
+    {"&Current Options",      0, (Fl_Callback *)status_options_cb, (void*)"?", 0},
+    {"&Restore all Options to Default Settings", 0, (Fl_Callback *)options_restore_defaults_cb, 0, FL_MENU_DIVIDER},
     {"&About Gmsh",           0, (Fl_Callback *)help_about_cb, 0},
     {0},
   {0}
@@ -1979,7 +1976,7 @@ static Fl_Menu_Item bar_table[] = {
 static Fl_Menu_Item sysbar_table[] = {
   {"File", 0, 0, 0, FL_SUBMENU},
     {"New...",     FL_META+'n', (Fl_Callback *)file_new_cb, 0},
-    {"Open...",    FL_META+'o', (Fl_Callback *)file_open_cb, 0},
+    {"Open...",    FL_META+'o', (Fl_Callback *)file_open_merge_cb, (void*)"open"},
     {"Open Recent", 0, 0, 0, FL_SUBMENU},
       {"", 0, (Fl_Callback *)file_open_recent_cb, 0},
       {"", 0, (Fl_Callback *)file_open_recent_cb, 0},
@@ -1987,7 +1984,7 @@ static Fl_Menu_Item sysbar_table[] = {
       {"", 0, (Fl_Callback *)file_open_recent_cb, 0},
       {"", 0, (Fl_Callback *)file_open_recent_cb, 0},
       {0},
-    {"Merge...",   FL_META+FL_SHIFT+'o', (Fl_Callback *)file_merge_cb, 0},
+    {"Merge...",   FL_META+FL_SHIFT+'o', (Fl_Callback *)file_open_merge_cb, (void*)"merge"},
     {"Watch Pattern...",   0, (Fl_Callback *)file_watch_cb, 0},
     {"Clear",      0, (Fl_Callback *)file_clear_cb, 0, FL_MENU_DIVIDER},
     {"Remote", 0, 0, 0, FL_MENU_DIVIDER | FL_SUBMENU},
@@ -2027,8 +2024,9 @@ static Fl_Menu_Item sysbar_table[] = {
     {0},
   {"Help", 0, 0, 0, FL_SUBMENU},
     {"Online Documentation", 0, (Fl_Callback *)help_online_cb, 0, FL_MENU_DIVIDER},
-    {"Keyboard and Mouse Usage",        0, (Fl_Callback *)help_basic_cb, 0},
+    {"Keyboard and Mouse Usage",        0, (Fl_Callback *)help_basic_cb, 0, FL_MENU_DIVIDER},
     {"Current Options",      0, (Fl_Callback *)status_options_cb, (void*)"?"},
+    {"Restore all Options to Default Settings", 0, (Fl_Callback *)options_restore_defaults_cb, 0},
     {0},
   {0}
 };
@@ -2891,24 +2889,18 @@ bool graphicWindow::split(openglWindow *g, char how)
   return true;
 }
 
-void graphicWindow::setStereo()
+void graphicWindow::setStereo(bool st)
 {
   openglWindow::setLastHandled(0);
   for(unsigned int i = 0; i < gl.size(); i++){
-    _tile->remove(gl[i]);
-    delete gl[i];
+    if (st) {
+      gl[i]->mode(FL_RGB | FL_DEPTH | FL_DOUBLE | FL_STEREO);
+    }
+    else{
+      gl[i]->mode(FL_RGB | FL_DEPTH | FL_DOUBLE );
+    }
+    gl[i]->show();
   }
-  gl.clear();
-  openglWindow *g2 = new openglWindow
-    (_tile->x() + (_onelab && !_menuwin ? _onelab->w() : 0),
-     _tile->y(),
-     _tile->w() - (_onelab && !_menuwin ? _onelab->w() : 0),
-     _tile->h() - (_browser ? _browser->h() : 0));
-  g2->mode(FL_RGB | FL_DEPTH | FL_DOUBLE | FL_STEREO);
-  g2->end();
-  gl.push_back(g2);
-  _tile->add(g2);
-  g2->show();
   Msg::Info("new gl window for stereo vision!");
 }
 

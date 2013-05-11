@@ -371,6 +371,58 @@ class LonLatField : public Field
   }
 };
 
+class XY2d2LonLatField : public Field
+{
+  int iField;
+  double R, phiP, thetaP;
+ public:
+  std::string getDescription()
+  {
+    return "Evaluate Field[IField] in geographic coordinates (longitude, latitude) from x and y projected on a plane\n\n";
+  }
+  XY2d2LonLatField()
+  {
+    iField = 1;
+    options["IField"] = new FieldOptionInt
+      (iField, "Index of the field to evaluate.");
+    R = 6371e3;
+    phiP = 0;
+    thetaP = 0;
+
+    options["Radius"] = new FieldOptionDouble
+      (R, "radius of the sphere");
+    options["Phi"] = new FieldOptionDouble
+      (phiP, "longitude of the projection point (in degrees)");
+    options["Theta"] = new FieldOptionDouble
+      (thetaP, "latitude of the projection point (in degrees)");
+  }
+  const char *getName()
+  {
+    return "XY2d2LonLat";
+  }
+  double operator() (double x2d, double y2d, double z2d, GEntity *ge=0)
+  {
+    Field *field = GModel::current()->getFields()->get(iField);
+    if(!field || iField == id) return MAX_LC;
+    double phi = phiP*M_PI/180;
+    double theta = thetaP*M_PI/180;
+    double pOx = cos(theta)*cos(phi)*R;
+    double pOy = cos(theta)*sin(phi)*R;
+    double pOz = sin(theta)*R;
+    double pPhiX = -sin(phi);
+    double pPhiY = cos(phi);
+    double pPhiZ = 0;
+    double pThetaX = -sin(theta)*cos(phi);
+    double pThetaY = -sin(theta)*sin(phi);
+    double pThetaZ = cos(theta);
+    
+    double x = pPhiX * x2d + pThetaX * y2d + pOx;
+		double y = pPhiY * x2d + pThetaY * y2d + pOy;
+		double z = pPhiZ * x2d + pThetaZ * y2d + pOz;
+    return (*field)(atan2(y, x), asin(z / R), 0);
+  }
+};
+
 class BoxField : public Field
 {
   double v_in, v_out, x_min, x_max, y_min, y_max, z_min, z_max;
@@ -1704,14 +1756,24 @@ class AttractorField : public Field
           it != edges_id.end(); ++it) {
 	GEdge *e = GModel::current()->getEdgeByTag(*it);
 	if(e) {
-	  for(int i = 1; i < n_nodes_by_edge - 1; i++) {
-	    double u = (double)i / (n_nodes_by_edge - 1);
+	  if (e->mesh_vertices.size()){
+	    for(unsigned int i = 0; i < e->mesh_vertices.size(); i++) {
+	      double u ; e->mesh_vertices[i]->getParameter(0,u);
+	      GPoint gp = e->point(u);
+	      getCoord(gp.x(), gp.y(), gp.z(), zeronodes[k][0],
+		       zeronodes[k][1], zeronodes[k][2], e);
+	      _infos[k++] = AttractorInfo(*it,1,u,0);
+	    }
+	  }
+	  int NNN = n_nodes_by_edge - e->mesh_vertices.size();
+	  for(int i = 1; i < NNN - 1; i++) {
+	    double u = (double)i / (NNN - 1);
 	    Range<double> b = e->parBounds(0);
 	    double t = b.low() + u * (b.high() - b.low());
 	    GPoint gp = e->point(t);
 	    getCoord(gp.x(), gp.y(), gp.z(), zeronodes[k][0],
 		     zeronodes[k][1], zeronodes[k][2], e);
-	    _infos[k++] = AttractorInfo(*it,1,u,0);
+	    _infos[k++] = AttractorInfo(*it,1,t,0);
           }
         }
       }
@@ -1849,6 +1911,41 @@ double BoundaryLayerField::operator() (double x, double y, double z, GEntity *ge
   return std::min (hfar,lc);
 }
 
+// assume that the closest point is one of the model vertices
+void BoundaryLayerField::computeFor1dMesh (double x, double y, double z,
+					   SMetric3 &metr)
+{
+  double xpk = 0., ypk = 0., zpk = 0.;
+  double distk = 1.e22;
+  for(std::list<int>::iterator it = nodes_id.begin();
+      it != nodes_id.end(); ++it) {
+    GVertex *v = GModel::current()->getVertexByTag(*it);    
+    double xp = v->x();
+    double yp = v->y();
+    double zp = v->z();
+    const double dist = sqrt ((x - xp) *(x - xp)+
+			      (y - yp) *(y - yp)+
+			      (z - zp) *(z - zp));
+    if (dist < distk){
+      distk = dist;
+      xpk = xp;
+      ypk = yp;
+      zpk = zp;
+    }
+  }
+
+  const double ll1   = (distk*(ratio-1) + hwall_n) / (1. + 0.5 * (ratio - 1));
+  // const double ll1   = (distk*(ratio-1) + hwall_n) / (1.);
+  double lc_n  = std::min(ll1,hfar);
+
+  if (distk > thickness) lc_n = hfar;
+  lc_n = std::max(lc_n, CTX::instance()->mesh.lcMin);
+  lc_n = std::min(lc_n, CTX::instance()->mesh.lcMax);
+  SVector3 t1= SVector3(x-xpk,y-ypk,z-zpk);
+  t1.normalize();
+  metr = buildMetricTangentToCurve(t1,lc_n,lc_n);  
+}
+
 void BoundaryLayerField::operator() (AttractorField *cc, double dist,
                                      double x, double y, double z,
                                      SMetric3 &metr, GEntity *ge)
@@ -1944,7 +2041,7 @@ void BoundaryLayerField::operator() (double x, double y, double z,
     }
     for(std::list<int>::iterator it = edges_id.begin();
 	it != edges_id.end(); ++it) {
-      _att_fields.push_back(new AttractorField(1,*it,100000));
+      _att_fields.push_back(new AttractorField(1,*it,10000));
     }
     for(std::list<int>::iterator it = faces_id.begin();
 	it != faces_id.end(); ++it) {
@@ -2017,6 +2114,7 @@ FieldManager::FieldManager()
   map_type_name["Cylinder"] = new FieldFactoryT<CylinderField>();
   map_type_name["Frustum"] = new FieldFactoryT<FrustumField>();
   map_type_name["LonLat"] = new FieldFactoryT<LonLatField>();
+  map_type_name["XY2d2LonLat"] = new FieldFactoryT<XY2d2LonLatField>();
 #if defined(HAVE_POST)
   map_type_name["PostView"] = new FieldFactoryT<PostViewField>();
 #endif

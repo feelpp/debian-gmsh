@@ -65,26 +65,29 @@ class GmshSocket{
   // receive data from a machine with a different byte ordering, and
   // we swap the bytes in the payload)
   enum MessageType{
-    GMSH_START           = 1,
-    GMSH_STOP            = 2,
-    GMSH_INFO            = 10,
-    GMSH_WARNING         = 11,
-    GMSH_ERROR           = 12,
-    GMSH_PROGRESS        = 13,
-    GMSH_MERGE_FILE      = 20,
-    GMSH_PARSE_STRING    = 21,
-    GMSH_VERTEX_ARRAY    = 22,
-    GMSH_PARAMETER       = 23,
-    GMSH_PARAMETER_QUERY = 24,
-    GMSH_PARAM_QUERY_ALL = 25,
-    GMSH_PARAM_QUERY_END = 26,
-    GMSH_CONNECT         = 27,
-    GMSH_SPEED_TEST      = 30,
-    GMSH_OPTION_1        = 100,
-    GMSH_OPTION_2        = 101,
-    GMSH_OPTION_3        = 102,
-    GMSH_OPTION_4        = 103,
-    GMSH_OPTION_5        = 104};
+    GMSH_START               = 1,
+    GMSH_STOP                = 2,
+    GMSH_INFO                = 10,
+    GMSH_WARNING             = 11,
+    GMSH_ERROR               = 12,
+    GMSH_PROGRESS            = 13,
+    GMSH_MERGE_FILE          = 20,
+    GMSH_PARSE_STRING        = 21,
+    GMSH_VERTEX_ARRAY        = 22,
+    GMSH_PARAMETER           = 23,
+    GMSH_PARAMETER_QUERY     = 24,
+    GMSH_PARAMETER_QUERY_ALL = 25,
+    GMSH_PARAMETER_QUERY_END = 26,
+    GMSH_CONNECT             = 27,
+    GMSH_OLPARSE             = 28,
+    GMSH_PARAMETER_NOT_FOUND = 29,
+    GMSH_SPEED_TEST          = 30,
+    GMSH_PARAMETER_CLEAR     = 31,
+    GMSH_OPTION_1            = 100,
+    GMSH_OPTION_2            = 101,
+    GMSH_OPTION_3            = 102,
+    GMSH_OPTION_4            = 103,
+    GMSH_OPTION_5            = 104};
  protected:
   // the socket descriptor
   int _sock;
@@ -154,10 +157,10 @@ class GmshSocket{
     WSACleanup();
 #endif
   }
-  // utility function to wait for some data to read on a socket (if
-  // seconds and microseconds == 0 we check for available data and
-  // return immediately, i.e., we do polling). Returns 0 when data is
-  // available.
+  // Wait for some data to read on the socket (if seconds and microseconds == 0
+  // we check for available data and return immediately, i.e., we do
+  // polling). Returns 1 when data is available, 0 when nothing happened before
+  // the time delay, -1 on error.
   int Select(int seconds, int microseconds, int socket=-1)
   {
     int s = (socket < 0) ? _sock : socket;
@@ -167,8 +170,8 @@ class GmshSocket{
     fd_set rfds;
     FD_ZERO(&rfds);
     FD_SET(s, &rfds);
-    // select checks all IO descriptors between 0 and its first arg,
-    // minus 1... hence the +1 below
+    // select checks all IO descriptors between 0 and its first arg, minus 1;
+    // hence the +1 below
     return select(s + 1, &rfds, NULL, NULL, &tv);
   }
   void SendMessage(int type, int length, const void *msg)
@@ -323,7 +326,7 @@ class GmshServer : public GmshSocket{
   GmshServer() : GmshSocket(), _portno(-1) {}
   virtual ~GmshServer(){}
   virtual int NonBlockingSystemCall(const char *str) = 0;
-  virtual int NonBlockingWait(int socket, double waitint, double timeout) = 0;
+  virtual int NonBlockingWait(double waitint, double timeout, int socket=-1) = 0;
   // start the client by launching "command" (command is supposed to contain
   // '%s' where the socket name should appear)
   int Start(const char *command, const char *sockname, double timeout)
@@ -408,7 +411,7 @@ class GmshServer : public GmshSocket{
     }
 
     // wait until we get data
-    int ret = NonBlockingWait(tmpsock, 0.001, timeout);
+    int ret = NonBlockingWait(0.001, timeout, tmpsock);
     if(ret){
       CloseSocket(tmpsock);
       if(ret == 2){

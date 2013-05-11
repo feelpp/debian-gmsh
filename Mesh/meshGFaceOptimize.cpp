@@ -158,7 +158,7 @@ void buildMeshGenerationDataStructures(GFace *gf,
     std::list<GVertex*>::iterator itvx = emb_vertx.begin();
     while(itvx != emb_vertx.end()){
       MVertex *v = *((*itvx)->mesh_vertices.begin());
-      vSizesMap[v] = std::min(vSizesMap[v], (*itvx)->prescribedMeshSizeAtVertex());
+      vSizesMap[v] = std::max(vSizesMap[v], (*itvx)->prescribedMeshSizeAtVertex());
       ++itvx;
     }
   }
@@ -169,9 +169,9 @@ void buildMeshGenerationDataStructures(GFace *gf,
     std::list<GEdge*>::iterator ite = embedded_edges.begin();
     while(ite != embedded_edges.end()){
       if(!(*ite)->isMeshDegenerated()){
-	for (int i=0;i<(*ite)->lines.size();i++)
-	  data.internalEdges.insert (MEdge((*ite)->lines[i]->getVertex(0),
-					   (*ite)->lines[i]->getVertex(1)));
+	for (unsigned int i = 0; i < (*ite)->lines.size(); i++)
+	  data.internalEdges.insert(MEdge((*ite)->lines[i]->getVertex(0),
+					  (*ite)->lines[i]->getVertex(1)));
       }
       ++ite;
     }
@@ -231,7 +231,7 @@ void transferDataStructure(GFace *gf, std::set<MTri3*, compareTri3Ptr> &AllTris,
 		    data.Us[index1], data.Vs[index1], 0.,
 		    data.Us[index2], data.Vs[index2], 0., n2);
       double pp; prosca(n1, n2, &pp);
-      if(pp < 0) t->revert();
+      if(pp < 0) t->reverse();
     }
   }
 
@@ -242,16 +242,16 @@ void transferDataStructure(GFace *gf, std::set<MTri3*, compareTri3Ptr> &AllTris,
       MVertex *v[3];
       for (int j=0;j<3;j++){
 	v[j] = t->getVertex(j);
-	std::map<MVertex* , MVertex*>::iterator it =  data.equivalence->find(v[j]);  
+	std::map<MVertex* , MVertex*>::iterator it =  data.equivalence->find(v[j]);
 	if (it != data.equivalence->end()){
 	  v[j] = it->second;
 	}
       }
       newT.push_back(new MTriangle (v[0],v[1],v[2]));
       delete t;
-    } 
+    }
     gf->triangles = newT;
-  }  
+  }
 
 
 }
@@ -661,7 +661,7 @@ static bool _isItAGoodIdeaToMoveThatVertex (GFace *gf,
     surface_old += surfaceFaceUV(e1[j],gf,false);
     minq = std::min(e1[j]->etaShapeMeasure(),minq);
   }
-  
+
   v1->setParameter(0,after.x());
   v1->setParameter(1,after.y());
   v1->setXYZ(pafter.x(),pafter.y(),pafter.z());
@@ -935,6 +935,7 @@ void createRegularMesh (GFace *gf,
           (p34.x() && p34.y() == -1.0) ||
           (p41.x() && p41.y() == -1.0)) {
         Msg::Error("Wrong param -1");
+        fclose(f3);
         return;
       }
 
@@ -1603,8 +1604,8 @@ static int _splitFlatQuads(GFace *gf, double minQual, std::set<MEdge,Less_Edge> 
         MVertex *v3 = e->getVertex((k+1)%4);
         MVertex *v2 = e->getVertex((k+2)%4);
         MVertex *v4 = e->getVertex((k+3)%4);
-	prioritory.insert(MEdge(v2,v3)); 
-	prioritory.insert(MEdge(v3,v4)); 
+	prioritory.insert(MEdge(v2,v3));
+	prioritory.insert(MEdge(v3,v4));
         SPoint2 pv1,pv2,pv3,pv4,pb1,pb2,pb3,pb4;
         reparamMeshEdgeOnFace (v1,v3,gf,pv1,pv3);
         reparamMeshEdgeOnFace (v1,v4,gf,pv1,pv4);
@@ -1901,7 +1902,7 @@ struct opti_data_vertex_relocation {
 
   double f() const
   {
-    
+
     double val = 1.0;
     for (unsigned int i=0;i<e.size();++i){
       MElement *el = e[i];
@@ -2032,14 +2033,14 @@ static int _untangleQuad (GFace *gf, MQuadrangle *q,v2t_cont & adj)
 
   std::vector<SPoint2> before;for(int i=0;i<4;i++)before.push_back(SPoint2(U[i],V[i]));
   std::vector<SPoint2> after;
-  for(int i=0;i<4;i++) 
+  for(int i=0;i<4;i++)
     if (q->getVertex(i)->onWhat()->dim() == 2)
       after.push_back(SPoint2(x[2*i],x[2*i+1]));
     else
       after.push_back(SPoint2(U[i],V[i]));
   std::vector<MVertex*> vs;for(int i=0;i<4;i++)vs.push_back(q->getVertex(i));
   bool success = _isItAGoodIdeaToMoveThoseVertices (gf,lt,vs,before,after);
-  
+
   if (success){
     for (int i=0;i<4;i++)data.set_(x[2*i],x[2*i+1],i);
     //    sprintf(NNN,"UNTANGLE_cavity_%d_after.pos",OPTI_NUMBER++);
@@ -2237,11 +2238,9 @@ int optiSmoothing(GFace *gf, int niter, bool infinity_norm)
   return N;
 }
 
-
-
 int untangleInvalidQuads(GFace *gf, int niter)
 {
-  //  return 0;
+  // return 0;
   int N = 0;
 #if defined(HAVE_BFGS)
   v2t_cont adj;
@@ -2258,32 +2257,34 @@ int untangleInvalidQuads(GFace *gf, int niter)
   return N;
 }
 
-static int orientationOK (GFace *gf, MVertex *v1, MVertex *v2, MVertex *v3){
-  SPoint2 p1,p2,p3;
-  reparamMeshVertexOnFace(v1,gf, p1);
-  reparamMeshVertexOnFace(v2,gf, p2);
-  reparamMeshVertexOnFace(v3,gf, p3);
-  if (robustPredicates::orient2d (p1,p2,p3) < 0)return true;
-  return false;     
+static int orientationOK (GFace *gf, MVertex *v1, MVertex *v2, MVertex *v3)
+{
+  SPoint2 p1, p2, p3;
+  reparamMeshVertexOnFace(v1, gf, p1);
+  reparamMeshVertexOnFace(v2, gf, p2);
+  reparamMeshVertexOnFace(v3, gf, p3);
+  if (robustPredicates::orient2d(p1, p2, p3) < 0) return true;
+  return false;
 }
 
-static int allowSwap (GFace *gf, MVertex *v1, MVertex *v2, MVertex *v3, MVertex *v4){
+static int allowSwap (GFace *gf, MVertex *v1, MVertex *v2, MVertex *v3, MVertex *v4)
+{
   SPoint2 p1,p2,p3,p4;
-  reparamMeshVertexOnFace(v1,gf, p1);
-  reparamMeshVertexOnFace(v2,gf, p2);
-  reparamMeshVertexOnFace(v3,gf, p3);
-  reparamMeshVertexOnFace(v4,gf, p4);
-  if (robustPredicates::orient2d (p1,p2,p3) *
-      robustPredicates::orient2d (p1,p2,p4) < 0 &&
-      robustPredicates::orient2d (p3,p4,p1) *
-      robustPredicates::orient2d (p3,p4,p2) > 0)return true;
-  return false;     
+  reparamMeshVertexOnFace(v1, gf, p1);
+  reparamMeshVertexOnFace(v2, gf, p2);
+  reparamMeshVertexOnFace(v3, gf, p3);
+  reparamMeshVertexOnFace(v4, gf, p4);
+  if (robustPredicates::orient2d(p1, p2, p3) *
+      robustPredicates::orient2d(p1, p2, p4) < 0 &&
+      robustPredicates::orient2d(p3, p4, p1) *
+      robustPredicates::orient2d(p3, p4, p2) > 0) return true;
+  return false;
 }
 
-static double myShapeMeasure(MElement *e){
+static double myShapeMeasure(MElement *e)
+{
   return e->etaShapeMeasure();
 }
-
 
 int _edgeSwapQuadsForBetterQuality(GFace *gf, double eps, std::set<MEdge,Less_Edge> &prioritory)
 {
@@ -2356,7 +2357,7 @@ int _edgeSwapQuadsForBetterQuality(GFace *gf, double eps, std::set<MEdge,Less_Ed
 	bool PA = prioritory.find(MEdge(v11,v22)) == prioritory.end();
 	bool PB = prioritory.find(MEdge(v12,v21)) == prioritory.end();
 
-        double old_surface = surfaceFaceUV(e1,gf) + surfaceFaceUV(e2,gf) ; 
+        double old_surface = surfaceFaceUV(e1,gf) + surfaceFaceUV(e2,gf) ;
         double new_surface_A = surfaceFaceUV(q1A,gf) + surfaceFaceUV(q2A,gf) ;
         double new_surface_B = surfaceFaceUV(q1B,gf) + surfaceFaceUV(q2B,gf) ;
 
@@ -2372,9 +2373,9 @@ int _edgeSwapQuadsForBetterQuality(GFace *gf, double eps, std::set<MEdge,Less_Ed
 
 	if(!allowSwap(gf,v1,v2,v11,v22)) doA = false;
 	if(!allowSwap(gf,v1,v2,v21,v12)) doB = false;
-	
-	if (!PA)doA = false; 
-	if (!PB)doB = false; 
+
+	if (!PA)doA = false;
+	if (!PB)doB = false;
 
 
         if (doA && SANITY_(gf,q1A,q2A)){
@@ -2459,9 +2460,9 @@ static std::vector<MVertex*> computeBoundingPoints (const std::vector<MElement*>
   std::list<MVertex *> oriented;
   {
     std::list<MEdge>::iterator itsz = border.begin();
-    border.erase (itsz);
     oriented.push_back(itsz->getVertex(0));
     oriented.push_back(itsz->getVertex(1));
+    border.erase (itsz);
   }
   while (border.size()){
     std::list<MVertex*>::iterator itb = oriented.begin();
@@ -2497,7 +2498,7 @@ static std::vector<MVertex*> computeBoundingPoints (const std::vector<MElement*>
 
 static MQuadrangle* buildNewQuad(MVertex *first,
 				 MVertex *newV,
-				 MElement *e, 
+				 MElement *e,
 				 const std::vector<MElement*> & E){
   int found[3] = {0,0,0};
   for (unsigned int i=0;i<E.size();i++){
@@ -2527,7 +2528,7 @@ static MQuadrangle* buildNewQuad(MVertex *first,
 			    newV,
 			    e->getVertex((start+1)%3),
 			    e->getVertex((start+2)%3));
-  }      
+  }
 }
 
 int postProcessExtraEdges (GFace *gf, std::vector<std::pair<MElement*,MElement*> > &toProcess)
@@ -3020,7 +3021,6 @@ int recombineWithBlossom(GFace *gf, double dx, double dy,
         elist[2*i]   = t2n[pairs[i].t1];
         elist[2*i+1] = t2n[pairs[i].t2];
         //elen [i] =  (int) pairs[i].angle;
-	//        elen [i] = (int) pairs[i].total_cost; //addition for class Temporary
         double angle = atan2(pairs[i].n1->y()-pairs[i].n2->y(),
                              pairs[i].n1->x()-pairs[i].n2->x());
 
@@ -3227,7 +3227,6 @@ static int _recombineIntoQuads(GFace *gf, int recur_level, bool cubicGraph = 1)
         elist[2*i]   = t2n[pairs[i].t1];
         elist[2*i+1] = t2n[pairs[i].t2];
         elen [i] =  (int) 1000*exp(-pairs[i].angle);
-        //elen [i] = (int) pairs[i].total_cost; //addition for class Temporary
 	//        double angle = atan2(pairs[i].n1->y()-pairs[i].n2->y(),
 	//                             pairs[i].n1->x()-pairs[i].n2->x());
 
@@ -3496,7 +3495,7 @@ void recombineIntoQuads(GFace *gf,
 	  optistatus[5] = (ITERB == 1) ?untangleInvalidQuads(gf,CTX::instance()->mesh.nbSmoothing) : 0;
 
 	  double bad = printStats (gf, "IN OPTIMIZATION");
-	  if (bad > .1)break;	  
+	  if (bad > .1)break;
           if (ITER == 10){
 	    ITERB = 1;
 	  }
@@ -3581,156 +3580,165 @@ void quadsToTriangles(GFace *gf, double minqual)
   gf->quadrangles = qds;
 }
 
+/***************************************************/
+/******************class Temporary******************/
+/***************************************************/
+
 double Temporary::w1,Temporary::w2,Temporary::w3;
-std::vector<SVector3> Temporary::gradients;
 
-Temporary::Temporary(){}
+std::vector<SVector3> Temporary::gradients; 	 	 
 
-Temporary::~Temporary(){}
+Temporary::Temporary(){} 	 	 
 
-SVector3 Temporary::compute_gradient(MElement*element)
-{
-  /*double x1,y1,z1;
-  double x2,y2,z2;
-  double x3,y3,z3;
-  double x,y,z;
-  MVertex*vertex1 = element->getVertex(0);
-  MVertex*vertex2 = element->getVertex(1);
-  MVertex*vertex3 = element->getVertex(2);
-  x1 = vertex1->x();
-  y1 = vertex1->y();
-  z1 = vertex1->z();
-  x2 = vertex2->x();
-  y2 = vertex2->y();
-  z2 = vertex2->z();
-  x3 = vertex3->x();
-  y3 = vertex3->y();
-  z3 = vertex3->z();
-  x = (x1+x2+x3)/3.0;
-  y = (y1+y2+y3)/3.0;
-  z = (z1+z2+z3)/3.0;*/
-  return SVector3(0.0,1.0,0.0);
+Temporary::~Temporary(){} 	 	 
+
+SVector3 Temporary::compute_gradient(MElement*element) 	 	 
+{ 	 	 
+  /*double x1,y1,z1; 	 	 
+  double x2,y2,z2; 	 	 
+  double x3,y3,z3; 	 	 
+  double x,y,z; 	 	 
+  MVertex*vertex1 = element->getVertex(0); 	 	 
+  MVertex*vertex2 = element->getVertex(1); 	 	 
+  MVertex*vertex3 = element->getVertex(2); 	 	 
+  x1 = vertex1->x(); 	 	 
+  y1 = vertex1->y(); 	 	 
+  z1 = vertex1->z(); 	 	 
+  x2 = vertex2->x(); 	 	 
+  y2 = vertex2->y(); 	 	 
+  z2 = vertex2->z(); 	 	 
+  x3 = vertex3->x(); 	 	 
+  y3 = vertex3->y(); 	 	 
+  z3 = vertex3->z(); 	 	 
+  x = (x1+x2+x3)/3.0; 	 	 
+  y = (y1+y2+y3)/3.0; 	 	 
+  z = (z1+z2+z3)/3.0;*/ 	 	 
+  return SVector3(0.0,1.0,0.0); 	 	 
+} 	 	 
+
+void Temporary::select_weights(double new_w1,double new_w2,double new_w3) 	 	 
+{ 	 	 
+  w1 = new_w1; 	 	 
+  w2 = new_w2; 	 	 
+  w3 = new_w3; 	 	 
+} 	 	 
+
+double Temporary::compute_total_cost(double f1,double f2) 	 	 
+{ 	 	 
+  double cost; 	 	 
+  cost = w1*f1 + w2*f2 + w3*f1*f2; 	 	 
+  return cost; 	 	 
+} 	 	 
+
+SVector3 Temporary::compute_normal(MElement*element) 	 	 
+{ 	 	 
+  double x1,y1,z1; 	 	 
+  double x2,y2,z2; 	 	 
+  double x3,y3,z3; 	 	 
+  double length; 	 	 
+  SVector3 vectorA; 	 	 
+  SVector3 vectorB; 	 	 
+  SVector3 normal; 	 	 
+  MVertex*vertex1 = element->getVertex(0); 	 	 
+  MVertex*vertex2 = element->getVertex(1); 	 	 
+  MVertex*vertex3 = element->getVertex(2); 	 	 
+  x1 = vertex1->x(); 	 	 
+  y1 = vertex1->y(); 	 	 
+  z1 = vertex1->z(); 	 	 
+  x2 = vertex2->x(); 	 	 
+  y2 = vertex2->y(); 	 	 
+  z2 = vertex2->z(); 	 	 
+  x3 = vertex3->x(); 	 	 
+  y3 = vertex3->y(); 	 	 
+  z3 = vertex3->z(); 	 	 
+  vectorA = SVector3(x2-x1,y2-y1,z2-z1); 	 	 
+  vectorB = SVector3(x3-x1,y3-y1,z3-z1); 	 	 
+  normal = crossprod(vectorA,vectorB); 	 	 
+  length = norm(normal); 	 	 
+  return SVector3(normal.x()/length,normal.y()/length,normal.z()/length); 	 	 
+} 	 	 
+
+SVector3 Temporary::compute_other_vector(MElement*element) 	 	 
+{ 	 	 
+  //int number; 	 	 
+  double length; 	 	 
+  SVector3 normal; 	 	 
+  SVector3 gradient; 	 	 
+  SVector3 other_vector; 	 	 
+  //number = element->getNum(); 	 	 
+  normal = Temporary::compute_normal(element); 	 	 
+  gradient = Temporary::compute_gradient(element);//gradients[number]; 	 	 
+  other_vector = crossprod(gradient,normal); 	 	 
+  length = norm(other_vector); 	 	 
+  return SVector3(other_vector.x()/length,other_vector.y()/length,other_vector.z()/length); 	 	 
+} 	 	 
+
+double Temporary::compute_alignment(const MEdge&_edge, MElement*element1, MElement*element2) 	 	 
+{ 	 	 
+  //int number; 	 	 
+  double scalar_productA,scalar_productB; 	 	 
+  double alignment; 	 	 
+  SVector3 gradient; 	 	 
+  SVector3 other_vector; 	 	 
+  SVector3 edge; 	 	 
+  MVertex*vertexA; 	 	 
+  MVertex*vertexB; 	 	 
+  //number = element1->getNum(); 	 	 
+  gradient = Temporary::compute_gradient(element1);//gradients[number]; 	 	 
+  other_vector = Temporary::compute_other_vector(element1); 	 	 
+  vertexA = _edge.getVertex(0); 	 	 
+  vertexB = _edge.getVertex(1); 	 	 
+  edge = SVector3(vertexB->x()-vertexA->x(),vertexB->y()-vertexA->y(),vertexB->z()-vertexA->z()); 	 	 
+  edge = edge * (1/norm(edge)); 	 	 
+  scalar_productA = fabs(dot(gradient,edge)); 	 	 
+  scalar_productB = fabs(dot(other_vector,edge)); 	 	 
+  alignment = std::max(scalar_productA,scalar_productB) - sqrt(2.0)/2.0; 	 	 
+  alignment = alignment/(1.0-sqrt(2.0)/2.0); 	 	 
+  return alignment; 	 	 
+} 	 	 
+
+void Temporary::read_data(std::string file_name) 	 	 
+{ 	 	 
+  #if defined(HAVE_POST) 	 	 
+  int i,j,number; 	 	 
+  double x,y,z; 	 	 
+  MElement*element; 	 	 
+  PViewData*data; 	 	 
+  PView::readMSH(file_name,-1); 	 	 
+  data = PView::list[0]->getData(); 	 	 
+  for(i = 0;i < data->getNumEntities(0);i++) 	 	 
+  { 	 	 
+    if(data->skipEntity(0,i)) continue; 	 	 
+	for(j = 0;j < data->getNumElements(0,i);j++){ 	 	 
+	  if(data->skipElement(0,i,j)) continue; 	 	 
+	  element = data->getElement(0,i,j); 	 	 
+	  number = element->getNum(); 	 	 
+	  data->getValue(0,i,j,0,x); 	 	 
+	  data->getValue(0,i,j,1,y); 	 	 
+	  data->getValue(0,i,j,2,z); 	 	 
+	  gradients[number] = SVector3(x,y,z); 	 	 
+	} 	 	 
+  } 	 	 
+  #endif 	 	 
+} 	 	 
+
+void Temporary::quadrilaterize(std::string file_name,double _w1,double _w2,double _w3) 	 	 
+{ 	 	 
+  GFace*face; 	 	 
+  GModel*model = GModel::current(); 	 	 
+  GModel::fiter iterator; 	 	 
+  gradients.resize(model->getNumMeshElements() + 1); 	 	 
+  w1 = _w1; 	 	 
+  w2 = _w2; 	 	 
+  w3 = _w3; 	 	 
+  Temporary::read_data(file_name); 	 	 
+  for(iterator = model->firstFace();iterator != model->lastFace();iterator++) 	 	 
+  { 	 	 
+    face = *iterator; 	 	 
+	_recombineIntoQuads(face,1,1); 	 	 
+  } 	 	 
 }
 
-void Temporary::select_weights(double new_w1,double new_w2,double new_w3)
-{
-  w1 = new_w1;
-  w2 = new_w2;
-  w3 = new_w3;
-}
-
-double Temporary::compute_total_cost(double f1,double f2)
-{
-  double cost;
-  cost = w1*f1 + w2*f2 + w3*f1*f2;
-  return cost;
-}
-
-SVector3 Temporary::compute_normal(MElement*element)
-{
-  double x1,y1,z1;
-  double x2,y2,z2;
-  double x3,y3,z3;
-  double length;
-  SVector3 vectorA;
-  SVector3 vectorB;
-  SVector3 normal;
-  MVertex*vertex1 = element->getVertex(0);
-  MVertex*vertex2 = element->getVertex(1);
-  MVertex*vertex3 = element->getVertex(2);
-  x1 = vertex1->x();
-  y1 = vertex1->y();
-  z1 = vertex1->z();
-  x2 = vertex2->x();
-  y2 = vertex2->y();
-  z2 = vertex2->z();
-  x3 = vertex3->x();
-  y3 = vertex3->y();
-  z3 = vertex3->z();
-  vectorA = SVector3(x2-x1,y2-y1,z2-z1);
-  vectorB = SVector3(x3-x1,y3-y1,z3-z1);
-  normal = crossprod(vectorA,vectorB);
-  length = norm(normal);
-  return SVector3(normal.x()/length,normal.y()/length,normal.z()/length);
-}
-
-SVector3 Temporary::compute_other_vector(MElement*element)
-{
-  //int number;
-  double length;
-  SVector3 normal;
-  SVector3 gradient;
-  SVector3 other_vector;
-  //number = element->getNum();
-  normal = Temporary::compute_normal(element);
-  gradient = Temporary::compute_gradient(element);//gradients[number];
-  other_vector = crossprod(gradient,normal);
-  length = norm(other_vector);
-  return SVector3(other_vector.x()/length,other_vector.y()/length,other_vector.z()/length);
-}
-
-double Temporary::compute_alignment(const MEdge&_edge, MElement*element1, MElement*element2)
-{
-  //int number;
-  double scalar_productA,scalar_productB;
-  double alignment;
-  SVector3 gradient;
-  SVector3 other_vector;
-  SVector3 edge;
-  MVertex*vertexA;
-  MVertex*vertexB;
-  //number = element1->getNum();
-  gradient = Temporary::compute_gradient(element1);//gradients[number];
-  other_vector = Temporary::compute_other_vector(element1);
-  vertexA = _edge.getVertex(0);
-  vertexB = _edge.getVertex(1);
-  edge = SVector3(vertexB->x()-vertexA->x(),vertexB->y()-vertexA->y(),vertexB->z()-vertexA->z());
-  edge = edge * (1/norm(edge));
-  scalar_productA = fabs(dot(gradient,edge));
-  scalar_productB = fabs(dot(other_vector,edge));
-  alignment = std::max(scalar_productA,scalar_productB) - sqrt(2.0)/2.0;
-  alignment = alignment/(1.0-sqrt(2.0)/2.0);
-  return alignment;
-}
-
-void Temporary::read_data(std::string file_name)
-{
-#if defined(HAVE_POST)
-  int i,j,number;
-  double x,y,z;
-  MElement*element;
-  PViewData*data;
-  PView::readMSH(file_name,-1);
-  data = PView::list[0]->getData();
-  for(i = 0;i < data->getNumEntities(0);i++)
-  {
-    if(data->skipEntity(0,i)) continue;
-    for(j = 0;j < data->getNumElements(0,i);j++){
-      if(data->skipElement(0,i,j)) continue;
-      element = data->getElement(0,i,j);
-      number = element->getNum();
-      data->getValue(0,i,j,0,x);
-      data->getValue(0,i,j,1,y);
-      data->getValue(0,i,j,2,z);
-      gradients[number] = SVector3(x,y,z);
-    }
-  }
-#endif
-}
-
-void Temporary::quadrilaterize(std::string file_name,double _w1,double _w2,double _w3)
-{
-  GFace*face;
-  GModel*model = GModel::current();
-  GModel::fiter iterator;
-  gradients.resize(model->getNumMeshElements() + 1);
-  w1 = _w1;
-  w2 = _w2;
-  w3 = _w3;
-  Temporary::read_data(file_name);
-  for(iterator = model->firstFace();iterator != model->lastFace();iterator++)
-  {
-    face = *iterator;
-    _recombineIntoQuads(face,1,1);
-  }
-}
+/***************************************************/
+/***************************************************/
+/***************************************************/

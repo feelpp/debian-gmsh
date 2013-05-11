@@ -38,6 +38,7 @@ class MLine : public MElement {
   virtual int getDim() const { return 1; }
   virtual int getNumVertices() const { return 2; }
   virtual MVertex *getVertex(int num){ return _v[num]; }
+  virtual const MVertex *getVertex(int num) const{ return _v[num]; }
   virtual void setVertex(int num,  MVertex *v){ _v[num] = v; }
   virtual double getInnerRadius(); // half-length of segment line
   virtual double getLength(); // length of segment line
@@ -47,7 +48,7 @@ class MLine : public MElement {
     ithVertex = _v[0] == vertex ? 0 : 1;
   }
   virtual int getNumEdges(){ return 1; }
-  virtual MEdge getEdge(int num){ return MEdge(_v[0], _v[1]); }
+  virtual MEdge getEdge(int num) const{ return MEdge(_v[0], _v[1]); }
   virtual int getNumEdgesRep(){ return 1; }
   virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n)
   {
@@ -68,21 +69,21 @@ class MLine : public MElement {
   virtual int getTypeForVTK() const { return 3; }
   virtual const char *getStringForPOS() const { return "SL"; }
   virtual const char *getStringForBDF() const { return "CBAR"; }
-  virtual const char *getStringForINP() const { return "C1D2"; }
-  virtual void revert()
+  virtual const char *getStringForINP() const { return "T3D2"/*"C1D2"*/; }
+  virtual void reverse()
   {
     MVertex *tmp = _v[0]; _v[0] = _v[1]; _v[1] = tmp;
   }
   virtual const nodalBasis* getFunctionSpace(int o=-1) const;
   virtual const JacobianBasis* getJacobianFuncSpace(int o=-1) const;
-  virtual bool isInside(double u, double v, double w)
+  virtual bool isInside(double u, double v, double w) const
   {
     double tol = _isInsideTolerance;
     if(u < -(1. + tol) || u > (1. + tol) || fabs(v) > tol || fabs(w) > tol)
       return false;
     return true;
   }
-  virtual void getNode(int num, double &u, double &v, double &w)
+  virtual void getNode(int num, double &u, double &v, double &w) const
   {
     v = w = 0.;
     switch(num) {
@@ -91,7 +92,7 @@ class MLine : public MElement {
     default: u =  0.; break;
     }
   }
-  virtual SPoint3 barycenterUVW()
+  virtual SPoint3 barycenterUVW() const
   {
     return SPoint3(0, 0, 0);
   }
@@ -124,6 +125,7 @@ class MLine3 : public MLine {
   virtual int getPolynomialOrder() const { return 2; }
   virtual int getNumVertices() const { return 3; }
   virtual MVertex *getVertex(int num){ return num < 2 ? _v[num] : _vs[num - 2]; }
+  virtual const MVertex *getVertex(int num) const{ return num < 2 ? _v[num] : _vs[num - 2]; }
   virtual MVertex *getVertexUNV(int num)
   {
     static const int map[3] = {0, 2, 1};
@@ -149,8 +151,8 @@ class MLine3 : public MLine {
   virtual int getTypeForUNV() const { return 24; } // parabolic beam
   virtual int getTypeForVTK() const { return 21; }
   virtual const char *getStringForPOS() const { return "SL2"; }
-  virtual const char *getStringForINP() const { return "C1D3"; }
-  virtual void getNode(int num, double &u, double &v, double &w)
+  virtual const char *getStringForINP() const { return "T3D3"/*"C1D3"*/; }
+  virtual void getNode(int num, double &u, double &v, double &w) const
   {
     num < 2 ? MLine::getNode(num, u, v, w) : MElement::getNode(num, u, v, w);
   }
@@ -184,6 +186,7 @@ class MLineN : public MLine {
   virtual int getPolynomialOrder() const { return _vs.size() + 1; }
   virtual int getNumVertices() const { return _vs.size() + 2; }
   virtual MVertex *getVertex(int num){ return num < 2 ? _v[num] : _vs[num - 2]; }
+  virtual const MVertex *getVertex(int num) const{ return num < 2 ? _v[num] : _vs[num - 2]; }
   virtual int getNumEdgeVertices() const { return _vs.size(); }
   virtual int getNumEdgesRep(){ return _vs.size() + 1; }
   virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n)
@@ -212,7 +215,7 @@ class MLineN : public MLine {
     if(_vs.size() == 9) return MSH_LIN_11;
     return 0;
   }
-  virtual void getNode(int num, double &u, double &v, double &w)
+  virtual void getNode(int num, double &u, double &v, double &w) const
   {
     num < 2 ? MLine::getNode(num, u, v, w) : MElement::getNode(num, u, v, w);
   }

@@ -338,17 +338,17 @@ void Recombinator::execute(GRegion* gr){
   build_tuples(gr);
   init_markings(gr);
 
+  Msg::Info("Building Connectivity...");
   build_vertex_to_vertices(gr);
   build_vertex_to_elements(gr);
-  printf("connectivity\n");
 
   potential.clear();
   patern1(gr);
-  printf("patern no. 1\n");
+  Msg::Info("Hex-merging patern nb. 1...");
   patern2(gr);
-  printf("patern no. 2\n");
+  Msg::Info("Hex-merging patern nb. 2...");
   patern3(gr);
-  printf("patern no. 3\n");
+  Msg::Info("Hex-merging patern nb. 3...");
 
   std::sort(potential.begin(),potential.end());
 
@@ -1887,26 +1887,26 @@ void Recombinator::build_vertex_to_vertices(GRegion* gr){
 
   for(i=0;i<gr->getNumMeshElements();i++){
     element = gr->getMeshElement(i);
-	for(j=0;j<element->getNumVertices();j++){
+    for(j=0;j<element->getNumVertices();j++){
       a = element->getVertex(j);
-	  b = element->getVertex((j+1)%4);
-	  c = element->getVertex((j+2)%4);
-	  d = element->getVertex((j+3)%4);
+      b = element->getVertex((j+1)%4);
+      c = element->getVertex((j+2)%4);
+      d = element->getVertex((j+3)%4);
 
-	  it = vertex_to_vertices.find(a);
-	  if(it!=vertex_to_vertices.end()){
-	    it->second.insert(b);
-	    it->second.insert(c);
-	    it->second.insert(d);
-	  }
-	  else{
-	    bin.clear();
-	    bin.insert(b);
-	    bin.insert(c);
-	    bin.insert(d);
-	    vertex_to_vertices.insert(std::pair<MVertex*,std::set<MVertex*> >(a,bin));
-	  }
-	}
+      it = vertex_to_vertices.find(a);
+      if(it!=vertex_to_vertices.end()){
+	it->second.insert(b);
+	it->second.insert(c);
+	it->second.insert(d);
+      }
+      else{
+	bin.clear();
+	bin.insert(b);
+	bin.insert(c);
+	bin.insert(d);
+	vertex_to_vertices.insert(std::pair<MVertex*,std::set<MVertex*> >(a,bin));
+      }
+    }
   }
 }
 

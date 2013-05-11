@@ -68,6 +68,7 @@ class Msg {
   static void Error(const char *fmt, ...);
   static void Warning(const char *fmt, ...);
   static void Info(const char *fmt, ...);
+  static void RequestRender();
   static void Direct(const char *fmt, ...);
   static void StatusBar(bool log, const char *fmt, ...);
   static void StatusGl(const char *fmt, ...);
@@ -106,6 +107,7 @@ class Msg {
                                       std::string &val,
                                       std::map<std::string, std::vector<double> > &fopt,
                                       std::map<std::string, std::vector<std::string> > &copt);
+  static void UndefineOnelabParameter(const std::string &name);
   static void ImportPhysicalsAsOnelabRegions();
 };
 

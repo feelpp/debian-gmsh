@@ -17,6 +17,8 @@
 #include <algorithm>
 #include "directions3D.h"
 #include "Context.h"
+#include <iostream>
+#include <string>
 
 #if defined(HAVE_RTREE)
 #include "rtree.h"
@@ -56,6 +58,7 @@ class Metric{
 
 class Node{
  private:
+  int layer;
   double h;
   Metric m;
   SPoint3 point;
@@ -65,9 +68,11 @@ class Node{
   Node();
   Node(SPoint3);
   ~Node();
+  void set_layer(int);
   void set_size(double);
   void set_metric(Metric);
   void set_point(SPoint3);
+  int get_layer();
   double get_size();
   Metric get_metric();
   SPoint3 get_point();
@@ -242,6 +247,10 @@ Node::Node(SPoint3 new_point){
 
 Node::~Node(){}
 
+void Node::set_layer(int new_layer){
+  layer = new_layer;
+}
+
 void Node::set_size(double new_h){
   h = new_h;
 }
@@ -252,6 +261,10 @@ void Node::set_metric(Metric new_m){
 
 void Node::set_point(SPoint3 new_point){
   point = new_point;
+}
+
+int Node::get_layer(){
+  return layer;
 }
 
 double Node::get_size(){
@@ -325,11 +338,24 @@ void Filler::treat_model(){
 }
 
 void Filler::treat_region(GRegion* gr){
-  #if defined(HAVE_RTREE)
+
+  int NumSmooth = CTX::instance()->mesh.smoothCrossField;
+  std::cout << "NumSmooth = " << NumSmooth << std::endl ;
+  if(NumSmooth && (gr->dim() == 3)){
+    double scale = gr->bounds().diag()*1e-2;
+    Frame_field::initRegion(gr,NumSmooth);
+    Frame_field::saveCrossField("cross0.pos",scale);
+
+    Frame_field::smoothRegion(gr,NumSmooth);
+    Frame_field::saveCrossField("cross1.pos",scale);
+  }
+
+#if defined(HAVE_RTREE)
   unsigned int i;
   int j;
   int count;
   bool ok2;
+  bool val;
   double x,y,z;
   SPoint3 point;
   Node *node,*individual,*parent;
@@ -338,32 +364,19 @@ void Filler::treat_region(GRegion* gr){
   MElementOctree* octree;
   deMeshGRegion deleter;
   Wrapper wrapper;
+  GFace* gf;
   std::queue<Node*> fifo;
   std::vector<Node*> spawns;
   std::vector<Node*> garbage;
   std::vector<MVertex*> boundary_vertices;
   std::set<MVertex*> temp;
+  std::list<GFace*> faces;
+  std::set<MVertex*> retired;
   std::set<MVertex*>::iterator it;
+  std::list<GFace*>::iterator it2;
   RTree<Node*,double,3,double> rtree;
   
   Frame_field::init_region(gr);
-
-  int NumSmooth = CTX::instance()->mesh.smoothCrossField;
-  if(NumSmooth){
-    Frame_field::init(gr);
-    Frame_field::save(gr,"cross_init.pos");
-    double enew = Frame_field::smooth(gr);
-    int NumIter = 0;
-    double eold = 0;
-    do{
-      std::cout << "Smoothing: energy(" << NumIter << ") = " << enew << std::endl;
-      eold = enew;
-      enew = Frame_field::smooth(gr);
-    } while((eold > enew) && (NumIter++ < NumSmooth));
-    Frame_field::save(gr,"cross_smooth.pos");
-    Frame_field::fillTreeVolume(gr);
-  }
-
   Size_field::init_region(gr);
   Size_field::solve(gr);
   octree = new MElementOctree(gr->model());
@@ -371,19 +384,37 @@ void Filler::treat_region(GRegion* gr){
   boundary_vertices.clear();
   temp.clear();
   new_vertices.clear();
+  faces.clear();
+  retired.clear();
 
+  faces = gr->faces();	
+  for(it2=faces.begin();it2!=faces.end();it2++){
+    gf = *it2;
+	val = code(gf->tag());
+	for(i=0;i<gf->getNumMeshElements();i++){
+	  element = gf->getMeshElement(i);
+      for(j=0;j<element->getNumVertices();j++){
+	    vertex = element->getVertex(j);
+		if(val){
+		  retired.insert(vertex);
+		}
+		//temp.insert(vertex);
+	  }
+	}
+  }
+		
   for(i=0;i<gr->getNumMeshElements();i++){
     element = gr->getMeshElement(i);
-	for(j=0;j<element->getNumVertices();j++){
-	  vertex = element->getVertex(j);
-	  temp.insert(vertex);
-	}
+    for(j=0;j<element->getNumVertices();j++){
+      vertex = element->getVertex(j);
+      temp.insert(vertex);
+    }
   }
 
   for(it=temp.begin();it!=temp.end();it++){
-	if((*it)->onWhat()->dim()<3){
-	  boundary_vertices.push_back(*it);
-	}
+    if((*it)->onWhat()->dim()<3){
+      boundary_vertices.push_back(*it);
+    }
   }
   //std::ofstream file("nodes.pos");
   //file << "View \"test\" {\n";	
@@ -393,11 +424,14 @@ void Filler::treat_region(GRegion* gr){
     y = boundary_vertices[i]->y();
     z = boundary_vertices[i]->z();
     
-	node = new Node(SPoint3(x,y,z));
-	compute_parameters(node,gr);
-	rtree.Insert(node->min,node->max,node);
-	fifo.push(node);
-	//print_node(node,file);
+    node = new Node(SPoint3(x,y,z));
+    compute_parameters(node,gr);
+	node->set_layer(0);
+    rtree.Insert(node->min,node->max,node);
+	if(retired.find(boundary_vertices[i])==retired.end()){
+      fifo.push(node);
+	}
+    //print_node(node,file);
   }
   
   count = 1;
@@ -425,6 +459,8 @@ void Filler::treat_region(GRegion* gr){
 	  
 	  if(inside_domain(octree,x,y,z)){
 		compute_parameters(individual,gr);
+		individual->set_layer(parent->get_layer()+1);
+		
 		if(far_from_boundary(octree,individual)){
 		  wrapper.set_ok(1);
 		  wrapper.set_individual(individual);
@@ -467,18 +503,20 @@ void Filler::treat_region(GRegion* gr){
   for(i=0;i<new_vertices.size();i++) delete new_vertices[i];
   new_vertices.clear();
   delete octree;
+  rtree.RemoveAll();
   Size_field::clear();
   Frame_field::clear();
-  #endif
+#endif
 }
 
 Metric Filler::get_metric(double x,double y,double z){
   Metric m;
-  Matrix m2;
-  if(!CTX::instance()->mesh.smoothCrossField)
-    m2 = Frame_field::search(x,y,z);
+  STensor3 m2;
+  if(CTX::instance()->mesh.smoothCrossField){
+    m2 = Frame_field::findCross(x,y,z);
+  }
   else
-    m2 = Frame_field::findNearestCross(x,y,z);
+    m2 = Frame_field::search(x,y,z);
 
   m.set_m11(m2.get_m11());
   m.set_m21(m2.get_m21());
@@ -687,6 +725,24 @@ double Filler::improvement(GEntity* ge,MElementOctree* octree,SPoint3 point,doub
   }
 	
   return average;
+}
+
+bool Filler::code(int x){
+  bool val;
+  std::string s;
+  std::stringstream s2;
+  
+  val = 0;
+  s2 << x;
+  s = s2.str();
+	
+  if(s.length()>=5){
+    if(s.at(0)=='1' && s.at(1)=='2' && s.at(2)=='3' && s.at(3)=='4' && s.at(4)=='5'){
+	  val = 1;
+	}
+  }
+  
+  return val;
 }
 
 int Filler::get_nbr_new_vertices(){

@@ -4,6 +4,7 @@
 # bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 set(SRC
+  boundaryLayersData.cpp
   intersectCurveSurface.cpp
   GEntity.cpp STensor3.cpp
     GVertex.cpp GEdge.cpp GFace.cpp GRegion.cpp

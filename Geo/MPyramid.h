@@ -67,11 +67,12 @@ class MPyramid : public MElement {
   virtual int getDim() const { return 3; }
   virtual int getNumVertices() const { return 5; }
   virtual MVertex *getVertex(int num){ return _v[num]; }
+  virtual const MVertex *getVertex(int num) const{ return _v[num]; }
   virtual void setVertex(int num,  MVertex *v){ _v[num] = v; }
   virtual const nodalBasis* getFunctionSpace(int o=-1) const;
   virtual const JacobianBasis* getJacobianFuncSpace(int o=-1) const;
   virtual int getNumEdges(){ return 8; }
-  virtual MEdge getEdge(int num)
+  virtual MEdge getEdge(int num) const
   {
     return MEdge(_v[edges_pyramid(num, 0)], _v[edges_pyramid(num, 1)]);
   }
@@ -120,12 +121,12 @@ class MPyramid : public MElement {
   virtual int getTypeForVTK() const { return 14; }
   virtual const char *getStringForPOS() const { return "SY"; }
   virtual const char *getStringForBDF() const { return "CPYRAM"; }
-  virtual void revert()
+  virtual void reverse()
   {
     MVertex *tmp = _v[0]; _v[0] = _v[2]; _v[2] = tmp;
   }
   virtual int getVolumeSign();
-  virtual void getNode(int num, double &u, double &v, double &w)
+  virtual void getNode(int num, double &u, double &v, double &w) const
   {
     switch(num) {
     case 0 : u = -1.; v = -1.; w = 0.; break;
@@ -136,11 +137,11 @@ class MPyramid : public MElement {
     default: u =  0.; v =  0.; w = 0.; break;
     }
   }
-  virtual SPoint3 barycenterUVW()
+  virtual SPoint3 barycenterUVW() const
   {
     return SPoint3(0., 0., .2);
   }
-  virtual bool isInside(double u, double v, double w)
+  virtual bool isInside(double u, double v, double w) const
   {
     double tol = _isInsideTolerance;
     if(u < (w - (1. + tol)) || u > ((1. + tol) - w) || v < (w - (1. + tol)) ||
@@ -244,6 +245,7 @@ class MPyramidN : public MPyramid {
   virtual int getPolynomialOrder() const { return _order; }
   virtual int getNumVertices() const { return 5 + _vs.size(); }
   virtual MVertex *getVertex(int num){ return num < 5 ? _v[num] : _vs[num - 5]; }
+  virtual const MVertex *getVertex(int num) const{ return num < 5 ? _v[num] : _vs[num - 5]; }
   virtual int getNumEdgeVertices() const { return 8 * (_order - 1); }
   virtual int getNumFaceVertices() const
   {
@@ -306,7 +308,7 @@ class MPyramidN : public MPyramid {
     if(_order == 9 && _vs.size() + 5 == 385) return MSH_PYR_385;
     return 0;
   }
-  virtual void revert()
+  virtual void reverse()
   {
 /*    MVertex *tmp;
     tmp = _v[1]; _v[1] = _v[2]; _v[2] = tmp;
@@ -316,14 +318,14 @@ class MPyramidN : public MPyramid {
       inv[i] = _vs[reverseIndices[i + 4] - 4];
     _vs = inv;*/
 
-    Msg::Error("Revert not implemented yet for MPyramidN");
+    Msg::Error("Reverse not implemented yet for MPyramidN");
 
   }
   virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n);
   virtual int getNumEdgesRep();
   virtual void getFaceRep(int num, double *x, double *y, double *z, SVector3 *n);
   virtual int getNumFacesRep();
-  virtual void getNode(int num, double &u, double &v, double &w)
+  virtual void getNode(int num, double &u, double &v, double &w) const
   {
     num < 5 ? MPyramid::getNode(num, u, v, w) : MElement::getNode(num, u, v, w);
   }

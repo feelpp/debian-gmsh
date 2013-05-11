@@ -56,6 +56,7 @@ class MQuadrangle : public MElement {
   virtual int getDim() const { return 2; }
   virtual int getNumVertices() const { return 4; }
   virtual MVertex *getVertex(int num){ return _v[num]; }
+  virtual const MVertex *getVertex(int num) const{ return _v[num]; }
   virtual void setVertex(int num, MVertex *v){ _v[num] = v; }
   virtual MVertex *getVertexDIFF(int num)
   {
@@ -63,7 +64,7 @@ class MQuadrangle : public MElement {
     return getVertex(map[num]);
   }
   virtual int getNumEdges(){ return 4; }
-  virtual MEdge getEdge(int num)
+  virtual MEdge getEdge(int num) const
   {
     return MEdge(_v[edges_quad(num, 0)], _v[edges_quad(num, 1)]);
   }
@@ -115,10 +116,10 @@ class MQuadrangle : public MElement {
   virtual const char *getStringForPOS() const { return "SQ"; }
   virtual const char *getStringForBDF() const { return "CQUAD4"; }
   virtual const char *getStringForDIFF() const { return "ElmB4n2D"; }
-  virtual const char *getStringForINP() const { return "C2D4"; }
+  virtual const char *getStringForINP() const { return "CPS4"/*"C2D4"*/; }
   virtual const nodalBasis* getFunctionSpace(int o=-1) const;
   virtual const JacobianBasis* getJacobianFuncSpace(int o=-1) const;
-  virtual void getNode(int num, double &u, double &v, double &w)
+  virtual void getNode(int num, double &u, double &v, double &w) const
   {
     w = 0.;
     switch(num) {
@@ -129,16 +130,16 @@ class MQuadrangle : public MElement {
     default: u =  0.; v =  0.; break;
     }
   }
-  virtual SPoint3 barycenterUVW()
+  virtual SPoint3 barycenterUVW() const
   {
     return SPoint3(0., 0., 0.);
   }
   virtual double getVolume();
-  virtual void revert()
+  virtual void reverse()
   {
     MVertex *tmp = _v[1]; _v[1] = _v[3]; _v[3] = tmp;
   }
-  virtual bool isInside(double u, double v, double w)
+  virtual bool isInside(double u, double v, double w) const
   {
     double tol = _isInsideTolerance;
     if(u < -(1. + tol) || v < -(1. + tol) || u > (1. + tol) || v > (1. + tol) ||
@@ -199,6 +200,7 @@ class MQuadrangle8 : public MQuadrangle {
   virtual int getPolynomialOrder() const { return 2; }
   virtual int getNumVertices() const { return 8; }
   virtual MVertex *getVertex(int num){ return num < 4 ? _v[num] : _vs[num - 4]; }
+  virtual const MVertex *getVertex(int num) const { return num < 4 ? _v[num] : _vs[num - 4]; }
   virtual MVertex *getVertexUNV(int num)
   {
     static const int map[8] = {0, 4, 1, 5, 2, 6, 3, 7};
@@ -234,19 +236,19 @@ class MQuadrangle8 : public MQuadrangle {
   virtual int getTypeForVTK() const { return 23; }
   virtual const char *getStringForBDF() const { return "CQUAD8"; }
   virtual const char *getStringForDIFF() const { return "ElmB8n2D"; }
-  virtual const char *getStringForINP() const { return "C2D8"; }
-  virtual void revert()
+  virtual const char *getStringForINP() const { return "CPS8"/*"C2D8"*/; }
+  virtual void reverse()
   {
     MVertex *tmp;
     tmp = _v[1]; _v[1] = _v[3]; _v[3] = tmp;
     tmp = _vs[0]; _vs[0] = _vs[3]; _vs[3] = tmp;
     tmp = _vs[1]; _vs[1] = _vs[2]; _vs[2] = tmp;
   }
-  virtual void getNode(int num, double &u, double &v, double &w)
+  virtual void getNode(int num, double &u, double &v, double &w) const
   {
     num < 4 ? MQuadrangle::getNode(num, u, v, w) : MElement::getNode(num, u, v, w);
   }
-  virtual SPoint3 barycenterUVW()
+  virtual SPoint3 barycenterUVW() const
   {
     return SPoint3(0., 0., 0.);
   }
@@ -285,6 +287,7 @@ class MQuadrangle9 : public MQuadrangle {
   virtual int getPolynomialOrder() const { return 2; }
   virtual int getNumVertices() const { return 9; }
   virtual MVertex *getVertex(int num){ return num < 4 ? _v[num] : _vs[num - 4]; }
+  virtual const MVertex *getVertex(int num) const { return num < 4 ? _v[num] : _vs[num - 4]; }
   virtual MVertex *getVertexDIFF(int num)
   {
     static const int map[9] = {0, 2, 8, 6, 1, 5, 7, 3, 4};
@@ -315,18 +318,18 @@ class MQuadrangle9 : public MQuadrangle {
   virtual int getTypeForMSH() const { return MSH_QUA_9; }
   virtual const char *getStringForPOS() const { return "SQ2"; }
   virtual const char *getStringForDIFF() const { return "ElmB9n2D"; }
-  virtual void revert()
+  virtual void reverse()
   {
     MVertex *tmp;
     tmp = _v[1]; _v[1] = _v[3]; _v[3] = tmp;
     tmp = _vs[0]; _vs[0] = _vs[3]; _vs[3] = tmp;
     tmp = _vs[1]; _vs[1] = _vs[2]; _vs[2] = tmp;
   }
-  virtual void getNode(int num, double &u, double &v, double &w)
+  virtual void getNode(int num, double &u, double &v, double &w) const
   {
     num < 4 ? MQuadrangle::getNode(num, u, v, w) : MElement::getNode(num, u, v, w);
   }
-  virtual SPoint3 barycenterUVW()
+  virtual SPoint3 barycenterUVW() const
   {
     return SPoint3(0., 0., 0.);
   }
@@ -369,6 +372,7 @@ class MQuadrangleN : public MQuadrangle {
   virtual int getPolynomialOrder() const { return _order; }
   virtual int getNumVertices() const {return 4 + _vs.size(); }
   virtual MVertex *getVertex(int num){ return num < 4 ? _v[num] : _vs[num - 4]; }
+  virtual const MVertex *getVertex(int num) const{ return num < 4 ? _v[num] : _vs[num - 4]; }
   virtual int getNumFaceVertices() const
   {
     if(_order > 1 && (int)_vs.size() + 4 == (_order + 1) * (_order + 1))
@@ -414,7 +418,7 @@ class MQuadrangleN : public MQuadrangle {
     if(_order==10 && _vs.size() + 4 == 121) return MSH_QUA_121;
     return 0;
   }
-  virtual void revert()
+  virtual void reverse()
   {
     MVertex *tmp;
     tmp = _v[1]; _v[1] = _v[3]; _v[3] = tmp;
@@ -422,11 +426,11 @@ class MQuadrangleN : public MQuadrangle {
     inv.insert(inv.begin(), _vs.rbegin(), _vs.rend());
     _vs = inv;
   }
-  virtual void getNode(int num, double &u, double &v, double &w)
+  virtual void getNode(int num, double &u, double &v, double &w) const
   {
     num < 4 ? MQuadrangle::getNode(num, u, v, w) : MElement::getNode(num, u, v, w);
   }
-  virtual SPoint3 barycenterUVW()
+  virtual SPoint3 barycenterUVW() const
   {
     return SPoint3(0., 0., 0.);
   }
@@ -443,7 +447,7 @@ void inline sort2(T &a, T &b)
 }
 
 template <class T>
-void sort4(T *t[3])
+void sort4(T *t[4])
 {
   sort2<T*>(t[0], t[1]);
   sort2<T*>(t[2], t[3]);

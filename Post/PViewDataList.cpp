@@ -493,7 +493,7 @@ void PViewDataList::getString3D(int i, int step, std::string &str,
   _getString(3, i, step, str, x, y, z, style);
 }
 
-void PViewDataList::revertElement(int step, int ent, int ele)
+void PViewDataList::reverseElement(int step, int ent, int ele)
 {
   if(step) return;
   if(ele != _lastElement) _setLast(ele);
@@ -586,6 +586,24 @@ void PViewDataList::smooth()
   }
   xyzv::eps = old_eps;
   finalize();
+}
+
+double PViewDataList::getMemoryInMb()
+{
+  double b = 0.;
+  b += (TimeStepMin.size() + TimeStepMax.size() + Time.size()) * sizeof(double);
+  b += (SP.size() + VP.size() + TP.size()) * sizeof(double);
+  b += (SL.size() + VL.size() + TL.size()) * sizeof(double);
+  b += (ST.size() + VT.size() + TT.size()) * sizeof(double);
+  b += (SQ.size() + VQ.size() + TQ.size()) * sizeof(double);
+  b += (SG.size() + VG.size() + TG.size()) * sizeof(double);
+  b += (SS.size() + VS.size() + TS.size()) * sizeof(double);
+  b += (SH.size() + VH.size() + TH.size()) * sizeof(double);
+  b += (SI.size() + VI.size() + TI.size()) * sizeof(double);
+  b += (SY.size() + VY.size() + TY.size()) * sizeof(double);
+  b += (SD.size() + VD.size() + TD.size()) * sizeof(double);
+  b += (T2D.size() + T3D.size()) * sizeof(double);
+  return b / 1024. / 1024.;
 }
 
 static void dVecMerge(std::vector<double> &v, std::vector<double> &dest)

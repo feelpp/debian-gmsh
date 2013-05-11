@@ -8,18 +8,18 @@
 #include "GmshConfig.h"
 #include "Context.h"
 #include "OS.h"
+#include "GamePad.h"
 
 #if defined(HAVE_FLTK)
 #include <FL/Fl.H>
 #endif
 
-CTX::CTX()
+CTX::CTX() : gamepad(0)
 {
   // initialize everything that has no default value in DefaultOptions.h
   short int word = 0x0001;
   char *byte = (char*)&word;
   bigEndian = (byte[0] ? 0 : 1);
-
   const char *tmp;
   if((tmp = GetEnvironmentVar("GMSH_HOME")))
     homeDir = tmp;
@@ -59,6 +59,7 @@ CTX::CTX()
   post.draw = 1;
   post.combineTime = 0; // try to combineTime views at startup
   lock = 0; // very primitive locking
+  fileread=false;
 
 #if defined(HAVE_FLTK)
   glFontEnum = FL_HELVETICA;
@@ -71,6 +72,7 @@ CTX::CTX()
   deltaFontSize = 0;
   recentFiles.resize(5);
   mesh.optimizeLloyd = 0;
+  gamepad = 0;
 
   // need to initialize these too, since the corresponding opt_XXX
   // routine uses the current value to set "mesh.changed"
@@ -92,10 +94,15 @@ CTX::CTX()
   color.mesh.tangents = color.mesh.line = color.mesh.quadrangle = 0;
   for (int i = 0; i < 20; i++)
     color.mesh.carousel[i] = 0;
-  // added by Gauthier Becker (these are not initialized by default 
+  // added by Gauthier Becker (these are not initialized by default
   // leading to valgrind error) Feel free to change the default values)
   mesh.switchElementTags=0;
   terminal=0;
+}
+
+CTX::~CTX()
+{
+  if(gamepad) delete gamepad;
 }
 
 CTX *CTX::_instance = NULL;

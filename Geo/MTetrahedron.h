@@ -60,9 +60,10 @@ class MTetrahedron : public MElement {
   virtual int getDim() const { return 3; }
   virtual int getNumVertices() const { return 4; }
   virtual MVertex *getVertex(int num){ return _v[num]; }
+  virtual const MVertex *getVertex(int num) const { return _v[num]; }
   virtual void setVertex(int num,  MVertex *v){ _v[num] = v; }
   virtual int getNumEdges(){ return 6; }
-  virtual MEdge getEdge(int num)
+  virtual MEdge getEdge(int num) const
   {
     return MEdge(_v[edges_tetra(num, 0)], _v[edges_tetra(num, 1)]);
   }
@@ -105,11 +106,11 @@ class MTetrahedron : public MElement {
   virtual const char *getStringForBDF() const { return "CTETRA"; }
   virtual const char *getStringForDIFF() const { return "ElmT4n3D"; }
   virtual const char *getStringForINP() const { return "C3D4"; }
-  virtual void revert()
+  virtual void reverse()
   {
     MVertex *tmp = _v[0]; _v[0] = _v[1]; _v[1] = tmp;
   }
-  void getMat(double mat[3][3])
+  void getMat(double mat[3][3]) const
   {
     mat[0][0] = _v[1]->x() - _v[0]->x();
     mat[0][1] = _v[2]->x() - _v[0]->x();
@@ -127,10 +128,10 @@ class MTetrahedron : public MElement {
   virtual double getInnerRadius();
   virtual double getCircumRadius();
   virtual double etaShapeMeasure();
-  void xyz2uvw(double xyz[3], double uvw[3]);
+  void xyz2uvw(double xyz[3], double uvw[3]) const;
   virtual const nodalBasis* getFunctionSpace(int o=-1) const;
   virtual const JacobianBasis* getJacobianFuncSpace(int o=-1) const;
-  virtual void getNode(int num, double &u, double &v, double &w)
+  virtual void getNode(int num, double &u, double &v, double &w) const
   {
     switch(num) {
     case 0 : u = 0.; v = 0.; w = 0.; break;
@@ -140,11 +141,11 @@ class MTetrahedron : public MElement {
     default: u = 0.; v = 0.; w = 0.; break;
     }
   }
-  virtual SPoint3 barycenterUVW()
+  virtual SPoint3 barycenterUVW() const
   {
     return SPoint3(.25, .25, .25);
   }
-  virtual bool isInside(double u, double v, double w)
+  virtual bool isInside(double u, double v, double w) const
   {
     double tol = _isInsideTolerance;
     if(u < (-tol) || v < (-tol) || w < (-tol) || u > ((1. + tol) - v - w))
@@ -216,6 +217,7 @@ class MTetrahedron10 : public MTetrahedron {
   virtual int getPolynomialOrder() const { return 2; }
   virtual int getNumVertices() const { return 10; }
   virtual MVertex *getVertex(int num){ return num < 4 ? _v[num] : _vs[num - 4]; }
+  virtual const MVertex *getVertex(int num) const { return num < 4 ? _v[num] : _vs[num - 4]; }
   virtual MVertex *getVertexUNV(int num)
   {
     static const int map[10] = {0, 4, 1, 5, 2, 6, 7, 9, 8, 3};
@@ -260,14 +262,14 @@ class MTetrahedron10 : public MTetrahedron {
   virtual const char *getStringForBDF() const { return "CTETRA"; }
   virtual const char *getStringForDIFF() const { return "ElmT10n3D"; }
   virtual const char *getStringForINP() const { return "C3D10"; }
-  virtual void revert()
+  virtual void reverse()
   {
     MVertex *tmp;
     tmp = _v[0] ; _v[0]  = _v[1]; _v[1] = tmp;
     tmp = _vs[1]; _vs[1] = _vs[2]; _vs[2] = tmp;
     tmp = _vs[5]; _vs[5] = _vs[3]; _vs[3] = tmp;
   }
-  virtual void getNode(int num, double &u, double &v, double &w)
+  virtual void getNode(int num, double &u, double &v, double &w) const
   {
     num < 4 ? MTetrahedron::getNode(num, u, v, w) : MElement::getNode(num, u, v, w);
   }
@@ -330,6 +332,7 @@ class MTetrahedronN : public MTetrahedron {
   virtual int getPolynomialOrder() const { return _order; }
   virtual int getNumVertices() const { return 4 + _vs.size(); }
   virtual MVertex *getVertex(int num){ return num < 4 ? _v[num] : _vs[num - 4]; }
+  virtual const MVertex *getVertex(int num) const{ return num < 4 ? _v[num] : _vs[num - 4]; }
   virtual int getNumEdgeVertices() const { return 6 * (_order - 1); }
   virtual int getNumFaceVertices() const
   {
@@ -382,7 +385,7 @@ class MTetrahedronN : public MTetrahedron {
     if(_order == 10 && _vs.size() + 4 == 286) return MSH_TET_286;
     return 0;
   }
-  virtual void revert()
+  virtual void reverse()
   {
     MVertex *tmp;
     tmp = _v[1]; _v[1] = _v[2]; _v[2] = tmp;
@@ -396,7 +399,7 @@ class MTetrahedronN : public MTetrahedron {
   virtual int getNumEdgesRep();
   virtual void getFaceRep(int num, double *x, double *y, double *z, SVector3 *n);
   virtual int getNumFacesRep();
-  virtual void getNode(int num, double &u, double &v, double &w)
+  virtual void getNode(int num, double &u, double &v, double &w) const
   {
     num < 4 ? MTetrahedron::getNode(num, u, v, w) : MElement::getNode(num, u, v, w);
   }
