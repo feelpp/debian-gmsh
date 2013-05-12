@@ -7,3 +7,4 @@ fix_FTBFS_linking.patch
 alauzet.patch
 fix_gmshpy_import.patch
 fix_libdir.patch
+fix_script_header.patch

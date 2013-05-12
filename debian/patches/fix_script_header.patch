@@ -1,0 +1,11 @@
+Description: add header into onelab
+Author: Anton Gladky <gladk@debian.org>
+Last-Update: 2013-05-12
+
+--- a/contrib/onelab/python/onelab.py
++++ b/contrib/onelab/python/onelab.py
+@@ -1,3 +1,4 @@
++#!/usr/bin/env python
+ import socket, struct, os, sys
+ _VERSION = '1.05'
+ 
