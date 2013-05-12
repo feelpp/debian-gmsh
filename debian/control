@@ -151,7 +151,7 @@ Description: Three-dimensional finite element mesh generator. Python wrapper
 Package: libjava-gmsh2
 Section: java
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, libgmsh2 (= ${binary:Version})
 Multi-Arch: foreign
 Pre-Depends: ${misc:Pre-Depends}
 Recommends: gmsh

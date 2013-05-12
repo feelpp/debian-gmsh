@@ -1,1 +1,2 @@
 usr/lib/*/libgmsh.so.*
+usr/lib/*/libjava-gmsh.so.*
