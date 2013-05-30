@@ -1,2 +1,3 @@
 debian/build/wrappers/gmshpy/*.so gmshpy
 debian/build/wrappers/gmshpy/*.py gmshpy
+debian/tmp/usr/bin/onelab.py onelab

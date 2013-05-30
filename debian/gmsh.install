@@ -1,3 +1,3 @@
 debian/*.xpm /usr/share/pixmaps
 debian/gmsh.desktop /usr/share/applications
-usr/bin
+usr/bin/gmsh
