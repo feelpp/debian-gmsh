@@ -9,7 +9,8 @@ gmsh (2.7.1.dfsg-1) unstable; urgency=low
   * [9364837] Install onelab using pyinstall.
 
   [ Roland Stigge ]
-  * [8c3f48c] Do not compile against slepc and petsc on powerpcspe.
+  * [8c3f48c] Do not compile against slepc and petsc on powerpcspe. 
+              (Closes: #708862)
   * [f7c38ed] Use multiarched python path.
 
  -- Anton Gladky <gladk@debian.org>  Thu, 30 May 2013 20:22:35 +0200
