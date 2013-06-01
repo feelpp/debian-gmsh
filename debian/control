@@ -49,8 +49,8 @@ Package: libgmsh2
 Architecture: any
 Section: libs
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Replaces: gmsh (<< 2.6.0.dfsg-3)
-Breaks: gmsh (<< 2.6.0.dfsg-3)
+Replaces: gmsh (<< 2.6.0.dfsg-3), libjava-gmsh2 (<<2.7.1.dfsg-1)
+Breaks: gmsh (<< 2.6.0.dfsg-3), libjava-gmsh2 (<<2.7.1.dfsg-1)
 Recommends: gmsh
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
