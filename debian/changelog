@@ -1,3 +1,10 @@
+gmsh (2.7.1.dfsg-2) unstable; urgency=low
+
+  * [ed2b563] Update changelog, close bug.
+  * [6713841] Add break/replaces to libgmsh2. (Closes: #710734)
+
+ -- Anton Gladky <gladk@debian.org>  Sun, 02 Jun 2013 09:29:29 +0200
+
 gmsh (2.7.1.dfsg-1) unstable; urgency=low
 
   [ Anton Gladky ]
