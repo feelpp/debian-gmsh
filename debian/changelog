@@ -1,3 +1,12 @@
+gmsh (2.7.1.dfsg-3) unstable; urgency=low
+
+  * [076cd51] Add missing header in libgmsh-dev package. (Closes: #713942)
+  * [b2afc09] Use canonical VCS-field.
+  * [4894563] Make the package arch-specific. 
+              Exclude kfreebsd*, mip* and hurd*.
+
+ -- Anton Gladky <gladk@debian.org>  Mon, 24 Jun 2013 22:20:42 +0200
+
 gmsh (2.7.1.dfsg-2) unstable; urgency=low
 
   * [ed2b563] Update changelog, close bug.
