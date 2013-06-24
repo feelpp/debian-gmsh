@@ -27,7 +27,7 @@ Vcs-Browser: http://anonscm.debian.org/gitweb/?p=debian-science/packages/gmsh.gi
 Homepage: http://www.geuz.org/gmsh/
 
 Package: gmsh
-Architecture: any
+Architecture: amd64 i386 armel armhf ia64 powerpc s390 s390x sparc
 Depends: ${shlibs:Depends}, ${misc:Depends}, mpi-default-bin
 Recommends: gmsh-doc
 Description: Three-dimensional finite element mesh generator
@@ -46,7 +46,7 @@ Description: Three-dimensional finite element mesh generator
  capabilities.
 
 Package: libgmsh2
-Architecture: any
+Architecture: amd64 i386 armel armhf ia64 powerpc s390 s390x sparc
 Section: libs
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Replaces: gmsh (<< 2.6.0.dfsg-3), libjava-gmsh2 (<<2.7.1.dfsg-1)
@@ -72,7 +72,7 @@ Description: Three-dimensional finite element mesh generator. Shared library
  The package contains a shared library.
 
 Package: libgmsh-dev
-Architecture: any
+Architecture: amd64 i386 armel armhf ia64 powerpc s390 s390x sparc
 Section: libdevel
 Replaces: gmsh (<< 2.6.0.dfsg-3)
 Breaks: gmsh (<< 2.6.0.dfsg-3)
@@ -124,7 +124,7 @@ Description: Three-dimensional finite element mesh generator. Documentation
  
 Package: python-gmsh
 Section: python
-Architecture: any
+Architecture: amd64 i386 armel armhf ia64 powerpc s390 s390x sparc
 Replaces: gmsh (<< 2.6.0.dfsg-3)
 Breaks: gmsh (<< 2.6.0.dfsg-3)
 Recommends: gmsh
@@ -150,7 +150,7 @@ Description: Three-dimensional finite element mesh generator. Python wrapper
  
 Package: libjava-gmsh2
 Section: java
-Architecture: any
+Architecture: amd64 i386 armel armhf ia64 powerpc s390 s390x sparc
 Depends: ${shlibs:Depends}, ${misc:Depends}, libgmsh2 (= ${binary:Version})
 Multi-Arch: foreign
 Pre-Depends: ${misc:Pre-Depends}
