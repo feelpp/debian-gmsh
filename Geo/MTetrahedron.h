@@ -246,10 +246,10 @@ class MTetrahedron10 : public MTetrahedron {
     v.resize(6);
     MTetrahedron::_getFaceVertices(num, v);
     static const int f[4][3] = {
-      {0, 1, 2},
-      {0, 3, 5},
-      {2, 3, 4},
-      {1, 4, 5}
+      {2, 1, 0},
+      {0, 5, 3},
+      {3, 4, 2},
+      {5, 1, 4}
     };
     v[3] = _vs[f[num][0]];
     v[4] = _vs[f[num][1]];
@@ -275,37 +275,19 @@ class MTetrahedron10 : public MTetrahedron {
   }
 };
 
-/*
- * MTetrahedronN  FIXME: check the plot
+/* tet order 3 FIXME: check the plot
  *
  *              2
  *            ,/|`\
- *          ,/  |  `\              E = order - 1
- *        ,/    '.   `\            C = 4 + 6*E
- *      ,/       |     `\          F = ((order - 1)*(order - 2))/2
+ *          ,8  |  `7              E = order - 1
+ *        ,/    13   `\            C = 4 + 6*E
+ *      ,9       |     `6          F = ((order - 1)*(order - 2))/2
  *    ,/         |       `\        N = total number of vertices
- *   0-----------'.--------1
+ *   0-----4-----'.--5-----1
  *    `\.         |      ,/        Interior vertex numbers
- *       `\.      |    ,/            for edge 0 <= i <= 5: 4+i*E to 3+(i+1)*E
- *          `\.   '. ,/              for face 0 <= j <= 3: C+j*F to C-1+(j+1)*F
- *             `\. |/                in volume           : C+4*F to N-1
- *                `3
- *
- */
-
-/* tet order 3
-
- *              2
- *            ,/|`\
- *          ,5  |  `6              E = order - 1
- *        ,/    12   `\            C = 4 + 6*E
- *      ,4       |     `7          F = ((order - 1)*(order - 2))/2
- *    ,/         |       `\        N = total number of vertices
- *   0-----9-----'.--8-----1
- *    `\.         |      ,/        Interior vertex numbers
- *       10.     13    ,14           for edge 0 <= i <= 5: 4+i*E to 3+(i+1)*E
- *          `\.   '. 15              for face 0 <= j <= 3: C+j*F to C-1+(j+1)*F
- *             11\.|/        in volume           : C+4*F to N-1
+ *       11.     12    ,15           for edge 0 <= i <= 5: 4+i*E to 4+(i+1)*E-1
+ *          `\.   '. 14              for face 0 <= j <= 3: C+j*F to C+(j+1)*F-1
+ *             10\.|/        in volume           : C+4*F to N-1
  *                `3
  *
  */

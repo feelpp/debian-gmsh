@@ -62,8 +62,7 @@ typedef unsigned long intptr_t;
 static void file_new_cb(Fl_Widget *w, void *data)
 {
  test:
-  if(fileChooser(FILE_CHOOSER_CREATE, "New", "",
-                 GModel::current()->getFileName().c_str())) {
+  if(fileChooser(FILE_CHOOSER_CREATE, "New", "")) {
     std::string name = fileChooserGetName(1);
     if(!StatFile(name)){
       if(fl_choice("File '%s' already exists.\n\nDo you want to erase it?",
@@ -72,7 +71,7 @@ static void file_new_cb(Fl_Widget *w, void *data)
       else
         goto test;
     }
-    FILE *fp = fopen(name.c_str(), "w");
+    FILE *fp = Fopen(name.c_str(), "w");
     if(!fp){
       Msg::Error("Unable to open file '%s'", name.c_str());
       return;
@@ -120,7 +119,7 @@ static const char *input_formats =
   "Mesh - PLY2 Surface" TT "*.ply2" NN
   "Post-processing - Gmsh POS" TT "*.pos" NN
 #if defined(HAVE_MED)
-  "Post-processing - MED" TT "*.{rmed}" NN
+  "Post-processing - MED" TT "*.rmed" NN
 #endif
   "Image - BMP" TT "*.bmp" NN
 #if defined(HAVE_LIBJPEG)
@@ -140,7 +139,7 @@ static void file_open_merge_cb(Fl_Widget *w, void *data)
   std::string mode((char*)data);
   int n = PView::list.size();
   int f = fileChooser(FILE_CHOOSER_MULTI, (mode == "open") ? "Open" : "Merge",
-                      input_formats, GModel::current()->getFileName().c_str());
+                      input_formats);
   if(f){
     for(int i = 1; i <= f; i++){
       if(mode == "open")
@@ -214,7 +213,7 @@ static void file_remote_cb(Fl_Widget *w, void *data)
       server->SendString(GmshSocket::GMSH_PARSE_STRING, "Delete All;");
       for(int i = PView::list.size() - 1; i >= 0; i--)
         if(PView::list[i]->getData()->isRemote()) delete PView::list[i];
-      FlGui::instance()->updateViews();
+      FlGui::instance()->updateViews(true, true);
       drawContext::global()->draw();
     }
     else if(str == "test"){
@@ -245,6 +244,9 @@ static void file_window_cb(Fl_Widget *w, void *data)
   }
   else if(str == "split_u"){
     FlGui::instance()->splitCurrentOpenglWindow('u');
+  }
+  else if(str == "copy"){
+    FlGui::instance()->copyCurrentOpenglWindowToClipboard();
   }
   drawContext::global()->draw();
 }
@@ -418,8 +420,7 @@ static void file_save_as_cb(Fl_Widget *w, void *data)
   }
 
  test:
-  if(fileChooser(FILE_CHOOSER_CREATE, "Save As", pat,
-                 GModel::current()->getFileName().c_str())) {
+  if(fileChooser(FILE_CHOOSER_CREATE, "Save As", pat)) {
     std::string name = fileChooserGetName(1);
     if(CTX::instance()->confirmOverwrite) {
       if(!StatFile(name))
@@ -449,7 +450,7 @@ static void file_options_save_cb(Fl_Widget *w, void *data)
     fileName = CTX::instance()->homeDir + CTX::instance()->optionsFileName;
   Msg::StatusBar(true, "Writing '%s'...", fileName.c_str());
   if(str == "file")
-    PrintOptions(0, GMSH_FULLRC, 1, 0, fileName.c_str());
+    PrintOptions(0, GMSH_FULLRC, 0, 0, fileName.c_str());
   else
     PrintOptions(0, GMSH_OPTIONSRC, 1, 1, fileName.c_str());
   Msg::StatusBar(true, "Done writing '%s'", fileName.c_str());
@@ -458,8 +459,7 @@ static void file_options_save_cb(Fl_Widget *w, void *data)
 static void file_rename_cb(Fl_Widget *w, void *data)
 {
  test:
-  if(fileChooser(FILE_CHOOSER_CREATE, "Rename", "",
-                 GModel::current()->getFileName().c_str())) {
+  if(fileChooser(FILE_CHOOSER_CREATE, "Rename", "")) {
     std::string name = fileChooserGetName(1);
     if(CTX::instance()->confirmOverwrite) {
       if(!StatFile(name))
@@ -1931,8 +1931,8 @@ static Fl_Menu_Item bar_table[] = {
     {"&Rename...",  FL_CTRL+'r', (Fl_Callback *)file_rename_cb, 0},
     {"Save &As...", FL_CTRL+'s', (Fl_Callback *)file_save_as_cb, 0},
     {"Sa&ve Mesh",  FL_CTRL+FL_SHIFT+'s', (Fl_Callback *)mesh_save_cb, 0},
-    {"Save Model Options", 0, (Fl_Callback *)file_options_save_cb, (void*)"file"},
-    {"Save Options As Default", 0, (Fl_Callback *)file_options_save_cb, (void*)"default", FL_MENU_DIVIDER},
+    {"Save Model Options", FL_CTRL+'j', (Fl_Callback *)file_options_save_cb, (void*)"file"},
+    {"Save Options As Default", FL_CTRL+FL_SHIFT+'j', (Fl_Callback *)file_options_save_cb, (void*)"default", FL_MENU_DIVIDER},
     {"&Quit",       FL_CTRL+'q', (Fl_Callback *)file_quit_cb, 0},
     {0},
   {"&Tools", 0, 0, 0, FL_SUBMENU},
@@ -1949,6 +1949,9 @@ static Fl_Menu_Item bar_table[] = {
     {0},
   {"&Window", 0, 0, 0, FL_SUBMENU},
     {"New Window", 0, (Fl_Callback *)file_window_cb, (void*)"new", FL_MENU_DIVIDER},
+#if defined(WIN32)
+    {"Copy to Clipboard",  FL_CTRL+'c', (Fl_Callback *)file_window_cb, (void*)"copy", FL_MENU_DIVIDER},
+#endif
     {"Split Horizontally", 0, (Fl_Callback *)file_window_cb, (void*)"split_h"},
     {"Split Vertically",   0, (Fl_Callback *)file_window_cb, (void*)"split_v"},
     {"Unsplit",            0, (Fl_Callback *)file_window_cb, (void*)"split_u", FL_MENU_DIVIDER},
@@ -1960,7 +1963,7 @@ static Fl_Menu_Item bar_table[] = {
     {0},
   {"&Help", 0, 0, 0, FL_SUBMENU},
     {"On&line Documentation", 0, (Fl_Callback *)help_online_cb, 0, FL_MENU_DIVIDER},
-    {"&Keyboard and Mouse Usage",    0, (Fl_Callback *)help_basic_cb, 0, FL_MENU_DIVIDER},
+    {"&Keyboard and Mouse Usage",  FL_CTRL+'h', (Fl_Callback *)help_basic_cb, 0, FL_MENU_DIVIDER},
     {"&Current Options",      0, (Fl_Callback *)status_options_cb, (void*)"?", 0},
     {"&Restore all Options to Default Settings", 0, (Fl_Callback *)options_restore_defaults_cb, 0, FL_MENU_DIVIDER},
     {"&About Gmsh",           0, (Fl_Callback *)help_about_cb, 0},
@@ -1996,8 +1999,8 @@ static Fl_Menu_Item sysbar_table[] = {
     {"Rename...",  FL_META+'r', (Fl_Callback *)file_rename_cb, 0},
     {"Save As...", FL_META+'s', (Fl_Callback *)file_save_as_cb, 0},
     {"Save Mesh",  FL_META+FL_SHIFT+'s', (Fl_Callback *)mesh_save_cb, 0},
-    {"Save Model Options", 0, (Fl_Callback *)file_options_save_cb, (void*)"file"},
-    {"Save Options As Default", 0, (Fl_Callback *)file_options_save_cb, (void*)"default"},
+    {"Save Model Options", FL_META+'j', (Fl_Callback *)file_options_save_cb, (void*)"file"},
+    {"Save Options As Default", FL_META+FL_SHIFT+'j', (Fl_Callback *)file_options_save_cb, (void*)"default"},
     {0},
   {"Tools", 0, 0, 0, FL_SUBMENU},
     {"Options",         FL_META+FL_SHIFT+'n', (Fl_Callback *)options_cb, 0},
@@ -3058,7 +3061,7 @@ void graphicWindow::saveMessages(const char *filename)
 {
   if(!_browser) return;
 
-  FILE *fp = fopen(filename, "w");
+  FILE *fp = Fopen(filename, "w");
 
   if(!fp) {
     Msg::Error("Unable to open file '%s'", filename);
@@ -3325,7 +3328,7 @@ void onelabGroup::_addGmshMenus()
   // add dynamic solver module items
   for(int i = 0; i < 5; i++){
     std::string name = opt_solver_name(i, GMSH_GET, "");
-    if(name.size()) _addMenu("0Modules/Solver/" + name, solver_cb, (void*)i);
+    if(name.size()) _addSolverMenu(i);
   }
 
   // add dynamic post-processing module items

@@ -161,8 +161,7 @@ void drawContext::addQuaternion(double p1x, double p1y, double p2x, double p2y)
   double quat[4];
   trackball(quat, p1x, p1y, p2x, p2y);
   add_quats(quat, quaternion, quaternion);
-  if (CTX::instance()->camera)   camera.rotate(quat);
-
+  if (CTX::instance()->camera) camera.rotate(quat);
 }
 
 void drawContext::addQuaternionFromAxisAndAngle(double axis[3], double angle)
@@ -836,16 +835,16 @@ bool drawContext::select(int type, bool multiple, bool mesh,
     //   for triangle, 4 for quad) and the fourth is the index of the element in
     //   the vertex array
     GLuint names = *ptr++;
-    *ptr++; // mindepth
+    GLuint mindepth = *ptr++;
     GLuint maxdepth = *ptr++;
     if(names == 2){
-      GLuint depth = maxdepth;
+      GLuint depth = maxdepth + 0 * mindepth; // could do something with mindepth
       GLuint type = *ptr++;
       GLuint ient = *ptr++;
       hits.push_back(hit(type, ient, depth));
     }
     else if(names == 4){
-      GLuint depth = maxdepth;
+      GLuint depth = maxdepth+ 0 * mindepth; // could do something with mindepth
       GLuint type = *ptr++;
       GLuint ient = *ptr++;
       GLuint type2 = *ptr++;

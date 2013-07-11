@@ -25,6 +25,7 @@
 #include "MTriangle.h"
 #include "MVertex.h"
 #include "MLine.h"
+#include "StringUtils.h"
 #include "GEntity.h"
 #include "Field.h"
 #include "GFace.h"
@@ -292,12 +293,9 @@ static void cutTriangle(MTriangle *tri,
   }
 }
 
-Centerline::Centerline(std::string fileName): kdtree(0), kdtreeR(0), nodes(0), nodesR(0)
+Centerline::Centerline(std::string fileName): kdtree(0), kdtreeR(0)
 {
   recombine = (CTX::instance()->mesh.recombineAll) || (CTX::instance()->mesh.recombine3DAll);
-
-  index = new ANNidx[1];
-  dist = new ANNdist[1];
 
   printf("centerline filename =%s \n", fileName.c_str());
   importFile(fileName);
@@ -315,10 +313,8 @@ Centerline::Centerline(std::string fileName): kdtree(0), kdtreeR(0), nodes(0), n
 
 }
 
-Centerline::Centerline(): kdtree(0), kdtreeR(0), nodes(0), nodesR(0)
+Centerline::Centerline(): kdtree(0), kdtreeR(0)
 {
-  index = new ANNidx[1];
-  dist = new ANNdist[1];
 
   recombine = (CTX::instance()->mesh.recombineAll) || (CTX::instance()->mesh.recombine3DAll);
   fileName = "centerlines.vtk";//default
@@ -358,12 +354,16 @@ Centerline::Centerline(): kdtree(0), kdtreeR(0), nodes(0), nodesR(0)
 Centerline::~Centerline()
 {
   if (mod) delete mod;
-  if(kdtree) delete kdtree;
-  if(kdtreeR) delete kdtreeR;
-  if(nodes) annDeallocPts(nodes);
-  if(nodesR) annDeallocPts(nodesR);
-  delete[]index;
-  delete[]dist;
+  if(kdtree){
+    ANNpointArray nodes = kdtree->thePoints();
+    if(nodes) annDeallocPts(nodes);
+    delete kdtree;
+  }
+  if(kdtreeR){
+    ANNpointArray nodesR = kdtreeR->thePoints();
+    if(nodesR) annDeallocPts(nodesR);
+    delete kdtreeR;
+  }
 }
 
 void Centerline::importFile(std::string fileName)
@@ -531,7 +531,7 @@ void Centerline::distanceToSurface()
   for(unsigned int j = 0; j < triangles.size(); j++)
     for(int k = 0; k<3; k++) allVS.insert(triangles[j]->getVertex(k));
   int nbSNodes = allVS.size();
-  nodesR = annAllocPts(nbSNodes, 3);
+  ANNpointArray nodesR = annAllocPts(nbSNodes, 3);
   vertices.resize(nbSNodes);
   int ind = 0;
   std::set<MVertex*>::iterator itp = allVS.begin();
@@ -550,6 +550,8 @@ void Centerline::distanceToSurface()
     MVertex *v1 = l->getVertex(0);
     MVertex *v2 = l->getVertex(1);
     double midp[3] = {0.5*(v1->x()+v2->x()), 0.5*(v1->y()+v1->y()),0.5*(v1->z()+v2->z())};
+    ANNidx index[1];
+    ANNdist dist[1];
     kdtreeR->annkSearch(midp, 1, index, dist);
     double minRad = sqrt(dist[0]);
     radiusl.insert(std::make_pair(lines[i], minRad));
@@ -576,14 +578,14 @@ void Centerline::computeRadii()
 
 void Centerline::buildKdTree()
 {
-  FILE * f = fopen("myPOINTS.pos","w");
+  FILE * f = Fopen("myPOINTS.pos","w");
   fprintf(f, "View \"\"{\n");
 
   int nbPL = 3;  //10 points per line
   //int nbNodes  = (lines.size()+1) + (nbPL*lines.size());
   int nbNodes  = (colorp.size()) + (nbPL*lines.size());
 
-  nodes = annAllocPts(nbNodes, 3);
+  ANNpointArray nodes = annAllocPts(nbNodes, 3);
   int ind = 0;
   std::map<MVertex*, int>::iterator itp = colorp.begin();
   while (itp != colorp.end()){
@@ -771,7 +773,10 @@ void Centerline::extrudeBoundaryLayerWall(GEdge* gin, std::vector<GEdge*> boundE
   SVector3 ne = e->getFace(0).normal();
   SVector3 ps(e->getVertex(0)->x(), e->getVertex(0)->y(), e->getVertex(0)->z());
   double xyz[3] = {ps.x(), ps.y(), ps.z()};
+  ANNidx index[1];
+  ANNdist dist[1];
   kdtree->annkSearch(xyz, 1, index, dist);
+  ANNpointArray nodes = kdtree->thePoints();
   SVector3 pc(nodes[index[0]][0], nodes[index[0]][1], nodes[index[0]][2]);
   SVector3 nc = ps-pc;
   if (dot(ne,nc) < 0) dir = 1;
@@ -834,9 +839,12 @@ void Centerline::run()
   double t1 = Cpu();
   if (update_needed){
     std::ifstream input;
+    //std::string pattern = FixRelativePath(fileName, "./");
+    //Msg::StatusBar(true, "Reading TEST '%s'...", pattern.c_str());
+    //input.open(pattern.c_str());
     input.open(fileName.c_str());
     if(StatFile(fileName))
-      Msg::Fatal("Centerline file '%s' does not exist", fileName.c_str());
+      Msg::Fatal("Centerline file '%s' does not exist ", fileName.c_str());
     importFile(fileName);
     buildKdTree();
     update_needed = false;
@@ -896,7 +904,7 @@ void Centerline::cutMesh()
     double AR = L/D;
     // printf("*** Centerline branch %d (AR=%.1f) \n", edges[i].tag, AR);
 
-    int nbSplit = (int)floor(AR/2 + 0.9); //AR/2 + 0.9
+    int nbSplit = (int)ceil(AR/2 + 1.1); //AR/2 + 0.9
     if( nbSplit > 1 ){
       //printf("->> cut branch in %d parts \n",  nbSplit);
       double li  = L/nbSplit;
@@ -1025,7 +1033,7 @@ bool Centerline::cutByDisk(SVector3 &PT, SVector3 &NORM, double &maxRad)
       // // theCut.insert(newCut.begin(),newCut.end());
       // char name[256];
       // sprintf(name, "myCUT-%d.pos", step);
-      // FILE * f2 = fopen(name,"w");
+      // FILE * f2 = Fopen(name,"w");
       // fprintf(f2, "View \"\"{\n");
       // std::set<MEdge,Less_Edge>::iterator itp =  newCut.begin();
       // while (itp != newCut.end()){
@@ -1076,15 +1084,20 @@ double Centerline::operator() (double x, double y, double z, GEntity *ge)
      if (isCompound) cFaces = ((GFaceCompound*)ge)->getCompounds();
      if ( ge->dim() == 3 || (ge->dim() == 2 && ge->geomType() == GEntity::Plane) ||
 	  (isCompound && (*cFaces.begin())->geomType() == GEntity::Plane) ){
-       int num_neighbours = 1;
+       const int num_neighbours = 1;
+       ANNidx index[num_neighbours];
+       ANNdist dist[num_neighbours];
        kdtreeR->annkSearch(xyz, num_neighbours, index, dist);
+       ANNpointArray nodesR = kdtreeR->thePoints();
        xyz[0] = nodesR[index[0]][0];
        xyz[1] = nodesR[index[0]][1];
        xyz[2] = nodesR[index[0]][2];
      }
    }
 
-   int num_neighbours = 1;
+   const int num_neighbours = 1;
+   ANNidx index[num_neighbours];
+   ANNdist dist[num_neighbours];
    kdtree->annkSearch(xyz, num_neighbours, index, dist);
    double rad = sqrt(dist[0]);
 
@@ -1130,23 +1143,24 @@ void  Centerline::operator() (double x, double y, double z, SMetric3 &metr, GEnt
      onTubularSurface = false;
    }
 
+   ANNidx index[1];
+   ANNdist dist[1];
    kdtreeR->annkSearch(xyz, 1, index, dist);
    if (! onTubularSurface){
+     ANNpointArray nodesR = kdtreeR->thePoints();
      ds = sqrt(dist[0]);
      xyz[0] = nodesR[index[0]][0];
      xyz[1] = nodesR[index[0]][1];
      xyz[2] = nodesR[index[0]][2];
    }
 
-   ANNidxArray index2 = new ANNidx[2];
-   ANNdistArray dist2 = new ANNdist[2];
+   ANNidx index2[2];
+   ANNdist dist2[2];
    kdtree->annkSearch(xyz, 2, index2, dist2);
    double radMax = sqrt(dist2[0]);
+   ANNpointArray nodes = kdtree->thePoints();
    SVector3  p0(nodes[index2[0]][0], nodes[index2[0]][1], nodes[index2[0]][2]);
    SVector3  p1(nodes[index2[1]][0], nodes[index2[1]][1], nodes[index2[1]][2]);
-
-   delete[]index2;
-   delete[]dist2;
 
    //dir_a = direction along the centerline
    //dir_n = normal direction of the disk
@@ -1185,7 +1199,7 @@ void  Centerline::operator() (double x, double y, double z, SMetric3 &metr, GEnt
    double thickness = radMax/3.;
    double h_far = radMax/5.;
    double beta = (ds <= thickness) ? 1.2 : 2.1; //CTX::instance()->mesh.smoothRatio;
-   double dist = (ds <= thickness) ? ds: thickness;
+   double ddist = (ds <= thickness) ? ds: thickness;
 
    double h_n_0 = thickness/20.;
    double h_n   = std::min( (h_n_0+ds*log(beta)), h_far);
@@ -1198,10 +1212,10 @@ void  Centerline::operator() (double x, double y, double z, SMetric3 &metr, GEnt
     (sqrt(1+ (4.*rhoMax*rhoMax*(betaMax*betaMax-1))/(h_n*h_n))-1.);
    double h_t1_0 = sqrt(1./oneOverD2_min);
    double h_t2_0 = sqrt(1./oneOverD2_max);
-   //double h_t1 =  h_t1_0*(rhoMin+signMin*dist)/rhoMin ;
-   //double h_t2 =  h_t2_0*(rhoMax+signMax*dist)/rhoMax ;
-   double h_t1  = std::min( (h_t1_0+(dist*log(beta))), radMax);
-   double h_t2  = std::min( (h_t2_0+(dist*log(beta))), h_far);
+   //double h_t1 =  h_t1_0*(rhoMin+signMin*ddist)/rhoMin ;
+   //double h_t2 =  h_t2_0*(rhoMax+signMax*ddist)/rhoMax ;
+   double h_t1  = std::min( (h_t1_0+(ddist*log(beta))), radMax);
+   double h_t2  = std::min( (h_t2_0+(ddist*log(beta))), h_far);
 
    double dCenter = radMax-ds;
    double h_a_0 = 0.5*radMax;
@@ -1268,7 +1282,7 @@ void Centerline::computeCrossField(double x,double y,double z,
 
 void Centerline::printSplit() const
 {
-  FILE * f = fopen("mySPLIT.pos","w");
+  FILE * f = Fopen("mySPLIT.pos","w");
   fprintf(f, "View \"\"{\n");
   for(unsigned int i = 0; i < edges.size(); ++i){
     std::vector<MLine*> lines = edges[i].lines;
@@ -1283,7 +1297,7 @@ void Centerline::printSplit() const
   fprintf(f,"};\n");
   fclose(f);
 
-  // FILE * f3 = fopen("myJUNCTIONS.pos","w");
+  // FILE * f3 = Fopen("myJUNCTIONS.pos","w");
   // fprintf(f3, "View \"\"{\n");
   //  std::set<MVertex*>::const_iterator itj = junctions.begin();
   //  while (itj != junctions.end()){
@@ -1296,7 +1310,7 @@ void Centerline::printSplit() const
   // fprintf(f3,"};\n");
   // fclose(f3);
 
-  FILE * f4 = fopen("myRADII.pos","w");
+  FILE * f4 = Fopen("myRADII.pos","w");
   fprintf(f4, "View \"\"{\n");
   for(unsigned int i = 0; i < lines.size(); ++i){
     MLine *l = lines[i];

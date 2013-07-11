@@ -16,11 +16,9 @@
 class pyramidalBasis: public nodalBasis
 {
  private:
-  // Inverse of the Vandermonde matrix
-  fullMatrix<double> VDMinv;
-
   // Orthogonal basis for the pyramid
   BergotBasis *bergot;
+  fullMatrix<double> coefficients;
 
  public:
   pyramidalBasis(int tag);
@@ -32,7 +30,6 @@ class pyramidalBasis: public nodalBasis
   virtual void df(const fullMatrix<double> &coord, fullMatrix<double> &dfm) const;
 
   virtual int getNumShapeFunctions() const;
-
 };
 
 

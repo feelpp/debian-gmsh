@@ -11,34 +11,42 @@
  /*
   * Functions to generate point distributions on
   * the references elements, for all orders.
+  * &
+  * Functions generating exponents of Pascal monomials
+  * in the same order than Gmsh Points.
   */
 
-/* --- Lines --- */
+// Points
 
 fullMatrix<double> gmshGeneratePointsLine(int order);
 
-/* --- Triangles --- */
+fullMatrix<double> gmshGeneratePointsTriangle(int order, bool serendip = false);
+fullMatrix<double> gmshGeneratePointsQuadrangle(int order, bool serendip = false);
 
-fullMatrix<double> gmshGeneratePointsTriangle(int order, bool serendip);
+fullMatrix<double> gmshGeneratePointsTetrahedron(int order, bool serendip = false);
+fullMatrix<double> gmshGeneratePointsHexahedron(int order, bool serendip = false);
+fullMatrix<double> gmshGeneratePointsPrism(int order, bool serendip = false);
 
-/* --- Quadrangles --- */
+fullMatrix<double> gmshGeneratePointsPyramid(int order, bool serendip = false);
 
-fullMatrix<double> gmshGeneratePointsQuadrangle(int order, bool serendip);
 
-/* --- Tetahedra --- */
+// Monomial exponents
 
-fullMatrix<double> gmshGeneratePointsTetrahedron(int order, bool serendip);
+fullMatrix<double> gmshGenerateMonomialsLine(int order, bool serendip = false);
 
-/* --- Hexahedra --- */
+fullMatrix<double> gmshGenerateMonomialsTriangle(int order, bool serendip = false);
+fullMatrix<double> gmshGenerateMonomialsQuadrangle(int order, bool forSerendipPoints = false);
+fullMatrix<double> gmshGenerateMonomialsQuadSerendipity(int order);
 
-fullMatrix<double> gmshGeneratePointsHexahedron(int order, bool serendip);
+fullMatrix<double> gmshGenerateMonomialsTetrahedron(int order, bool serendip = false);
+fullMatrix<double> gmshGenerateMonomialsHexahedron(int order, bool forSerendipPoints = false);
+fullMatrix<double> gmshGenerateMonomialsHexaSerendipity(int order);
+fullMatrix<double> gmshGenerateMonomialsPrism(int order, bool forSerendipPoints = false);
+fullMatrix<double> gmshGenerateMonomialsPrismSerendipity(int order);
 
-/* --- Prisms --- */
+fullMatrix<double> gmshGenerateMonomialsPyramid(int order, bool forSerendipPoints = false);
+//fullMatrix<double> gmshGenerateMonomialsPyramidSerendipity(int order); //TODO
 
-fullMatrix<double> gmshGeneratePointsPrism(int order, bool serendip);
 
-/* --- Pyramids --- */
-
-fullMatrix<double> gmshGeneratePointsPyramid(int order, bool serendip);
 
 #endif

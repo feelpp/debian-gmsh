@@ -9,6 +9,8 @@ set(SRC
       openglWindow.cpp
     optionWindow.cpp
       colorbarWindow.cpp
+    drawContextFltkCairo.cpp
+    drawContextFltkStringTexture.cpp
     gamepadWindow.cpp
     fieldWindow.cpp
     pluginWindow.cpp
@@ -26,7 +28,7 @@ set(SRC
     partitionDialog.cpp
     onelabGroup.cpp
     inputRegion.cpp
-    viewButton.cpp
+    viewButton.cpp solverButton.cpp
     Navigator.cpp
 )
 

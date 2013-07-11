@@ -9,20 +9,23 @@
 #include "pyramidalBasis.h"
 #include "pointsGenerators.h"
 #include "BasisFactory.h"
+#include "MElement.h"
 
 std::map<int, nodalBasis*> BasisFactory::fs;
+std::map<int, JacobianBasis*> BasisFactory::js;
+BasisFactory::Cont_bezierBasis BasisFactory::bs;
 
-const nodalBasis* BasisFactory::create(int elementType) {
-
+const nodalBasis* BasisFactory::getNodalBasis(int tag)
+{
   // If the Basis has already been built, return it.
-  std::map<int, nodalBasis*>::const_iterator it = fs.find(elementType);
+  std::map<int, nodalBasis*>::const_iterator it = fs.find(tag);
   if (it != fs.end()) {
     return it->second;
   }
   // Get the parent type to see which kind of basis
   // we want to create
-  int parentType = MElement::ParentTypeFromTag(elementType);
-  nodalBasis* B = 0;
+  int parentType = ElementType::ParentTypeFromTag(tag);
+  nodalBasis* F = NULL;
 
   switch(parentType) {
     case(TYPE_PNT):
@@ -32,19 +35,64 @@ const nodalBasis* BasisFactory::create(int elementType) {
     case(TYPE_PRI):
     case(TYPE_TET):
     case(TYPE_HEX):
-      B = new polynomialBasis(elementType);
+      F = new polynomialBasis(tag);
       break;
     case(TYPE_PYR):
-      B = new pyramidalBasis(elementType);
+      F = new pyramidalBasis(tag);
       break;
     default:
-      Msg::Error("Unknown type of element.");
-      return 0;
+      Msg::Error("Unknown type of element %d (in BasisFactory)", tag);
+      return NULL;
   }
 
   // FIXME: check if already exists to deallocate if necessary
-  fs.insert(std::make_pair(elementType, B));
+  fs.insert(std::make_pair(tag, F));
 
-  return fs[elementType];
+  return F;
+}
 
+const JacobianBasis* BasisFactory::getJacobianBasis(int tag)
+{
+  std::map<int, JacobianBasis*>::const_iterator it = js.find(tag);
+  if (it != js.end())
+    return it->second;
+
+  JacobianBasis* J = new JacobianBasis(tag);
+  js.insert(std::make_pair(tag, J));
+  return J;
+}
+
+const bezierBasis* BasisFactory::getBezierBasis(int parentType, int order)
+{
+  Cont_bezierBasis::iterator it = bs.find(std::make_pair(parentType, order));
+  if (it != bs.end())
+    return it->second;
+
+  bezierBasis* B = new bezierBasis(parentType, order);
+  bs.insert(std::make_pair(std::make_pair(parentType, order), B));
+  return B;
+}
+
+void BasisFactory::clearAll()
+{
+  std::map<int, nodalBasis*>::iterator itF = fs.begin();
+  while (itF != fs.end()) {
+    delete itF->second;
+    itF++;
+  }
+  fs.clear();
+
+  std::map<int, JacobianBasis*>::iterator itJ = js.begin();
+  while (itJ != js.end()) {
+    delete itJ->second;
+    itJ++;
+  }
+  js.clear();
+
+  Cont_bezierBasis::iterator itB = bs.begin();
+  while (itB != bs.end()) {
+    delete itB->second;
+    itB++;
+  }
+  bs.clear();
 }

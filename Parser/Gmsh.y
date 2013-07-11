@@ -107,12 +107,13 @@ struct doubleXstring{
 %token tExp tLog tLog10 tSqrt tSin tAsin tCos tAcos tTan tRand
 %token tAtan tAtan2 tSinh tCosh tTanh tFabs tFloor tCeil
 %token tFmod tModulo tHypot tList
-%token tPrintf tError tSprintf tStrCat tStrPrefix tStrRelative tStrFind
+%token tPrintf tError tStr tSprintf tStrCat tStrPrefix tStrRelative tStrReplace
+%token tStrFind tStrCmp
 %token tTextAttributes
 %token tBoundingBox tDraw tToday tSyncModel tCreateTopology tCreateTopologyNoHoles
 %token tDistanceFunction tDefineConstant tUndefineConstant
 %token tPoint tCircle tEllipse tLine tSphere tPolarSphere tSurface tSpline tVolume
-%token tCharacteristic tLength tParametric tElliptic tRefineMesh
+%token tCharacteristic tLength tParametric tElliptic tRefineMesh tAdaptMesh
 %token tPlane tRuled tTransfinite tComplex tPhysical tCompound tPeriodic
 %token tUsing tPlugin tDegenerated
 %token tRotate tTranslate tSymmetry tDilate tExtrude tLevelset
@@ -218,7 +219,7 @@ Printf :
   | tPrintf '(' tBIGSTR ')' SendToFile StringExprVar tEND
     {
       std::string tmp = FixRelativePath(gmsh_yyname, $6);
-      FILE *fp = fopen(tmp.c_str(), $5);
+      FILE *fp = Fopen(tmp.c_str(), $5);
       if(!fp){
 	yymsg(0, "Unable to open file '%s'", tmp.c_str());
       }
@@ -265,7 +266,7 @@ Printf :
 	yymsg(0, "%d extra argument%s in Printf", i, (i > 1) ? "s" : "");
       else{
         std::string tmp = FixRelativePath(gmsh_yyname, $8);
-	FILE *fp = fopen(tmp.c_str(), $7);
+	FILE *fp = Fopen(tmp.c_str(), $7);
 	if(!fp){
 	  yymsg(0, "Unable to open file '%s'", tmp.c_str());
 	}
@@ -1292,7 +1293,7 @@ FloatParameterOption :
       List_Delete($4);
     }
 
-  | ',' tSTRING tBIGSTR
+  | ',' tSTRING StringExpr
     {
       std::string key($2);
       std::string val($3);
@@ -1316,7 +1317,7 @@ CharParameterOption :
       Free($2);
     }
 
-  | ',' tSTRING tBIGSTR
+  | ',' tSTRING StringExpr
     {
       std::string key($2);
       std::string val($3);
@@ -2195,10 +2196,13 @@ LevelSet :
 	    centers(i,j) = (double)(*(double*)List_Pointer(l, j));
 	  }
 	}
-	 gLevelset *ls = new gLevelsetPoints(centers, t);
-	 LevelSet *l = Create_LevelSet(ls->getTag(), ls);
-	 Tree_Add(GModel::current()->getGEOInternals()->LevelSets, &l);
+        gLevelset *ls = new gLevelsetPoints(centers, t);
+        LevelSet *l = Create_LevelSet(ls->getTag(), ls);
+        Tree_Add(GModel::current()->getGEOInternals()->LevelSets, &l);
       }
+      for(int i = 0; i < List_Nbr($8); i++)
+        List_Delete(*(List_T**)List_Pointer($8, i));
+      List_Delete($8);
 #endif
     }
   | tLevelset tPlane '(' FExpr ')' tAFFECT '{' VExpr ',' VExpr ','
@@ -2844,11 +2848,67 @@ Command :
       GModel::current()->importGEOInternals();
       GModel::current()->refineMesh(CTX::instance()->mesh.secondOrderLinear);
     }
+  | tAdaptMesh '{' RecursiveListOfDouble '}' '{' RecursiveListOfDouble '}'
+               '{' RecursiveListOfListOfDouble '}' '{' FExpr ',' FExpr '}' tEND
+    {
+      int lock = CTX::instance()->lock;
+      CTX::instance()->lock = 0;
+      std::vector<int> technique;
+      for(int i = 0; i < List_Nbr($3); i++){
+        double d;
+        List_Read($3, i, &d);
+        technique.push_back((int)d);
+      }
+      if(technique.empty()){
+        yyerror("Need at least one adaptation technique");
+      }
+      else{
+        std::vector<simpleFunction<double>*> f;
+        for(int i = 0; i < List_Nbr($6); i++){
+          double d;
+          List_Read($6, i, &d);
+          LevelSet *l = FindLevelSet((int)d);
+          if(l) f.push_back(l->ls);
+          else yymsg(0, "Unknown Levelset %d", (int)d);
+        }
+        if(technique.size() != f.size()){
+          yyerror("Number of techniques != number of levelsets");
+        }
+        else{
+          if(List_Nbr($9) != f.size()){
+            yyerror("Number of parameters != number of levelsets");
+          }
+          else{
+            std::vector<std::vector<double> > parameters;
+            parameters.resize(List_Nbr($9));
+            for(int i = 0; i < List_Nbr($9); i++){
+              List_T *l = *(List_T**)List_Pointer($9, i);
+              for(int j = 0; j < List_Nbr(l); j++){
+                double d;
+                List_Read(l, j, &d);
+                parameters[i].push_back(d);
+              }
+            }
+            int niter = (int)$12;
+            bool meshAll = ($14 == 0) ? false : true;
+            GModel::current()->importGEOInternals();
+            GModel::current()->adaptMesh(technique, f, parameters, niter, meshAll);
+          }
+        }
+      }
+      List_Delete($3);
+      List_Delete($6);
+      for(int i = 0; i < List_Nbr($9); i++)
+        List_Delete(*(List_T**)List_Pointer($9, i));
+      List_Delete($9);
+      CTX::instance()->lock = lock;
+    }
    | tSetOrder FExpr tEND
     {
 #if defined(HAVE_MESH)
       SetOrderN(GModel::current(), $2, CTX::instance()->mesh.secondOrderLinear,
-                CTX::instance()->mesh.secondOrderIncomplete);
+                CTX::instance()->mesh.secondOrderIncomplete,
+                CTX::instance()->mesh.meshOnlyVisible);
 #endif
     }
 ;
@@ -3395,9 +3455,13 @@ TransfiniteArrangement :
       if(!strcmp($1, "Right"))
         $$ = 1;
       else if(!strcmp($1, "Left"))
-        $$ = -1;
-      else // alternated
-        $$ = 0;
+	$$ = -1;
+      else if(!strcmp($1, "AlternateRight"))
+	$$ = 2;
+      else if(!strcmp($1, "AlternateLeft"))
+	$$ = -2;
+      else // "Alternate" -> "Alternate Right"
+	$$ = 2;
       Free($1);
     }
 ;
@@ -3885,7 +3949,26 @@ Constraints :
     }
   | tSurface '{' RecursiveListOfDouble '}' tIn tVolume '{' FExpr '}' tEND
     {
-      Msg::Error("Surface in Volume not implemented yet");
+      Volume *v = FindVolume((int)$8);
+      if(v){
+	setVolumeEmbeddedSurfaces(v, $3);
+      }
+      else{
+        GRegion *gr = GModel::current()->getRegionByTag((int)$8);
+        if(gr){
+          for(int i = 0; i < List_Nbr($3); i++){
+            int iSurface;
+            List_Read($3, i, &iSurface);
+            GFace *gf = GModel::current()->getFaceByTag(iSurface);
+            if(gf)
+              gr->addEmbeddedFace(gf);
+            else
+              yymsg(0, "Unknown surface %d", iSurface);
+          }
+        }
+        else
+          yymsg(0, "Unknown region %d", (int)$8);
+      }
     }
   | tReverse tSurface ListOfDoubleOrAll tEND
     {
@@ -4328,6 +4411,11 @@ FExpr_Single :
         $$ = 1.;
       else
         $$ = 0.;
+      Free($3); Free($5);
+    }
+  | tStrCmp '(' StringExprVar ',' StringExprVar ')'
+    {
+      $$ = strcmp($3, $5);
       Free($3); Free($5);
     }
   | tTextAttributes '(' RecursiveListOfStringExprVar ')'
@@ -4935,11 +5023,64 @@ StringExpr :
 	strcpy($$, &$3[i+1]);
       Free($3);
     }
+  | tStrReplace '(' StringExprVar ',' StringExprVar ',' StringExprVar ')'
+    {
+      std::string input = $3;
+      std::string substr_old = $5;
+      std::string substr_new = $7;
+      std::string ret = ReplaceSubString(substr_old, substr_new, input);
+      $$ = (char *)Malloc((ret.size() + 1) * sizeof(char));
+      strcpy($$, ret.c_str());
+      Free($3);
+      Free($5);
+      Free($7);
+    }
+  | tStr '[' RecursiveListOfStringExprVar ']'
+    {
+      int size = 0;
+      for(int i = 0; i < List_Nbr($3); i++)
+        size += strlen(*(char**)List_Pointer($3, i)) + 1;
+      $$ = (char*)Malloc(size * sizeof(char));
+      $$[0] = '\0';
+      for(int i = 0; i < List_Nbr($3); i++){
+        char *s;
+        List_Read($3, i, &s);
+        strcat($$, s);
+        Free(s);
+        if(i != List_Nbr($3) - 1) strcat($$, "\n");
+      }
+      List_Delete($3);
+    }
   | tSprintf '(' StringExprVar ')'
     {
       $$ = $3;
     }
+  // for compatibility with GetDP
+  | tSprintf '[' StringExprVar ']'
+    {
+      $$ = $3;
+    }
   | tSprintf '(' StringExprVar ',' RecursiveListOfDouble ')'
+    {
+      char tmpstring[5000];
+      int i = PrintListOfDouble($3, $5, tmpstring);
+      if(i < 0){
+	yymsg(0, "Too few arguments in Sprintf");
+	$$ = $3;
+      }
+      else if(i > 0){
+	yymsg(0, "%d extra argument%s in Sprintf", i, (i > 1) ? "s" : "");
+	$$ = $3;
+      }
+      else{
+	$$ = (char*)Malloc((strlen(tmpstring) + 1) * sizeof(char));
+	strcpy($$, tmpstring);
+	Free($3);
+      }
+      List_Delete($5);
+    }
+  // for compatibility with GetDP
+  | tSprintf '[' StringExprVar ',' RecursiveListOfDouble ']'
     {
       char tmpstring[5000];
       int i = PrintListOfDouble($3, $5, tmpstring);

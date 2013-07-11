@@ -51,16 +51,18 @@ int metamodel(const std::string &action){
   std::string workingDir = OLMsg::GetOnelabString("Arguments/WorkingDir");
   std::string clientName = "meta";
 
-  MetaModel *myModel =
-    new MetaModel("meta", workingDir, "meta", modelName);
-
   parseMode todo;
   if(action == "compute")
     todo = COMPUTE;
   else{
     todo = ANALYZE;
   }
+  OLMsg::SetOnelabNumber("Metamodel/Action",todo,false);
+
+  MetaModel *myModel =
+    new MetaModel("meta", workingDir, "meta", modelName);
   myModel->setTodo(todo);
+
   if(OLMsg::GetErrorCount()) myModel->setTodo(EXIT);
 
   if(OLMsg::GetOnelabNumber("LOGFILES")){
@@ -68,8 +70,8 @@ int metamodel(const std::string &action){
     std::string mystderr = FixWindowsQuotes(workingDir + "stderr.txt");
     OLMsg::Info("Redirecting stdout into <%s>",mystdout.c_str());
     OLMsg::Info("Redirecting stderr into <%s>",mystderr.c_str());
-    freopen(mystdout.c_str(),"w",stdout);
-    freopen(mystderr.c_str(),"w",stderr);
+    if(!freopen(mystdout.c_str(),"w",stdout)) return 0;
+    if(!freopen(mystderr.c_str(),"w",stderr)) return 0;
   }
 
   if( myModel->isTodo(ANALYZE)){

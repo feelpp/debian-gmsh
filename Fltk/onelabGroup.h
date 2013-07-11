@@ -24,7 +24,6 @@ class onelabGroup : public Fl_Group{
   int _gearOptionsStart, _gearOptionsEnd;
   std::vector<Fl_Widget*> _treeWidgets;
   std::vector<char*> _treeStrings;
-  std::string _title;
   bool _stop;
   int _baseWidth, _indent;
   int _minWindowWidth, _minWindowHeight;
@@ -40,13 +39,14 @@ class onelabGroup : public Fl_Group{
   Fl_Widget *_addParameterWidget(onelab::function &p, Fl_Tree_Item *n,
                                  bool highlight, Fl_Color c);
   void _addMenu(const std::string &path, Fl_Callback *callback, void *data);
+  void _addSolverMenu(int num);
   void _addViewMenu(int num);
   std::set<std::string> _getClosedGmshMenus();
   void _addGmshMenus();
  public:
   onelabGroup(int x, int y, int w, int h, const char *l=0);
   void rebuildSolverList();
-  void rebuildTree();
+  void rebuildTree(bool deleteWidgets);
   void redrawTree(){ _tree->redraw(); }
   void openTreeItem(const std::string &name);
   void setButtonVisibility();

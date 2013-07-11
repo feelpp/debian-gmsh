@@ -133,11 +133,11 @@ void SetBoundingBox(bool aroundVisible)
     CTX::instance()->cg[i] = 0.5 * (CTX::instance()->min[i] + CTX::instance()->max[i]);
 
 }
-// FIXME: this is necessary for now to have an approximate
-// CTX::instance()->lc *while* parsing input files (it's important
-// since some of the geometrical operations use a tolerance that
-// depends on CTX::instance()->lc). This will be removed once the new
-// database is filled directly during the parsing step
+
+// FIXME: this is necessary for now to have an approximate CTX::instance()->lc
+// *while* parsing input files (it's important since some of the geometrical
+// operations use a tolerance that depends on CTX::instance()->lc). This will be
+// removed once the new database is filled directly during the parsing step
 static SBoundingBox3d temp_bb;
 
 void ResetTemporaryBoundingBox()
@@ -185,7 +185,7 @@ int ParseFile(const std::string &fileName, bool close, bool warnIfMissing)
   // add 'b' for pure Windows programs: opening in text mode messes up
   // fsetpos/fgetpos (used e.g. for user-defined functions)
   FILE *fp;
-  if(!(fp = fopen(fileName.c_str(), "rb"))){
+  if(!(fp = Fopen(fileName.c_str(), "rb"))){
     if(warnIfMissing)
       Msg::Warning("Unable to open file '%s'", fileName.c_str());
     return 0;
@@ -233,7 +233,7 @@ int ParseFile(const std::string &fileName, bool close, bool warnIfMissing)
 
 #if defined(HAVE_FLTK) && defined(HAVE_POST)
   if(FlGui::available())
-    FlGui::instance()->updateViews(numViewsBefore != (int)PView::list.size());
+    FlGui::instance()->updateViews(numViewsBefore != (int)PView::list.size(), false);
 #endif
 
   return 1;
@@ -244,7 +244,7 @@ void ParseString(const std::string &str)
 {
   if(str.empty()) return;
   std::string fileName = CTX::instance()->homeDir + CTX::instance()->tmpFileName;
-  FILE *fp = fopen(fileName.c_str(), "w");
+  FILE *fp = Fopen(fileName.c_str(), "w");
   if(fp){
     fprintf(fp, "%s\n", str.c_str());
     fclose(fp);
@@ -254,11 +254,12 @@ void ParseString(const std::string &str)
 
 static int defineSolver(const std::string &name)
 {
-  for(int i = 0; i < 5; i++){
+  for(int i = 0; i < NUM_SOLVERS; i++){
     if(opt_solver_name(i, GMSH_GET, "") == name) return i;
   }
-  opt_solver_name(4, GMSH_SET|GMSH_GUI, name);
-  return 4;
+  // overwrite last one
+  opt_solver_name(NUM_SOLVERS - 1, GMSH_SET|GMSH_GUI, name);
+  return NUM_SOLVERS - 1;
 }
 
 int MergeFile(const std::string &fileName, bool warnIfMissing)
@@ -275,7 +276,7 @@ int MergeFile(const std::string &fileName, bool warnIfMissing)
 
   // added 'b' for pure Windows programs, since some of these files
   // contain binary data
-  FILE *fp = fopen(fileName.c_str(), "rb");
+  FILE *fp = Fopen(fileName.c_str(), "rb");
   if(!fp){
     if(warnIfMissing)
       Msg::Warning("Unable to open file '%s'", fileName.c_str());
@@ -412,11 +413,17 @@ int MergeFile(const std::string &fileName, bool warnIfMissing)
   }
 #endif
 #if defined(HAVE_ONELAB)
-  else if(ext == ".pro"){
+  else if(ext == ".pro" || ext == ".PRO"){
     int num = defineSolver("GetDP");
-    std::vector<std::string> split = SplitFileName(fileName);
     GModel::current()->setName(split[1] + ".geo");
     GModel::current()->setFileName(split[0] + split[1] + ".geo");
+    CTX::instance()->launchSolverAtStartup = num;
+    return 1;
+  }
+  else if(ext == ".py" || ext == ".PY" ||
+          ext == ".exe" || ext == ".EXE"){
+    int num = defineSolver(split[1]);
+    opt_solver_executable(num, GMSH_SET, fileName);
     CTX::instance()->launchSolverAtStartup = num;
     return 1;
   }
@@ -425,17 +432,6 @@ int MergeFile(const std::string &fileName, bool warnIfMissing)
   else if(ext == ".ol"){
     // FIXME: this is a hack -- think about a better way
     status = metamodel_cb(fileName);
-  }
-  else if(ext == ".py"){
-    FlGui::instance()->onelab->addSolver("python", fileName, "", 1);
-    onelab_cb(0, (void*)"check");
-    status = 1;
-    /* tester ceci:
-    int num = defineSolver("python");
-    opt_solver_executable(num, GMSH_SET, fileName);
-    CTX::instance()->launchSolverAtStartup = num;
-    return 1;
-    */
   }
 #endif
   else {
@@ -487,7 +483,7 @@ int MergeFile(const std::string &fileName, bool warnIfMissing)
     for(unsigned int i = numViewsBefore; i < PView::list.size(); i++)
       opt_view_timestep(i, GMSH_SET | GMSH_GUI,
                         PView::list[i]->getData()->getFirstNonEmptyTimeStep());
-    FlGui::instance()->updateViews(numViewsBefore != (int)PView::list.size());
+    FlGui::instance()->updateViews(numViewsBefore != (int)PView::list.size(), false);
   }
 #endif
 
@@ -508,7 +504,7 @@ int MergePostProcessingFile(const std::string &fileName, bool showLastStep,
 {
 #if defined(HAVE_POST)
   // check if there is a mesh in the file
-  FILE *fp = fopen(fileName.c_str(), "rb");
+  FILE *fp = Fopen(fileName.c_str(), "rb");
   if(!fp){
     if(warnIfMissing) Msg::Warning("Unable to open file '%s'", fileName.c_str());
     return 0;
@@ -610,7 +606,7 @@ void ClearProject()
   if(FlGui::available()){
     FlGui::instance()->setGraphicTitle(GModel::current()->getFileName());
     FlGui::instance()->resetVisibility();
-    FlGui::instance()->updateViews();
+    FlGui::instance()->updateViews(true, true);
     FlGui::instance()->updateFields();
     GModel::current()->setSelection(0);
   }
@@ -629,17 +625,21 @@ void OpenProject(const std::string &fileName)
   Msg::ResetErrorCounter();
 
   if(GModel::current()->empty()){
-    // if the current model is empty, make sure it's reaaally
-    // cleaned-up, and reuse it (don't clear the parser variables: if
-    // the model is empty we probably just launched gmsh, and we don't
-    // want to delete variables set e.g. using the -string command
-    // line option)
+    // if the current model is empty, make sure it's reaaally cleaned-up, and
+    // reuse it
     GModel::current()->destroy();
     GModel::current()->getGEOInternals()->destroy();
+    // don't clear the parser variables if we just launched gmsh with the
+    // -string command line option
+#if defined(HAVE_PARSER)
+    std::string c = Msg::GetCommandLineArgs();
+    if(c.find("-string") == std::string::npos)
+      gmsh_yysymbols.clear();
+#endif
   }
   else{
-    // if the current model is not empty make it invisible, clear the
-    // parser variables and add a new model
+    // if the current model is not empty make it invisible, clear the parser
+    // variables and add a new model
 #if defined(HAVE_PARSER)
     gmsh_yysymbols.clear();
 #endif
@@ -647,8 +647,7 @@ void OpenProject(const std::string &fileName)
     GModel::current(GModel::list.size() - 1);
   }
 
-  // temporary hack until we fill the current GModel on the fly during
-  // parsing
+  // temporary hack until we fill the current GModel on the fly during parsing
   ResetTemporaryBoundingBox();
 
   // merge the file
@@ -677,7 +676,7 @@ void OpenProject(const std::string &fileName)
   if(FlGui::available()){
     file_watch_cb(0, 0);
     FlGui::instance()->resetVisibility();
-    FlGui::instance()->updateViews();
+    FlGui::instance()->updateViews(true, false);
     FlGui::instance()->updateFields();
     GModel::current()->setSelection(0);
     GModel::current()->setCompoundVisibility();

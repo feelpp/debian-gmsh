@@ -8,6 +8,7 @@
 #include "GmshConfig.h"
 #include "GmshMessage.h"
 #include "GModel.h"
+#include "OS.h"
 #include "Geo.h"
 #include "OpenFile.h"
 #include "Numeric.h"
@@ -162,7 +163,7 @@ int GModel::importGEOInternals()
           e = new gmshEdge(this, c, 0, 0);
           add(e);
         }
-  
+
 
         if(!c->Visible) e->setVisibility(0);
         if(c->Color.type) e->setColor(c->Color.mesh);
@@ -259,6 +260,17 @@ int GModel::importGEOInternals()
           if(gr) comp.push_back(gr);
         }
         r = new GRegionCompound(this, v->Num, comp);
+        if(v->EmbeddedSurfaces){
+          for(int i = 0; i < List_Nbr(v->EmbeddedSurfaces); i++){
+            Surface *s;
+            List_Read(v->EmbeddedSurfaces, i, &s);
+            GFace *gf = getFaceByTag(abs(s->Num));
+            if(gf)
+              r->addEmbeddedFace(gf);
+            else
+              Msg::Error("Unknown surface %d", s->Num);
+          }
+        }
         add(r);
       }
       else if(!r){
@@ -441,7 +453,7 @@ static bool skipVertex(GVertex *gv)
 
 int GModel::writeGEO(const std::string &name, bool printLabels, bool onlyPhysicals)
 {
-  FILE *fp = fopen(name.c_str(), "w");
+  FILE *fp = Fopen(name.c_str(), "w");
 
   std::map<double, std::string> meshSizeParameters;
   int cpt = 0;

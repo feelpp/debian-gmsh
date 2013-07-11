@@ -81,6 +81,7 @@ string	{alpha}({alpha}|{digit})*
 
 Abort                   return tAbort;
 Acos                    return tAcos;
+AdaptMesh               return tAdaptMesh;
 ArcCos                  return tAcos;
 Alias                   return tAlias;
 AliasWithOptions        return tAliasWithOptions;
@@ -205,11 +206,14 @@ Sphere                  return tSphere;
 Spline                  return tSpline;
 Split                   return tSplit;
 Surface                 return tSurface;
+Str                     return tStr;
 Sprintf                 return tSprintf;
 StrCat                  return tStrCat;
+StrReplace              return tStrReplace;
 StrPrefix               return tStrPrefix;
 StrRelative             return tStrRelative;
 StrFind                 return tStrFind;
+StrCmp                  return tStrCmp;
 Show                    return tShow;
 Symmetry                return tSymmetry;
 SyncModel               return tSyncModel;

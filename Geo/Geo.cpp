@@ -233,8 +233,8 @@ void End_Curve(Curve *c)
 {
   // if all control points of a curve are on the same geometry, then
   // the curve is also on the geometry
-  if(c->Control_Points){
-    int NN = List_Nbr(c->Control_Points);
+  int NN = List_Nbr(c->Control_Points);
+  if(NN){
     Vertex *pV;
     List_Read (c->Control_Points, 0, &pV);
     c->geometry = pV->geometry;
@@ -481,6 +481,10 @@ Curve *Create_Curve(int Num, int Typ, int Order, List_T *Liste,
   pC->typeTransfinite = 0;
   pC->coeffTransfinite = 0.;
   pC->ReverseMesh = 0;
+  pC->beg = NULL;
+  pC->end = NULL;
+  pC->Control_Points = NULL;
+  pC->degenerated = false;
 
   if(Typ == MSH_SEGM_SPLN) {
     for(int i = 0; i < 4; i++)
@@ -517,7 +521,7 @@ Curve *Create_Curve(int Num, int Typ, int Order, List_T *Liste,
   else
     pC->k = NULL;
 
-  if(Liste) {
+  if(List_Nbr(Liste)) {
     pC->Control_Points = List_Create(List_Nbr(Liste), 1, sizeof(Vertex *));
     for(int j = 0; j < List_Nbr(Liste); j++) {
       int iPnt;
@@ -529,38 +533,31 @@ Curve *Create_Curve(int Num, int Typ, int Order, List_T *Liste,
         Msg::Error("Unknown control point %d in Curve %d", iPnt, pC->Num);
       }
     }
-  }
-  else {
-    pC->Control_Points = NULL;
-    pC->beg = NULL;
-    pC->end = NULL;
-    pC->degenerated = false;
-    return pC;
-  }
-
-  if(p1 < 0) {
-    List_Read(pC->Control_Points, 0, &pC->beg);
-    List_Read(pC->Control_Points, List_Nbr(pC->Control_Points) - 1, &pC->end);
-  }
-  else {
-    Vertex *v;
-    if((v = FindPoint(p1))) {
-      Msg::Info("Curve %d first control point %d ", pC->Num, v->Num);
-      pC->beg = v;
+    if(p1 < 0) {
+      if(List_Nbr(pC->Control_Points)){
+        List_Read(pC->Control_Points, 0, &pC->beg);
+        List_Read(pC->Control_Points, List_Nbr(pC->Control_Points) - 1, &pC->end);
+      }
     }
     else {
-      Msg::Error("Unknown control point %d in Curve %d", p1, pC->Num);
+      Vertex *v;
+      if((v = FindPoint(p1))) {
+        Msg::Info("Curve %d first control point %d ", pC->Num, v->Num);
+        pC->beg = v;
+      }
+      else {
+        Msg::Error("Unknown control point %d in Curve %d", p1, pC->Num);
+      }
+      if((v = FindPoint(p2))) {
+        Msg::Info("Curve %d first control point %d ", pC->Num, v->Num);
+        pC->end = v;
+      }
+      else {
+        Msg::Error("Unknown control point %d in Curve %d", p2, pC->Num);
+      }
     }
-    if((v = FindPoint(p2))) {
-      Msg::Info("Curve %d first control point %d ", pC->Num, v->Num);
-      pC->end = v;
-    }
-    else {
-      Msg::Error("Unknown control point %d in Curve %d", p2, pC->Num);
-    }
+    End_Curve(pC);
   }
-
-  End_Curve(pC);
 
   return pC;
 }
@@ -635,6 +632,7 @@ Volume *Create_Volume(int Num, int Typ)
   pV->SurfacesOrientations = List_Create(1, 2, sizeof(int));
   pV->SurfacesByTag = List_Create(1, 2, sizeof(int));
   pV->Extrude = NULL;
+  pV->EmbeddedSurfaces = NULL;
   return pV;
 }
 
@@ -2287,6 +2285,9 @@ int Extrude_ProtudePoint(int type, int ip,
     }
     c->end = chapeau;
     break;
+//  case ANALYTICAL:
+//
+//    break;
   default:
     Msg::Error("Unknown extrusion type");
     return pv->Num;
@@ -3629,6 +3630,22 @@ void setSurfaceEmbeddedCurves(Surface *s, List_T *curves)
       List_Add(s->EmbeddedCurves, &c);
     else
       Msg::Error("Unknown curve %d", (int)iCurve);
+  }
+}
+
+void setVolumeEmbeddedSurfaces(Volume *v, List_T *surfaces)
+{
+  if (!v->EmbeddedSurfaces)
+    v->EmbeddedSurfaces = List_Create(4, 4, sizeof(Surface *));
+  int nb = List_Nbr(surfaces);
+  for(int i = 0; i < nb; i++) {
+    double iSurface;
+    List_Read(surfaces, i, &iSurface);
+    Surface *s = FindSurface((int)iSurface);
+    if(s)
+      List_Add(v->EmbeddedSurfaces, &s);
+    else
+      Msg::Error("Unknown surface %d", (int)iSurface);
   }
 }
 

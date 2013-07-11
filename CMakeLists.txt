@@ -35,8 +35,10 @@ option(ENABLE_BUILD_LIB "Build static Gmsh library" OFF)
 option(ENABLE_BUILD_SHARED "Build shared Gmsh library" OFF)
 option(ENABLE_BUILD_DYNAMIC "Build dynamically linked Gmsh binary" OFF)
 option(ENABLE_BUILD_ANDROID "Build Gmsh library for Android NDK" OFF)
-option(ENABLE_BUILD_IOS "Build Gmsh library for iOS" OFF)
+option(ENABLE_BUILD_IOS "Build Gmsh library for iOS (ARM)" OFF)
+option(ENABLE_BUILD_IOS_EMULATOR "Build Gmsh library for iOS emulator (x86)" OFF)
 option(ENABLE_CGNS "Enable CGNS mesh export" OFF)
+option(ENABLE_CAIRO "Enable Cairo to render fonts" ${DEFAULT})
 option(ENABLE_CHACO "Enable Chaco mesh partitioner" ${DEFAULT})
 option(ENABLE_DINTEGRATION "Enable discrete integration and levelsets" ${DEFAULT})
 option(ENABLE_FLTK "Build FLTK GUI" ${DEFAULT})
@@ -58,6 +60,7 @@ option(ENABLE_NETGEN "Enable Netgen mesh generator" ${DEFAULT})
 option(ENABLE_OCC "Enable Open CASCADE geometrical models" ${DEFAULT})
 option(ENABLE_ONELAB "Enable OneLab solver interface" ${DEFAULT})
 option(ENABLE_ONELAB_METAMODEL "Enable OneLab metamodel" ${DEFAULT})
+option(ENABLE_OPENMP "Enable OpenMP" OFF)
 option(ENABLE_OS_SPECIFIC_INSTALL "Use OS-specific (e.g. app bundle) install" ${DEFAULT})
 option(ENABLE_OSMESA "Use OSMesa for offscreen rendering" OFF)
 option(ENABLE_PARSER "Build the GEO file parser" ${DEFAULT})
@@ -78,7 +81,7 @@ option(ENABLE_WRAP_JAVA "Build Java wrappers" OFF)
 option(ENABLE_WRAP_PYTHON "Build Python wrappers" OFF)
 
 set(GMSH_MAJOR_VERSION 2)
-set(GMSH_MINOR_VERSION 7)
+set(GMSH_MINOR_VERSION 8)
 set(GMSH_PATCH_VERSION 1)
 set(GMSH_EXTRA_VERSION "" CACHE STRING "Gmsh extra version string")
 
@@ -93,8 +96,8 @@ set(GMSH_API
     Common/VertexArray.h Common/Octree.h Common/OctreeInternals.h 
     Common/OS.h Common/StringUtils.h Common/OpenFile.h
   Numeric/Numeric.h Numeric/GaussIntegration.h Numeric/polynomialBasis.h
-    Numeric/JacobianBasis.h Numeric/fullMatrix.h
-    Numeric/simpleFunction.h Numeric/cartesian.h
+    Numeric/JacobianBasis.h Numeric/bezierBasis.h Numeric/fullMatrix.h
+    Numeric/simpleFunction.h Numeric/cartesian.h Numeric/ElementType.h
   Geo/GModel.h Geo/GEntity.h Geo/GPoint.h Geo/GVertex.h Geo/GEdge.h 
     Geo/GFace.h Geo/GRegion.h Geo/GEdgeLoop.h Geo/GEdgeCompound.h 
     Geo/GFaceCompound.h Geo/GRegionCompound.h Geo/GRbf.h Geo/MVertex.h
@@ -106,7 +109,7 @@ set(GMSH_API
     Geo/SPoint2.h Geo/SPoint3.h Geo/SVector3.h Geo/STensor3.h Geo/SBoundingBox3d.h 
     Geo/Pair.h Geo/Range.h Geo/SOrientedBoundingBox.h 
     Geo/CellComplex.h Geo/ChainComplex.h Geo/Cell.h Geo/Homology.h Geo/Chain.h 
-    Geo/partitionEdge.h Geo/CGNSOptions.h Geo/gmshLevelset.h
+    Geo/partitionEdge.h Geo/CGNSOptions.h Geo/gmshLevelset.h Geo/boundaryLayersData.h
   Mesh/meshGEdge.h Mesh/meshGFace.h Mesh/meshGFaceOptimize.h 
     Mesh/meshGFaceElliptic.h Mesh/meshPartition.h Mesh/meshGFaceDelaunayInsertion.h 
     Mesh/simple3D.h Mesh/meshPartitionOptions.h Mesh/directions3D.h Mesh/yamakawa.h
@@ -180,6 +183,14 @@ if(MSVC)
   endif(ENABLE_MSVC_STATIC_RUNTIME)
 endif(MSVC)
 
+if(ENABLE_OPENMP)
+  find_package(OpenMP)
+  if(OPENMP_FOUND)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+  endif(OPENMP_FOUND)
+endif(ENABLE_OPENMP)
+
 macro(append_gmsh_src DIRNAME FILES)
   foreach(FILE ${FILES})
     list(APPEND LIST ${DIRNAME}/${FILE})
@@ -219,122 +230,128 @@ if(SIZEOF_VOID_P EQUAL 8)
 endif(SIZEOF_VOID_P EQUAL 8)
 
 if(ENABLE_BLAS_LAPACK)
-  if(MSVC)
-    # on Windows with Visual C++ try really hard to find blas/lapack
-    # *without* requiring a Fortran compiler: 1) try to find the Intel
-    # MKL libs using the standard search path; if not found 2) try to
-    # get the reference blas/lapack libs (useful for users with no
-    # Fortran compiler and no MKL license, who can just download our
-    # precompiled "gmsh-dep" package)
-    if(HAVE_64BIT_SIZE_T)
-      set(MKL_PATH em64t/lib)
-    else(HAVE_64BIT_SIZE_T)
-      set(MKL_PATH ia32/lib)
-    endif(HAVE_64BIT_SIZE_T)
-    set(MKL_LIBS_REQUIRED libguide40 mkl_intel_c mkl_intel_thread mkl_core)
-    find_all_libraries(LAPACK_LIBRARIES MKL_LIBS_REQUIRED "" ${MKL_PATH})
-    if(LAPACK_LIBRARIES)
-      set_config_option(HAVE_BLAS "Blas(IntelMKL)")
-      set_config_option(HAVE_LAPACK "Lapack(IntelMKL)")
-    else(LAPACK_LIBRARIES)
-      set(REFLAPACK_LIBS_REQUIRED lapack blas g2c gcc)
-      find_all_libraries(LAPACK_LIBRARIES REFLAPACK_LIBS_REQUIRED "" "")
-      if(LAPACK_LIBRARIES)
-        set_config_option(HAVE_BLAS "Blas(Reference)")
-        set_config_option(HAVE_LAPACK "Lapack(Reference)")
-      endif(LAPACK_LIBRARIES)
-    endif(LAPACK_LIBRARIES)
-  elseif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-    # on Linux try to find the Intel MKL without a Fortran compiler
-    if(HAVE_64BIT_SIZE_T)
-      set(MKL_PATH lib/em64t)
-    else(HAVE_64BIT_SIZE_T)
-      set(MKL_PATH lib/32)
-    endif(HAVE_64BIT_SIZE_T)
-    set(MKL_LIBS_REQUIRED mkl_gf_lp64 iomp5 mkl_gnu_thread mkl_core guide pthread)
-    find_all_libraries(LAPACK_LIBRARIES MKL_LIBS_REQUIRED "" ${MKL_PATH})
-    if(NOT LAPACK_LIBRARIES)
-      # match lapack 9.0 on 64bit
-      set(MKL_LIBS_REQUIRED mkl_lapack mkl_em64t guide)
+  if(BLAS_LAPACK_LIBRARIES)
+    set_config_option(HAVE_BLAS "Blas(Custom)")
+    set_config_option(HAVE_LAPACK "Lapack(Custom)")
+    set(LAPACK_LIBRARIES ${BLAS_LAPACK_LIBRARIES})
+  else(BLAS_LAPACK_LIBRARIES)
+    if(MSVC)
+      # on Windows with Visual C++ try really hard to find blas/lapack
+      # *without* requiring a Fortran compiler: 1) try to find the Intel
+      # MKL libs using the standard search path; if not found 2) try to
+      # get the reference blas/lapack libs (useful for users with no
+      # Fortran compiler and no MKL license, who can just download our
+      # precompiled "gmsh-dep" package)
+      if(HAVE_64BIT_SIZE_T)
+        set(MKL_PATH em64t/lib)
+      else(HAVE_64BIT_SIZE_T)
+        set(MKL_PATH ia32/lib)
+      endif(HAVE_64BIT_SIZE_T)
+      set(MKL_LIBS_REQUIRED libguide40 mkl_intel_c mkl_intel_thread mkl_core)
       find_all_libraries(LAPACK_LIBRARIES MKL_LIBS_REQUIRED "" ${MKL_PATH})
-    endif(NOT LAPACK_LIBRARIES)
-    if(LAPACK_LIBRARIES)
-      set_config_option(HAVE_BLAS "Blas(IntelMKL)")
-      set_config_option(HAVE_LAPACK "Lapack(IntelMKL)")
-    else(LAPACK_LIBRARIES)
-      # on Linux also try to find ATLAS without a Fortran compiler,
-      # because cmake ships with a buggy FindBLAS e.g. on Ubuntu Lucid
-      # Lynx
-      set(ATLAS_LIBS_REQUIRED lapack f77blas cblas atlas)
-      find_all_libraries(LAPACK_LIBRARIES ATLAS_LIBS_REQUIRED "" "")
       if(LAPACK_LIBRARIES)
-        set_config_option(HAVE_BLAS "Blas(ATLAS)")
-        set_config_option(HAVE_LAPACK "Lapack(ATLAS)")
+        set_config_option(HAVE_BLAS "Blas(IntelMKL)")
+        set_config_option(HAVE_LAPACK "Lapack(IntelMKL)")
       else(LAPACK_LIBRARIES)
-        # try with generic names
-        set(GENERIC_LIBS_REQUIRED lapack blas pthread)
-        find_all_libraries(LAPACK_LIBRARIES GENERIC_LIBS_REQUIRED "" "")
+        set(REFLAPACK_LIBS_REQUIRED lapack blas g2c gcc)
+        find_all_libraries(LAPACK_LIBRARIES REFLAPACK_LIBS_REQUIRED "" "")
         if(LAPACK_LIBRARIES)
-          set_config_option(HAVE_BLAS "Blas")
-          set_config_option(HAVE_LAPACK "Lapack")
-          find_library(GFORTRAN_LIB gfortran)
-          if(GFORTRAN_LIB)
-            list(APPEND LAPACK_LIBRARIES ${GFORTRAN_LIB})
-          endif(GFORTRAN_LIB)
+          set_config_option(HAVE_BLAS "Blas(Reference)")
+          set_config_option(HAVE_LAPACK "Lapack(Reference)")
         endif(LAPACK_LIBRARIES)
       endif(LAPACK_LIBRARIES)
-    endif(LAPACK_LIBRARIES)
-  elseif(${CMAKE_SYSTEM_NAME} MATCHES "SunOS")
-    # on SunOS we know blas and lapack are available in sunperf
-    set(LAPACK_FLAGS -library=sunperf)
-    set_config_option(HAVE_BLAS "Blas(SunPerf)")
-    set_config_option(HAVE_LAPACK "Lapack(SunPerf)")
-  elseif(APPLE)
-    # on Mac we also know that blas and lapack are available
-    set(LAPACK_LIBRARIES "-framework vecLib")
-    set_config_option(HAVE_BLAS "Blas(VecLib)")
-    set_config_option(HAVE_LAPACK "Lapack(VecLib)")
-  endif(MSVC)
-  if(BUILD_ANDROID)
-    find_library(BLAS_LIB f2cblas PATH_SUFFIXES lib)
-    find_library(LAPACK_LIB f2clapack PATH_SUFFIXES lib)
-    if(BLAS_LIB)
-      list(APPEND EXTERNAL_LIBRARIES ${BLAS_LIB})
-      set_config_option(HAVE_BLAS "Blas")
-    endif(BLAS_LIB)
-    if(LAPACK_LIB)
-      list(APPEND EXTERNAL_LIBRARIES ${LAPACK_LIB})
-      set_config_option(HAVE_LAPACK "Lapack")
-    endif(LAPACK_LIB)
-  endif(BUILD_ANDROID)
-  if(NOT HAVE_BLAS OR NOT HAVE_LAPACK)
-    # if we haven't found blas and lapack without using the standard
-    # cmake tests, do it (this requires a working Fortran compiler)
-    enable_language(Fortran)
-    find_package(BLAS)
-    if(BLAS_FOUND)
-      set_config_option(HAVE_BLAS "Blas")
-      find_package(LAPACK)
-      if(LAPACK_FOUND)
+    elseif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+      # on Linux try to find the Intel MKL without a Fortran compiler
+      if(HAVE_64BIT_SIZE_T)
+        set(MKL_PATH lib/em64t)
+      else(HAVE_64BIT_SIZE_T)
+        set(MKL_PATH lib/32)
+      endif(HAVE_64BIT_SIZE_T)
+      set(MKL_LIBS_REQUIRED mkl_gf_lp64 iomp5 mkl_gnu_thread mkl_core guide pthread)
+      find_all_libraries(LAPACK_LIBRARIES MKL_LIBS_REQUIRED "" ${MKL_PATH})
+      if(NOT LAPACK_LIBRARIES)
+        # match lapack 9.0 on 64bit
+        set(MKL_LIBS_REQUIRED mkl_lapack mkl_em64t guide)
+        find_all_libraries(LAPACK_LIBRARIES MKL_LIBS_REQUIRED "" ${MKL_PATH})
+      endif(NOT LAPACK_LIBRARIES)
+      if(LAPACK_LIBRARIES)
+        set_config_option(HAVE_BLAS "Blas(IntelMKL)")
+        set_config_option(HAVE_LAPACK "Lapack(IntelMKL)")
+      else(LAPACK_LIBRARIES)
+        # on Linux also try to find ATLAS without a Fortran compiler,
+        # because cmake ships with a buggy FindBLAS e.g. on Ubuntu Lucid
+        # Lynx
+        set(ATLAS_LIBS_REQUIRED lapack f77blas cblas atlas)
+        find_all_libraries(LAPACK_LIBRARIES ATLAS_LIBS_REQUIRED "" "")
+        if(LAPACK_LIBRARIES)
+          set_config_option(HAVE_BLAS "Blas(ATLAS)")
+          set_config_option(HAVE_LAPACK "Lapack(ATLAS)")
+        else(LAPACK_LIBRARIES)
+          # try with generic names
+          set(GENERIC_LIBS_REQUIRED lapack blas pthread)
+          find_all_libraries(LAPACK_LIBRARIES GENERIC_LIBS_REQUIRED "" "")
+          if(LAPACK_LIBRARIES)
+            set_config_option(HAVE_BLAS "Blas")
+            set_config_option(HAVE_LAPACK "Lapack")
+            find_library(GFORTRAN_LIB gfortran)
+            if(GFORTRAN_LIB)
+              list(APPEND LAPACK_LIBRARIES ${GFORTRAN_LIB})
+            endif(GFORTRAN_LIB)
+          endif(LAPACK_LIBRARIES)
+        endif(LAPACK_LIBRARIES)
+      endif(LAPACK_LIBRARIES)
+    elseif(${CMAKE_SYSTEM_NAME} MATCHES "SunOS")
+      # on SunOS we know blas and lapack are available in sunperf
+      set(LAPACK_FLAGS -library=sunperf)
+      set_config_option(HAVE_BLAS "Blas(SunPerf)")
+      set_config_option(HAVE_LAPACK "Lapack(SunPerf)")
+    elseif(APPLE)
+      # on Mac we also know that blas and lapack are available
+      set(LAPACK_LIBRARIES "-framework vecLib")
+      set_config_option(HAVE_BLAS "Blas(VecLib)")
+      set_config_option(HAVE_LAPACK "Lapack(VecLib)")
+    endif(MSVC)
+    if(BUILD_ANDROID)
+      find_library(BLAS_LIB f2cblas PATH_SUFFIXES lib)
+      find_library(LAPACK_LIB f2clapack PATH_SUFFIXES lib)
+      if(BLAS_LIB)
+        list(APPEND EXTERNAL_LIBRARIES ${BLAS_LIB})
+        set_config_option(HAVE_BLAS "Blas")
+      endif(BLAS_LIB)
+      if(LAPACK_LIB)
+        list(APPEND EXTERNAL_LIBRARIES ${LAPACK_LIB})
         set_config_option(HAVE_LAPACK "Lapack")
-      else(LAPACK_FOUND)
-        set(LAPACK_LIBRARIES ${BLAS_LIBRARIES})
-      endif(LAPACK_FOUND)
-      if(CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
-        if(CMAKE_Fortran_COMPILER MATCHES "gfortran")
-          list(APPEND LAPACK_LIBRARIES gfortran)
-        elseif(CMAKE_Fortran_COMPILER MATCHES "f95")
-          list(APPEND LAPACK_LIBRARIES gfortran)
-        elseif(CMAKE_Fortran_COMPILER MATCHES "g77")
-          list(APPEND LAPACK_LIBRARIES g2c)
-        endif(CMAKE_Fortran_COMPILER MATCHES "gfortran")
-      endif(CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
-    endif(BLAS_FOUND)
-  endif(NOT HAVE_BLAS OR NOT HAVE_LAPACK)
-  if(NOT HAVE_BLAS OR NOT HAVE_LAPACK)
-    message(STATUS "Warning: Could not find Blas or Lapack: most meshing algorithms "
-            "will not be functional")
-  endif(NOT HAVE_BLAS OR NOT HAVE_LAPACK)
+      endif(LAPACK_LIB)
+    endif(BUILD_ANDROID)
+    if(NOT HAVE_BLAS OR NOT HAVE_LAPACK)
+      # if we haven't found blas and lapack without using the standard
+      # cmake tests, do it (this requires a working Fortran compiler)
+      enable_language(Fortran)
+      find_package(BLAS)
+      if(BLAS_FOUND)
+        set_config_option(HAVE_BLAS "Blas")
+        find_package(LAPACK)
+        if(LAPACK_FOUND)
+          set_config_option(HAVE_LAPACK "Lapack")
+        else(LAPACK_FOUND)
+          set(LAPACK_LIBRARIES ${BLAS_LIBRARIES})
+        endif(LAPACK_FOUND)
+        if(CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
+          if(CMAKE_Fortran_COMPILER MATCHES "gfortran")
+            list(APPEND LAPACK_LIBRARIES gfortran)
+          elseif(CMAKE_Fortran_COMPILER MATCHES "f95")
+            list(APPEND LAPACK_LIBRARIES gfortran)
+          elseif(CMAKE_Fortran_COMPILER MATCHES "g77")
+            list(APPEND LAPACK_LIBRARIES g2c)
+          endif(CMAKE_Fortran_COMPILER MATCHES "gfortran")
+        endif(CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
+      endif(BLAS_FOUND)
+    endif(NOT HAVE_BLAS OR NOT HAVE_LAPACK)
+    if(NOT HAVE_BLAS OR NOT HAVE_LAPACK)
+      message(STATUS "Warning: Could not find Blas or Lapack: most meshing algorithms "
+              "will not be functional")
+    endif(NOT HAVE_BLAS OR NOT HAVE_LAPACK)
+  endif(BLAS_LAPACK_LIBRARIES)
 endif(ENABLE_BLAS_LAPACK)
 
 add_subdirectory(Common)
@@ -449,8 +466,16 @@ if(ENABLE_ONELAB)
   endif(ENABLE_ONELAB_METAMODEL)
 endif(ENABLE_ONELAB)
 
+if(ENABLE_BUILD_IOS_EMULATOR)
+  set(GMSH_API ${GMSH_API} Common/onelab.h Common/GmshSocket.h Common/onelabUtils.h)
+endif(ENABLE_BUILD_IOS_EMULATOR)
+
 if(ENABLE_BUILD_IOS)
- #TODO
+  find_file(CMAKE_TOOLCHAIN_FILE "ios.cmake")
+  if(NOT CMAKE_TOOLCHAIN_FILE)
+    message(SEND_ERROR "Cannot compile Gmsh for iOS without a toolchain")
+  endif(NOT CMAKE_TOOLCHAIN_FILE)
+  set(GMSH_API ${GMSH_API} Common/onelab.h Common/GmshSocket.h Common/onelabUtils.h)
 endif(ENABLE_BUILD_IOS)
 
 if(ENABLE_BUILD_ANDROID)
@@ -458,6 +483,7 @@ if(ENABLE_BUILD_ANDROID)
   if(NOT CMAKE_TOOLCHAIN_FILE)
     message(SEND_ERROR "Cannot compile Gmsh for android without android-cmake")
   endif(NOT CMAKE_TOOLCHAIN_FILE)
+  set(GMSH_API ${GMSH_API} Common/onelab.h Common/GmshSocket.h Common/onelabUtils.h)
   set(CMAKE_BUILD_TYPE Release)
   set(LIBRARY_OUTPUT_PATH_ROOT ${CMAKE_CURRENT_BINARY_DIR})
   set(LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/libs/)
@@ -468,7 +494,7 @@ endif(ENABLE_BUILD_ANDROID)
 
 if(HAVE_FLTK OR HAVE_QT OR ENABLE_GRAPHICS)
   if(NOT HAVE_MESH OR NOT HAVE_POST OR NOT HAVE_PLUGINS OR NOT HAVE_ONELAB)
-    message(SEND_ERROR "Cannot compile GUI without Mesh, Post, Plugin or OneLab")
+    message(SEND_ERROR "Cannot compile GUI without Mesh, Post, Plugin and OneLab")
   endif(NOT HAVE_MESH OR NOT HAVE_POST OR NOT HAVE_PLUGINS OR NOT HAVE_ONELAB)
 
   if(FLTK_JPEG)
@@ -557,6 +583,16 @@ if(ENABLE_BFGS)
   set_config_option(HAVE_BFGS "Bfgs")
 endif(ENABLE_BFGS)
 
+if(HAVE_FLTK AND ENABLE_CAIRO)
+  find_library(CAIRO_LIB cairo)
+  find_path(CAIRO_INC "cairo/cairo.h" PATH_SUFFIXES include)
+  if(CAIRO_INC AND CAIRO_LIB)
+     set_config_option(HAVE_CAIRO "Cairo")
+     list(APPEND EXTERNAL_LIBRARIES ${CAIRO_LIB})
+     list(APPEND EXTERNAL_INCLUDES ${CAIRO_INC})
+  endif(CAIRO_INC AND CAIRO_LIB)
+endif(HAVE_FLTK AND ENABLE_CAIRO)
+
 if(ENABLE_DINTEGRATION)
   add_subdirectory(contrib/DiscreteIntegration)
   include_directories(contrib/DiscreteIntegration)
@@ -568,7 +604,6 @@ if(ENABLE_OPTHOM)
   include_directories(contrib/HighOrderMeshOptimizer)
   set_config_option(HAVE_OPTHOM "OptHom")
 endif(ENABLE_OPTHOM)
-
 
 if(ENABLE_KBIPACK)
   set_config_option(HAVE_KBIPACK "Kbipack")
@@ -964,9 +999,9 @@ if(ENABLE_ACIS)
 endif(ENABLE_ACIS)
 
 check_function_exists(vsnprintf HAVE_VSNPRINTF)
-if(NOT HAVE_VSNPRINTF)
+if(NOT HAVE_VSNPRINTF AND NOT ENABLE_BUILD_IOS)
   set_config_option(HAVE_NO_VSNPRINTF "NoVsnprintf")
-endif(NOT HAVE_VSNPRINTF)
+endif(NOT HAVE_VSNPRINTF AND NOT ENABLE_BUILD_IOS)
 
 check_include_file(sys/socket.h HAVE_SYS_SOCKET_H)
 if(HAVE_SYS_SOCKET_H)
@@ -974,9 +1009,9 @@ if(HAVE_SYS_SOCKET_H)
 endif(HAVE_SYS_SOCKET_H)
 check_type_size(socklen_t SOCKLEN_T_SIZE)
 set(CMAKE_EXTRA_INCLUDE_FILES)
-if(NOT SOCKLEN_T_SIZE)
+if(NOT SOCKLEN_T_SIZE AND NOT ENABLE_BUILD_IOS)
   set_config_option(HAVE_NO_SOCKLEN_T "NoSocklenT")
-endif(NOT SOCKLEN_T_SIZE)
+endif(NOT SOCKLEN_T_SIZE AND NOT ENABLE_BUILD_IOS)
 
 check_include_file(stdint.h HAVE_STDINT_H)
 if(HAVE_STDINT_H)
@@ -986,9 +1021,9 @@ else(HAVE_STDINT_H)
 endif(HAVE_STDINT_H)
 check_type_size(intptr_t INTPTR_T_SIZE)
 set(CMAKE_EXTRA_INCLUDE_FILES)
-if(NOT INTPTR_T_SIZE)
+if(NOT INTPTR_T_SIZE AND NOT ENABLE_BUILD_IOS)
   set_config_option(HAVE_NO_INTPTR_T "NoIntptrT")
-endif(NOT INTPTR_T_SIZE)
+endif(NOT INTPTR_T_SIZE AND NOT ENABLE_BUILD_IOS)
 
 check_include_file(dlfcn.h DLFCN_H)
 if(DLFCN_H)
@@ -1008,25 +1043,40 @@ if(MSVC)
 endif(MSVC)
 
 if(WIN32 OR CYGWIN)
-  list(APPEND EXTERNAL_LIBRARIES winmm wsock32 ws2_32)
+  list(APPEND EXTERNAL_LIBRARIES winmm wsock32 ws2_32 psapi)
 endif(WIN32 OR CYGWIN)
-
-# disable compile optimization on some known problematic files
-check_cxx_compiler_flag("-O0" NOOPT)
-if(NOOPT)
-  file(GLOB_RECURSE NON_OPTIMIZED_SRC Numeric/robustPredicates.cpp Mesh/BDS.cpp
-       Parser/Gmsh.tab.cpp contrib/Tetgen*/*.cxx)
-  set_source_files_properties(${NON_OPTIMIZED_SRC} COMPILE_FLAGS "-O0")
-endif(NOOPT)
 
 # force full warnings to encourage everybody to write clean(er) code
 check_cxx_compiler_flag("-Wall" WALL)
 if(WALL AND NOT MSVC)
   file(GLOB_RECURSE WALL_SRC Common/*.cpp Fltk/*.cpp FunctionSpace/*.cpp
        Geo/*.cpp Graphics/*.cpp Mesh/*.cpp Numeric/*.cpp Parser/*.cpp
-       Plugin/*.cpp Post/*.cpp Qt/*.cpp Solver/*.cpp contrib/onelab/*.cpp)
-  set_source_files_properties(${WALL_SRC} COMPILE_FLAGS "-Wall")
+       Plugin/*.cpp Post/*.cpp Qt/*.cpp Solver/*.cpp)
+  set_source_files_properties(${WALL_SRC} PROPERTIES COMPILE_FLAGS "-Wall")
 endif(WALL AND NOT MSVC)
+
+# don't issue warnings for contributed libraries
+check_cxx_compiler_flag("-w" NOWARN)
+if(NOWARN)
+  file(GLOB_RECURSE NOWARN_SRC contrib/*.cpp contrib/*.cc contrib/*.cxx
+                               contrib/*.c)
+  set_source_files_properties(${NOWARN_SRC} PROPERTIES COMPILE_FLAGS "-w")
+endif(NOWARN)
+
+# disable compile optimization on some known problematic files
+check_cxx_compiler_flag("-O0" NOOPT)
+if(NOOPT)
+  file(GLOB_RECURSE NOOPT_SRC Numeric/robustPredicates.cpp Mesh/BDS.cpp
+                              Parser/Gmsh.tab.cpp contrib/Tetgen*/*.cxx)
+  foreach(FILE ${NOOPT_SRC})
+    get_source_file_property(PROP ${FILE} COMPILE_FLAGS)
+    if(PROP)
+      set_source_files_properties(${FILE} PROPERTIES COMPILE_FLAGS "${PROP} -O0")
+    else(PROP)
+      set_source_files_properties(${FILE} PROPERTIES COMPILE_FLAGS "-O0")
+    endif(PROP)
+  endforeach(FILE)
+endif(NOOPT)
 
 list(SORT CONFIG_OPTIONS)
 set(GMSH_CONFIG_OPTIONS "")
@@ -1169,13 +1219,13 @@ if(WIN32 AND NOT MSVC OR CYGWIN)
   endif(HAVE_64BIT_SIZE_T)
   if(ENABLE_BUILD_DYNAMIC)
     set_target_properties(gmsh PROPERTIES 
-                          LINK_FLAGS "${FLAGS} -Wl,--enable-auto-import")
-    set_target_properties(shared PROPERTIES 
-                          PREFIX "lib"
-                          LINK_FLAGS "${FLAGS} -Wl,--export-all-symbols")
+      LINK_FLAGS "${FLAGS} -Wl,--enable-auto-import")
+    set(LIBGMSH_DEF "libGmsh-${GMSH_MAJOR_VERSION}.${GMSH_MINOR_VERSION}.def")
+    set_target_properties(shared PROPERTIES PREFIX "lib"
+      LINK_FLAGS "${FLAGS} -Wl,--export-all-symbols,--output-def,${LIBGMSH_DEF}")
   else(ENABLE_BUILD_DYNAMIC)
     set_target_properties(gmsh PROPERTIES 
-                          LINK_FLAGS "${FLAGS} -static")
+      LINK_FLAGS "${FLAGS} -static")
     # remove -Wl,-Bdynamic flags
     set(CMAKE_EXE_LINK_DYNAMIC_C_FLAGS)
     set(CMAKE_EXE_LINK_DYNAMIC_CXX_FLAGS)
@@ -1276,11 +1326,30 @@ if(ENABLE_BUILD_LIB)
   install(TARGETS lib DESTINATION ${GMSH_LIB} OPTIONAL)
 endif(ENABLE_BUILD_LIB)
 if(ENABLE_BUILD_SHARED OR ENABLE_BUILD_DYNAMIC)
-  install(TARGETS shared DESTINATION ${GMSH_LIB} OPTIONAL)
+  if(WIN32 AND NOT MSVC OR CYGWIN)
+    # install only the runtime (DLL); the .dll.a generated by gcc is not usable
+    # by MSVC
+    install(TARGETS shared RUNTIME DESTINATION ${GMSH_LIB} OPTIONAL)
+    # install .def file
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${LIBGMSH_DEF} 
+            DESTINATION ${GMSH_LIB})
+    # install these DLLs until we figure out how to link them in statically
+    find_program(GCC_DLL libgcc_s_sjlj-1.dll)
+    find_program(GFORTRAN_DLL libgfortran-3.dll)
+    find_program(STDC_DLL libstdc++-6.dll)
+    if(GCC_DLL AND GFORTRAN_DLL AND STDC_DLL)
+      message(STATUS "Will install extra DLLs for Windows")
+      install(FILES ${GCC_DLL} ${GFORTRAN_DLL} ${STDC_DLL} DESTINATION ${GMSH_LIB})
+    endif(GCC_DLL AND GFORTRAN_DLL AND STDC_DLL)
+  else(WIN32 AND NOT MSVC OR CYGWIN)
+    install(TARGETS shared DESTINATION ${GMSH_LIB} OPTIONAL)
+  endif(WIN32 AND NOT MSVC OR CYGWIN)
 endif(ENABLE_BUILD_SHARED OR ENABLE_BUILD_DYNAMIC)
 
 install(FILES ${ONELAB_PY} DESTINATION ${GMSH_BIN})
-install(FILES ${GMSH_API} DESTINATION include/gmsh)
+if(ENABLE_BUILD_LIB OR ENABLE_BUILD_SHARED OR ENABLE_BUILD_DYNAMIC)
+  install(FILES ${GMSH_API} DESTINATION include/gmsh)
+endif(ENABLE_BUILD_LIB OR ENABLE_BUILD_SHARED OR ENABLE_BUILD_DYNAMIC)
 install(FILES ${WELCOME_FILE} DESTINATION ${GMSH_DOC} RENAME README.txt)
 install(FILES ${LICENSE_FILE} DESTINATION ${GMSH_DOC})
 install(FILES ${CREDITS_FILE} DESTINATION ${GMSH_DOC})
@@ -1320,7 +1389,7 @@ endif(MAKEINFO)
 find_program(TEXI2PDF texi2pdf)
 if(TEXI2PDF)
   add_custom_command(OUTPUT ${TEX_DIR}/gmsh.pdf DEPENDS ${TEX_SRC} 
-                     COMMAND ${TEXI2PDF} ARGS ${TEX_DIR}/gmsh.texi 
+                     COMMAND ${TEXI2PDF} ARGS gmsh.texi 
                      WORKING_DIRECTORY ${TEX_DIR})
   add_custom_target(pdf DEPENDS ${TEX_DIR}/gmsh.pdf)
   install(FILES ${TEX_DIR}/gmsh.pdf DESTINATION ${GMSH_DOC} OPTIONAL)
@@ -1466,8 +1535,9 @@ message(STATUS "Run 'ccmake ${CMAKE_CURRENT_SOURCE_DIR}' to fine-tune the config
 message(STATUS "")
 
 mark_as_advanced(GMSH_EXTRA_VERSION 
-                 ANN_INC ANN_LIB GMM_INC GMP_INC GMP_LIB MMG3D_INC MMG3D_LIB
-                 TAUCS_INC TAUCS_LIB HDF5_LIB ACIS_LIB MED_LIB OCC_INC OCC_CONFIG_H
-                 CGNS_INC SZ_LIB PETSC_LIBS SLEPC_INC SLEPC_INC2 SLEPC_LIB
+                 ACIS_LIB ANN_INC ANN_LIB CAIRO_LIB CAIRO_INC CGNS_INC GMM_INC 
+                 GMP_INC GMP_LIB MMG3D_INC MMG3D_LIB TAUCS_INC TAUCS_LIB HDF5_LIB 
+                 MED_LIB OCC_INC OCC_CONFIG_H SZ_LIB 
+                 PETSC_LIBS SLEPC_INC SLEPC_INC2 SLEPC_LIB
                  BISON FLEX MAKEINFO TEXI2PDF FLTK_CONFIG_SCRIPT
                  GMSH_EXTERNAL_INCLUDE_DIRS GMSH_EXTERNAL_LIBRARIES)

@@ -9,16 +9,29 @@
 #include "MElement.h"
 #include "MPyramid.h"
 #include "nodalBasis.h"
+#include "JacobianBasis.h"
 
 class BasisFactory
 {
-  private:
-    static std::map<int, nodalBasis*> fs;
+  typedef std::map<std::pair<int, int>, bezierBasis*> Cont_bezierBasis;
 
-  public:
-    // Caution: the returned pointer should be
-    // checked against 0.
-    static const nodalBasis* create(int elementType);
+ private:
+  static std::map<int, nodalBasis*> fs;
+  static std::map<int, JacobianBasis*> js;
+  static Cont_bezierBasis bs;
+  // store bezier bases by parentType and order (no serendipity..)
+
+ public:
+  // Caution: the returned pointer can be NULL
+  static const nodalBasis* getNodalBasis(int tag);
+  static const JacobianBasis* getJacobianBasis(int tag);
+  static const bezierBasis* getBezierBasis(int parentTag, int order);
+  static inline const bezierBasis* getBezierBasis(int tag) {
+      return getBezierBasis(ElementType::ParentTypeFromTag(tag),
+                            ElementType::OrderFromTag(tag) );
+    }
+
+  static void clearAll();
 };
 
 #endif

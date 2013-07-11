@@ -82,11 +82,12 @@ bool CellComplex::_insertCells(std::vector<MElement*>& elements,
     MElement* element = elements.at(i);
     int dim = element->getDim();
     int type = element->getType();
-    if(type == TYPE_PYR || type == TYPE_PRI ||
+    if(//type == TYPE_PYR || type == TYPE_PRI ||
        type == TYPE_POLYG || type == TYPE_POLYH) {
       Msg::Error("Mesh element type %d not implemented in homology solver", type);
     }
-    if(type == TYPE_QUA || type == TYPE_HEX)
+    if(type == TYPE_QUA || type == TYPE_HEX ||
+       type == TYPE_PYR || type == TYPE_PRI)
       _simplicial = false;
     std::pair<Cell*, bool> maybeCell = Cell::createCell(element, domain);
     if(!maybeCell.second) {
@@ -421,6 +422,17 @@ int CellComplex::coreduction(int dim, int omit,
   return count;
 }
 
+int CellComplex::getSize(int dim, bool orig) {
+  if(dim == -1) {
+    unsigned int size = 0;
+    if(!orig) for(int i = 0; i < 4; i++) size += _cells[i].size();
+    else for(int i = 0; i < 4; i++) size += _ocells[i].size();
+    return size;
+  }
+  if(!orig) return _cells[dim].size();
+  else return _ocells[dim].size();
+}
+
 int CellComplex::getDomain(Cell* cell, std::string& str)
 {
   int domain = 0;
@@ -633,59 +645,11 @@ int CellComplex::coreduceComplex(int combine, bool omit, int heuristic)
   return count;
 }
 
-std::vector<int> CellComplex::bettiCoreduceComplex()
+void CellComplex::bettiReduceComplex()
 {
-  Msg::Debug("Cell Complex betti coreduction:");
-  Msg::Debug(" %d volumes, %d faces, %d edges, and %d vertices",
-            getSize(3), getSize(2), getSize(1), getSize(0));
-
-  std::vector<int> betti(4,0);
-  if(!getSize(0)) return betti;
-
-  std::vector<Cell*> empty;
-  if(relative()) {
-    removeSubdomain();
-    int count = 0;
-    for(int dim = 0; dim < 4; dim++){
-      citer cit = firstCell(dim);
-      while(cit != lastCell(dim)){
-        Cell* cell = *cit;
-        int count =+ coreduction(cell, -1, empty);
-        if(count != 0) break;
-        cit++;
-      }
-    }
-    for(int j = 1; j <= getDim(); j++) count += coreduction(j, -1, empty);
-  }
-
-  for(int i = 0; i < 4; i++) {
-    while (getSize(i) != 0){
-      citer cit = firstCell(i);
-      Cell* cell = *cit;
-
-      Msg::Debug(" %d volumes, %d faces, %d edges, and %d vertices",
-                 getSize(3), getSize(2), getSize(1), getSize(0));
-
-      int count = 1;
-
-      removeCell(cell, false);
-      betti.at(i)++;
-
-      count += coreduction(cell, -1, empty);
-      for(int j = 1; j <= getDim(); j++) count += coreduction(j, -1, empty);
-
-      std::string domainstr = "";
-      getDomain(cell, domainstr);
-
-      Msg::Debug("Omitted %d-cell in %s that caused %d reductions",
-                 cell->getDim(), domainstr.c_str(), count);
-      Msg::Debug(" %d volumes, %d faces, %d edges, and %d vertices",
-                 getSize(3), getSize(2), getSize(1), getSize(0));
-    }
-  }
-
-  _reduced = true;
-  return betti;
+  reduceComplex(3, true);
+  for(int i = 1; i <= 3; i++) cocombine(i-1);
+  return;
 }
 
 int CellComplex::combine(int dim)
@@ -1015,7 +979,7 @@ void CellComplex::printComplex(int dim)
 
 int CellComplex::saveComplex(std::string filename)
 {
-  /*FILE *fp = fopen (filename.c_str(), "w");
+  /*FILE *fp = Fopen (filename.c_str(), "w");
   if(!fp){
     printf("\nUnable to open file '%s' \n", filename.c_str());
     return 0;
@@ -1056,7 +1020,7 @@ int CellComplex::saveComplex(std::string filename)
 
 int CellComplex::loadComplex(std::string filename)
 {
-  /*  FILE *fp = fopen (filename.c_str(), "r");
+  /*  FILE *fp = Fopen (filename.c_str(), "r");
   if(!fp){
     printf("\nUnable to open file '%s' \n", filename.c_str());
     return 0;

@@ -360,7 +360,9 @@ void Msg::Info(const char *fmt, ...)
   if(_client) _client->Info(str);
 
 #if defined(HAVE_FLTK)
+#if defined(_OPENMP)
   #pragma omp critical
+#endif
   {
     if(FlGui::available()){
       FlGui::instance()->check();
@@ -394,7 +396,9 @@ void Msg::Direct(const char *fmt, ...)
   if(_client) _client->Info(str);
 
 #if defined(HAVE_FLTK)
+#if defined(_OPENMP)
 #pragma omp master
+#endif
   {
     if(FlGui::available()){
       FlGui::instance()->check();
@@ -428,7 +432,9 @@ void Msg::StatusBar(bool log, const char *fmt, ...)
   if(_client && log) _client->Info(str);
 
 #if defined(HAVE_FLTK)
+#if defined(_OPENMP)
 #pragma omp master
+#endif
   {
     if(FlGui::available()){
       if(log) FlGui::instance()->check();
@@ -752,7 +758,12 @@ void Msg::InitializeOnelab(const std::string &name, const std::string &sockname)
   if(sockname.empty()){
     _onelabClient = new localGmsh();
     if(name != "Gmsh"){ // load db from file:
-      if(!_onelabClient->fromFile(name))
+      FILE *fp = Fopen(name.c_str(), "rb");
+      if(fp){
+        _onelabClient->fromFile(fp);
+        fclose(fp);
+      }
+      else
         Error("Error loading onelab database '%s'", name.c_str());
     }
   }
@@ -932,7 +943,12 @@ void Msg::ExchangeOnelabParameter(const std::string &key,
     ps[0].setChoices(fopt["Choices"]);
     if(copt.count("Choices")) ps[0].setChoiceLabels(copt["Choices"]);
   }
-  if(noLoop && copt.count("Loop")) ps[0].setAttribute("Loop", copt["Loop"][0]);
+  if(noLoop && copt.count("Loop")) // for backward compatibity
+    ps[0].setAttribute("Loop", copt["Loop"][0]);
+  if(noLoop && fopt.count("Loop"))
+    ps[0].setAttribute("Loop", (fopt["Loop"][0] == 3.) ? "3" :
+                       (fopt["Loop"][0] == 2.) ? "2" :
+                       (fopt["Loop"][0] == 1.) ? "1" : "");
   if(noGraph && copt.count("Graph")) ps[0].setAttribute("Graph", copt["Graph"][0]);
   if(noClosed && copt.count("Closed")) // for backward compatibility
     ps[0].setAttribute("Closed", copt["Closed"][0]);

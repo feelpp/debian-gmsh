@@ -95,8 +95,8 @@ class FlGui{
   int testArrowShortcuts();
   // set the title of the graphic windows
   void setGraphicTitle(std::string title);
-  // update the GUI when views get added or deleted
-  void updateViews(bool numberOfViewsHasChanged=true);
+  // update the GUI when views get modified, added or deleted
+  void updateViews(bool numberOfViewsHasChanged, bool deleteWidgets);
   // update the GUI when fields change
   void updateFields();
   // reset the visibility window
@@ -107,6 +107,8 @@ class FlGui{
   openglWindow *getCurrentOpenglWindow();
   // split the current opengl window
   void splitCurrentOpenglWindow(char how);
+  // copy the current opengl window to the clipboard
+  void copyCurrentOpenglWindowToClipboard();
   // select an entity in the most recent graphic window
   char selectEntity(int type);
   // display status message
@@ -124,7 +126,7 @@ class FlGui{
   // save messages to file
   void saveMessages(const char *fileName);
   // rebuild the tree
-  void rebuildTree();
+  void rebuildTree(bool deleteWidgets);
   // open module in tree
   void openModule(const std::string &name);
 };

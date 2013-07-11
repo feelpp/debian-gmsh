@@ -7,9 +7,9 @@
 #if defined(__CYGWIN__)
 #include <sys/cygwin.h>
 #endif
-
 #include "StringUtils.h"
 #include "GmshMessage.h"
+#include "OS.h"
 
 void SwapBytes(char *array, int size, int n)
 {
@@ -77,7 +77,8 @@ std::string FixRelativePath(const std::string &reference, const std::string &in)
 {
   if(in.empty()) return "";
 
-  if(in[0] == '/' || in[0] == '\\' || (in.size() > 2 && in[1] == ':')){
+  if(in[0] == '/' || in[0] == '\\' ||
+     (in.size() > 3 && in[1] == ':' && (in[2] == '/' || in[2] == '\\'))){
     // do nothing: 'in' is an absolute path
     return in;
   }
@@ -112,7 +113,7 @@ std::string GetFileNameWithoutPath(const std::string &fileName)
 
 std::string ConvertFileToString(const std::string &fileName)
 {
-  FILE *fp = fopen(fileName.c_str(), "r");
+  FILE *fp = Fopen(fileName.c_str(), "r");
   if(!fp) return "";
   std::string out;
   char str[256];
@@ -121,7 +122,7 @@ std::string ConvertFileToString(const std::string &fileName)
   return out;
 }
 
-void ReplaceSubStringInPlace(const std::string &olds, const std::string &news, 
+void ReplaceSubStringInPlace(const std::string &olds, const std::string &news,
                              std::string &str)
 {
   while(1){
@@ -131,7 +132,7 @@ void ReplaceSubStringInPlace(const std::string &olds, const std::string &news,
   }
 }
 
-std::string ReplaceSubString(const std::string &olds, const std::string &news, 
+std::string ReplaceSubString(const std::string &olds, const std::string &news,
                              const std::string &str)
 {
   std::string copy(str);

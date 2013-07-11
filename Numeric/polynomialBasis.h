@@ -30,8 +30,7 @@ inline double pow_int(const double &a, const int &n)
   case 5 :
     {
       const double a2 = a*a;
-      const double a3 = a*a*a;
-      return a2*a3;
+      return a2*a2*a;
     }
   case 6 :
     {
@@ -51,9 +50,8 @@ inline double pow_int(const double &a, const int &n)
     }
   case 9 :
     {
-      const double a2 = a*a;
-      const double a4 = a2*a2;
-      return a4*a4*a;
+      const double a3 = a*a*a;
+      return a3*a3*a3;
     }
   case 10 :
     {
@@ -62,56 +60,38 @@ inline double pow_int(const double &a, const int &n)
       return a4*a4*a2;
     }
   default :
-    return pow_int(a,n-1)*a;
+    return pow_int(a, n-9) * pow_int(a, 9);
   }
 }
 
-fullMatrix<double> generate1DMonomials(int order);
-
-
-
+inline double pow_int(const double &a, const double &d)
+{
+  // Round double !
+  int n = static_cast<int>(d + .5);
+  return pow_int(a, n);
+}
 
 class polynomialBasis : public nodalBasis
 {
-  // integrationOrder, closureId => df/dXi
-//  mutable std::map<int,std::vector<fullMatrix<double> > > _dfAtFace;
  public:
   // for now the only implemented polynomial basis are nodal poly
   // basis, we use the type of the corresponding gmsh element as type
-  //int type, parentType, order, dimension;
-  //bool serendip;
-
-  //fullMatrix<double> points;
   fullMatrix<double> monomials;
   fullMatrix<double> coefficients;
 
   polynomialBasis(int tag);
   ~polynomialBasis();
 
+  virtual inline int getNumShapeFunctions() const {return coefficients.size1();}
+
   virtual void f(double u, double v, double w, double *sf) const;
   virtual void f(const fullMatrix<double> &coord, fullMatrix<double> &sf) const;
   virtual void df(const fullMatrix<double> &coord, fullMatrix<double> &dfm) const;
   virtual void df(double u, double v, double w, double grads[][3]) const;
   virtual void ddf(double u, double v, double w, double hess[][3][3]) const;
-  virtual  void dddf(double u, double v, double w, double third[][3][3][3]) const;
+  virtual void dddf(double u, double v, double w, double third[][3][3][3]) const;
 
-  virtual int getNumShapeFunctions() const;
-
-  inline void evaluateMonomials(double u, double v, double w, double p[]) const;
-
+  void evaluateMonomials(double u, double v, double w, double p[]) const;
 };
-
-
-
-inline void polynomialBasis::evaluateMonomials(double u, double v, double w, double p[]) const
-{
-  for (int j = 0; j < monomials.size1(); j++) {
-    p[j] = pow_int(u, (int)monomials(j, 0));
-    if (monomials.size2() > 1) p[j] *= pow_int(v, (int)monomials(j, 1));
-    if (monomials.size2() > 2) p[j] *= pow_int(w, (int)monomials(j, 2));
-  }
-}
-
-
 
 #endif
