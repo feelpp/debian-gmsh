@@ -4,7 +4,7 @@ Last-Update: 2012-11-28
 
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -1206,7 +1206,7 @@
+@@ -1256,7 +1256,7 @@
  endif(UNIX)
  
  set(WELCOME_FILE ${CMAKE_CURRENT_SOURCE_DIR}/doc/WELCOME.txt)
@@ -13,7 +13,7 @@ Last-Update: 2012-11-28
  set(CREDITS_FILE ${CMAKE_CURRENT_SOURCE_DIR}/doc/CREDITS.txt)
  set(ONELAB_PY ${CMAKE_CURRENT_SOURCE_DIR}/contrib/onelab/python/onelab.py)
  file(GLOB TUTORIAL_FILES ${CMAKE_CURRENT_SOURCE_DIR}/tutorial/?*.*)
-@@ -1329,7 +1329,7 @@
+@@ -1398,7 +1398,7 @@
  if(MAKEINFO AND TEXI2PDF)
    add_custom_target(doc COMMAND ${CMAKE_COMMAND} -E tar zcf 
                      ${CMAKE_CURRENT_BINARY_DIR}/gmsh-${GMSH_VERSION}-doc.tgz

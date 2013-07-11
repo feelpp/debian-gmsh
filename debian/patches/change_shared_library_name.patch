@@ -19,7 +19,7 @@ Last-Update: 2012-11-28
  POST_BUILD # do the rest of the command after the build period
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -1110,7 +1110,7 @@
+@@ -1160,7 +1160,7 @@
  # static library target
  if(ENABLE_BUILD_LIB)
    add_library(lib STATIC ${GMSH_SRC})
@@ -28,7 +28,7 @@ Last-Update: 2012-11-28
    if(MSVC)
      set_target_properties(lib PROPERTIES DEBUG_POSTFIX d) 
      if(ENABLE_MSVC_STATIC_RUNTIME)
-@@ -1123,10 +1123,10 @@
+@@ -1173,10 +1173,10 @@
  if(ENABLE_BUILD_SHARED OR ENABLE_BUILD_DYNAMIC OR 
     ENABLE_WRAP_PYTHON OR ENABLE_WRAP_JAVA)
    add_library(shared SHARED ${GMSH_SRC})

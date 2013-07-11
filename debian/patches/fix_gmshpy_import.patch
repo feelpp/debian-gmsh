@@ -12,4 +12,4 @@ Last-Update: 2013-01-26
 +
  import signal
  signal.signal(signal.SIGINT, signal.SIG_DFL)
- ${GMSH_PYTHON_MODULES_INCLUDE_CODE}
+ ${GMSH_PYTHON_OPENMPI_HACK}
