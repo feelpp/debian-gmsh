@@ -21,7 +21,6 @@ template <class scalar> class simpleFunction;
 #include "linearSystem.h"
 #include "GRbf.h"
 #include "MElementOctree.h"
-#include <ANN/ANN.h>
 class ANNkd_tree;
 
 #define AR_MAX 5 //maximal geometrical aspect ratio
@@ -81,7 +80,6 @@ class GFaceCompound : public GFace {
   mutable std::map<int,SPoint3> XYZoct;
   mutable std::set<MVertex*> allNodes;
   mutable v2t_cont adjv;
-  mutable bool mapv2Tri;
   mutable std::map<MVertex*, SPoint3> coordinates;
   mutable std::map<MVertex*, Pair<SVector3,SVector3> > firstDerivatives;
   mutable std::map<MVertex*, SVector3> xuu;
@@ -97,13 +95,8 @@ class GFaceCompound : public GFace {
   mutable std::vector<MVertex*> _ordered;
   mutable std::vector<double> _coords;
   mutable std::map<MVertex*, int> _mapV;
-  linearSystem <double> *_lsys;
   mutable ANNkd_tree *uv_kdtree;
   mutable ANNkd_tree *kdtree;
-  mutable ANNpointArray uv_nodes;
-  mutable ANNpointArray nodes;
-  ANNidxArray index;
-  ANNdistArray dist;
   void buildOct() const ;
   void buildAllNodes() const;
 
@@ -141,15 +134,14 @@ class GFaceCompound : public GFace {
  public:
   GFaceCompound(GModel *m, int tag, std::list<GFace*> &compound,
 		std::list<GEdge*> &U0, typeOfCompound typ = HARMONIC_CIRCLE,
-		int allowPartition=1,
-		linearSystem<double>* lsys =0);
+		int allowPartition=1);
   GFaceCompound(GModel *m, int tag, std::list<GFace*> &compound,
                 std::list<GEdge*> &U0, std::list<GEdge*> &V0,
                 std::list<GEdge*> &U1, std::list<GEdge*> &V1,
                 typeOfCompound typ = HARMONIC_CIRCLE,
-                int allowPartition=1,
-                linearSystem<double>* lsys =0);
+                int allowPartition=1);
  ~GFaceCompound();
+  virtual void deleteMesh();
 
   Range<double> parBounds(int i) const
   { return trivial() ? (*(_compound.begin()))->parBounds(i) : Range<double>(-1, 1); }
@@ -187,6 +179,7 @@ class GFaceCompound : public GFace {
 				 const double &d, double uv[2]) const;
 
  private:
+  void _deleteInternals();
   mutable typeOfCompound _toc;
   mutable typeOfMapping _mapping;
   mutable typeOfIsomorphism _type;
@@ -205,8 +198,7 @@ class GFaceCompound : public GFace {
   typedef enum {UNITCIRCLE, MEANPLANE, SQUARE, ALREADYFIXED,SPECTRAL, FE} typeOfIsomorphism;
   GFaceCompound(GModel *m, int tag, std::list<GFace*> &compound,
                 std::list<GEdge*> &U0, typeOfCompound typ = HARMONIC_CIRCLE,
-                int allowPartition=1,
-                linearSystem<double>* lsys =0)
+                int allowPartition=1)
     : GFace(m, tag)
   {
     Msg::Error("Gmsh has to be compiled with Solver and ANN support to use GFaceCompounds");
@@ -215,13 +207,13 @@ class GFaceCompound : public GFace {
                 std::list<GEdge*> &U0, std::list<GEdge*> &V0,
                 std::list<GEdge*> &U1, std::list<GEdge*> &V1,
                 typeOfCompound typ = HARMONIC_CIRCLE,
-                int allowPartition=1,
-                linearSystem<double>* lsys =0)
+                int allowPartition=1)
     : GFace(m, tag)
   {
     Msg::Error("Gmsh has to be compiled with Solver and ANN support to use GFaceCompounds");
   }
   virtual ~GFaceCompound() {}
+  virtual void deleteMesh() {}
   GPoint point(double par1, double par2) const { return GPoint(); }
   Pair<SVector3, SVector3> firstDer(const SPoint2 &param) const
   {

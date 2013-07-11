@@ -4,6 +4,7 @@
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include "GModel.h"
+#include "OS.h"
 #include "GmshMessage.h"
 #include "MElement.h"
 #include "MPoint.h"
@@ -16,7 +17,7 @@
 #include "MPyramid.h"
 #include "StringUtils.h"
 
-void writeMSHPeriodicNodes (FILE *fp, std::vector<GEntity*> &entities)
+void writeMSHPeriodicNodes(FILE *fp, std::vector<GEntity*> &entities)
 {
   int count = 0;
   for (unsigned int i = 0; i < entities.size(); i++)
@@ -48,14 +49,14 @@ void writeMSHPeriodicNodes (FILE *fp, std::vector<GEntity*> &entities)
   fprintf(fp, "$EndPeriodic\n");
 }
 
-void readMSHPeriodicNodes (FILE *fp, GModel *gm)
+void readMSHPeriodicNodes(FILE *fp, GModel *gm)
 {
   int count;
-  fscanf(fp, "%d", &count);
+  if(fscanf(fp, "%d", &count) != 1) return;
   for(int i = 0; i < count; i++){
-    int dim,slave,master;
-    fscanf(fp, "%d %d %d", &dim, &slave, &master);
-    GEntity *s=0,*m=0;
+    int dim, slave, master;
+    if(fscanf(fp, "%d %d %d", &dim, &slave, &master) != 3) continue;
+    GEntity *s = 0, *m = 0;
     switch(dim){
     case 0 : s = gm->getVertexByTag(slave); m = gm->getVertexByTag(master); break;
     case 1 : s = gm->getEdgeByTag(slave); m = gm->getEdgeByTag(master); break;
@@ -64,10 +65,10 @@ void readMSHPeriodicNodes (FILE *fp, GModel *gm)
     if (s && m){
       s->setMeshMaster(m->tag());
       int numv;
-      fscanf(fp, "%d", &numv);
+      if(fscanf(fp, "%d", &numv) != 1) numv = 0;
       for(int j = 0; j < numv; j++){
-	int v1,v2;
-	fscanf(fp,"%d %d", &v1, &v2);
+	int v1, v2;
+	if(fscanf(fp,"%d %d", &v1, &v2) != 2) continue;
 	MVertex *mv1 = gm->getMeshVertexByTag(v1);
 	MVertex *mv2 = gm->getMeshVertexByTag(v2);
 	s->correspondingVertices[mv1] = mv2;
@@ -78,7 +79,7 @@ void readMSHPeriodicNodes (FILE *fp, GModel *gm)
 
 int GModel::readMSH(const std::string &name)
 {
-  FILE *fp = fopen(name.c_str(), "rb");
+  FILE *fp = Fopen(name.c_str(), "rb");
   if(!fp){
     Msg::Error("Unable to open file '%s'", name.c_str());
     return 0;
@@ -87,7 +88,7 @@ int GModel::readMSH(const std::string &name)
   char str[256] = "";
 
   // detect prehistoric MSH files
-  fgets(str, sizeof(str), fp);
+  if(!fgets(str, sizeof(str), fp)){ fclose(fp); return 0; }
   if(!strncmp(&str[1], "NOD", 3) || !strncmp(&str[1], "NOE", 3)){
     fclose(fp);
     return _readMSH2(name);
@@ -310,7 +311,6 @@ int GModel::readMSH(const std::string &name)
       if(sscanf(str, "%d", &numElements) != 1){ fclose(fp); return 0; }
       Msg::Info("%d elements", numElements);
       Msg::ResetProgressMeter();
-      _elementMapCache.clear();
       for(int i = 0; i < numElements; i++) {
         int num, type, entity, numData;
         if(!binary){
@@ -360,7 +360,6 @@ int GModel::readMSH(const std::string &name)
         case TYPE_POLYG: elements[8][entity].push_back(element); break;
         case TYPE_POLYH: elements[9][entity].push_back(element); break;
         }
-        _elementMapCache[num] = element;
         if(numElements > 100000)
           Msg::ProgressMeter(i + 1, numElements, true, "Reading elements");
       }
@@ -376,7 +375,6 @@ int GModel::readMSH(const std::string &name)
     else if(!strncmp(&str[1], "Periodical", 10)) {
       readMSHPeriodicNodes (fp, this);
     }
-
 
     do {
       if(!fgets(str, sizeof(str), fp) || feof(fp))
@@ -475,9 +473,9 @@ int GModel::writeMSH(const std::string &name, double version, bool binary,
 
   FILE *fp;
   if(multipleView)
-    fp = fopen(name.c_str(), binary ? "ab" : "a");
+    fp = Fopen(name.c_str(), binary ? "ab" : "a");
   else
-    fp = fopen(name.c_str(), binary ? "wb" : "w");
+    fp = Fopen(name.c_str(), binary ? "wb" : "w");
   if(!fp){
     Msg::Error("Unable to open file '%s'", name.c_str());
     return 0;
@@ -586,7 +584,6 @@ int GModel::writeMSH(const std::string &name, double version, bool binary,
 
   //save periodic nodes
   writeMSHPeriodicNodes (fp,entities);
-
 
   fclose(fp);
 

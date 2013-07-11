@@ -12,6 +12,8 @@
 #include "CGNSOptions.h"
 #include "meshPartitionOptions.h"
 
+#define NUM_SOLVERS 10
+
 class GamePad;
 
 // The interface-independent context.
@@ -31,6 +33,11 @@ struct contextMeshOptions {
   int dual, voronoi, drawSkinOnly, colorCarousel, labelSampling;
   int fileFormat, nbSmoothing, algo2d, algo3d, algoSubdivide;
   int algoRecombine, recombineAll, recombine3DAll;
+  //-- for recombination test (amaury) --
+    int doRecombinationTest, recombinationTestStart;
+    int recombinationTestNoGreedyStrat, recombinationTestNewStrat;
+    std::string recTestName;
+  //-------------------------------------
   int remeshParam, remeshAlgo;
   int order, secondOrderLinear, secondOrderIncomplete;
   int secondOrderExperimental, meshOnlyVisible;
@@ -147,7 +154,7 @@ class CTX {
   double lc;
   // double buffer/antialias/stereo graphics?
   int db, antialiasing, stereo, camera ;
-  bool fileread; ;
+  bool fileread;
   double eye_sep_ratio,focallength_ratio,camera_aperture;
   // orthogonal projection?
   int ortho;
@@ -175,7 +182,7 @@ class CTX {
   // fltk font size (and delta for palette windows)
   int fontSize, deltaFontSize;
   // font name, FLTK enum and size for opengl graphics
-  std::string glFont, glFontTitle;
+  std::string glFont, glFontTitle, glFontEngine;
   int glFontEnum, glFontEnumTitle, glFontSize, glFontSizeTitle;
   // point/line widths
   double pointSize, lineWidth;
@@ -230,7 +237,7 @@ class CTX {
     int plugins, listen;
     double timeout;
     std::string socketName;
-    std::string name[5], executable[5], remoteLogin[5];
+    std::string name[NUM_SOLVERS], executable[NUM_SOLVERS], remoteLogin[NUM_SOLVERS];
     int autoSaveDatabase, autoArchiveOutputFiles, autoMesh, autoMergeFile;
     int autoHideNewViews, autoShowLastStep, autoCheck;
   }solver;

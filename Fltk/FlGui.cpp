@@ -18,6 +18,7 @@ typedef unsigned long intptr_t;
 #include <FL/fl_draw.H>
 #include "FlGui.h"
 #include "drawContextFltk.h"
+#include "drawContextFltkCairo.h"
 #include "graphicWindow.h"
 #include "optionWindow.h"
 #include "fieldWindow.h"
@@ -49,6 +50,7 @@ typedef unsigned long intptr_t;
 #include "Generator.h"
 #include "gl2ps.h"
 #include "gmshPopplerWrapper.h"
+#include "PixelBuffer.h"
 #if defined(HAVE_3M)
 #include "3M.h"
 #endif
@@ -232,13 +234,16 @@ FlGui::FlGui(int argc, char **argv)
   Fl::set_boxtype(GMSH_SIMPLE_RIGHT_BOX, simple_right_box_draw, 0, 0, 1, 0);
   Fl::set_boxtype(GMSH_SIMPLE_TOP_BOX, simple_top_box_draw, 0, 1, 0, 1);
 
-  if(CTX::instance()->gamepad)   Fl::add_timeout(5.,gamepad_handler , (void*)0);
+  // add gamepad handler
+  if(CTX::instance()->gamepad)
+    Fl::add_timeout(5.,gamepad_handler, (void*)0);
 
   // add global shortcuts
   Fl::add_handler(globalShortcut);
 
-  // set global fltk-dependent drawing functions
-  drawContext::setGlobal(new drawContextFltk);
+  // make sure a global drawing context is setup
+  if(!drawContext::global())
+    drawContext::setGlobal(new drawContextFltk);
 
   // set default font size
   FL_NORMAL_SIZE = drawContext::global()->getFontSize();
@@ -304,12 +309,11 @@ FlGui::FlGui(int argc, char **argv)
                                         gmsh32x32, 32, 32));
 #endif
 
-  graph[0]->getWindow()->show(1, argv);
+  graph[0]->getWindow()->show(argc >0 ? 1 : 0, argv);
   if(graph[0]->getMenuWindow()) graph[0]->getMenuWindow()->show();
 
   // graphic window should have the initial focus (so we can e.g. directly loop
   // through time steps with the keyboard)
-  //graph[0]->gl[0]->take_focus();
   Fl::focus(graph[0]->gl[0]);
 
   // get onelab tree group (FIXME: should clean this up)
@@ -337,6 +341,9 @@ FlGui::FlGui(int argc, char **argv)
   fullscreen->mode(mode);
   fullscreen->end();
   fullscreen->fullscreen();
+#if not defined (__APPLE__)
+  fullscreen->icon(graph[0]->getWindow()->icon());
+#endif
 
   // create all other windows
   options = new optionWindow(CTX::instance()->deltaFontSize);
@@ -774,12 +781,12 @@ void FlGui::setGraphicTitle(std::string title)
   }
 }
 
-void FlGui::updateViews(bool numberOfViewsHasChanged)
+void FlGui::updateViews(bool numberOfViewsHasChanged, bool deleteWidgets)
 {
   for(unsigned int i = 0; i < graph.size(); i++)
     graph[i]->checkAnimButtons();
   if(numberOfViewsHasChanged){
-    onelab->rebuildTree();
+    onelab->rebuildTree(deleteWidgets);
     options->resetBrowser();
     options->resetExternalViewList();
     fields->loadFieldViewList();
@@ -814,6 +821,63 @@ void FlGui::splitCurrentOpenglWindow(char how)
     if(graph[i]->split(g, how))
       break;
   }
+}
+
+void FlGui::copyCurrentOpenglWindowToClipboard()
+{
+#if defined(WIN32)
+  GLint width = getCurrentOpenglWindow()->w();
+  GLint height = getCurrentOpenglWindow()->h();
+
+  // lines have to be 32 bytes aligned, suppose 24 bits per pixel; just crop it
+  width -= width % 4;
+
+  // get pixels
+  PixelBuffer *buffer = new PixelBuffer(width, height, GL_RGB, GL_UNSIGNED_BYTE);
+  buffer->fill(0);
+  unsigned char *pixels = (unsigned char*)buffer->getPixels();
+
+  // swap R and B since Windows bitmap format is BGR
+  int nBytes = 3 * width * height;
+  for(int i = 0; i < nBytes; i += 3){
+    unsigned char tmp = pixels[i];
+    pixels[i] = pixels[i + 2];
+    pixels[i + 2] = tmp;
+  }
+
+  // fill header
+  BITMAPINFOHEADER header;
+  header.biWidth = width;
+  header.biHeight = height;
+  header.biSizeImage = nBytes;
+  header.biSize = 40;
+  header.biPlanes = 1;
+  header.biBitCount = 3 * 8;
+  header.biCompression = BI_RGB;
+  header.biXPelsPerMeter = 0;
+  header.biYPelsPerMeter = 0;
+  header.biClrUsed = 0;
+  header.biClrImportant = 0;
+
+  // generate handle
+  HANDLE handle = (HANDLE)::GlobalAlloc(GHND, sizeof(BITMAPINFOHEADER) + nBytes);
+  if(handle != NULL){
+    // lock handle
+    char *pData = (char *)::GlobalLock((HGLOBAL)handle);
+    // copy header and data
+    memcpy(pData, &header, sizeof(BITMAPINFOHEADER));
+    memcpy(pData + sizeof(BITMAPINFOHEADER), pixels, nBytes);
+    // unlock
+    ::GlobalUnlock((HGLOBAL)handle);
+    // push DIB in clipboard
+    OpenClipboard(NULL);
+    EmptyClipboard();
+    SetClipboardData(CF_DIB, handle);
+    CloseClipboard();
+  }
+
+  delete buffer;
+#endif
 }
 
 char FlGui::selectEntity(int type)
@@ -995,7 +1059,12 @@ void window_cb(Fl_Widget *w, void *data)
   }
   else if(str == "fullscreen"){
     if(!fullscreen){
+      int x,y,w,h;
+      Fl::screen_xywh(x, y, w, h);
+      FlGui::instance()->fullscreen->resize(x, y, w, h);
+      FlGui::instance()->fullscreen->valid(0);
       FlGui::instance()->fullscreen->show();
+      while (!FlGui::instance()->fullscreen->valid()) FlGui::wait();
       FlGui::instance()->fullscreen->getDrawContext()->copyViewAttributes
         (FlGui::instance()->getCurrentOpenglWindow()->getDrawContext());
       openglWindow::setLastHandled(FlGui::instance()->fullscreen);
@@ -1006,7 +1075,11 @@ void window_cb(Fl_Widget *w, void *data)
     }
     else{
       for(unsigned int i = 0; i < FlGui::instance()->graph.size(); i++)
+        FlGui::instance()->graph[i]->gl[0]->valid(0);
+      for(unsigned int i = 0; i < FlGui::instance()->graph.size(); i++)
         FlGui::instance()->graph[i]->getWindow()->show();
+      for(unsigned int i = 0; i < FlGui::instance()->graph.size(); i++)
+        while(!FlGui::instance()->graph[i]->gl[0]->valid()) FlGui::wait();
       FlGui::instance()->graph[0]->gl[0]->getDrawContext()->copyViewAttributes
         (FlGui::instance()->getCurrentOpenglWindow()->getDrawContext());
       openglWindow::setLastHandled(FlGui::instance()->graph[0]->gl[0]);
@@ -1053,9 +1126,9 @@ void FlGui::saveMessages(const char *fileName)
   FlGui::instance()->graph[0]->saveMessages(fileName);
 }
 
-void FlGui::rebuildTree()
+void FlGui::rebuildTree(bool deleteWidgets)
 {
-  onelab->rebuildTree();
+  onelab->rebuildTree(deleteWidgets);
 }
 
 void FlGui::openModule(const std::string &name)

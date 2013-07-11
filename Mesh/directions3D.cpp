@@ -12,6 +12,7 @@
 #include "meshGFaceDelaunayInsertion.h"
 #include "MTetrahedron.h"
 #include "directions3D.h"
+#include "OS.h"
 
 #if defined(HAVE_PETSC)
 #include "dofManager.h"
@@ -47,7 +48,7 @@ void Frame_field::init_region(GRegion* gr){
     init_face(gf);
   }
 
-  duplicate = annAllocPts(temp.size(),3);
+  ANNpointArray duplicate = annAllocPts(temp.size(),3);
 
   index = 0;
   for(std::map<MVertex*,STensor3>::iterator it=temp.begin(); it != temp.end(); it++){
@@ -431,12 +432,12 @@ void Frame_field::clear(){
   temp.clear();
   field.clear();
 #if defined(HAVE_ANN)
-  delete duplicate;
+  delete kd_tree->thePoints();
   delete kd_tree;
   annClose();
 #endif
 #if defined(HAVE_ANN)
-  if(annTreeData) delete annTreeData;
+  if(annTree && annTree->thePoints()) delete annTree->thePoints();
   if(annTree) delete annTree;
 #endif
 }
@@ -517,7 +518,7 @@ int Frame_field::buildAnnData(GEntity* ge, int dim){
   build_listVertices(ge,dim);
   int n = listVertices.size();
 #if defined(HAVE_ANN)
-  annTreeData = annAllocPts(n,3);
+  ANNpointArray annTreeData = annAllocPts(n,3);
   for(int i=0; i<n; i++){
     MVertex* pVertex = listVertices[i];
     annTreeData[i][0] = pVertex->x();
@@ -532,9 +533,8 @@ int Frame_field::buildAnnData(GEntity* ge, int dim){
 
 void Frame_field::deleteAnnData(){
 #if defined(HAVE_ANN)
-  if(annTreeData) delete annTreeData;
+  if(annTree && annTree->thePoints()) delete annTree->thePoints();
   if(annTree) delete annTree;
-  annTreeData = NULL;
   annTree = NULL;
 #endif
 }
@@ -872,7 +872,7 @@ void Frame_field::save(const std::vector<std::pair<SPoint3, STensor3> > data,
   file.close();
 }
 
-void Frame_field::recur_connect_vert(FILE *fi, int count, 
+void Frame_field::recur_connect_vert(FILE *fi, int count,
 				     MVertex *v,
 				     STensor3 &cross,
 				     std::multimap<MVertex*,MVertex*> &v2v,
@@ -880,15 +880,15 @@ void Frame_field::recur_connect_vert(FILE *fi, int count,
 
   if (touched.find(v) != touched.end()) return;
   touched.insert(v);
-  
+
   count++;
 
   for (std::multimap <MVertex*,MVertex*>::iterator it = v2v.lower_bound(v);
        it != v2v.upper_bound(v) ; ++it){
-   
+
     MVertex *nextV = it->second;
     if (touched.find(nextV) == touched.end()){
-      
+
     //compute dot product (N0,R0,A0) dot (Ni,Ri,Ai)^T
     //where N,R,A are the 3 directions
     std::map<MVertex*, STensor3>::iterator iter = crossField.find(nextV);
@@ -896,10 +896,10 @@ void Frame_field::recur_connect_vert(FILE *fi, int count,
     STensor3 nextCrossT = nextCross.transpose();
     STensor3 prod = cross.operator*=(nextCrossT);
     fullMatrix<double> mat(3,3); prod.getMat(mat);
-   
+
     //find biggest dot product
     fullVector<int> Id(3);
-    Id(0) = Id(1) = Id(2) = 0; 
+    Id(0) = Id(1) = Id(2) = 0;
     for (int j = 0; j < 3; j++){
       double maxVal = 0.0;
       for (int i = 0; i < 3; i++){
@@ -917,7 +917,7 @@ void Frame_field::recur_connect_vert(FILE *fi, int count,
       printf("Id =%d %d %d \n", Id(0), Id(1), Id(2));
       return;
     }
-    
+
     //create new cross
     fullMatrix<double> newmat(3,3);
     for (int i = 0; i < 3; i++){
@@ -941,13 +941,13 @@ void Frame_field::recur_connect_vert(FILE *fi, int count,
      prod.print("product");
      newcross.print("newcross");
    }
-   
+
    fprintf(fi,"SP(%g,%g,%g) {%g};\n",nextV->x(),nextV->y(),nextV->z(), (double)count);
 
     //continue recursion
     recur_connect_vert (fi, count, nextV, newcross, v2v,touched);
     }
-    
+
   }
 
 }
@@ -987,13 +987,13 @@ void Frame_field::continuousCrossField(GRegion *gr, GFace *gf){
   std::map<MVertex*, STensor3>::iterator iter = crossField.find(beginV);
   STensor3 bCross = iter->second;
 
-  FILE *fi = fopen ("cross_recur.pos","w");
+  FILE *fi = Fopen ("cross_recur.pos","w");
   fprintf(fi,"View \"\"{\n");
   fprintf(fi,"SP(%g,%g,%g) {%g};\n",beginV->x(),beginV->y(),beginV->z(), 0.0);
   int count = 0;
 
   recur_connect_vert (fi, count, beginV,bCross,v2v,touched);
-  
+
   fprintf(fi,"};\n");
   fclose (fi);
   //printf("touched =%d vert =%d \n", touched.size(), vertex_to_vertices.size());
@@ -1046,7 +1046,7 @@ void Frame_field::save_dist(const std::string& filename){
   std::ofstream file(filename.c_str());
   file << "View \"Distance\" {\n";
 
-  for(std::map<MEdge, double>::iterator it = crossDist.begin();
+  for(std::map<MEdge, double, Less_Edge>::iterator it = crossDist.begin();
       it != crossDist.end(); it++){
     MVertex* pVerta = it->first.getVertex(0);
     MVertex* pVertb = it->first.getVertex(1);
@@ -1120,7 +1120,7 @@ void Frame_field::save_energy(GRegion* gr, const std::string& filename){
 	matvec(inv, gsf[nod1], grd1);
 	matvec(inv, gsf[nod2], grd2);
 	SVector3 esf = sf[nod1] * SVector3(grd2) - sf[nod2] * SVector3(grd1);
-	std::map<MEdge, double>::iterator it = crossDist.find(pTet->getEdge(k));
+	std::map<MEdge, double, Less_Edge>::iterator it = crossDist.find(pTet->getEdge(k));
 	sum += it->second * esf;
 	//sum += (pTet->getVertex(nod2)->z() - pTet->getVertex(nod1)->z()) * esf;
       }
@@ -1486,7 +1486,7 @@ void Nearest_point::init_region(GRegion* gr){
 	//vicinity.push_back(NULL);
   }
 
-  duplicate = annAllocPts(field.size(),3);
+  ANNpointArray duplicate = annAllocPts(field.size(),3);
 
   for(i=0;i<field.size();i++){
 	duplicate[i][0] = field[i].x();
@@ -1706,7 +1706,7 @@ void Nearest_point::clear(){
   field.clear();
   vicinity.clear();
   #if defined(HAVE_ANN)
-  delete duplicate;
+  delete kd_tree->thePoints();
   delete kd_tree;
   annClose();
   #endif
@@ -1722,9 +1722,7 @@ std::map<MVertex*,std::set<MVertex*> > Frame_field::vertex_to_vertices;
 std::map<MVertex*,std::set<MElement*> > Frame_field::vertex_to_elements;
 std::vector<MVertex*> Frame_field::listVertices;
 #if defined(HAVE_ANN)
-ANNpointArray Frame_field::duplicate;
 ANNkd_tree* Frame_field::kd_tree;
-ANNpointArray Frame_field::annTreeData;
 ANNkd_tree* Frame_field::annTree;
 #endif
 
@@ -1734,6 +1732,5 @@ MElementOctree* Size_field::octree;
 std::vector<SPoint3> Nearest_point::field;
 std::vector<MElement*> Nearest_point::vicinity;
 #if defined(HAVE_ANN)
-ANNpointArray Nearest_point::duplicate;
 ANNkd_tree* Nearest_point::kd_tree;
 #endif

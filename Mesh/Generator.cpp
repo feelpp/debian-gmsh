@@ -401,9 +401,9 @@ static void PrintMesh2dStatistics(GModel *m)
 
   FILE *statreport = 0;
   if(CTX::instance()->createAppendMeshStatReport == 1)
-    statreport = fopen(CTX::instance()->meshStatReportFileName.c_str(), "w");
+    statreport = Fopen(CTX::instance()->meshStatReportFileName.c_str(), "w");
   else if(CTX::instance()->createAppendMeshStatReport == 2)
-    statreport = fopen(CTX::instance()->meshStatReportFileName.c_str(), "a");
+    statreport = Fopen(CTX::instance()->meshStatReportFileName.c_str(), "a");
   else return;
 
   double worst = 1, best = 0, avg = 0;
@@ -467,7 +467,7 @@ static void Mesh2D(GModel *m)
   // and curve meshes) is global as it depends on a smooth normal
   // field generated from the surface mesh of the source surfaces
   if(!Mesh2DWithBoundaryLayers(m)){
-    std::set<GFace*> cf, f;
+    std::set<GFace*, GEntityLessThan> cf, f;
     for(GModel::fiter it = m->firstFace(); it != m->lastFace(); ++it)
       if ((*it)->geomType() == GEntity::CompoundSurface)
         cf.insert(*it);
@@ -479,23 +479,31 @@ static void Mesh2D(GModel *m)
     int nIter = 0, nTot = m->getNumFaces();
     while(1){
       int nPending = 0;
-      std::vector<GFace*> _temp; _temp.insert(_temp.begin(), f.begin(), f.end());
+      std::vector<GFace*> temp;
+      temp.insert(temp.begin(), f.begin(), f.end());
+#if defined(_OPENMP)
 #pragma omp parallel for schedule (dynamic)
-      for(size_t K = 0 ; K < _temp.size() ; K++){
-	if (_temp[K]->meshStatistics.status == GFace::PENDING){
-	  meshGFace mesher (true, CTX::instance()->mesh.multiplePasses);
-	  mesher(_temp[K]);
+#endif
+      for(size_t K = 0 ; K < temp.size() ; K++){
+	if (temp[K]->meshStatistics.status == GFace::PENDING){
+	  meshGFace mesher(true, CTX::instance()->mesh.multiplePasses);
+	  mesher(temp[K]);
+#if defined(_OPENMP)
 #pragma omp critical
+#endif
 	  {
 	    nPending++;
 	  }
 	}
         if(!nIter) Msg::ProgressMeter(nPending, nTot, false, "Meshing 2D...");
       }
+#if defined(_OPENMP)
 #pragma omp master
-      for(std::set<GFace*>::iterator it = cf.begin(); it != cf.end(); ++it){
+#endif
+      for(std::set<GFace*, GEntityLessThan>::iterator it = cf.begin();
+          it != cf.end(); ++it){
         if ((*it)->meshStatistics.status == GFace::PENDING){
-	  meshGFace mesher (true, CTX::instance()->mesh.multiplePasses);
+	  meshGFace mesher(true, CTX::instance()->mesh.multiplePasses);
           mesher(*it);
           nPending++;
         }
@@ -514,7 +522,8 @@ static void Mesh2D(GModel *m)
 	smoothing smm(CTX::instance()->mesh.optimizeLloyd,6);
 	m->writeMSH("beforeLLoyd.msh");
 	smm.optimize_face(*it);
-	//int rec = 1;//(CTX::instance()->mesh.recombineAll || (*it)->meshAttributes.recombine);
+	//int rec = 1;//(CTX::instance()->mesh.recombineAll ||
+        //              (*it)->meshAttributes.recombine);
 	m->writeMSH("afterLLoyd.msh");
 	//if(rec) recombineIntoQuads(*it);
 	//m->writeMSH("afterRecombine.msh");

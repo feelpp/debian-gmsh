@@ -101,12 +101,9 @@ class CellComplex
   bool simplicial() const { return _simplicial; }
   bool relative() const { return _relative; }
 
-
-
   // get the number of certain dimensional cells
-  int getSize(int dim, bool orig=false){
-    if(!orig) return _cells[dim].size();
-    else return _ocells[dim].size(); }
+  // if dim = -1 return the number of all cells
+  int getSize(int dim, bool orig=false);
 
   // get domain of a cell
   // cell in domain relative to subdomain  -> domain = 0
@@ -170,8 +167,8 @@ class CellComplex
   int reduceComplex(int combine=1, bool omit=true, bool homseq=false);
   int coreduceComplex(int combine=1, bool omit=true, int heuristic=0);
 
-  // compute Betti numbers of the cell complex using coreduction
-  std::vector<int> bettiCoreduceComplex();
+  // reduce cell complex for Betti number computation
+  void bettiReduceComplex();
 
   bool isReduced() const { return _reduced; }
 

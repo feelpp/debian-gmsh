@@ -13,6 +13,7 @@
 #include "GModel.h"
 #include "Context.h"
 #include "Options.h"
+#include "OS.h"
 #include "Colors.h"
 #include "CommandLine.h"
 #include "GamePad.h"
@@ -51,6 +52,8 @@
 #include "clippingWindow.h"
 #include "onelabGroup.h"
 #include "viewButton.h"
+#include "drawContextFltkCairo.h"
+#include "drawContextFltkStringTexture.h"
 #endif
 
 // General routines for string options
@@ -615,7 +618,7 @@ void PrintOptions(int num, int level, int diff, int help, const char *filename,
   FILE *file;
 
   if(filename) {
-    file = fopen(filename, "w");
+    file = Fopen(filename, "w");
     if(!file) {
       Msg::Error("Unable to open file '%s'", filename);
       return;
@@ -730,7 +733,7 @@ void PrintOptionsDoc()
     "@c\n\n";
 
   {
-    FILE *file = fopen("opt_general.texi", "w");
+    FILE *file = Fopen("opt_general.texi", "w");
     if(!file) {
       Msg::Error("Unable to open file 'opt_general.texi'");
       return;
@@ -743,7 +746,7 @@ void PrintOptionsDoc()
     fclose(file);
   }
   {
-    FILE *file = fopen("opt_print.texi", "w");
+    FILE *file = Fopen("opt_print.texi", "w");
     if(!file) {
       Msg::Error("Unable to open file 'opt_print.texi'");
       return;
@@ -756,7 +759,7 @@ void PrintOptionsDoc()
     fclose(file);
   }
   {
-    FILE *file = fopen("opt_geometry.texi", "w");
+    FILE *file = Fopen("opt_geometry.texi", "w");
     if(!file) {
       Msg::Error("Unable to open file 'opt_geometry.texi'");
       return;
@@ -769,7 +772,7 @@ void PrintOptionsDoc()
     fclose(file);
   }
   {
-    FILE *file = fopen("opt_mesh.texi", "w");
+    FILE *file = Fopen("opt_mesh.texi", "w");
     if(!file) {
       Msg::Error("Unable to open file 'opt_mesh.texi'");
       return;
@@ -782,7 +785,7 @@ void PrintOptionsDoc()
     fclose(file);
   }
   {
-    FILE *file = fopen("opt_solver.texi", "w");
+    FILE *file = Fopen("opt_solver.texi", "w");
     if(!file) {
       Msg::Error("Unable to open file 'opt_solver.texi'");
       return;
@@ -795,7 +798,7 @@ void PrintOptionsDoc()
     fclose(file);
   }
   {
-    FILE *file = fopen("opt_post.texi", "w");
+    FILE *file = Fopen("opt_post.texi", "w");
     if(!file) {
       Msg::Error("Unable to open file 'opt_post.texi'");
       return;
@@ -809,7 +812,7 @@ void PrintOptionsDoc()
   }
   {
 #if defined(HAVE_POST)
-    FILE *file = fopen("opt_view.texi", "w");
+    FILE *file = Fopen("opt_view.texi", "w");
     if(!file) {
       Msg::Error("Unable to open file 'opt_view.texi'");
       return;
@@ -828,7 +831,7 @@ void PrintOptionsDoc()
   }
   {
 #if defined(HAVE_PLUGINS)
-    FILE *file = fopen("opt_plugin.texi", "w");
+    FILE *file = Fopen("opt_plugin.texi", "w");
     if(!file) {
       Msg::Error("Unable to open file 'opt_plugin.texi'");
       return;
@@ -872,7 +875,7 @@ void PrintOptionsDoc()
 
 #if defined(HAVE_MESH)
   {
-    FILE *file = fopen("opt_fields.texi", "w");
+    FILE *file = Fopen("opt_fields.texi", "w");
     if(!file) {
       Msg::Error("Unable to open file 'opt_fields.texi'");
       return;
@@ -917,7 +920,7 @@ void PrintOptionsDoc()
   }
 #endif
   {
-    FILE *file = fopen("shortcuts.texi", "w");
+    FILE *file = Fopen("shortcuts.texi", "w");
     if(!file) {
       Msg::Error("Unable to open file 'shortcuts.texi'");
       return;
@@ -930,7 +933,7 @@ void PrintOptionsDoc()
     fclose(file);
   }
   {
-    FILE *file = fopen("mouse.texi", "w");
+    FILE *file = Fopen("mouse.texi", "w");
     if(!file) {
       Msg::Error("Unable to open file 'mouse.texi'");
       return;
@@ -943,7 +946,7 @@ void PrintOptionsDoc()
     fclose(file);
   }
   {
-    FILE *file = fopen("commandline.texi", "w");
+    FILE *file = Fopen("commandline.texi", "w");
     if(!file) {
       Msg::Error("Unable to open file 'commandline.texi'");
       return;
@@ -1232,6 +1235,40 @@ std::string opt_general_graphics_font_title(OPT_ARGS_STR)
   return CTX::instance()->glFontTitle;
 }
 
+std::string opt_general_graphics_font_engine(OPT_ARGS_STR)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->glFontEngine = val;
+
+#if defined(HAVE_FLTK)
+  if(action & GMSH_SET){
+    drawContextGlobal *old = drawContext::global();
+    if(!old || old->getName() != CTX::instance()->glFontEngine){
+#if defined(HAVE_CAIRO)
+      if(CTX::instance()->glFontEngine == "Cairo")
+        drawContext::setGlobal(new drawContextFltkCairo);
+      else
+#endif
+      if(CTX::instance()->glFontEngine == "StringTexture")
+        drawContext::setGlobal(new drawContextFltkStringTexture);
+      else
+        drawContext::setGlobal(new drawContextFltk);
+      if(old) delete old;
+    }
+  }
+  if(FlGui::available() && (action & GMSH_GUI)){
+    int index = 0;
+#if defined(HAVE_CAIRO)
+    if(CTX::instance()->glFontEngine == "Cairo") index = 1;
+#endif
+    if(CTX::instance()->glFontEngine == "StringTexture") index = 2;
+    FlGui::instance()->options->general.choice[7]->value(index);
+  }
+#endif
+
+  return CTX::instance()->glFontEngine;
+}
+
 std::string opt_solver_socket_name(OPT_ARGS_STR)
 {
   if(action & GMSH_SET)
@@ -1246,6 +1283,7 @@ std::string opt_solver_socket_name(OPT_ARGS_STR)
 
 std::string opt_solver_name(OPT_ARGS_STR)
 {
+  if(num < 0 || num > NUM_SOLVERS - 1) return "";
   if(action & GMSH_SET)
     CTX::instance()->solver.name[num] = val;
   return CTX::instance()->solver.name[num];
@@ -1276,8 +1314,34 @@ std::string opt_solver_name4(OPT_ARGS_STR)
   return opt_solver_name(4, action, val);
 }
 
+std::string opt_solver_name5(OPT_ARGS_STR)
+{
+  return opt_solver_name(5, action, val);
+}
+
+std::string opt_solver_name6(OPT_ARGS_STR)
+{
+  return opt_solver_name(6, action, val);
+}
+
+std::string opt_solver_name7(OPT_ARGS_STR)
+{
+  return opt_solver_name(7, action, val);
+}
+
+std::string opt_solver_name8(OPT_ARGS_STR)
+{
+  return opt_solver_name(8, action, val);
+}
+
+std::string opt_solver_name9(OPT_ARGS_STR)
+{
+  return opt_solver_name(9, action, val);
+}
+
 std::string opt_solver_executable(OPT_ARGS_STR)
 {
+  if(num < 0 || num > NUM_SOLVERS - 1) return "";
   if(action & GMSH_SET)
     CTX::instance()->solver.executable[num] = val;
   return CTX::instance()->solver.executable[num];
@@ -1308,8 +1372,34 @@ std::string opt_solver_executable4(OPT_ARGS_STR)
   return opt_solver_executable(4, action, val);
 }
 
+std::string opt_solver_executable5(OPT_ARGS_STR)
+{
+  return opt_solver_executable(5, action, val);
+}
+
+std::string opt_solver_executable6(OPT_ARGS_STR)
+{
+  return opt_solver_executable(6, action, val);
+}
+
+std::string opt_solver_executable7(OPT_ARGS_STR)
+{
+  return opt_solver_executable(7, action, val);
+}
+
+std::string opt_solver_executable8(OPT_ARGS_STR)
+{
+  return opt_solver_executable(8, action, val);
+}
+
+std::string opt_solver_executable9(OPT_ARGS_STR)
+{
+  return opt_solver_executable(9, action, val);
+}
+
 std::string opt_solver_remote_login(OPT_ARGS_STR)
 {
+  if(num < 0 || num > NUM_SOLVERS - 1) return "";
   if(action & GMSH_SET)
     CTX::instance()->solver.remoteLogin[num] = val;
   return CTX::instance()->solver.remoteLogin[num];
@@ -1338,6 +1428,31 @@ std::string opt_solver_remote_login3(OPT_ARGS_STR)
 std::string opt_solver_remote_login4(OPT_ARGS_STR)
 {
   return opt_solver_remote_login(4, action, val);
+}
+
+std::string opt_solver_remote_login5(OPT_ARGS_STR)
+{
+  return opt_solver_remote_login(5, action, val);
+}
+
+std::string opt_solver_remote_login6(OPT_ARGS_STR)
+{
+  return opt_solver_remote_login(6, action, val);
+}
+
+std::string opt_solver_remote_login7(OPT_ARGS_STR)
+{
+  return opt_solver_remote_login(7, action, val);
+}
+
+std::string opt_solver_remote_login8(OPT_ARGS_STR)
+{
+  return opt_solver_remote_login(8, action, val);
+}
+
+std::string opt_solver_remote_login9(OPT_ARGS_STR)
+{
+  return opt_solver_remote_login(9, action, val);
 }
 
 #if defined(HAVE_FLTK)
@@ -3164,14 +3279,14 @@ double opt_general_stereo_mode(OPT_ARGS_NUM)
   if(action & GMSH_SET)
     CTX::instance()->stereo = (int)val;
   if (CTX::instance()->stereo)    opt_general_camera_mode(num, action, 1.);
-  
+
 #if defined(HAVE_FLTK)
   /*
   if(FlGui::available() && (action & GMSH_GUI))
   FlGui::instance()->options->general.butt[17]->value(CTX::instance()->stereo);
 */
 #endif
-  
+
   return CTX::instance()->stereo ;
 }
 
@@ -3223,7 +3338,7 @@ double opt_general_camera_mode(OPT_ARGS_NUM)
     FlGui::instance()->options->general.butt[18]->value
       (CTX::instance()->camera);
     FlGui::instance()->options->activate("general_camera");
-  
+
   }
   */
 #endif
@@ -5304,6 +5419,38 @@ double opt_mesh_recombine3d_all(OPT_ARGS_NUM)
   return CTX::instance()->mesh.recombine3DAll;
 }
 
+double opt_mesh_do_recombination_test(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET){
+    CTX::instance()->mesh.doRecombinationTest = (int)val;
+  }
+  return CTX::instance()->mesh.doRecombinationTest;
+}
+
+double opt_mesh_recombination_test_start(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET){
+    CTX::instance()->mesh.recombinationTestStart = (int)val;
+  }
+  return CTX::instance()->mesh.recombinationTestStart;
+}
+
+double opt_mesh_recombination_no_greedy_strat(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET){
+    CTX::instance()->mesh.recombinationTestNoGreedyStrat = (int)val;
+  }
+  return CTX::instance()->mesh.recombinationTestNoGreedyStrat;
+}
+
+double opt_mesh_recombination_new_strat(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET){
+    CTX::instance()->mesh.recombinationTestNewStrat = (int)val;
+  }
+  return CTX::instance()->mesh.recombinationTestNewStrat;
+}
+
 double opt_mesh_remesh_algo(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET){
@@ -6147,6 +6294,7 @@ double opt_view_timestep(OPT_ARGS_NUM)
       if(data->getAdaptiveData())
         data->getAdaptiveData()->changeResolution
           (opt->timeStep, opt->maxRecursionLevel, opt->targetError);
+      opt->currentTime = data->getTime(opt->timeStep);
     }
     if(view) view->setChanged(true);
   }

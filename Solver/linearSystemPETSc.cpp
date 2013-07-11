@@ -27,6 +27,29 @@ void linearSystemPETScBlockDouble::_kspCreate()
   _kspAllocated = true;
 }
 
+linearSystemPETScBlockDouble::~linearSystemPETScBlockDouble()
+{
+#if (PETSC_VERSION_RELEASE == 0 || ((PETSC_VERSION_MAJOR == 3) && (PETSC_VERSION_MINOR >= 2)))
+  if (_isAllocated) {
+    MatDestroy(&_a);
+    VecDestroy(&_b);
+    VecDestroy(&_x);
+  }
+  if (_kspAllocated) {
+    KSPDestroy(&_ksp);
+  }
+#else
+  if (_isAllocated) {
+    MatDestroy(_a);
+    VecDestroy(_b);
+    VecDestroy(_x);
+  }
+  if (_kspAllocated) {
+    KSPDestroy(_ksp);
+  }
+#endif
+}
+
 void linearSystemPETScBlockDouble::addToMatrix(int row, int col,
                                                const fullMatrix<double> &val)
 {

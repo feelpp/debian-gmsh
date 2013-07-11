@@ -23,12 +23,14 @@
 #include "GmshConfig.h"
 #include "GmshMessage.h"
 #include "GmshDefines.h"
+#include "StringUtils.h"
 #include "FlGui.h"
 #include "optionWindow.h"
 #include "fileDialogs.h"
 #include "CreateFile.h"
 #include "Options.h"
 #include "Context.h"
+#include "GModel.h"
 #include "PView.h"
 #include "PViewOptions.h"
 
@@ -86,11 +88,20 @@ int fileChooser(FILE_CHOOSER_TYPE type, const char *message,
   static char thefilter[1024] = "";
   static int thefilterindex = 0;
 
+  // reset the filter and the selection if the filter has changed
   if(strncmp(thefilter, filter, 1024)) {
-    // reset the filter and the selection if the filter has changed
     strncpy(thefilter, filter, 1024);
     thefilterindex = 0;
   }
+
+  // determine where to start
+  std::string thepath;
+  if(fname)
+    thepath = std::string(fname);
+  else
+    thepath = GModel::current()->getFileName();
+  std::vector<std::string> split = SplitFileName(thepath);
+  if(split[0].empty()) thepath = std::string("./") + thepath;
 
 #if defined(HAVE_NATIVE_FILE_CHOOSER)
   if(!fc) fc = new Fl_Native_File_Chooser();
@@ -107,7 +118,19 @@ int fileChooser(FILE_CHOOSER_TYPE type, const char *message,
   fc->title(message);
   fc->filter(filter);
   fc->filter_value(thefilterindex);
-  if(fname) fc->preset_file(fname);
+
+  static bool first = true;
+  if(first){
+    // preset the path and the file only the first time in a given
+    // session. Afterwards, always reuse the last directory
+    fc->preset_file(thepath.c_str());
+    first = false;
+  }
+  else{
+    std::string name = split[1] + split[2];
+    fc->preset_file(name.c_str());
+  }
+
   int ret = 0;
   switch(fc->show()) {
   case -1: break; // error
@@ -141,7 +164,17 @@ int fileChooser(FILE_CHOOSER_TYPE type, const char *message,
   fc->label(message);
   fc->filter(thefilter);
   fc->filter_value(thefilterindex);
-  if(fname) fc->value(fname);
+  static bool first = true;
+  if(first){
+    // preset the path and the file only the first time in a given
+    // session. Afterwards, always reuse the last directory
+    fc->value(thepath.c_str());
+    first = false;
+  }
+  else{
+    std::string name = split[1] + split[2];
+    fc->value(name.c_str());
+  }
   fc->show();
   while(fc->shown()) Fl::wait();
   thefilterindex = fc->filter_value();

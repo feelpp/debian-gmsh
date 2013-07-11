@@ -148,7 +148,7 @@ class Surface{
   char Visible;
   int Method;
   int Recombine;
-  int Recombine_Dir; // -1 is left, +1 is right, 0 is alternated
+  int Recombine_Dir; // -1 is left, +1 is right, -2/2 is alternated left/right
   double RecombineAngle;
   int TransfiniteSmoothing;
   List_T *Generatrices;
@@ -190,6 +190,7 @@ class Volume {
   List_T *Surfaces;
   List_T *SurfacesOrientations;
   List_T *SurfacesByTag;
+  List_T *EmbeddedSurfaces;
   DrawingColor Color;
   std::vector<int> compound;
 };
@@ -338,6 +339,7 @@ void setSurfaceGeneratrices(Surface *s, List_T *loops);
 void setVolumeSurfaces(Volume *v, List_T *loops);
 void setSurfaceEmbeddedPoints(Surface *s, List_T *points);
 void setSurfaceEmbeddedCurves(Surface *s, List_T *curves);
+void setVolumeEmbeddedSurfaces(Volume *v, List_T *surfaces);
 int select_contour(int type, int num, List_T * List);
 
 #endif

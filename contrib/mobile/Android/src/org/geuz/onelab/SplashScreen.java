@@ -1,0 +1,78 @@
+package org.geuz.onelab;
+
+import java.io.BufferedInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+
+import android.app.Activity;
+import android.content.Context;
+import android.content.Intent;
+import android.os.Handler;
+import android.os.Message;
+import android.util.Log;
+
+public class SplashScreen extends Activity{
+	private static final int SPLASHTIME = 1000; // duration for the splash screen in milliseconds
+	
+	private static final int STOPSPLASH = 0;
+	private static final int EXITAPP = 1;
+	
+	private Intent newIntent;
+	
+	private final Handler handler = new Handler()
+	{
+		public void handleMessage(Message msg) {
+			switch (msg.what) {
+			case STOPSPLASH:
+				startActivity(newIntent);
+				finish();
+				break;
+			case EXITAPP:
+				finish();
+				break;
+			default:
+				break;
+			}
+		};
+	};
+	
+	protected void onCreate(android.os.Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+		setContentView(R.layout.splash);
+		Intent oldIntent = this.getIntent();
+		if(oldIntent != null && oldIntent.getAction() != null && oldIntent.getAction().equals(Intent.ACTION_VIEW)){
+			newIntent = new Intent(SplashScreen.this, MainActivity.class);
+			newIntent.setAction(oldIntent.getAction());
+			newIntent.setData(oldIntent.getData());
+		}
+		else
+			newIntent = new Intent(SplashScreen.this, ModelList.class);
+		loadNative();
+		final Message msg = new Message();
+        msg.what = STOPSPLASH;
+        handler.sendMessageDelayed(msg, SPLASHTIME);
+	}
+
+	/**
+     * Load file from res/raw/ directory to the files directory of the application.
+     */
+    private void loadNative()
+    {
+    	try {
+    		ZipInputStream zipStream = new ZipInputStream(new BufferedInputStream(getResources().openRawResource(R.raw.models)));
+			ZipEntry entry;
+		     while ((entry = zipStream.getNextEntry()) != null) {
+				FileOutputStream outputStream = openFileOutput(entry.getName(), Context.MODE_PRIVATE);
+				byte[] buffer = new byte[2048];
+				for (int i = zipStream.read(buffer, 0, buffer.length); i > 0;i = zipStream.read(buffer, 0, buffer.length)) 
+					outputStream.write(buffer,0,i);
+				Log.d("Load files", "Add " + entry.getName() + " from the zip file");
+		     }
+		     zipStream.close();
+		} catch (IOException e1) {
+			e1.printStackTrace();
+		}
+    }
+}

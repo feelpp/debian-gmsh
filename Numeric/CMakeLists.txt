@@ -8,13 +8,15 @@ set(SRC
     fullMatrix.cpp
   BasisFactory.cpp
     nodalBasis.cpp
-    polynomialBasis.cpp
+	polynomialBasis.cpp
+	pyramidalBasis.cpp
+	BergotBasis.cpp
+	jacobiPolynomials.cpp
+	legendrePolynomials.cpp
+    bezierBasis.cpp
     JacobianBasis.cpp
-    BergotBasis.cpp
-    pyramidalBasis.cpp
-    jacobiPolynomials.cpp
-    legendrePolynomials.cpp
-  pointsGenerators.cpp
+    pointsGenerators.cpp
+  ElementType.cpp
   GaussIntegration.cpp
     GaussQuadratureLin.cpp
     GaussQuadratureTri.cpp

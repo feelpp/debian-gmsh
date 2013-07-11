@@ -8,44 +8,35 @@
 
 #include <map>
 #include <vector>
+#include "bezierBasis.h"
 #include "fullMatrix.h"
 
-class MElement;
-
-class bezierBasis {
- private :
-  static std::map<int, bezierBasis> _bbs;
- public :
-  int dim, order;
-  int numLagPts;
-  int numDivisions;
-  // the 'numLagPts' first exponents are related to 'Lagrangian' values
-  fullMatrix<double> exponents; // exponents of Bezier FF
-  fullMatrix<double> bezierPoints, lagPoints; // sampling point
-  fullMatrix<double> matrixLag2Bez, matrixBez2Lag;
-  fullMatrix<double> subDivisor;
-  static const bezierBasis *find(int);
-};
 
 class JacobianBasis {
  private:
-  static std::map<int, JacobianBasis*> _fs;
   const bezierBasis *bezier;
+
+  fullMatrix<double> lagPoints; // sampling point
   fullMatrix<double> gradShapeMatX, gradShapeMatY, gradShapeMatZ;
-  fullVector<double> primGradShapeBarX, primGradShapeBarY, primGradShapeBarZ;
+  fullVector<double> primGradShapeBarycenterX, primGradShapeBarycenterY, primGradShapeBarycenterZ;
   fullMatrix<double> matrixPrimJac2Jac;                                   // Lifts Lagrange basis of primary Jac. to Lagrange basis of Jac.
-  int numJacNodes, numMapNodes, numPrimJacNodes, numPrimMapNodes;
-  inline const fullMatrix<double> &getPoints() const { return bezier->lagPoints; }
+
+  int numJacNodes, numPrimJacNodes;
+  int numMapNodes, numPrimMapNodes;
+
  public :
-  static const JacobianBasis *find(int);
   JacobianBasis(int tag);
+
+  // get methods
   inline int getNumJacNodes() const { return numJacNodes; }
   inline int getNumMapNodes() const { return numMapNodes; }
   inline int getNumPrimJacNodes() const { return numPrimJacNodes; }
   inline int getNumPrimMapNodes() const { return numPrimMapNodes; }
-  inline int getNumDivisions() const { return bezier->numDivisions; }
+  inline int getNumDivisions() const { return bezier->getNumDivision(); }
   inline int getNumSubNodes() const { return bezier->subDivisor.size1(); }
-  inline int getNumLagPts() const { return bezier->numLagPts; }
+  inline int getNumLagCoeff() const { return bezier->getNumLagCoeff(); }
+
+  //
   double getPrimNormals1D(const fullMatrix<double> &nodesXYZ, fullMatrix<double> &result) const;
   double getPrimNormal2D(const fullMatrix<double> &nodesXYZ, fullMatrix<double> &result) const;
   double getPrimJac3D(const fullMatrix<double> &nodesXYZ) const;
@@ -60,6 +51,8 @@ class JacobianBasis {
   void getSignedJacobian(const fullMatrix<double> &nodesX, const fullMatrix<double> &nodesY,
                          const fullMatrix<double> &nodesZ, fullMatrix<double> &jacobian) const;
   void getScaledJacobian(const fullMatrix<double> &nodesXYZ, fullVector<double> &jacobian) const;
+
+  //
   inline void lag2Bez(const fullVector<double> &jac, fullVector<double> &bez) const {
     bezier->matrixLag2Bez.mult(jac,bez);
   }
@@ -69,9 +62,14 @@ class JacobianBasis {
   inline void primJac2Jac(const fullVector<double> &primJac, fullVector<double> &jac) const {
     matrixPrimJac2Jac.mult(primJac,jac);
   }
-  inline void subDivisor(const fullVector<double> &bez, fullVector<double> &result) const {
+  inline void subdivideBezierCoeff(const fullVector<double> &bez, fullVector<double> &result) const {
     bezier->subDivisor.mult(bez,result);
   }
+
+  //
+  static int jacobianOrder(int parentType, int order);
+  static fullMatrix<double> generateJacMonomialsPyramid(int order);
+  static fullMatrix<double> generateJacPointsPyramid(int order);
 };
 
 #endif

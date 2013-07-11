@@ -22,18 +22,6 @@ static std::string localFileTag("_");
 // Possible actions for clients
 enum parseMode {REGISTER, ANALYZE, COMPUTE, EXIT};
 
-#if defined(WIN32)
-static char dirSep='\\';
-static std::string cmdSep(" & ");
-static std::string removeCmd("del ");
-static std::string lsCmd("dir ");
-#else
-static char dirSep='/';
-static std::string cmdSep(" ; ");
-static std::string removeCmd("rm -rf ");
-static std::string lsCmd("ls ");
-#endif
-
 // TOOLS 
 
 std::string itoa(const int i);
@@ -128,7 +116,7 @@ class localSolverClient : public onelab::localClient{
  localSolverClient(const std::string &name, const std::string &cmdl, 
 		   const std::string &wdir) 
    : onelab::localClient(name), _commandLine(cmdl), _workingDir(wdir),
-    _remote(false), _active(1), _onelabBlock(false) {
+    _remote(false), _active(0), _onelabBlock(false) {
   }
   virtual ~localSolverClient(){}
   const std::string &getCommandLine(){ return _commandLine; }
@@ -274,6 +262,12 @@ class MetaModel : public localSolverClient {
     for(unsigned int i=0; i<_clients.size(); i++)
       if(_clients[i]->getName() == name) return _clients[i];
     return 0;
+  }
+  void showClientStatus(){
+    for (citer it=firstClient(); it<lastClient(); it++){
+      bool changed = onelab::server::instance()->getChanged((*it)->getName());
+      std::cout << "(" << changed << ") " << (*it)->getName() << std::endl;
+    }
   }
 
   std::string genericNameFromArgs, clientName;

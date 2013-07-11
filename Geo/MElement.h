@@ -364,10 +364,6 @@ class MElement
   virtual MElement *copy(std::map<int, MVertex*> &vertexMap,
                          std::map<MElement*, MElement*> &newParents,
                          std::map<MElement*, MElement*> &newDomains);
-
-  static int ParentTypeFromTag(int tag);
-  static int OrderFromTag(int tag);
-
 };
 
 class MElementFactory{

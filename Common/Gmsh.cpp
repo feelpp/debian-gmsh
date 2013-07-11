@@ -22,6 +22,9 @@
 #include "PView.h"
 #endif
 
+//test new algo generation points
+#include "BasisFactory.h"
+
 #if defined(HAVE_ONELAB)
 #include "gmshLocalNetworkClient.h"
 #endif
@@ -45,6 +48,10 @@
 
 int GmshInitialize(int argc, char **argv)
 {
+  static bool isInitialized = false;
+  if(isInitialized) return 1;
+  isInitialized = true;
+
 #if defined(HAVE_FLTK)
   RedirectIOToConsole();
 #endif
@@ -81,6 +88,11 @@ int GmshSetMessageHandler(GmshMessage *callback)
 {
   Msg::SetCallback(callback);
   return 1;
+}
+
+GmshMessage *GmshGetMessageHandler()
+{
+  return Msg::GetCallback();
 }
 
 int GmshSetBoundingBox(double xmin, double xmax,
@@ -232,6 +244,7 @@ int GmshBatch()
   solver_batch_cb(0, (void*)CTX::instance()->launchSolverAtStartup);
 #endif
 
+
   time_t now;
   time(&now);
   std::string currtime = ctime(&now);
@@ -276,7 +289,7 @@ int GmshFLTK(int argc, char **argv)
 
   if(CTX::instance()->post.combineTime){
     PView::combine(true, 2, CTX::instance()->post.combineRemoveOrig);
-    FlGui::instance()->updateViews();
+    FlGui::instance()->updateViews(true, true);
   }
 
   // init first context

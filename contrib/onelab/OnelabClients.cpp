@@ -10,6 +10,18 @@
 #define PCLOSE pclose
 #endif
 
+#if defined(WIN32)
+static char dirSep='\\';
+static std::string cmdSep(" & ");
+static std::string removeCmd("del ");
+static std::string lsCmd("dir ");
+#else
+static char dirSep='/';
+static std::string cmdSep(" ; ");
+static std::string removeCmd("rm -rf ");
+static std::string lsCmd("ls ");
+#endif
+
 class onelabMetaModelServer : public GmshServer{
  private:
   localNetworkSolverClient *_client;
@@ -446,7 +458,7 @@ void localSolverClient::FixExecPath(const std::string &in)
     setCommandLine(cmd);
   }
 
-#if not defined(WIN32)
+#if !defined(WIN32)
   //if(split[0].find("elmerfem") != std::string::npos){
   if(!split[1].compare("ElmerSolver") && split[2].empty() && split[0].size()){
     std::string fileName = getWorkingDir() + getName() + ".sh";
@@ -469,7 +481,6 @@ void localSolverClient::FixExecPath(const std::string &in)
 
 bool localSolverClient::checkCommandLine(){
   bool success=true;
-  if(!isActive()) return success;
   OLMsg::Info("Check command line <%s> for client <%s>",
 	      getCommandLine().c_str(), getName().c_str());
 
@@ -504,7 +515,7 @@ bool localSolverClient::checkCommandLine(){
       success = checkIfPresent(getCommandLine());
 
       // resolve a possible linux link
-#if not defined(WIN32)
+#if !defined(WIN32)
       if(!success){
 	char cbuf [1024];
 	FILE *fp;
@@ -565,13 +576,10 @@ void localSolverClient::addNumberChoice(std::string name, double val, bool readO
     ps[0].setValue(val);
     choices.push_back(val);
     ps[0].setChoices(choices);
-    //ps[0].setAttribute("Highlight","Coral");
     set(ps[0]);
   }
   else{
     OLMsg::Error("The parameter <%s> does not exist", name.c_str());
-    // ps.resize(1);
-    // ps[0].setName(name);
   }
 }
 
@@ -619,7 +627,7 @@ bool remoteClient::checkCommandLine(const std::string &commandLine){
   success=checkIfPresentRemote(commandLine);
 
   // resolve a possible linux link
-#if not defined(WIN32)
+#if !defined(WIN32)
   if(!success){
     char cbuf [1024];
     FILE *fp;
@@ -1042,7 +1050,6 @@ void EncapsulatedClient::compute(){
 
 bool RemoteInterfacedClient::checkCommandLine(){
   bool success;
-  if(!isActive()) return true;
   OLMsg::Info("Check command line <%s> for client <%s>",
 	      getCommandLine().c_str(), getName().c_str());
   if(getCommandLine().empty())
@@ -1118,7 +1125,6 @@ std::string RemoteNativeClient::buildCommandLine(){
 
 bool RemoteNativeClient::checkCommandLine(){
   bool success;
-  if(!isActive()) return true;
   OLMsg::Info("Check command line <%s> for client <%s>",
 	      getCommandLine().c_str(), getName().c_str());
   if(getCommandLine().empty())
@@ -1205,7 +1211,6 @@ void RemoteNativeClient::compute(){
 
 bool RemoteEncapsulatedClient::checkCommandLine(){
   bool success;
-  if(!isActive()) return true;
   OLMsg::Info("Check command line <%s> for client <%s>",
 	      getCommandLine().c_str(), getName().c_str());
   if(getCommandLine().empty())
@@ -1334,7 +1339,7 @@ bool chmod(std::string fileName){
 
 #include <sys/types.h>
 
-#if not defined WIN32
+#if !defined(WIN32)
 #include <unistd.h>
 #include <pwd.h>
 std::string getUserHomedir(){
@@ -1401,8 +1406,8 @@ std::string QuoteExecPath(const std::string &in)
 
 std::string removeBlanks(const std::string &in)
 {
-  size_t pos0=in.find_first_not_of(" ");
-  size_t pos=in.find_last_not_of(" ");
+  size_t pos0=in.find_first_not_of(" \t");
+  size_t pos=in.find_last_not_of(" \t");
   if( (pos0 != std::string::npos) && (pos != std::string::npos))
     return in.substr(pos0, pos-pos0+1);
   else

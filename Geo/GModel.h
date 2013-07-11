@@ -18,6 +18,7 @@
 #include "SPoint3.h"
 #include "SBoundingBox3d.h"
 #include "boundaryLayersData.h"
+
 template <class scalar> class simpleFunction;
 
 class FM_Internals;
@@ -154,7 +155,7 @@ class GModel
 
   // boundary layer columns i.e. list of vertices that form columns
   // in boundary layers
-  BoundaryLayerColumns _columns; 
+  BoundaryLayerColumns _columns;
 
  public:
   GModel(std::string name="");
@@ -360,6 +361,11 @@ class GModel
   // access a mesh element by coordinates (using an octree search)
   MElement *getMeshElementByCoord(SPoint3 &p, int dim=-1, bool strict=true);
   std::vector<MElement*> getMeshElementsByCoord(SPoint3 &p, int dim=-1, bool strict=true);
+  //  inline std::vector<MElement*> getMeshElementsByCoords(std::vector<std::vector<double, std::allocator<double> >, int dim=-1, bool strict=true){
+  //    std::vector<MElement*> e;
+  //    for (unsigned int i = 0;i<p.size();i++)e.push_back (getMeshElementByCoord (p[i],dim,strict));
+  //    return e;
+  //  }
 
   // access a mesh element by tag, using the element cache
   MElement *getMeshElementByTag(int n);
@@ -506,6 +512,9 @@ class GModel
   void addRuledFaces(std::vector<std::vector<GEdge *> > edges);
   GFace *addFace(std::vector<GEdge *> edges, std::vector< std::vector<double > > points);
   GFace *addPlanarFace(std::vector<std::vector<GEdge *> > edges);
+  GFace *add2Drect(double x0, double y0, double dx, double dy);
+  GFace *add2Dellips(double xc, double yc, double rx, double ry);
+
   GEdge *addCompoundEdge(std::vector<GEdge*> edges, int num=-1);
   GFace *addCompoundFace(std::vector<GFace*> faces, int type, int split, int num=-1);
   GRegion *addVolume(std::vector<std::vector<GFace*> > faces);
@@ -516,6 +525,7 @@ class GModel
   GEntity *addTorus(std::vector<double> p1, std::vector<double> p2, double radius1,
                     double radius2);
   GEntity *addBlock(std::vector<double> p1, std::vector<double> p2);
+  GEntity *add3DBlock(std::vector<double> p1, double dx, double dy , double dz);
   GEntity *addCone(std::vector<double> p1, std::vector<double> p2, double radius1,
                    double radius2);
 
@@ -523,6 +533,16 @@ class GModel
   GModel *computeBooleanUnion(GModel *tool, int createNewModel=0);
   GModel *computeBooleanIntersection(GModel *tool, int createNewModel=0);
   GModel *computeBooleanDifference(GModel *tool, int createNewModel=0);
+  void    salomeconnect(); 
+  void    occconnect();
+	
+	// do stuff for all entities inside a bounding box
+  void    setPeriodicAllFaces(std::vector<double> FaceTranslationVector);
+  void    setPeriodicPairOfFaces(int numFaceMaster, std::vector<int> EdgeListMaster, 
+																 int numFaceSlave, std::vector<int> EdgeListSlave);
+  void    setPhysicalNumToEntitiesInBox(int EntityType, int PhysicalGroupNumber, 
+																				std::vector<double> p1,std::vector<double> p2);
+	
 
   // build a new GModel by cutting the elements crossed by the levelset ls
   // if cutElem is set to false, split the model without cutting the elements

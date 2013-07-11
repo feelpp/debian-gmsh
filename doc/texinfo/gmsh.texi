@@ -21,7 +21,7 @@
 @c =========================================================================
 @c %**start of header
 @setfilename gmsh.info
-@set GMSH-VERSION 2.7
+@set GMSH-VERSION 2.8
 @set COPYRIGHT @copyright{} 1997-2013 Christophe Geuzaine, Jean-Fran@,{c}ois Remacle
 @settitle Gmsh @value{GMSH-VERSION}
 @footnotestyle separate
@@ -237,6 +237,7 @@ Tutorial
 * t12.geo::                     
 * t13.geo::                     
 * t14.geo::                     
+* t15.geo::                     
 
 Options
 
@@ -540,7 +541,7 @@ small but powerful GUI.
 @node and what Gmsh is not so good at, Bug reports, What Gmsh is pretty good at, Overview
 @section @dots{} and what Gmsh is not so good at
 
-As of version 2.7, here are some known weaknesses of Gmsh:
+As of version 2.8, here are some known weaknesses of Gmsh:
 
 @itemize @bullet
 @item
@@ -979,7 +980,8 @@ parsing of the script file:
   @var{built-in-function} |
   @var{real-option} |
   StrFind(@var{char-expression}, @var{char-expression}) |
-  TextAttributes(@var{char-expression}<,@var{char-expression}@dots{}>)|
+  StrCmp(@var{char-expression}, @var{char-expression}) |
+  TextAttributes(@var{char-expression}<,@var{char-expression}@dots{}>) |
   GetValue("@var{string}", @var{expression})
 @end example
 
@@ -993,8 +995,10 @@ in @ref{Operators}. For the definition of @w{@var{built-in-function}s},
 see @ref{Built-in functions}. The various @w{@var{real-option}s} are
 listed in @ref{Options}. @code{StrFind} searches the first
 @var{char-expression} for any occurrence of the second
-@var{char-expression}. @code{TextAttributes} creates attributes for text
-strings.
+@var{char-expression}. @code{StrCmp} compares the two strings (returns
+an integer greater than, equal to, or less than 0, according as the
+first string is greater than, equal to, or less than the second string).
+@code{TextAttributes} creates attributes for text strings.
 
 The last case in the definition allows to ask the user for a value
 interactively. For example, inserting @code{GetValue("Value of parameter
@@ -1077,24 +1081,27 @@ Character expressions are defined as:
   StrPrefix ( @var{char-expression} ) |
   StrRelative ( @var{char-expression} ) |
   StrCat ( @var{char-expression} , @var{char-expression} ) |
+  Str [ @var{char-expression} , @dots{} ] |
   Sprintf ( @var{char-expression} , @var{expression-list} ) |
   Sprintf ( @var{char-expression} ) |
   Sprintf ( @var{char-option} ) |
   GetEnv ( @var{char-expression} ) |
-  GetString ( @var{char-expression} , @var{char-expression} )
+  GetString ( @var{char-expression} , @var{char-expression} ) | 
+  StrReplace ( @var{char-expression} , @var{char-expression} , @var{char-expression} ) 
 @end example
 
-@noindent The third and fourth cases in this definition permit to take the
-prefix (e.g. to remove the extension) or the relative path of a
-string. The fifth case permits to concatenate two character expressions,
-and the sixth and seventh are equivalent to the @code{sprintf} C
+@noindent @code{StrPrefix} and @code{StrRelative} permit to take the
+prefix (e.g. to remove the extension) or the relative path of a file
+name. @code{StrCat} and @code{Str} permit to concatenate character
+expressions (@code{Str} adds a newline character after each string
+except the last). @code{Sprintf} is equivalent to the @code{sprintf} C
 function (where @var{char-expression} is a format string that can
 contain floating point formatting characters: @code{%e}, @code{%g},
-etc.). The eigth case permits to use the value of a @var{char-option} as
-a @var{char-expression}. The ninth case gets the value of an environment
-variable from the operating system. The last case in the definition
-allows to ask the user for a value interactively. The various
-@w{@var{char-option}s} are listed in @ref{Options}.
+etc.) The various @w{@var{char-option}s} are listed in
+@ref{Options}. @code{GetEnvThe} gets the value of an environment
+variable from the operating system. @code{GetString} allows to ask the
+user for a value interactively. @code{StrReplace}'s arguments are: input
+string, old substring, new substring.
 
 Character expressions are mostly used to specify non-numeric options and
 input/output file names. See @ref{t8.geo}, for an interesting usage of
@@ -1672,6 +1679,9 @@ Refines the current mesh by splitting all elements. If
 @code{Mesh.SecondOrderLinear} is set, the new vertices are inserted by
 linear interpolatinon. Otherwise they are snapped on the actual
 geometry.
+
+@item AdaptMesh @{ @var{expression-list} @} @{ @var{expression-list} @} @{ @{ @var{expression-list} < , @dots{} >  @} @};
+Performs adaptive mesh generation. Documentation not yet available.
 
 @item SetOrder @var{expression};
 Changes the order of the elements in the current mesh.
@@ -2355,7 +2365,7 @@ algorithm should be tried. For very large meshes of plane surfaces the
 ``Delaunay'' algorithm is the fastest.
 
 The ``Automatic'' algorithm tries to select the best algorithm
-automatically for each surface in the model. As of Gmsh 2.7, the
+automatically for each surface in the model. As of Gmsh 2.8, the
 ``Automatic'' algorithm selects ``Delaunay'' for plane surfaces and
 ``MeshAdapt'' for all other surfaces.
 
@@ -2644,14 +2654,15 @@ as the preceding one). The optional argument `@code{Using Bump
 @var{expression}}' instructs the transfinite algorithm to distribute the
 nodes with a refinement at both ends of the line.
 
-@item Transfinite Surface @{ @var{expression-list} @} | "*" < = @{ @var{expression-list} @} > < Left | Right | Alternate > ;
+@item Transfinite Surface @{ @var{expression-list} @} | "*" < = @{ @var{expression-list} @} > < Left | Right | Alternate | AlternateRight | AlternateLeft > ;
 Selects surfaces to be meshed with the 2D transfinite algorithm. The
 @var{expression-list} on the right-hand-side should contain the
 identification numbers of three or four points on the boundary of the
 surface that define the corners of the transfinite interpolation. If no
 identification numbers are given, the transfinite algorithm will try to
 find the corners automatically. The optional argument specifies the way
-the triangles are oriented when the mesh is not recombined.
+the triangles are oriented when the mesh is not
+recombined. (@code{Alternate} is a synonym for @code{AlternateRight}).
 
 @item Transfinite Volume @{ @var{expression-list} @} | "*" < = @{ @var{expression-list} @} > ;
 Selects five- or six-face volumes to be meshed with the 3D transfinite
@@ -2662,6 +2673,12 @@ interpolation. If no identification numbers are given, the transfinite
 algorithm will try to find the corners automatically.
 
 @end ftable
+
+@c .........................................................................
+@c Levelsets
+@c .........................................................................
+
+@c TODO document levelsets; explain use e.g. with AdaptMesh
 
 @c .........................................................................
 @c Miscellaneous
@@ -2675,8 +2692,11 @@ Here is a list of all other mesh commands currently available:
 @ftable @code
 @item Point | Line @{ @var{expression-list} @} In Surface @{ @var{expression} @};
 Embed the point(s) or line(s) in the given surface. The surface mesh
-will conform to the mesh of the point(s) or lines(s). Note that embedded
-lines only work with the MeshAdapt 2-D algorithm.
+will conform to the mesh of the point(s) or lines(s). 
+
+@item Surface @{ @var{expression-list} @} In Volume @{ @var{expression} @};
+Embed the surface in the given volume. The volume mesh will conform to
+the mesh of the surface. 
 
 @item Periodic Line @{ @var{expression-list} @} = @{ @var{expression-list} @};
 Force mesh of lines on the left-hand side (slaves) to match the mesh of
@@ -3234,6 +3254,16 @@ When @code{$Elements} are given, @code{$Nodes} should also be provided,
 before the @code{$Elements} section. Currently only one @code{$Nodes}
 and one @code{$Elements} section are allowed per file. (This might/will
 change in the future.) 
+
+Important note about efficiency. Node and element tags can be "sparse",
+i.e., do not have to constitute a continuous list of indexes starting at
+1. However, using non-continuous tags will lead to performance
+degradation. For meshes, non-continuous indexing forces Gmsh to use a
+map instead of a vector to access nodes and elements. The performance
+hit is on speed. For post-processing datasets, which always use vectors
+to access data, the performance hit is on memory. A @code{NodeData} with
+two nodes, tagged 1 and 1000000, will allocate a (mostly empty) vector
+of 1000000 elements.
 
 Any section with an unrecognized header is simply ignored: you can thus
 add comments in a @file{.msh} file by putting them e.g. inside a
@@ -4252,6 +4282,7 @@ system}. Screencasts that show how to use the GUI are available on
 * t12.geo::                     
 * t13.geo::                     
 * t14.geo::                     
+* t15.geo::                     
 @end menu
 
 @c -------------------------------------------------------------------------
@@ -4375,10 +4406,19 @@ system}. Screencasts that show how to use the GUI are available on
 @c t14.geo
 @c -------------------------------------------------------------------------
 
-@node t14.geo,  , t13.geo, Tutorial
+@node t14.geo, t15.geo, t13.geo, Tutorial
 @section @file{t14.geo}
 
 @verbatiminclude ../../tutorial/t14.geo
+
+@c -------------------------------------------------------------------------
+@c t15.geo
+@c -------------------------------------------------------------------------
+
+@node t15.geo,  , t14.geo, Tutorial
+@section @file{t15.geo}
+
+@verbatiminclude ../../tutorial/t15.geo
 
 @c =========================================================================
 @c Options

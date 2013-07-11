@@ -149,6 +149,7 @@ class MPyramid : public MElement {
       return false;
     return true;
   }
+  void getIntegrationPoints(int pOrder, int *npts, IntPt **pts);
   static int edges_pyramid(const int edge, const int vert)
   {
     static const int e[8][2] = {
@@ -166,11 +167,12 @@ class MPyramid : public MElement {
   static int faces_pyramid(const int face, const int vert)
   {
     // only triangular faces
-    static const int f[4][3] = {
-      {0, 1, 4},
-      {3, 0, 4},
-      {1, 2, 4},
-      {2, 3, 4}
+    static const int f[5][4] = {
+      {0, 1, 4, -1},
+      {3, 0, 4, -1},
+      {1, 2, 4, -1},
+      {2, 3, 4, -1},
+      {0, 3, 2, 1}
     };
     return f[face][vert];
   }
@@ -292,19 +294,19 @@ class MPyramidN : public MPyramid {
   {
     if(_order == 2 && _vs.size() + 5 == 13) return MSH_PYR_13;
     if(_order == 2 && _vs.size() + 5 == 14) return MSH_PYR_14;
-    if(_order == 3 && _vs.size() + 5 == 29) return MSH_PYR_29;
+    if(_order == 3 && _vs.size() + 5 == 21) return MSH_PYR_21;
     if(_order == 3 && _vs.size() + 5 == 30) return MSH_PYR_30;
-    if(_order == 4 && _vs.size() + 5 == 50) return MSH_PYR_50;
+    if(_order == 4 && _vs.size() + 5 == 29) return MSH_PYR_29;
     if(_order == 4 && _vs.size() + 5 == 55) return MSH_PYR_55;
-    if(_order == 5 && _vs.size() + 5 == 77) return MSH_PYR_77;
+    if(_order == 5 && _vs.size() + 5 == 37) return MSH_PYR_37;
     if(_order == 5 && _vs.size() + 5 == 91) return MSH_PYR_91;
-    if(_order == 6 && _vs.size() + 5 == 110) return MSH_PYR_110;
+    if(_order == 6 && _vs.size() + 5 == 45) return MSH_PYR_45;
     if(_order == 6 && _vs.size() + 5 == 140) return MSH_PYR_140;
-    if(_order == 7 && _vs.size() + 5 == 149) return MSH_PYR_149;
+    if(_order == 7 && _vs.size() + 5 == 53)  return MSH_PYR_53;
     if(_order == 7 && _vs.size() + 5 == 204) return MSH_PYR_204;
-    if(_order == 8 && _vs.size() + 5 == 194) return MSH_PYR_194;
+    if(_order == 8 && _vs.size() + 5 == 61)  return MSH_PYR_61;
     if(_order == 8 && _vs.size() + 5 == 285) return MSH_PYR_285;
-    if(_order == 9 && _vs.size() + 5 == 245) return MSH_PYR_245;
+    if(_order == 9 && _vs.size() + 5 == 69)  return MSH_PYR_69;
     if(_order == 9 && _vs.size() + 5 == 385) return MSH_PYR_385;
     return 0;
   }
