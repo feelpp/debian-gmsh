@@ -1,4 +1,4 @@
-gmsh (2.8.1-1) UNRELEASED; urgency=low
+gmsh (2.8.1.dfsg-1) unstable; urgency=low
 
   * [a9800c5] Imported Upstream version 2.8.1
   * [5736abd] Update patches, remove applied by upstream ones.
