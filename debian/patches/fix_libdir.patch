@@ -15,7 +15,7 @@ Last-Update: 2013-03-15
 +  DESTINATION ${INSTALL_LIB_DIR})
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -1339,7 +1339,7 @@
+@@ -1334,7 +1334,7 @@
  # (e.g. "make lib" or "make shared" followed by "make install/fast")
  install(TARGETS gmsh DESTINATION ${GMSH_BIN} OPTIONAL)
  if(ENABLE_BUILD_LIB)
@@ -24,7 +24,7 @@ Last-Update: 2013-03-15
  endif(ENABLE_BUILD_LIB)
  if(ENABLE_BUILD_SHARED OR ENABLE_BUILD_DYNAMIC)
    if(WIN32 AND NOT MSVC OR CYGWIN)
-@@ -1358,7 +1358,7 @@
+@@ -1353,7 +1353,7 @@
        install(FILES ${GCC_DLL} ${GFORTRAN_DLL} ${STDC_DLL} DESTINATION ${GMSH_LIB})
      endif(GCC_DLL AND GFORTRAN_DLL AND STDC_DLL)
    else(WIN32 AND NOT MSVC OR CYGWIN)
