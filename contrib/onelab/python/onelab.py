@@ -272,31 +272,30 @@ class client :
   def sendCommand(self, command) :
     if not self.socket :
       return
-    self._send(self._GMSH_PARSE_STRING, command + ' ;')
+    self._send(self._GMSH_PARSE_STRING, command)
     
   def mergeFile(self, filename) :
     if not self.socket :
       return
-    #self._send(self._GMSH_PARSE_STRING, 'Merge "' + filename + '";')
-    self._send(self._GMSH_MERGE_FILE,filename)
+    self._send(self._GMSH_MERGE_FILE, filename)
 
   def sendInfo(self, msg) :
     if not self.socket :
       print (msg)
       return
-    self._send(self._GMSH_INFO, msg)
+    self._send(self._GMSH_INFO, str(msg))
 
   def sendWarning(self, msg) :
     if not self.socket :
       print (msg)
       return
-    self._send(self._GMSH_WARNING, msg)
+    self._send(self._GMSH_WARNING, str(msg))
 
   def sendError(self, msg) :
     if not self.socket :
       print (msg)
       return
-    self._send(self._GMSH_ERROR, msg)
+    self._send(self._GMSH_ERROR, str(msg))
 
   def preProcess(self, filename) :
     if not self.socket :
@@ -324,13 +323,15 @@ class client :
       if t == self._GMSH_STOP :
         self.NumSubClients -= 1
 
-  def run(self, name, command, arguments):
-    if not self.socket :
-      return
+  def run(self, name, command, arguments=''):
+    # create command line
     if self.action == "check":
-      msg = [name, command]
+      cmd = command
     else:
-      msg = [name, command + ' ' + arguments]
+      cmd = command + ' ' + arguments
+    if not self.socket :
+      return os.system(cmd);
+    msg = [name, cmd]
     self._send(self._GMSH_CONNECT, '\0'.join(msg))
     self.NumSubClients +=1
     self._wait_on_subclients() # makes the subclient blocking

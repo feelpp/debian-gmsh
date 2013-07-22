@@ -1,12 +1,32 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Copyright (C) 2013 ULg-UCL
 //
-// See the LICENSE.txt file for license information. Please report all
-// bugs and problems to the public mailing list <gmsh@geuz.org>.
+// Permission is hereby granted, free of charge, to any person
+// obtaining a copy of this software and associated documentation
+// files (the "Software"), to deal in the Software without
+// restriction, including without limitation the rights to use, copy,
+// modify, merge, publish, distribute, and/or sell copies of the
+// Software, and to permit persons to whom the Software is furnished
+// to do so, provided that the above copyright notice(s) and this
+// permission notice appear in all copies of the Software and that
+// both the above copyright notice(s) and this permission notice
+// appear in supporting documentation.
 //
-// Contributor(s):
-//   Koen Hillewaert
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT OF THIRD PARTY RIGHTS. IN NO EVENT SHALL THE
+// COPYRIGHT HOLDER OR HOLDERS INCLUDED IN THIS NOTICE BE LIABLE FOR
+// ANY CLAIM, OR ANY SPECIAL INDIRECT OR CONSEQUENTIAL DAMAGES, OR ANY
+// DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+// WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS
+// ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE
+// OF THIS SOFTWARE.
 //
+// Please report all bugs and problems to the public mailing list
+// <gmsh@geuz.org>.
 
+#include "OptHomElastic.h"
+#include "GModel.h"
 #include "GmshConfig.h"
 
 #if defined(HAVE_SOLVER)
@@ -21,7 +41,6 @@
 #include "MPoint.h"
 #include "HighOrder.h"
 #include "meshGFaceOptimize.h"
-#include "highOrderTools.h"
 #include "GFace.h"
 #include "GRegion.h"
 #include "GeomMeshMatcher.h"
@@ -35,6 +54,44 @@
 #include "OS.h"
 
 #define SQU(a)      ((a)*(a))
+
+void ElasticAnalogy(GModel *m, double threshold, bool onlyVisible)
+{
+  bool CAD, complete;
+  int meshOrder;
+
+  getMeshInfoForHighOrder(m, meshOrder, complete, CAD);
+  highOrderTools hot(m);
+  // now we smooth mesh the internal vertices of the faces
+  // we do that model face by model face
+  std::vector<MElement*> bad;
+  double worst;
+  checkHighOrderTriangles("Surface mesh", m, bad, worst);
+  {
+    for(GModel::fiter it = m->firstFace(); it != m->lastFace(); ++it) {
+      if (onlyVisible && !(*it)->getVisibility()) continue;
+      std::vector<MElement*> v;
+      v.insert(v.begin(), (*it)->triangles.begin(), (*it)->triangles.end());
+      v.insert(v.end(), (*it)->quadrangles.begin(), (*it)->quadrangles.end());
+      if (CAD) hot.applySmoothingTo(v, (*it));
+      else hot.applySmoothingTo(v, 1.e32, false);
+    }
+  }
+  checkHighOrderTriangles("Final surface mesh", m, bad, worst);
+
+  checkHighOrderTetrahedron("Volume Mesh", m, bad, worst);
+  {
+    for(GModel::riter it = m->firstRegion(); it != m->lastRegion(); ++it) {
+      if (onlyVisible && !(*it)->getVisibility())continue;
+      std::vector<MElement*> v;
+      v.insert(v.begin(), (*it)->tetrahedra.begin(), (*it)->tetrahedra.end());
+      v.insert(v.end(), (*it)->hexahedra.begin(), (*it)->hexahedra.end());
+      v.insert(v.end(), (*it)->prisms.begin(), (*it)->prisms.end());
+      hot.applySmoothingTo(v, 1.e32, false);
+    }
+  }
+  checkHighOrderTetrahedron("File volume Mesh", m, bad, worst);
+}
 
 void highOrderTools::moveToStraightSidedLocation(MElement *e) const
 {
@@ -151,8 +208,7 @@ double highOrderTools::applySmoothingTo(GFace *gf, double tres, bool mixed)
   std::vector<MElement*> v;
   v.insert(v.begin(), gf->triangles.begin(),gf->triangles.end());
   v.insert(v.begin(), gf->quadrangles.begin(),gf->quadrangles.end());
-  //  applySmoothingTo(v,gf);
-  return applySmoothingTo(v,tres, mixed);
+  return applySmoothingTo(v, tres, mixed);
 }
 
 void highOrderTools::ensureMinimumDistorsion (double threshold)
@@ -173,19 +229,6 @@ void highOrderTools::ensureMinimumDistorsion (double threshold)
   }
   ensureMinimumDistorsion(v,threshold);
 }
-
-/*
-void highOrderTools::applySmoothingTo(GRegion *gr)
-{
-   std::vector<MElement*> v;
-   v.insert(v.begin(), gr->tetrahedra.begin(),gr->tetrahedra.end());
-   v.insert(v.begin(), gr->hexahedra.begin(),gr->hexahedra.end());
-   v.insert(v.begin(), gr->prisms.begin(),gr->prisms.end());
-   Msg::Info("Smoothing high order mesh : model region %d (%d elements)", gr->tag(),
-   v.size());
-   applySmoothingTo(v,gr);
-}
-*/
 
 void highOrderTools::computeMetricInfo(GFace *gf,
                                        MElement *e,
@@ -227,18 +270,10 @@ void highOrderTools::computeMetricInfo(GFace *gf,
     D(XJ) = (gp.x() - ss.x());
     D(YJ) = (gp.y() - ss.y());
     D(ZJ) = (gp.z() - ss.z());
-    /*
-    printf("point %d on %d %d dx = %g %g %g --> %g %g %g --> %g %g %g \n",e->getVertex(j)->getIndex(),
-	   e->getVertex(j)->onWhat()->dim(),e->getVertex(j)->onWhat()->tag(),
-	   D(XJ),D(YJ),D(ZJ),
-	   ss.x(),ss.y(),ss.z(),
-	   e->getVertex(j)->x(),e->getVertex(j)->y(),e->getVertex(j)->z());
-    */
-
   }
 }
 
-void highOrderTools::applySmoothingTo(std::vector<MElement*> & all, GFace *gf)
+void highOrderTools::applySmoothingTo(std::vector<MElement*> &all, GFace *gf)
 {
 #ifdef HAVE_TAUCS
   linearSystemCSRTaucs<double> *lsys = new linearSystemCSRTaucs<double>;
@@ -248,19 +283,20 @@ void highOrderTools::applySmoothingTo(std::vector<MElement*> & all, GFace *gf)
   // compute the straight sided positions of high order nodes that are
   // on the edges of the face in the UV plane
   dofManager<double> myAssembler(lsys);
-  elasticityTerm El(0, 1.0, CTX::instance()->mesh.smoothPoissonRatio, _tag);
+  elasticityTerm El(0, 1.0, CTX::instance()->mesh.hoPoissonRatio, _tag);
   std::vector<MElement*> layer, v;
   double minD;
-  getDistordedElements(all, CTX::instance()->mesh.smoothDistoThreshold, v, minD);
+  getDistordedElements(all, CTX::instance()->mesh.hoThresholdMin, v, minD);
   int numBad = v.size();
-  const int nbLayers = CTX::instance()->mesh.smoothNLayers;
+  const int nbLayers = CTX::instance()->mesh.hoNLayers;
   for (int i = 0; i < nbLayers; i++){
     addOneLayer(all, v, layer);
     v.insert(v.end(), layer.begin(), layer.end());
   }
 
   if (!v.size()) return;
-  Msg::Info("Smoothing high order mesh : model face %d (%d elements considered in the elastic analogy, worst mapping %12.5E, %3d bad elements)", gf->tag(),
+  Msg::Info("Smoothing high order mesh : model face %d (%d elements considered in "
+            "the elastic analogy, worst mapping %12.5E, %3d bad elements)", gf->tag(),
             v.size(),minD,numBad);
 
   addOneLayer(all, v, layer);
@@ -323,7 +359,6 @@ void highOrderTools::applySmoothingTo(std::vector<MElement*> & all, GFace *gf)
     }
     else{
       SVector3 p =  getTL(*it);
-      //      printf("%12.5E %12.5E %12.5E %d %d\n",p.x(),p.y(),p.z(),(*it)->onWhat()->dim(),(*it)->onWhat()->tag());
       (*it)->x() = p.x();
       (*it)->y() = p.y();
       (*it)->z() = p.z();
@@ -341,11 +376,9 @@ double highOrderTools::smooth_metric_(std::vector<MElement*>  & v,
   std::set<MVertex*>::iterator it;
   double dx = 0.0;
 
-  //  printf("size %d\n",myAssembler.sizeOfR());
-
   if (myAssembler.sizeOfR()){
 
-    // while convergence -------------------------------------------------------
+    // while convergence
     for (unsigned int i = 0; i < v.size(); i++){
       MElement *e = v[i];
       int nbNodes = e->getNumVertices();
@@ -365,10 +398,7 @@ double highOrderTools::smooth_metric_(std::vector<MElement*>  & v,
       computeMetricInfo(gf, e, J32, J23, D3);
       J23K33.gemm(J23, K33, 1, 0);
       K22.gemm(J23K33, J32, 1, 0);
-      //      K33.print("K33");
-      //            K22.print("K22");
       J23K33.mult(D3, R2);
-      //      R2.print("hopla");
       for (int j = 0; j < n2; j++){
         Dof RDOF = El.getLocalDofR(&se, j);
         myAssembler.assemble(RDOF, -R2(j));
@@ -379,8 +409,8 @@ double highOrderTools::smooth_metric_(std::vector<MElement*>  & v,
       }
     }
     myAssembler.systemSolve();
-    // for all element, compute detJ at integration points --> material law
-    // end while convergence -------------------------------------------------------
+    // for all element, compute detJ at integration points --> material law end
+    // while convergence
 
     for (it = verticesToMove.begin(); it != verticesToMove.end(); ++it){
       if ((*it)->onWhat()->dim() == 2){
@@ -389,7 +419,6 @@ double highOrderTools::smooth_metric_(std::vector<MElement*>  & v,
 	SPoint2 dparam;
 	myAssembler.getDofValue((*it), 0, _tag, dparam[0]);
 	myAssembler.getDofValue((*it), 1, _tag, dparam[1]);
-	//      printf("%g %g -- %g %g\n",dparam[0],dparam[1],param[0],param[1]);
 	SPoint2 newp = param+dparam;
 	dx += newp.x() * newp.x() + newp.y() * newp.y();
 	(*it)->setParameter(0, newp.x());
@@ -416,7 +445,7 @@ highOrderTools::highOrderTools (GModel *gm, GModel *mesh, int order)
   computeStraightSidedPositions();
 }
 
-void highOrderTools::computeStraightSidedPositions ()
+void highOrderTools::computeStraightSidedPositions()
 {
   _clean();
   // compute straigh sided positions that are actually X,Y,Z positions
@@ -552,12 +581,12 @@ void highOrderTools::computeStraightSidedPositions ()
 
 // apply a displacement that does not create elements that are
 // distorted over a value "thres"
-double highOrderTools::apply_incremental_displacement (double max_incr,
-                                                       std::vector<MElement*> & v,
-                                                       bool mixed,
-                                                       double thres,
-                                                       char *meshName,
-                                                       std::vector<MElement*> & disto)
+double highOrderTools::apply_incremental_displacement(double max_incr,
+                                                      std::vector<MElement*> & v,
+                                                      bool mixed,
+                                                      double thres,
+                                                      char *meshName,
+                                                      std::vector<MElement*> & disto)
 {
 #ifdef HAVE_PETSC
   // assume that the mesh is OK, yet already curved
@@ -592,16 +621,11 @@ double highOrderTools::apply_incremental_displacement (double max_incr,
     }
   }
 
-  printf("coucou1\n");
-
   for (std::set<MVertex*>::iterator it = _vertices.begin(); it != _vertices.end(); ++it){
     MVertex *vert = *it;
     std::map<MVertex*,SVector3>::iterator itt = _targetLocation.find(vert);
     // impose displacement @ boundary
-    //    if (!(vert->onWhat()->geomType()  == GEntity::Line
-    //	  && vert->onWhat()->tag()  == 2)){
     if (itt != _targetLocation.end() && vert->onWhat()->dim() < _dim){
-      //		printf("fixing motion of vertex %d to %g %g\n",vert->getNum(),itt->second.x()-vert->x(),itt->second.y()-vert->y());
       myAssembler.fixVertex(vert, 0, _tag, itt->second.x()-vert->x());
       myAssembler.fixVertex(vert, 1, _tag, itt->second.y()-vert->y());
       myAssembler.fixVertex(vert, 2, _tag, itt->second.z()-vert->z());
@@ -624,28 +648,21 @@ double highOrderTools::apply_incremental_displacement (double max_incr,
     }
   }
 
-  printf("coucou2\n");
-
-  //+++++++++ Assembly  & Solve ++++++++++++++++++++++++++++++++++++
   if (myAssembler.sizeOfR()){
     // assembly of the elasticity term on the
-    double t1 = Cpu();
     for (unsigned int i = 0; i < v.size(); i++){
       SElement se(v[i]);
-      if (mixed)El_mixed.addToMatrix(myAssembler, &se);
+      if (mixed) El_mixed.addToMatrix(myAssembler, &se);
       else El.addToMatrix(myAssembler, &se);
     }
-    double t2 = Cpu();
     // solve the system
-    printf("coucou3 %12.5E\n", t2-t1);
     lsys->systemSolve();
-    double t3 = Cpu();
-    printf("coucou4 %12.5E\n", t3-t2);
   }
 
-  //+++++++++ Move vertices @ maximum ++++++++++++++++++++++++++++++++++++
+  // Move vertices @ maximum
   FILE *fd = Fopen ("d.msh","w");
-  fprintf(fd,"$MeshFormat\n2 0 8\n$EndMeshFormat\n$NodeData\n1\n\"tr(sigma)\"\n1\n0.0\n3\n1\n3\n%d\n", (int) _vertices.size());
+  fprintf(fd,"$MeshFormat\n2 0 8\n$EndMeshFormat\n$NodeData\n1\n"
+          "\"tr(sigma)\"\n1\n0.0\n3\n1\n3\n%d\n", (int) _vertices.size());
   for (std::set<MVertex*>::iterator it = _vertices.begin(); it != _vertices.end(); ++it){
     double ax, ay, az;
     myAssembler.getDofValue(*it, 0, _tag, ax);
@@ -659,11 +676,9 @@ double highOrderTools::apply_incremental_displacement (double max_incr,
   fprintf(fd,"$EndNodeData\n");
   fclose(fd);
 
-  //+------------------- Check now if elements are ok ---------------+++++++
+  // Check now if elements are ok
 
   (*_vertices.begin())->onWhat()->model()->writeMSH(meshName);
-
-  printf("coucou5\n");
 
   double percentage = max_incr * 100.;
   while(1){
@@ -684,7 +699,6 @@ double highOrderTools::apply_incremental_displacement (double max_incr,
     }
     else break;
   }
-  printf("coucou6\n");
 
   delete lsys;
   return percentage;
@@ -708,8 +722,8 @@ void highOrderTools::ensureMinimumDistorsion(std::vector<MElement*> &all,
   }
 }
 
-double highOrderTools::applySmoothingTo (std::vector<MElement*> &all,
-					 double threshold, bool mixed)
+double highOrderTools::applySmoothingTo(std::vector<MElement*> &all,
+                                        double threshold, bool mixed)
 {
   int ITER = 0;
   double minD;
@@ -746,11 +760,66 @@ double highOrderTools::applySmoothingTo (std::vector<MElement*> &all,
   return percentage;
 }
 
-extern void printJacobians(GModel *m, const char *nm);
+void printJacobians(GModel *m, const char *nm)
+{
+  const int n = 100;
+  double D[n][n], X[n][n], Y[n][n], Z[n][n];
+
+  FILE *f = Fopen(nm,"w");
+  fprintf(f,"View \"\"{\n");
+  for(GModel::fiter it = m->firstFace(); it != m->lastFace(); ++it){
+    for(unsigned int j = 0; j < (*it)->triangles.size(); j++){
+      MTriangle *t = (*it)->triangles[j];
+      for(int i = 0; i < n; i++){
+        for(int k = 0; k < n - i; k++){
+          SPoint3 pt;
+          double u = (double)i / (n - 1);
+          double v = (double)k / (n - 1);
+          t->pnt(u, v, 0, pt);
+          D[i][k] = 0.; //mesh_functional_distorsion_2D(t, u, v);
+          //X[i][k] = u;
+          //Y[i][k] = v;
+          //Z[i][k] = 0.0;
+          X[i][k] = pt.x();
+          Y[i][k] = pt.y();
+          Z[i][k] = pt.z();
+        }
+      }
+      for(int i= 0; i < n -1; i++){
+        for(int k = 0; k < n - i -1; k++){
+          fprintf(f,"ST(%g,%g,%g,%g,%g,%g,%g,%g,%g){%22.15E,%22.15E,%22.15E};\n",
+                  X[i][k],Y[i][k],Z[i][k],
+                  X[i+1][k],Y[i+1][k],Z[i+1][k],
+                  X[i][k+1],Y[i][k+1],Z[i][k+1],
+                  D[i][k],
+                  D[i+1][k],
+                  D[i][k+1]);
+          if (i != n-2 && k != n - i -2)
+            fprintf(f,"ST(%g,%g,%g,%g,%g,%g,%g,%g,%g){%22.15E,%22.15E,%22.15E};\n",
+                    X[i+1][k],Y[i+1][k],Z[i+1][k],
+                    X[i+1][k+1],Y[i+1][k+1],Z[i+1][k+1],
+                    X[i][k+1],Y[i][k+1],Z[i][k+1],
+                    D[i+1][k],
+                    D[i+1][k+1],
+                    D[i][k+1]);
+        }
+      }
+    }
+  }
+  fprintf(f,"};\n");
+  fclose(f);
+}
 
 void highOrderTools::makePosViewWithJacobians (const char *fn)
 {
   printJacobians(_gm,fn);
+}
+
+#else
+
+void ElasticAnalogy(GModel *m, double threshold, bool onlyVisible)
+{
+  Msg::Error("Elastic analogy high-order optimzer requires the solver module");
 }
 
 #endif

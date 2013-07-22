@@ -2241,6 +2241,20 @@ double opt_general_manip_position1(OPT_ARGS_NUM)
   return CTX::instance()->manipPosition[1];
 }
 
+double opt_general_hot_position0(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->hotPosition[0] = (int)val;
+  return CTX::instance()->hotPosition[0];
+}
+
+double opt_general_hot_position1(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->hotPosition[1] = (int)val;
+  return CTX::instance()->hotPosition[1];
+}
+
 double opt_general_session_save(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
@@ -5576,30 +5590,37 @@ double opt_mesh_order(OPT_ARGS_NUM)
   return CTX::instance()->mesh.order;
 }
 
-double opt_mesh_smooth_internal_edges(OPT_ARGS_NUM)
+double opt_mesh_ho_optimize(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
-    CTX::instance()->mesh.smoothInternalEdges = (int)val;
+    CTX::instance()->mesh.hoOptimize = (int)val;
 #if defined(HAVE_FLTK)
   if(FlGui::available() && (action & GMSH_GUI))
     FlGui::instance()->options->mesh.butt[3]->value
-      (CTX::instance()->mesh.smoothInternalEdges);
+      (CTX::instance()->mesh.hoOptimize);
 #endif
-  return CTX::instance()->mesh.smoothInternalEdges;
+  return CTX::instance()->mesh.hoOptimize;
 }
 
 double opt_mesh_ho_nlayers(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
-    CTX::instance()->mesh.smoothNLayers = (int)val;
-  return CTX::instance()->mesh.smoothNLayers;
+    CTX::instance()->mesh.hoNLayers = (int)val;
+  return CTX::instance()->mesh.hoNLayers;
 }
 
-double opt_mesh_ho_mindisto(OPT_ARGS_NUM)
+double opt_mesh_ho_threshold_min(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
-    CTX::instance()->mesh.smoothDistoThreshold = val;
-  return CTX::instance()->mesh.smoothDistoThreshold;
+    CTX::instance()->mesh.hoThresholdMin = val;
+  return CTX::instance()->mesh.hoThresholdMin;
+}
+
+double opt_mesh_ho_threshold_max(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->mesh.hoThresholdMax = val;
+  return CTX::instance()->mesh.hoThresholdMax;
 }
 
 double opt_mesh_ho_poisson(OPT_ARGS_NUM)
@@ -5610,9 +5631,9 @@ double opt_mesh_ho_poisson(OPT_ARGS_NUM)
       ratio = -0.999;
     else if (ratio >= 0.5)
       ratio = 0.499;
-    CTX::instance()->mesh.smoothPoissonRatio = ratio;
+    CTX::instance()->mesh.hoPoissonRatio = ratio;
   }
-  return CTX::instance()->mesh.smoothPoissonRatio;
+  return CTX::instance()->mesh.hoPoissonRatio;
 }
 
 double opt_mesh_second_order_experimental(OPT_ARGS_NUM)
