@@ -170,6 +170,10 @@ static void file_open_recent_cb(Fl_Widget *w, void *data)
 
 static void file_clear_cb(Fl_Widget *w, void *data)
 {
+  if(CTX::instance()->lock || FlGui::instance()->onelab->isBusy()) {
+    Msg::Info("I'm busy! Ask me that later...");
+    return;
+  }
   ClearProject();
   onelab_cb(0, (void*)"reset"); // this will call OpenProject
   drawContext::global()->draw();
@@ -543,6 +547,11 @@ static void geometry_edit_cb(Fl_Widget *w, void *data)
 
 void geometry_reload_cb(Fl_Widget *w, void *data)
 {
+  if(CTX::instance()->lock || FlGui::instance()->onelab->isBusy()) {
+    Msg::Info("I'm busy! Ask me that later...");
+    return;
+  }
+
   std::string fileName = GModel::current()->getFileName();
   ClearProject();
 
@@ -3289,7 +3298,7 @@ static menuItem static_modules[] = {
    (Fl_Callback *)mesh_degree_cb, (void*)2},
   {"0Modules/Mesh/Set order 3",
    (Fl_Callback *)mesh_degree_cb, (void*)3},
-  {"0Modules/Mesh/Optimize high order",
+  {"0Modules/Mesh/High order tools",
    (Fl_Callback *)highordertools_cb},
   {"0Modules/Mesh/Inspect",
    (Fl_Callback *)mesh_inspect_cb} ,

@@ -1,17 +1,45 @@
+// Copyright (C) 2013 UCL
+//
+// Permission is hereby granted, free of charge, to any person
+// obtaining a copy of this software and associated documentation
+// files (the "Software"), to deal in the Software without
+// restriction, including without limitation the rights to use, copy,
+// modify, merge, publish, distribute, and/or sell copies of the
+// Software, and to permit persons to whom the Software is furnished
+// to do so, provided that the above copyright notice(s) and this
+// permission notice appear in all copies of the Software and that
+// both the above copyright notice(s) and this permission notice
+// appear in supporting documentation.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT OF THIRD PARTY RIGHTS. IN NO EVENT SHALL THE
+// COPYRIGHT HOLDER OR HOLDERS INCLUDED IN THIS NOTICE BE LIABLE FOR
+// ANY CLAIM, OR ANY SPECIAL INDIRECT OR CONSEQUENTIAL DAMAGES, OR ANY
+// DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+// WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS
+// ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE
+// OF THIS SOFTWARE.
+//
+// Please report all bugs and problems to the public mailing list
+// <gmsh@geuz.org>.
+//
+// Contributor(s): Thomas Toulorge, Jonathan Lambrechts
+
 #include <iostream>
 #include "GFace.h"
 #include "GEdge.h"
 #include "MVertex.h"
 #include "ParamCoord.h"
-
-
+#include "GmshMessage.h"
 
 SPoint3 ParamCoordParent::getUvw(MVertex* vert)
 {
-
   GEntity *ge = vert->onWhat();
-  if ((ge->geomType() == GEntity::DiscreteCurve) || (ge->geomType() == GEntity::DiscreteSurface))
-    std::cout << "ERROR: using parent coordinates on discrete curve or surface" << std::endl;
+  if ((ge->geomType() == GEntity::DiscreteCurve) ||
+      (ge->geomType() == GEntity::DiscreteSurface))
+    Msg::Error("Using parent coordinates on discrete curve or surface");
 
   switch (ge->dim()) {
   case 1: {
@@ -31,14 +59,10 @@ SPoint3 ParamCoordParent::getUvw(MVertex* vert)
     break;
   }
   }
-
 }
-
-
 
 SPoint3 ParamCoordParent::uvw2Xyz(MVertex* vert, const SPoint3 &uvw)
 {
-
   GEntity *ge = vert->onWhat();
 
   switch (ge->dim()) {
@@ -57,14 +81,11 @@ SPoint3 ParamCoordParent::uvw2Xyz(MVertex* vert, const SPoint3 &uvw)
     break;
   }
   }
-
 }
 
-
-
-void ParamCoordParent::gXyz2gUvw(MVertex* vert, const SPoint3 &uvw, const SPoint3 &gXyz, SPoint3 &gUvw)
+void ParamCoordParent::gXyz2gUvw(MVertex* vert, const SPoint3 &uvw,
+                                 const SPoint3 &gXyz, SPoint3 &gUvw)
 {
-
   GEntity *ge = vert->onWhat();
 
   switch (ge->dim()) {
@@ -75,8 +96,10 @@ void ParamCoordParent::gXyz2gUvw(MVertex* vert, const SPoint3 &uvw, const SPoint
   }
   case 2: {
     Pair<SVector3,SVector3> der = static_cast<GFace*>(ge)->firstDer(SPoint2(uvw[0],uvw[1]));
-    gUvw[0] = gXyz.x() * der.first().x() + gXyz.y() * der.first().y() + gXyz.z() * der.first().z();
-    gUvw[1] = gXyz.x() * der.second().x() + gXyz.y() * der.second().y() + gXyz.z() * der.second().z();
+    gUvw[0] = gXyz.x() * der.first().x() + gXyz.y() * der.first().y() +
+      gXyz.z() * der.first().z();
+    gUvw[1] = gXyz.x() * der.second().x() + gXyz.y() * der.second().y() +
+      gXyz.z() * der.second().z();
     break;
   }
   case 3: {
@@ -87,9 +110,9 @@ void ParamCoordParent::gXyz2gUvw(MVertex* vert, const SPoint3 &uvw, const SPoint
 
 }
 
-
-
-void ParamCoordParent::gXyz2gUvw(MVertex* vert, const SPoint3 &uvw, const std::vector<SPoint3> &gXyz, std::vector<SPoint3> &gUvw)
+void ParamCoordParent::gXyz2gUvw(MVertex* vert, const SPoint3 &uvw,
+                                 const std::vector<SPoint3> &gXyz,
+                                 std::vector<SPoint3> &gUvw)
 {
 
   GEntity *ge = vert->onWhat();
@@ -97,26 +120,32 @@ void ParamCoordParent::gXyz2gUvw(MVertex* vert, const SPoint3 &uvw, const std::v
   switch (ge->dim()) {
   case 1: {
     SVector3 der = static_cast<GEdge*>(ge)->firstDer(uvw[0]);
-    std::vector<SPoint3>::iterator itUvw=gUvw.begin();
-    for (std::vector<SPoint3>::const_iterator itXyz=gXyz.begin(); itXyz != gXyz.end(); itXyz++) {
+    std::vector<SPoint3>::iterator itUvw = gUvw.begin();
+    for (std::vector<SPoint3>::const_iterator itXyz=gXyz.begin();
+         itXyz != gXyz.end(); itXyz++) {
       (*itUvw)[0] = itXyz->x() * der.x() + itXyz->y() * der.y() + itXyz->z() * der.z();
       itUvw++;
     }
     break;
   }
   case 2: {
-    Pair<SVector3,SVector3> der = static_cast<GFace*>(ge)->firstDer(SPoint2(uvw[0],uvw[1]));
+    Pair<SVector3,SVector3> der = static_cast<GFace*>(ge)->firstDer
+      (SPoint2(uvw[0],uvw[1]));
     std::vector<SPoint3>::iterator itUvw=gUvw.begin();
-    for (std::vector<SPoint3>::const_iterator itXyz=gXyz.begin(); itXyz != gXyz.end(); itXyz++) {
-      (*itUvw)[0] = itXyz->x() * der.first().x() + itXyz->y() * der.first().y() + itXyz->z() * der.first().z();
-      (*itUvw)[1] = itXyz->x() * der.second().x() + itXyz->y() * der.second().y() + itXyz->z() * der.second().z();
+    for (std::vector<SPoint3>::const_iterator itXyz=gXyz.begin();
+         itXyz != gXyz.end(); itXyz++) {
+      (*itUvw)[0] = itXyz->x() * der.first().x() + itXyz->y() * der.first().y() +
+        itXyz->z() * der.first().z();
+      (*itUvw)[1] = itXyz->x() * der.second().x() + itXyz->y() * der.second().y() +
+        itXyz->z() * der.second().z();
       itUvw++;
     }
     break;
   }
   case 3: {
     std::vector<SPoint3>::iterator itUvw=gUvw.begin();
-    for (std::vector<SPoint3>::const_iterator itXyz=gXyz.begin(); itXyz != gXyz.end(); itXyz++) {
+    for (std::vector<SPoint3>::const_iterator itXyz=gXyz.begin();
+         itXyz != gXyz.end(); itXyz++) {
       *itUvw = *itXyz;
       itUvw++;
     }
@@ -125,8 +154,6 @@ void ParamCoordParent::gXyz2gUvw(MVertex* vert, const SPoint3 &uvw, const std::v
   }
 
 }
-
-
 
 void ParamCoordParent::exportParamCoord(MVertex *v, const SPoint3 &uvw)
 {
