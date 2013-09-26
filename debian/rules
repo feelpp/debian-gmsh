@@ -41,11 +41,6 @@ else
 	-DENABLE_MPI:BOOL=OFF
 endif
 
-# PETSC_DIR is the location of PETSc.
-export PETSC_DIR=/usr/lib/petscdir/3.2
-export PETSC_ARCH=linux-gnu-c-opt
-export SLEPC_DIR=/usr/lib/slepcdir/3.2
-
 override_dh_auto_clean:
 	rm -rf $(BUILDDIR)
 	rm -rf $(CURDIR)/debian/tmp
