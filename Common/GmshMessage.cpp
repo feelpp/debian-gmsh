@@ -78,6 +78,24 @@ static int vsnprintf(char *str, size_t size, const char *fmt, va_list ap)
 #define vsnprintf _vsnprintf
 #endif
 
+static void addGmshPathToEnvironmentVar(const std::string &name)
+{
+  std::vector<std::string> split = SplitFileName(CTX::instance()->argv0);
+  std::string path;
+  char *tmp = getenv(name.c_str());
+  if(tmp){
+    path = tmp;
+#if defined(WIN32)
+    path += ";" + split[0];
+#else
+    path += ":" + split[0];
+#endif
+  }
+  else
+    path = split[0];
+  SetEnvironmentVar(name.c_str(), path.c_str());
+}
+
 void Msg::Init(int argc, char **argv)
 {
 #if defined(HAVE_MPI)
@@ -116,23 +134,11 @@ void Msg::Init(int argc, char **argv)
 
   if(argc && argv){
     CTX::instance()->argv0 = std::string(argv[0]);
-    std::vector<std::string> split = SplitFileName(CTX::instance()->argv0);
-
     // add the directory where the binary is installed to the path where Python
-    // looks for modules
-    std::string path;
-    char *tmp = getenv("PYTHONPATH");
-    if(tmp){
-      path = tmp;
-#if defined(WIN32)
-      path += ";" + split[0];
-#else
-      path += ":" + split[0];
-#endif
-    }
-    else
-      path = split[0];
-    SetEnvironmentVar("PYTHONPATH", path.c_str());
+    // looks for modules, and to the path for executables (this allows us to
+    // find the onelab.py module or subclients automatically)
+    addGmshPathToEnvironmentVar("PYTHONPATH");
+    addGmshPathToEnvironmentVar("PATH");
   }
 
   InitializeOnelab("Gmsh");
@@ -263,7 +269,7 @@ void Msg::Fatal(const char *fmt, ...)
       c0 = "\33[1m\33[31m"; c1 = "\33[0m";  // bold red
     }
     if(_commSize > 1)
-      fprintf(stderr, "%sFatal   : [On processor %d] %s%s\n", c0, _commRank, str, c1);
+      fprintf(stderr, "%sFatal   : [rank %3d] %s%s\n", c0, _commRank, str, c1);
     else
       fprintf(stderr, "%sFatal   : %s%s\n", c0, str, c1);
     fflush(stderr);
@@ -304,7 +310,7 @@ void Msg::Error(const char *fmt, ...)
       c0 = "\33[1m\33[31m"; c1 = "\33[0m";  // bold red
     }
     if(_commSize > 1)
-      fprintf(stderr, "%sError   : [On processor %d] %s%s\n", c0, _commRank, str, c1);
+      fprintf(stderr, "%sError   : [rank %3d] %s%s\n", c0, _commRank, str, c1);
     else
       fprintf(stderr, "%sError   : %s%s\n", c0, str, c1);
     fflush(stderr);
@@ -490,7 +496,7 @@ void Msg::Debug(const char *fmt, ...)
 
   if(CTX::instance()->terminal){
     if(_commSize > 1)
-      fprintf(stdout, "Debug   : [On processor %d] %s\n", _commRank, str);
+      fprintf(stdout, "Debug   : [rank %3d] %s\n", _commRank, str);
     else
       fprintf(stdout, "Debug   : %s\n", str);
     fflush(stdout);
@@ -547,7 +553,7 @@ void Msg::PrintTimers()
 
   if(CTX::instance()->terminal){
     if(_commSize > 1)
-      fprintf(stdout, "Timers  : [On processor %d] %s\n", _commRank, str.c_str());
+      fprintf(stdout, "Timers  : [rank %3d] %s\n", _commRank, str.c_str());
     else
       fprintf(stdout, "Timers  : %s\n", str.c_str());
     fflush(stdout);

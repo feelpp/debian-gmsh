@@ -161,7 +161,6 @@ static void view_color_cb(Fl_Widget *w, void *data)
   drawContext::global()->draw();
 }
 
-
 void general_gmpdcf_cb(Fl_Widget *w, void *data)
 {
   FlGui::instance()->options->gmpdoption = new gamepadWindow;
@@ -175,7 +174,9 @@ void options_cb(Fl_Widget *w, void *data)
 
 static void options_browser_cb(Fl_Widget *w, void *data)
 {
-  FlGui::instance()->options->showGroup(FlGui::instance()->options->browser->value());
+  // allows multiple selections with the mouse
+  FlGui::instance()->options->showGroup(FlGui::instance()->options->browser->value(),
+                                        true, true);
 }
 
 static void options_show_file_cb(Fl_Widget *w, void *data)
@@ -623,17 +624,24 @@ static void post_options_ok_cb(Fl_Widget *w, void *data)
 
 void view_options_cb(Fl_Widget *w, void *data)
 {
-  FlGui::instance()->options->showGroup((intptr_t)data + 6);
+  int num = (intptr_t)data;
+  if(num < 0){ // automatic
+    int current = FlGui::instance()->options->view.index;
+    if(current >= 0 && current < (int)PView::list.size())
+      num = current;
+    else
+      num = 0;
+  }
+  if(num >= 0 && num < (int)PView::list.size())
+    FlGui::instance()->options->showGroup(num + 6);
 }
 
 static void view_options_timestep_cb(Fl_Widget *w, void *data)
 {
   std::string str((const char*)data);
-  int links = (int)opt_post_link(0, GMSH_GET, 0);
   for(int i = 0; i < (int)PView::list.size(); i++) {
-    if((links == 2 || links == 4) ||
-       ((links == 1 || links == 3) && opt_view_visible(i, GMSH_GET, 0)) ||
-       (links == 0 && i == FlGui::instance()->options->view.index)) {
+    if(i == FlGui::instance()->options->view.index ||
+       FlGui::instance()->options->browser->selected(i + 6)) {
       if(str == "=")
         opt_view_timestep(i, GMSH_SET, ((Fl_Value_Input *) w)->value());
       else if(str == "-")
@@ -675,7 +683,7 @@ static void view_options_ok_cb(Fl_Widget *w, void *data)
     }
   }
 
-  int force = 0, links = (int)opt_post_link(0, GMSH_GET, 0);
+  int force = (int)opt_post_link(0, GMSH_GET, 0);
 
   // get the old values for the current view
   double scale_type = opt_view_scale_type(current, GMSH_GET, 0);
@@ -793,13 +801,7 @@ static void view_options_ok_cb(Fl_Widget *w, void *data)
 
   // modify only the views that need to be updated
   for(int i = 0; i < (int)PView::list.size(); i++) {
-    if((links == 2 || links == 4) ||
-       ((links == 1 || links == 3) && opt_view_visible(i, GMSH_GET, 0)) ||
-       (links == 0 && i == current)) {
-
-      if(links == 3 || links == 4)
-        force = 1;
-
+    if(i == current || FlGui::instance()->options->browser->selected(i + 6)) {
       double val;
 
       // view_choice
@@ -1331,7 +1333,7 @@ optionWindow::optionWindow(int deltaFontSize)
   win->label("Options - General");
 
   // Selection browser
-  browser = new Fl_Hold_Browser(0, 0, L, height);
+  browser = new Fl_Multi_Browser(0, 0, L, height);
   browser->box(GMSH_SIMPLE_RIGHT_BOX);
   browser->has_scrollbar(Fl_Browser_::VERTICAL);
   browser->add("General");
@@ -2682,12 +2684,12 @@ optionWindow::optionWindow(int deltaFontSize)
           (L + WB, WB + BH, width - 2 * WB, height - 2 * WB - BH, "General");
 
         solver.input[0] = new Fl_Input
-          (L + 2 * WB, 2 * WB + 1 * BH, IW, BH, "Socket name");
+          (L + 2 * WB, 2 * WB + 1 * BH, IW, BH, "Base socket name");
         solver.input[0]->align(FL_ALIGN_RIGHT);
         solver.input[0]->callback(solver_options_ok_cb);
 
         solver.value[0] = new Fl_Value_Input
-          (L + 2 * WB, 2 * WB + 2 * BH, IW, BH, "Timeout (s)");
+          (L + 2 * WB, 2 * WB + 2 * BH, IW, BH, "Timeout (in seconds)");
         solver.value[0]->align(FL_ALIGN_RIGHT);
         solver.value[0]->callback(solver_options_ok_cb);
 
@@ -2714,11 +2716,8 @@ optionWindow::optionWindow(int deltaFontSize)
         (L + WB, WB + BH, width - 2 * WB, height - 2 * WB - BH, "General");
 
       static Fl_Menu_Item menu_links[] = {
-        {"None", 0, 0, 0},
-        {"Apply next changes to all visible views", 0, 0, 0},
-        {"Apply next changes to all views", 0, 0, 0},
-        {"Force same options for all visible views", 0, 0, 0},
-        {"Force same options for all views", 0, 0, 0},
+        {"Apply next changes to selected views", 0, 0, 0},
+        {"Force same options for selected views", 0, 0, 0},
         {0}
       };
 
@@ -3499,7 +3498,7 @@ optionWindow::optionWindow(int deltaFontSize)
   FL_NORMAL_SIZE += deltaFontSize;
 }
 
-void optionWindow::showGroup(int num, bool showWindow)
+void optionWindow::showGroup(int num, bool showWindow, bool allowMultipleSelections)
 {
   general.group->hide();
   geo.group->hide();
@@ -3507,7 +3506,14 @@ void optionWindow::showGroup(int num, bool showWindow)
   solver.group->hide();
   post.group->hide();
   view.group->hide();
-  browser->value(num);
+
+  if(num > 5 && allowMultipleSelections){
+    for(int i = 1; i <= 5; i++) browser->select(i, 0);
+  }
+  else{
+    browser->deselect();
+  }
+  browser->select(num, 1);
   switch(num){
   case 0: case 1: win->label("Options - General"); general.group->show(); break;
   case 2: win->label("Options - Geometry"); geo.group->show(); break;
@@ -3542,7 +3548,6 @@ void optionWindow::resetBrowser()
     browser->add(str);
   }
   int num = (select <= browser->size()) ? select : browser->size();
-  browser->value(num);
   showGroup(num, false);
 }
 
@@ -3558,7 +3563,7 @@ void optionWindow::resetExternalViewList()
     view.choice[10]->add(str, 0, NULL);
     view.choice[11]->add(str, 0, NULL);
   }
-  if(view.index >= 0){
+  if(view.index >= 0 && view.index < (int)PView::list.size()){
     opt_view_external_view(view.index, GMSH_GUI, 0);
     opt_view_gen_raise_view(view.index, GMSH_GUI, 0);
   }

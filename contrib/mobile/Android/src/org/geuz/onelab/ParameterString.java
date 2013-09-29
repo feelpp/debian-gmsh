@@ -23,8 +23,8 @@ public class ParameterString extends Parameter{
 	private Spinner _spinner;
 	private EditText _edittext;
 	
-	public ParameterString(Context context, Gmsh gmsh, mGLSurfaceView glView, String name) {
-		super(context, gmsh, glView, name);
+	public ParameterString(Context context, Gmsh gmsh, String name) {
+		super(context, gmsh, name);
 		_choices = new ArrayList<String>();
 		_choices.add("-"); // Default choice
 	}
@@ -46,15 +46,24 @@ public class ParameterString extends Parameter{
 			_edittext.setText(_choices.get(0));
 	}
 	
-	public void setValue(int index) {if(index != _index)_changed = true;_index = index;this.update();}
+	public void setValue(int index) {
+		if(index == _index) return;
+		_changed = true;
+		_index = index;
+		_gmsh.setParam(getType(), getName(), _choices.get(_index));
+		if(mListener != null) mListener.OnParameterChanged();
+	}
 	public void setValue(String value) {
 		int index = _choices.indexOf(value);
 		if(index < 0) { // the value is not in the list, add it
 			this.addChoices(value);
 			index = _choices.indexOf(value);
 		}
-		if(index != _index)_changed = true;
-		_index = index;this.update();
+		if(index == _index) return;
+		_changed = true;
+		_index = index;
+		_gmsh.setParam(getType(), getName(), value);
+		if(mListener != null) mListener.OnParameterChanged();
 	}
 	public void setKind(String kind) {_kind = kind;}
 	public void addChoices(String choice) {
@@ -73,7 +82,7 @@ public class ParameterString extends Parameter{
 	public int fromString(String s){
 		int pos = super.fromString(s);
 		if(pos <= 0) return -1; // error
-		String[] infos = s.split("\n");
+		String[] infos = s.split(Character.toString((char)0x03));
 		String value = infos[pos++];
 		setKind(infos[pos++]); // generic file 
 		if(_kind.equals("file"))
@@ -81,6 +90,7 @@ public class ParameterString extends Parameter{
 		int nChoices = Integer.parseInt(infos[pos++]);
 		if(nChoices < 1 && _kind.equals("generic"))
 			_edittext = new EditText(_context);
+		if(_choices != null)_choices.clear();
 		for(int i=0;i<nChoices;i++) this.addChoices(infos[pos++]);
 		// ...
 		setValue(value);
@@ -95,23 +105,12 @@ public class ParameterString extends Parameter{
 		if(_spinner != null){
 			paramLayout.addView(_spinner);
 			_spinner.setEnabled(!_readOnly);
-			_spinner.setOnFocusChangeListener(new View.OnFocusChangeListener() {
-				
-				public void onFocusChange(View v, boolean hasFocus) {
-					if(_listView != null) _listView.refresh();
-				}
-			});
 			_spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
 
 				public void onNothingSelected(AdapterView<?> arg0) {}
 
-				public void onItemSelected(AdapterView<?> parent, View view,
-						int pos, long id) {
-					if(_listView != null) _listView.refresh();
+				public void onItemSelected(AdapterView<?> parent, View view, int pos, long id) {
 					setValue(pos);
-					_gmsh.setParam(getType(), getName(), String.valueOf(getValue()));
-					if(_gmsh.onelabCB("check") == 1 && _glView != null)
-						_glView.requestRender();
 				}
 
 			});
@@ -135,11 +134,10 @@ public class ParameterString extends Parameter{
 			_edittext.addTextChangedListener(new TextWatcher() {
 				
 				public void onTextChanged(CharSequence s, int start, int before, int count) {
-					if(_listView != null) _listView.refresh();
+					_choices.clear(); _choices.add(s.toString());
 				}
 				
-				public void beforeTextChanged(CharSequence s, int start, int count,
-						int after) {} // UNUSED Auto-generated method stub
+				public void beforeTextChanged(CharSequence s, int start, int count, int after) {} // UNUSED Auto-generated method stub
 				
 				public void afterTextChanged(Editable s) {
 					_gmsh.setParam(getType(), getName(), _choices.get(0));
@@ -147,6 +145,11 @@ public class ParameterString extends Parameter{
 			});
 		}
 		return paramLayout;
+	}
+	private OnParameterChangedListener mListener;
+	public void setOnParameterChangedListener(OnParameterChangedListener listener) { mListener = listener;}
+	public interface OnParameterChangedListener {
+		void OnParameterChanged();
 	}
 	
 }

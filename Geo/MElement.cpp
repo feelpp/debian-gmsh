@@ -192,10 +192,10 @@ SPoint3 MElement::barycenter_infty () const
   return SPoint3(0.5*(xmin+xmax),0.5*(ymin+ymax),0.5*(zmin+zmax));
 }
 
-SPoint3 MElement::barycenter() const
+SPoint3 MElement::barycenter(bool primary) const
 {
   SPoint3 p(0., 0., 0.);
-  int n = getNumVertices();
+  int n = primary ? getNumPrimaryVertices() : getNumVertices();
   for(int i = 0; i < n; i++) {
     const MVertex *v = getVertex(i);
     p[0] += v->x();
@@ -613,60 +613,6 @@ double MElement::integrate(double val[], int pOrder, int stride, int order)
   return sum;
 }
 
-static int getTriangleType (int order)
-{
-  switch(order) {
-  case 0 : return MSH_TRI_1;
-  case 1 : return MSH_TRI_3;
-  case 2 : return MSH_TRI_6;
-  case 3 : return MSH_TRI_10;
-  case 4 : return MSH_TRI_15;
-  case 5 : return MSH_TRI_21;
-  case 6 : return MSH_TRI_28;
-  case 7 : return MSH_TRI_36;
-  case 8 : return MSH_TRI_45;
-  case 9 : return MSH_TRI_55;
-  case 10 : return MSH_TRI_66;
-  default : Msg::Error("triangle order %i unknown", order); return 0;
-  }
-}
-
-static int getQuadType (int order)
-{
-  switch(order) {
-  case 0 : return MSH_QUA_1;
-  case 1 : return MSH_QUA_4;
-  case 2 : return MSH_QUA_9;
-  case 3 : return MSH_QUA_16;
-  case 4 : return MSH_QUA_25;
-  case 5 : return MSH_QUA_36;
-  case 6 : return MSH_QUA_49;
-  case 7 : return MSH_QUA_64;
-  case 8 : return MSH_QUA_81;
-  case 9 : return MSH_QUA_100;
-  case 10 : return MSH_QUA_121;
-  default : Msg::Error("quad order %i unknown", order); return 0;
-  }
-}
-
-static int getLineType (int order)
-{
-  switch(order) {
-  case 0 : return MSH_LIN_1;
-  case 1 : return MSH_LIN_2;
-  case 2 : return MSH_LIN_3;
-  case 3 : return MSH_LIN_4;
-  case 4 : return MSH_LIN_5;
-  case 5 : return MSH_LIN_6;
-  case 6 : return MSH_LIN_7;
-  case 7 : return MSH_LIN_8;
-  case 8 : return MSH_LIN_9;
-  case 9 : return MSH_LIN_10;
-  case 10 : return MSH_LIN_11;
-  default : Msg::Error("line order %i unknown", order); return 0;
-  }
-}
-
 double MElement::integrateCirc(double val[], int edge, int pOrder, int order)
 {
   if(edge > getNumEdges() - 1){
@@ -677,7 +623,7 @@ double MElement::integrateCirc(double val[], int edge, int pOrder, int order)
   std::vector<MVertex*> v;
   getEdgeVertices(edge, v);
   MElementFactory f;
-  int type = getLineType(getPolynomialOrder());
+  int type = ElementType::getTag(TYPE_LIN, getPolynomialOrder());
   MElement* ee = f.create(type, v);
 
   double intv[3];
@@ -704,19 +650,21 @@ double MElement::integrateFlux(double val[], int face, int pOrder, int order)
   MElementFactory f;
   int type = 0;
   switch(getType()) {
-  case TYPE_TRI : type = getTriangleType(getPolynomialOrder()); break;
-  case TYPE_TET : type = getTriangleType(getPolynomialOrder()); break;
-  case TYPE_QUA : type = getQuadType(getPolynomialOrder());     break;
-  case TYPE_HEX : type = getQuadType(getPolynomialOrder());     break;
-  case TYPE_PYR :
-    if(face < 4) type = getTriangleType(getPolynomialOrder());
-    else type = getQuadType(getPolynomialOrder());
-    break;
-  case TYPE_PRI :
-    if(face < 2) type = getTriangleType(getPolynomialOrder());
-    else type = getQuadType(getPolynomialOrder());
-    break;
-  default: type = 0; break;
+    case TYPE_TRI :
+    case TYPE_TET :
+    case TYPE_QUA :
+    case TYPE_HEX :
+      type = ElementType::getTag(getType(), getPolynomialOrder());
+      break;
+    case TYPE_PYR :
+      if(face < 4) type = ElementType::getTag(TYPE_TRI, getPolynomialOrder());
+      else type = ElementType::getTag(TYPE_QUA, getPolynomialOrder());
+      break;
+    case TYPE_PRI :
+      if(face < 2) type = ElementType::getTag(TYPE_TRI, getPolynomialOrder());
+      else type = ElementType::getTag(TYPE_QUA, getPolynomialOrder());
+      break;
+    default: type = 0; break;
   }
   MElement* fe = f.create(type, v);
 
@@ -1157,10 +1105,26 @@ void MElement::writeDIFF(FILE *fp, int num, bool binary, int physical_property)
 void MElement::writeINP(FILE *fp, int num)
 {
   setVolumePositive();
-  fprintf(fp, "%d", num);
-  for(int i = 0; i < getNumVertices(); i++)
-    fprintf(fp, ", %d", getVertexINP(i)->getIndex());
+  fprintf(fp, "%d, ", num);
+  int n = getNumVertices();
+  for(int i = 0; i < n; i++){
+    fprintf(fp, "%d", getVertexINP(i)->getIndex());
+    if(i != n - 1){
+      fprintf(fp, ", ");
+      if(i && !((i+2) % 16)) fprintf(fp, "\n");
+    }
+  }
   fprintf(fp, "\n");
+}
+
+void MElement::writeSU2(FILE *fp, int num)
+{
+  setVolumePositive();
+  fprintf(fp, "%d ", getTypeForVTK());
+  for(int i = 0; i < getNumVertices(); i++)
+    fprintf(fp, "%d ", getVertexVTK(i)->getIndex() - 1);
+  if(num >= 0) fprintf(fp, "%d\n", num);
+  else fprintf(fp, "\n");
 }
 
 int MElement::getInfoMSH(const int typeMSH, const char **const name)
@@ -1226,20 +1190,21 @@ int MElement::getInfoMSH(const int typeMSH, const char **const name)
   case MSH_TET_4   : if(name) *name = "Tetrahedron 4";    return 4;
   case MSH_TET_10  : if(name) *name = "Tetrahedron 10";   return 4 + 6;
   case MSH_TET_20  : if(name) *name = "Tetrahedron 20";   return 4 + 12 + 4;
-  case MSH_TET_34  : if(name) *name = "Tetrahedron 34";   return 4 + 18 + 12 + 0;
   case MSH_TET_35  : if(name) *name = "Tetrahedron 35";   return 4 + 18 + 12 + 1;
-  case MSH_TET_52  : if(name) *name = "Tetrahedron 52";   return 4 + 24 + 24 + 0;
   case MSH_TET_56  : if(name) *name = "Tetrahedron 56";   return 4 + 24 + 24 + 4;
   case MSH_TET_84  : if(name) *name = "Tetrahedron 84";   return (7*8*9)/6;
   case MSH_TET_120 : if(name) *name = "Tetrahedron 120";  return (8*9*10)/6;
   case MSH_TET_165 : if(name) *name = "Tetrahedron 165";  return (9*10*11)/6;
   case MSH_TET_220 : if(name) *name = "Tetrahedron 220";  return (10*11*12)/6;
   case MSH_TET_286 : if(name) *name = "Tetrahedron 286";  return (11*12*13)/6;
-  case MSH_TET_74  : if(name) *name = "Tetrahedron 74";   return 74;
-  case MSH_TET_100 : if(name) *name = "Tetrahedron 100";  return 100;
-  case MSH_TET_130 : if(name) *name = "Tetrahedron 130";  return 130;
-  case MSH_TET_164 : if(name) *name = "Tetrahedron 164";  return 164;
-  case MSH_TET_202 : if(name) *name = "Tetrahedron 202";  return 202;
+  case MSH_TET_16  : if(name) *name = "Tetrahedron 16";   return 4 + 6*2;
+  case MSH_TET_22  : if(name) *name = "Tetrahedron 22";   return 4 + 6*3;
+  case MSH_TET_28  : if(name) *name = "Tetrahedron 28";   return 4 + 6*4;
+  case MSH_TET_34  : if(name) *name = "Tetrahedron 34";   return 4 + 6*5;
+  case MSH_TET_40  : if(name) *name = "Tetrahedron 40";   return 4 + 6*6;
+  case MSH_TET_46  : if(name) *name = "Tetrahedron 46";   return 4 + 6*7;
+  case MSH_TET_52  : if(name) *name = "Tetrahedron 52";   return 4 + 6*8;
+  case MSH_TET_58  : if(name) *name = "Tetrahedron 58";   return 4 + 6*9;
   case MSH_HEX_1   : if(name) *name = "Hexahedron 1";     return 1;
   case MSH_HEX_8   : if(name) *name = "Hexahedron 8";     return 8;
   case MSH_HEX_20  : if(name) *name = "Hexahedron 20";    return 8 + 12;
@@ -1404,22 +1369,25 @@ MElement *MElementFactory::create(int type, std::vector<MVertex*> &v,
   case MSH_LIN_C:   return new MLineChild(v, num, part, owner, parent);
   case MSH_TRI_3:   return new MTriangle(v, num, part);
   case MSH_TRI_6:   return new MTriangle6(v, num, part);
-  case MSH_TRI_9:   return new MTriangleN(v, 3, num, part);
   case MSH_TRI_10:  return new MTriangleN(v, 3, num, part);
-  case MSH_TRI_12:  return new MTriangleN(v, 4, num, part);
   case MSH_TRI_15:  return new MTriangleN(v, 4, num, part);
-  case MSH_TRI_15I: return new MTriangleN(v, 5, num, part);
   case MSH_TRI_21:  return new MTriangleN(v, 5, num, part);
   case MSH_TRI_28:  return new MTriangleN(v, 6, num, part);
   case MSH_TRI_36:  return new MTriangleN(v, 7, num, part);
   case MSH_TRI_45:  return new MTriangleN(v, 8, num, part);
   case MSH_TRI_55:  return new MTriangleN(v, 9, num, part);
   case MSH_TRI_66:  return new MTriangleN(v,10, num, part);
+  case MSH_TRI_9:   return new MTriangleN(v, 3, num, part);
+  case MSH_TRI_12:  return new MTriangleN(v, 4, num, part);
+  case MSH_TRI_15I: return new MTriangleN(v, 5, num, part);
+  case MSH_TRI_18:  return new MTriangleN(v, 6, num, part);
+  case MSH_TRI_21I: return new MTriangleN(v, 7, num, part);
+  case MSH_TRI_24:  return new MTriangleN(v, 8, num, part);
+  case MSH_TRI_27:  return new MTriangleN(v, 9, num, part);
+  case MSH_TRI_30:  return new MTriangleN(v,10, num, part);
   case MSH_TRI_B:   return new MTriangleBorder(v, num, part, d1, d2);
   case MSH_QUA_4:   return new MQuadrangle(v, num, part);
-  case MSH_QUA_8:   return new MQuadrangle8(v, num, part);
   case MSH_QUA_9:   return new MQuadrangle9(v, num, part);
-  case MSH_QUA_12:  return new MQuadrangleN(v, 3, num, part);
   case MSH_QUA_16:  return new MQuadrangleN(v, 3, num, part);
   case MSH_QUA_25:  return new MQuadrangleN(v, 4, num, part);
   case MSH_QUA_36:  return new MQuadrangleN(v, 5, num, part);
@@ -1428,6 +1396,15 @@ MElement *MElementFactory::create(int type, std::vector<MVertex*> &v,
   case MSH_QUA_81:  return new MQuadrangleN(v, 8, num, part);
   case MSH_QUA_100: return new MQuadrangleN(v, 9, num, part);
   case MSH_QUA_121: return new MQuadrangleN(v, 10, num, part);
+  case MSH_QUA_8:   return new MQuadrangle8(v, num, part);
+  case MSH_QUA_12:  return new MQuadrangleN(v, 3, num, part);
+  case MSH_QUA_16I: return new MQuadrangleN(v, 4, num, part);
+  case MSH_QUA_20:  return new MQuadrangleN(v, 5, num, part);
+  case MSH_QUA_24:  return new MQuadrangleN(v, 6, num, part);
+  case MSH_QUA_28:  return new MQuadrangleN(v, 7, num, part);
+  case MSH_QUA_32:  return new MQuadrangleN(v, 8, num, part);
+  case MSH_QUA_36I: return new MQuadrangleN(v, 9, num, part);
+  case MSH_QUA_40:  return new MQuadrangleN(v,10, num, part);
   case MSH_POLYG_:  return new MPolygon(v, num, part, owner, parent);
   case MSH_POLYG_B: return new MPolygonBorder(v, num, part, d1, d2);
   case MSH_TET_4:   return new MTetrahedron(v, num, part);
@@ -1438,16 +1415,37 @@ MElement *MElementFactory::create(int type, std::vector<MVertex*> &v,
   case MSH_PRI_6:   return new MPrism(v, num, part);
   case MSH_PRI_15:  return new MPrism15(v, num, part);
   case MSH_PRI_18:  return new MPrism18(v, num, part);
+  case MSH_PRI_40:  return new MPrismN(v, 3, num, part);
+  case MSH_PRI_75:  return new MPrismN(v, 4, num, part);
+  case MSH_PRI_126:  return new MPrismN(v, 5, num, part);
+  case MSH_PRI_196:  return new MPrismN(v, 6, num, part);
+  case MSH_PRI_288:  return new MPrismN(v, 7, num, part);
+  case MSH_PRI_405:  return new MPrismN(v, 8, num, part);
+  case MSH_PRI_550:  return new MPrismN(v, 9, num, part);
+  case MSH_PRI_24:  return new MPrismN(v, 3, num, part);
+  case MSH_PRI_33:  return new MPrismN(v, 4, num, part);
+  case MSH_PRI_42:  return new MPrismN(v, 5, num, part);
+  case MSH_PRI_51:  return new MPrismN(v, 6, num, part);
+  case MSH_PRI_60:  return new MPrismN(v, 7, num, part);
+  case MSH_PRI_69:  return new MPrismN(v, 8, num, part);
+  case MSH_PRI_78:  return new MPrismN(v, 9, num, part);
+  case MSH_PRI_1:  return new MPrismN(v, 0, num, part);
   case MSH_TET_20:  return new MTetrahedronN(v, 3, num, part);
-  case MSH_TET_34:  return new MTetrahedronN(v, 3, num, part);
   case MSH_TET_35:  return new MTetrahedronN(v, 4, num, part);
-  case MSH_TET_52:  return new MTetrahedronN(v, 5, num, part);
   case MSH_TET_56:  return new MTetrahedronN(v, 5, num, part);
   case MSH_TET_84:  return new MTetrahedronN(v, 6, num, part);
   case MSH_TET_120: return new MTetrahedronN(v, 7, num, part);
   case MSH_TET_165: return new MTetrahedronN(v, 8, num, part);
   case MSH_TET_220: return new MTetrahedronN(v, 9, num, part);
   case MSH_TET_286: return new MTetrahedronN(v, 10, num, part);
+  case MSH_TET_16:  return new MTetrahedronN(v, 3, num, part);
+  case MSH_TET_22:  return new MTetrahedronN(v, 4, num, part);
+  case MSH_TET_28:  return new MTetrahedronN(v, 5, num, part);
+  case MSH_TET_34:  return new MTetrahedronN(v, 6, num, part);
+  case MSH_TET_40:  return new MTetrahedronN(v, 7, num, part);
+  case MSH_TET_46:  return new MTetrahedronN(v, 8, num, part);
+  case MSH_TET_52:  return new MTetrahedronN(v, 9, num, part);
+  case MSH_TET_58:  return new MTetrahedronN(v, 10, num, part);
   case MSH_POLYH_:  return new MPolyhedron(v, num, part, owner, parent);
   case MSH_HEX_32:  return new MHexahedronN(v, 3, num, part);
   case MSH_HEX_64:  return new MHexahedronN(v, 3, num, part);

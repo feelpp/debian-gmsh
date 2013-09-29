@@ -203,8 +203,6 @@ static void copyMesh(GFace *source, GFace *target)
                          SVector3(mean_target.a,mean_target.b,mean_target.c));
     LINE = myLine(PLANE_SOURCE, PLANE_TARGET);
 
-    // FIXME: this fails when the 2 planes have a common edge (= rotation axis)
-
     // LINE is the axis of rotation
     // let us compute the angle of rotation
     count = 0;
@@ -219,21 +217,23 @@ static void copyMesh(GFace *source, GFace *target)
       SPoint3 p_pt = LINE.orthogonalProjection(pt);
       SVector3 dist1 = ps - pt;
       SVector3 dist2 = p_ps - p_pt;
-      if (dist2.norm() > 1.e-8 * dist1.norm()){
-	rotation = false;
-      }
-      SVector3 t1 = ps - p_ps;
-      SVector3 t2 = pt - p_pt;
-      if (t1.norm() > 1.e-8 * dist1.norm()){
-	if (count == 0)
-          ANGLE = myAngle(t1, t2, LINE.t);
-	else {
-	  double ANGLE2 = myAngle(t1, t2, LINE.t);
-	  if (fabs (ANGLE2 - ANGLE) > 1.e-8){
-            rotation = false;
+      if (dist1.norm() > CTX::instance()->geom.tolerance){
+        if (dist2.norm() > 1.e-8 * dist1.norm()){
+          rotation = false;
+        }
+        SVector3 t1 = ps - p_ps;
+        SVector3 t2 = pt - p_pt;
+        if (t1.norm() > 1.e-8 * dist1.norm()){
+          if (count == 0)
+            ANGLE = myAngle(t1, t2, LINE.t);
+          else {
+            double ANGLE2 = myAngle(t1, t2, LINE.t);
+            if (fabs (ANGLE2 - ANGLE) > 1.e-8){
+              rotation = false;
+            }
           }
-	}
-	count++;
+          count++;
+        }
       }
     }
 
@@ -256,7 +256,7 @@ static void copyMesh(GFace *source, GFace *target)
     }
     else {
       Msg::Error("Only rotations or translations can be currently taken into account "
-                 "for peridic faces: face %d not meshed", target->tag());
+                 "for periodic faces: face %d not meshed", target->tag());
       return;
     }
   }
@@ -630,8 +630,8 @@ void filterOverlappingElements(int dim, std::vector<MElement*> &e,
 
 void modifyInitialMeshForTakingIntoAccountBoundaryLayers(GFace *gf)
 {
-  BoundaryLayerColumns* _columns = gf->model()->getColumns();
-  if (!buildAdditionalPoints2D (gf, _columns))return;
+  if (!buildAdditionalPoints2D (gf))return;
+  BoundaryLayerColumns* _columns = gf->getColumns();
 
 
   std::set<MEdge,Less_Edge> bedges;
@@ -687,41 +687,43 @@ void modifyInitialMeshForTakingIntoAccountBoundaryLayers(GFace *gf)
     ++ite;
   }
 
-  for (BoundaryLayerColumns::iterf itf = _columns->beginf();
-       itf != _columns->endf() ; ++itf){
-    MVertex *v = itf->first;
-    int nbCol = _columns->getNbColumns(v);
+  if (USEFANS__){
+    for (BoundaryLayerColumns::iterf itf = _columns->beginf();
+	 itf != _columns->endf() ; ++itf){
+      MVertex *v = itf->first;
+      int nbCol = _columns->getNbColumns(v);
 
-    for (int i=0;i<nbCol-1;i++){
-      const BoundaryLayerData & c1 = _columns->getColumn(v,i);
-      const BoundaryLayerData & c2 = _columns->getColumn(v,i+1);
-      int N = std::min(c1._column.size(),c2._column.size());
-      for (int l=0;l < N ;++l){
-	MVertex *v11,*v12,*v21,*v22;
-	v21 = c1._column[l];
-	v22 = c2._column[l];
-	if (l == 0){
-	  v11 = v;
-	  v12 = v;
-	}
-	else {
-	  v11 = c1._column[l-1];
-	  v12 = c2._column[l-1];
-	}
-	if (v11 != v12){
-	  blQuads.push_back(new MQuadrangle(v11,v12,v22,v21));
-	  fprintf(ff2,"SQ (%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g){1,1,1,1};\n",
-		  v11->x(),v11->y(),v11->z(),
+      for (int i=0;i<nbCol-1;i++){
+	const BoundaryLayerData & c1 = _columns->getColumn(v,i);
+	const BoundaryLayerData & c2 = _columns->getColumn(v,i+1);
+	int N = std::min(c1._column.size(),c2._column.size());
+	for (int l=0;l < N ;++l){
+	  MVertex *v11,*v12,*v21,*v22;
+	  v21 = c1._column[l];
+	  v22 = c2._column[l];
+	  if (l == 0){
+	    v11 = v;
+	    v12 = v;
+	  }
+	  else {
+	    v11 = c1._column[l-1];
+	    v12 = c2._column[l-1];
+	  }
+	  if (v11 != v12){
+	    blQuads.push_back(new MQuadrangle(v11,v12,v22,v21));
+	    fprintf(ff2,"SQ (%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g){1,1,1,1};\n",
+		    v11->x(),v11->y(),v11->z(),
 		    v12->x(),v12->y(),v12->z(),
-		  v22->x(),v22->y(),v22->z(),
-		  v21->x(),v21->y(),v21->z());
-	}
-	else {
-	  blTris.push_back(new MTriangle(v,v22,v21));
-	  fprintf(ff2,"ST (%g,%g,%g,%g,%g,%g,%g,%g,%g){1,1,1,1};\n",
-		  v->x(),v->y(),v->z(),
-		  v22->x(),v22->y(),v22->z(),
-		  v21->x(),v21->y(),v21->z());
+		    v22->x(),v22->y(),v22->z(),
+		    v21->x(),v21->y(),v21->z());
+	  }
+	  else {
+	    blTris.push_back(new MTriangle(v,v22,v21));
+	    fprintf(ff2,"ST (%g,%g,%g,%g,%g,%g,%g,%g,%g){1,1,1,1};\n",
+		    v->x(),v->y(),v->z(),
+		    v22->x(),v22->y(),v22->z(),
+		    v21->x(),v21->y(),v21->z());
+	  }
 	}
       }
     }
@@ -1344,7 +1346,11 @@ bool meshGenerator(GFace *gf, int RECUR_ITER,
 			      gf->additionalVertices.end());
   gf->additionalVertices.clear();
 
-   return true;
+  if(CTX::instance()->mesh.algo3d==ALGO_3D_RTREE){
+    directions_storage(gf);
+  }
+
+  return true;
 }
 
 // this function buils a list of vertices (BDS) that are consecutive
@@ -2495,4 +2501,154 @@ void orientMeshGFace::operator()(GFace *gf)
   if(gf->meshAttributes.reverseMesh)
     for(unsigned int k = 0; k < gf->getNumMeshElements(); k++)
       gf->getMeshElement(k)->reverse();
+}
+
+void directions_storage(GFace* gf){
+  bool ok;
+  unsigned int i;
+  int j;
+  MVertex* vertex;
+  MElement* element;
+  SPoint2 point;
+  SVector3 v1;
+  SVector3 v2;
+  MElementOctree* octree;
+  std::set<MVertex*> vertices;
+  std::set<MVertex*>::iterator it;
+	
+  vertices.clear();	
+	
+  for(i=0;i<gf->getNumMeshElements();i++){
+    element = gf->getMeshElement(i);
+	for(j=0;j<element->getNumVertices();j++){
+	  vertex = element->getVertex(j);
+	  vertices.insert(vertex);
+	}
+  }
+	
+  backgroundMesh::set(gf);
+  octree = backgroundMesh::current()->get_octree();
+	
+  gf->storage1.clear();
+  gf->storage2.clear();
+  gf->storage3.clear();
+  gf->storage4.clear();
+	
+  for(it=vertices.begin();it!=vertices.end();it++){
+    ok = 0;
+	  
+	if(!gf->getCompound()){
+      if(gf->geomType()==GEntity::CompoundSurface){
+	    ok = translate(gf,octree,*it,SPoint2(0.0,0.0),v1,v2);
+	  }
+	  else{
+	    ok = improved_translate(gf,*it,v1,v2);
+	  }
+	}
+	  
+	if(ok){
+      gf->storage1.push_back(SPoint3((*it)->x(),(*it)->y(),(*it)->z()));
+	  gf->storage2.push_back(v1);
+	  gf->storage3.push_back(v2);
+	  reparamMeshVertexOnFace(*it,gf,point);
+	  gf->storage4.push_back(backgroundMesh::current()->operator()(point.x(),point.y(),0.0));
+	}  
+  }
+	
+  backgroundMesh::unset();
+}
+
+bool translate(GFace* gf,MElementOctree* octree,MVertex* vertex,SPoint2 corr,SVector3& v1,SVector3& v2){
+  bool ok;
+  double k;
+  double size;
+  double angle;
+  double delta_x;
+  double delta_y;
+  double x,y;
+  double x1,y1;
+  double x2,y2;
+  SPoint2 point;
+  GPoint gp1;
+  GPoint gp2;
+	
+  ok = true;
+  k = 0.0001;
+  reparamMeshVertexOnFace(vertex,gf,point);
+  x = point.x();
+  y = point.y();
+  size = backgroundMesh::current()->operator()(x,y,0.0)/**get_ratio(gf,corr)*/;
+  angle = backgroundMesh::current()->getAngle(x,y,0.0);
+
+  delta_x = k*size*cos(angle);
+  delta_y = k*size*sin(angle);
+	
+  x1 = x + delta_x;
+  y1 = y + delta_y;
+  x2 = x + delta_y;
+  y2 = y - delta_x;
+	
+  if(!inside_domain(octree,x1,y1)){
+    x1 = x - delta_x;
+	y1 = y - delta_y;
+    if(!inside_domain(octree,x1,y1)) ok = false;
+  }
+  if(!inside_domain(octree,x2,y2)){
+    x2 = x - delta_y;
+	y2 = y + delta_x;
+	if(!inside_domain(octree,x2,y2)) ok = false;
+  }
+	
+  ok = true; //?
+	
+  if(ok){
+    gp1 = gf->point(x1,y1);
+	gp2 = gf->point(x2,y2);
+	v1 = SVector3(gp1.x()-vertex->x(),gp1.y()-vertex->y(),gp1.z()-vertex->z());
+	v2 = SVector3(gp2.x()-vertex->x(),gp2.y()-vertex->y(),gp2.z()-vertex->z());
+  }
+  else{
+    v1 = SVector3(1.0,0.0,0.0);
+	v2 = SVector3(0.0,1.0,0.0);
+  }
+  return ok;
+}
+
+bool improved_translate(GFace* gf,MVertex* vertex,SVector3& v1,SVector3& v2){
+  double x,y;
+  double angle;
+  SPoint2 point;
+  SVector3 s1,s2;
+  SVector3 normal;
+  SVector3 basis_u,basis_v;
+  Pair<SVector3,SVector3> derivatives;
+	
+  reparamMeshVertexOnFace(vertex,gf,point);
+  x = point.x();
+  y = point.y();
+	
+  angle = backgroundMesh::current()->getAngle(x,y,0.0);
+  derivatives = gf->firstDer(point);
+	
+  s1 = derivatives.first();
+  s2 = derivatives.second();
+  normal = crossprod(s1,s2);
+	
+  basis_u = s1;
+  basis_u.normalize();
+  basis_v = crossprod(normal,basis_u);
+  basis_v.normalize();
+	
+  v1 = basis_u*cos(angle) + basis_v*sin(angle);
+  v2 = crossprod(v1,normal);
+  v2.normalize();
+	
+  return 1;
+}
+
+bool inside_domain(MElementOctree* octree,double x,double y){
+  MElement* element;
+  element = (MElement*)octree->find(x,y,0.0,2,true);
+  if(element!=NULL) return 1;
+  else return 0;
 }

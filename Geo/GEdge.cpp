@@ -93,16 +93,19 @@ void GEdge::resetMeshAttributes()
   meshAttributes.extrude = 0;
   meshAttributes.meshSize = MAX_LC;
   meshAttributes.minimumMeshSegments = 1;
+  meshAttributes.reverseMesh = false;
 }
 
-void GEdge::addFace(GFace *e)
+void GEdge::addFace(GFace *f)
 {
-  l_faces.push_back(e);
+  if(std::find(l_faces.begin(), l_faces.end(), f) == l_faces.end())
+    l_faces.push_back(f);
 }
 
-void GEdge::delFace(GFace *e)
+void GEdge::delFace(GFace *f)
 {
-  l_faces.erase(std::find(l_faces.begin(), l_faces.end(), e));
+  std::list<GFace*>::iterator it = std::find(l_faces.begin(), l_faces.end(), f);
+  if(it != l_faces.end()) l_faces.erase(it);
 }
 
 SBoundingBox3d GEdge::bounds() const
@@ -484,4 +487,19 @@ void GEdge::replaceEndingPoints(GVertex *replOfv0, GVertex *replOfv1)
     replOfv1->addEdge(this);
     v1 = replOfv1;
   }
+}
+
+// regions that bound this entity or that this entity bounds.
+std::list<GRegion*> GEdge::regions() const
+{
+  std::list<GFace*> _faces = faces();
+  std::list<GFace*>::const_iterator it = _faces.begin();
+  std::set<GRegion*> _r;
+  for ( ; it != _faces.end() ; ++it){
+    std::list<GRegion*> temp = (*it)->regions();
+    _r.insert (temp.begin(), temp.end());
+  }
+  std::list<GRegion*> ret;
+  ret.insert (ret.begin(), _r.begin(), _r.end());
+  return ret;
 }

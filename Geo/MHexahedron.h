@@ -242,7 +242,12 @@ class MHexahedron20 : public MHexahedron {
                                 9, 10, 12, 14, 15, 16, 18, 19, 17};
     return getVertex(map[num]);
   }
-  virtual MVertex *getVertexINP(int num){ return getVertexBDF(num); }
+  virtual MVertex *getVertexINP(int num)
+  {
+    static const int map[20]={0, 1, 2, 3, 4, 5, 6, 7, 8, 11, 13,
+                              9, 16, 18, 19, 17, 10, 12, 14, 15};
+    return getVertex(map[num]);
+  }
   virtual MVertex *getVertexDIFF(int num)
   {
     static const int map[20] = {2, 3, 7, 6, 0, 1, 5, 4, 9, 18, 12,
@@ -526,13 +531,15 @@ class MHexahedronN : public MHexahedron {
     if(_order == 9 && _vs.size() + 8 == 1000) return MSH_HEX_1000;
 
     if(_order == 2 && _vs.size() + 8 == 20)  return MSH_HEX_20;
-    if(_order == 3 && _vs.size() + 8 == 56 ) return MSH_HEX_56;
+    if(_order == 3 && _vs.size() + 8 == 32)  return MSH_HEX_32;
     if(_order == 4 && _vs.size() + 8 == 44)  return MSH_HEX_44;
     if(_order == 5 && _vs.size() + 8 == 56)  return MSH_HEX_56;
     if(_order == 6 && _vs.size() + 8 == 68)  return MSH_HEX_68;
     if(_order == 7 && _vs.size() + 8 == 80)  return MSH_HEX_80;
     if(_order == 8 && _vs.size() + 8 == 92)  return MSH_HEX_92;
     if(_order == 9 && _vs.size() + 8 == 104) return MSH_HEX_104;
+
+    Msg::Error("no tag matches a p%d hexahedron with %d vertices", _order, 8+_vs.size());
     return 0;
   }
   virtual int getNumFacesRep();

@@ -114,12 +114,14 @@ CatmullRom		return tSpline;
 Call                    return tCall;
 CreateTopology          return tCreateTopology;
 CreateTopologyNoHoles   return tCreateTopologyNoHoles;
+Cpu                     return tCpu;
 
 DefineConstant          return tDefineConstant;
 Delete                  return tDelete;
 Degenerated             return tDegenerated;
 Dilate                  return tDilate;
 Draw                    return tDraw;
+SetChanged              return tSetChanged;
 
 Exp                     return tExp;
 Ellipsis                return tEllipse;
@@ -170,6 +172,7 @@ MeshAlgorithm           return tMeshAlgorithm;
 Modulo                  return tModulo;
 MPI_Rank                return tMPI_Rank;
 MPI_Size                return tMPI_Size;
+Memory                  return tMemory;
 
 Nurbs			return tNurbs;
 
@@ -185,18 +188,24 @@ PolarSphere             return tPolarSphere;
 Printf                  return tPrintf;
 Plugin                  return tPlugin;
 
+Quad[tT]ri[aA]dd[vV]erts        return tQuadTriAddVerts;
+Quad[tT]ri[nN]o[nN]ew[vV]erts   return tQuadTriNoNewVerts;
+
 Quad[tT]ri[dD]bl        return tQuadTriDbl;
 Quad[tT]ri[sS]ngl       return tQuadTriSngl;
 
 Recombine               return tRecombine;
 Recomb[lL]aterals       return tRecombLaterals;
+Recursive               return tRecursive;
 Rotate                  return tRotate;
+Round                   return tRound;
 Ruled                   return tRuled;
 Rand                    return tRand;
 RefineMesh              return tRefineMesh;
 Return                  return tReturn;
 Reverse                 return tReverse;
 
+ScaleLastLayer          return tScaleLast;
 Smoother                return tSmoother;
 SetOrder                return tSetOrder;
 Sqrt                    return tSqrt;

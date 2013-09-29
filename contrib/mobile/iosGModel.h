@@ -12,8 +12,12 @@
 #include <iostream>
 #include <string>
 
-#include "drawContext.h"
+#include <Gmsh/GmshMessage.h>
+
 void messageFromCpp (void *self, std::string level, std::string msg);
+void getBitmap(void *self, const char *text, int textsize, unsigned char **map, int *height, int *width, int *realWidth=NULL);
+void getBitmapFromString(const char *text, int textsize, unsigned char **map, int *height, int *width, int *realWidth=NULL);
+void setObjCBridge(void *objcObject);
 
 class MobileMessage : GmshMessage
 {
@@ -26,19 +30,6 @@ public:
     {
         messageFromCpp(_objcObject, level, message);
     }
-};
-
-class iosGModel
-{
-private:
-    void* _objcObject;
-public:
-    iosGModel(void* objcObject)
-    {
-        _objcObject = objcObject;
-        Msg::SetCallback((GmshMessage*)new MobileMessage(objcObject));
-    }
-    ~iosGModel(){}
 };
 
 #endif /* defined(__Onelab__iosGModel__) */

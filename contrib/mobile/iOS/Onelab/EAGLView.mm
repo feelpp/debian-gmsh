@@ -33,57 +33,39 @@
         CAEAGLLayer *eaglLayer = (CAEAGLLayer *)self.layer;
         eaglLayer.opaque = YES;
         eaglLayer.drawableProperties =
-        [NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithBool:NO],
-         kEAGLDrawablePropertyRetainedBacking,
-         kEAGLColorFormatRGBA8,
-         kEAGLDrawablePropertyColorFormat, nil];
+			[NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithBool:NO],
+			 kEAGLDrawablePropertyRetainedBacking,
+			 kEAGLColorFormatRGBA8,
+			 kEAGLDrawablePropertyColorFormat, nil];
         context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES1];
         if (!context || ![EAGLContext setCurrentContext:context]) {
             //[self release];
             return nil;
         }
-        [self copyRes];
-        //NSString *ressourcePath = [[NSBundle mainBundle] resourcePath];
-        NSString *startupModel = [docPath stringByAppendingPathComponent:@"pmsm.geo"];
-
         mContext = new drawContext();
-        mContext->load(*new std::string([startupModel fileSystemRepresentation]));
     }
+    rendering = NO;
     return self;
-}
-
-- (void) copyRes
-{
-    NSString *resPath = [[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:@"files"];
-    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-    docPath = [paths objectAtIndex:0]; //Get the docs directory
-    
-    NSArray *resContents = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:resPath error:NULL];
-    
-    for (NSString* obj in resContents){
-        NSError* error;
-        if (![[NSFileManager defaultManager] copyItemAtPath:[resPath stringByAppendingPathComponent:obj] toPath:[docPath stringByAppendingPathComponent:obj] error:&error])
-            NSLog(@"Error: %@", error);;
-    }
 }
 
 - (void)drawView
 {
+    if(rendering) return;
+    rendering = YES;
     [EAGLContext setCurrentContext:context];
     
     glBindFramebufferOES(GL_FRAMEBUFFER_OES, viewFramebuffer);
-    glViewport(0, 0, backingWidth, backingHeight); // need this ...??
     mContext->initView(backingWidth, backingHeight);
     mContext->drawView();
     
     glBindRenderbufferOES(GL_RENDERBUFFER_OES, viewRenderbuffer);
     [context presentRenderbuffer:GL_RENDERBUFFER_OES];
+    rendering = NO;
 }
-- (void)loadMsh:(NSString*) file
+- (void)load:(NSString*) file
 {
-    NSString *msh = [docPath stringByAppendingPathComponent: file];
-    //mContext = new drawContext();
-    mContext->load(*new std::string([msh fileSystemRepresentation]));
+    mContext->load(*new std::string([file fileSystemRepresentation]));
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"resetParameters" object:nil];
     [self drawView];
 }
 - (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event
@@ -91,7 +73,6 @@
     NSUInteger ntouch = [[event allTouches] count];
     UITouch* touch = [touches anyObject];
     CGPoint position = [touch locationInView:self];
-    CGPoint lastPosition = [touch previousLocationInView:self];
     switch(ntouch)
     {
         case 1:
@@ -113,6 +94,7 @@
 
 - (void)layoutSubviews
 {
+	[super layoutSubviews];
     [EAGLContext setCurrentContext:context];
     [self destroyFramebuffer];
     [self createFramebuffer];
@@ -164,6 +146,40 @@
     if ([EAGLContext currentContext] == context) {
         [EAGLContext setCurrentContext:nil];
     }
+}
+
+- (UIImage*) getGLScreenshot
+{
+    NSInteger myDataLength = backingWidth * backingHeight * 4;
+
+    GLubyte *buffer = (GLubyte *) malloc(myDataLength);
+    glReadPixels(0, 0, backingWidth, backingHeight, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
+
+    GLubyte *buffer2 = (GLubyte *) malloc(myDataLength);
+    for(int y = 0; y <backingHeight; y++)
+    {
+        for(int x = 0; x <backingWidth * 4; x++)
+        {
+            buffer2[(backingHeight - 1 - y) * backingWidth * 4 + x] = buffer[y * 4 * backingWidth + x];
+        }
+    }
+
+    CGDataProviderRef provider = CGDataProviderCreateWithData(NULL, buffer2, myDataLength, NULL);
+
+    int bitsPerComponent = 8;
+    int bitsPerPixel = 32;
+    int bytesPerRow = 4 * backingWidth;
+    CGColorSpaceRef colorSpaceRef = CGColorSpaceCreateDeviceRGB();
+    CGBitmapInfo bitmapInfo = kCGBitmapByteOrderDefault;
+    CGColorRenderingIntent renderingIntent = kCGRenderingIntentDefault;
+
+    CGImageRef imageRef = CGImageCreate(backingWidth, backingHeight, bitsPerComponent, bitsPerPixel, bytesPerRow, colorSpaceRef, bitmapInfo, provider, NULL, NO, renderingIntent);
+
+    return [UIImage imageWithCGImage:imageRef];
+}
+
+- (void)saveGLScreenshotToPhotosAlbum {
+    UIImageWriteToSavedPhotosAlbum([self getGLScreenshot], nil, nil, nil);
 }
 
 @end

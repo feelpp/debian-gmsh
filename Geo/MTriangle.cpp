@@ -119,86 +119,20 @@ double MTriangle::gammaShapeMeasure()
    uvw[2] = 0.;
 }
 
-const nodalBasis* MTriangle::getFunctionSpace(int o) const
+const nodalBasis* MTriangle::getFunctionSpace(int order) const
 {
-  int order = (o == -1) ? getPolynomialOrder() : o;
+  if (order == -1) return BasisFactory::getNodalBasis(getTypeForMSH());
 
-  int nf = getNumFaceVertices();
-
-  if ((nf == 0) && (o == -1)) {
-    switch (order) {
-    case 0: return BasisFactory::getNodalBasis(MSH_TRI_1);
-    case 1: return BasisFactory::getNodalBasis(MSH_TRI_3);
-    case 2: return BasisFactory::getNodalBasis(MSH_TRI_6);
-    case 3: return BasisFactory::getNodalBasis(MSH_TRI_9);
-    case 4: return BasisFactory::getNodalBasis(MSH_TRI_12);
-    case 5: return BasisFactory::getNodalBasis(MSH_TRI_15I);
-    case 6: return BasisFactory::getNodalBasis(MSH_TRI_18);
-    case 7: return BasisFactory::getNodalBasis(MSH_TRI_21I);
-    case 8: return BasisFactory::getNodalBasis(MSH_TRI_24);
-    case 9: return BasisFactory::getNodalBasis(MSH_TRI_27);
-    case 10: return BasisFactory::getNodalBasis(MSH_TRI_30);
-    default: Msg::Error("Order %d triangle incomplete function space not implemented", order);
-    }
-  }
-  else {
-    switch (order) {
-    case 0: return BasisFactory::getNodalBasis(MSH_TRI_1);
-    case 1: return BasisFactory::getNodalBasis(MSH_TRI_3);
-    case 2: return BasisFactory::getNodalBasis(MSH_TRI_6);
-    case 3: return BasisFactory::getNodalBasis(MSH_TRI_10);
-    case 4: return BasisFactory::getNodalBasis(MSH_TRI_15);
-    case 5: return BasisFactory::getNodalBasis(MSH_TRI_21);
-    case 6: return BasisFactory::getNodalBasis(MSH_TRI_28);
-    case 7: return BasisFactory::getNodalBasis(MSH_TRI_36);
-    case 8: return BasisFactory::getNodalBasis(MSH_TRI_45);
-    case 9: return BasisFactory::getNodalBasis(MSH_TRI_55);
-    case 10: return BasisFactory::getNodalBasis(MSH_TRI_66);
-    default: Msg::Error("Order %d triangle function space not implemented", order);
-    }
-  }
-  return 0;
+  int tag = ElementType::getTag(TYPE_TRI, order);
+  return tag ? BasisFactory::getNodalBasis(tag) : NULL;
 }
 
-const JacobianBasis* MTriangle::getJacobianFuncSpace(int o) const
+const JacobianBasis* MTriangle::getJacobianFuncSpace(int order) const
 {
+  if (order == -1) return BasisFactory::getJacobianBasis(getTypeForMSH());
 
-  int order = (o == -1) ? getPolynomialOrder() : o;
-
-  int nf = getNumFaceVertices();
-
-  if ((nf == 0) && (o == -1)) {
-    switch (order) {
-    case 0: return BasisFactory::getJacobianBasis(MSH_TRI_1);
-    case 1: return BasisFactory::getJacobianBasis(MSH_TRI_3);
-    case 2: return BasisFactory::getJacobianBasis(MSH_TRI_6);
-    case 3: return BasisFactory::getJacobianBasis(MSH_TRI_9);
-    case 4: return BasisFactory::getJacobianBasis(MSH_TRI_12);
-    case 5: return BasisFactory::getJacobianBasis(MSH_TRI_15I);
-    case 6: return BasisFactory::getJacobianBasis(MSH_TRI_18);
-    case 7: return BasisFactory::getJacobianBasis(MSH_TRI_21I);
-    case 8: return BasisFactory::getJacobianBasis(MSH_TRI_24);
-    case 9: return BasisFactory::getJacobianBasis(MSH_TRI_27);
-    case 10: return BasisFactory::getJacobianBasis(MSH_TRI_30);
-    default: Msg::Error("Order %d triangle incomplete function space not implemented", order);
-    }
-  }
-  else {
-    switch (order) {
-    case 1: return BasisFactory::getJacobianBasis(MSH_TRI_3);
-    case 2: return BasisFactory::getJacobianBasis(MSH_TRI_6);
-    case 3: return BasisFactory::getJacobianBasis(MSH_TRI_10);
-    case 4: return BasisFactory::getJacobianBasis(MSH_TRI_15);
-    case 5: return BasisFactory::getJacobianBasis(MSH_TRI_21);
-    case 6: return BasisFactory::getJacobianBasis(MSH_TRI_28);
-    case 7: return BasisFactory::getJacobianBasis(MSH_TRI_36);
-    case 8: return BasisFactory::getJacobianBasis(MSH_TRI_45);
-    case 9: return BasisFactory::getJacobianBasis(MSH_TRI_55);
-    case 10: return BasisFactory::getJacobianBasis(MSH_TRI_66);
-    default: Msg::Error("Order %d triangle function space not implemented", order);
-    }
-  }
-  return 0;
+  int tag = ElementType::getTag(TYPE_TRI, order);
+  return tag ? BasisFactory::getJacobianBasis(tag) : NULL;
 }
 
 int MTriangleN::getNumEdgesRep(){ return 3 * CTX::instance()->mesh.numSubEdges; }
@@ -207,7 +141,7 @@ int MTriangle6::getNumEdgesRep(){ return 3 * CTX::instance()->mesh.numSubEdges; 
 static void _myGetEdgeRep(MTriangle *t, int num, double *x, double *y, double *z,
                           SVector3 *n, int numSubEdges)
 {
-  n[0] = n[1] = n[2] = t->getFace(0).normal();
+  n[0] = n[1] = t->getFace(0).normal();
 
   if (num < numSubEdges){
     SPoint3 pnt1, pnt2;

@@ -24,8 +24,8 @@
 	
 	/* OpenGL name for the depth buffer that is attached to viewFramebuffer, if it exists (0 if it does not exist) */
 	GLuint depthRenderbuffer;
-    
-    NSString *docPath;
+
+    BOOL rendering;
 @public
 	/* our GModel drawing class */
     drawContext *mContext;
@@ -33,6 +33,8 @@
 
 - (void)drawView;
 
-- (void)loadMsh:(NSString*) file;
+- (void)load:(NSString*) file;
+
+- (UIImage*) getGLScreenshot;
 
 @end

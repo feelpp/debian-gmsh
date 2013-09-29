@@ -364,9 +364,14 @@ int MergeFile(const std::string &fileName, bool warnIfMissing)
     if(status > 1) status = PView::readMED(fileName);
 #endif
   }
-  else if(ext == ".bdf" || ext == ".BDF" || ext == ".nas" || ext == ".NAS" ||
-          ext == ".dat" || ext == ".DAT"){
+  else if(ext == ".bdf" || ext == ".BDF" || ext == ".nas" || ext == ".NAS"){
     status = GModel::current()->readBDF(fileName);
+  }
+  else if(ext == ".dat" || ext == ".DAT"){
+    if(!strncmp(header, "BEGIN ACTRAN", 12))
+      status = GModel::current()->readACTRAN(fileName);
+    else
+      status = GModel::current()->readBDF(fileName);
   }
   else if(ext == ".p3d" || ext == ".P3D"){
     status = GModel::current()->readP3D(fileName);
@@ -479,10 +484,11 @@ int MergeFile(const std::string &fileName, bool warnIfMissing)
 
 #if defined(HAVE_FLTK) && defined(HAVE_POST)
   if(FlGui::available()){
-    // go directly to the first non-empty step
+    // go directly to the first non-empty step after the one that is requested
     for(unsigned int i = numViewsBefore; i < PView::list.size(); i++)
       opt_view_timestep(i, GMSH_SET | GMSH_GUI,
-                        PView::list[i]->getData()->getFirstNonEmptyTimeStep());
+                        PView::list[i]->getData()->getFirstNonEmptyTimeStep
+                        (opt_view_timestep(i, GMSH_GET, 0)));
     FlGui::instance()->updateViews(numViewsBefore != (int)PView::list.size(), false);
   }
 #endif

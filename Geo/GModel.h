@@ -17,13 +17,13 @@
 #include "GRegion.h"
 #include "SPoint3.h"
 #include "SBoundingBox3d.h"
-#include "boundaryLayersData.h"
 
 template <class scalar> class simpleFunction;
 
 class FM_Internals;
 class GEO_Internals;
 class OCC_Internals;
+class SGEOM_Internals;
 class ACIS_Internals;
 class smooth_normals;
 class FieldManager;
@@ -39,6 +39,7 @@ class GModel
 {
  private:
   friend class OCCFactory;
+  friend class SGEOMFactory;
   std::multimap<std::pair<std::vector<int>, std::vector<int> >,
                 std::pair<std::string, std::vector<int> > > _homologyRequests;
   std::set<GRegion*, GEntityLessThan> _chainRegions;
@@ -91,7 +92,11 @@ class GModel
   OCC_Internals *_occ_internals;
   void _deleteOCCInternals();
 
-  // OpenCascade model internal data
+  // SGEOM model internal data
+  SGEOM_Internals *_sgeom_internals;
+  void _deleteSGEOMInternals();
+
+  // ACIS model internal data
   ACIS_Internals *_acis_internals;
   void _deleteACISInternals();
 
@@ -205,6 +210,7 @@ class GModel
   // access internal CAD representations
   GEO_Internals *getGEOInternals(){ return _geo_internals; }
   OCC_Internals *getOCCInternals(){ return _occ_internals; }
+  SGEOM_Internals *getSGEOMInternals(){ return _sgeom_internals; }
   FM_Internals *getFMInternals() { return _fm_internals; }
   ACIS_Internals *getACISInternals(){ return _acis_internals; }
 
@@ -266,15 +272,6 @@ class GModel
   GEdge *getEdgeByTag(int n) const;
   GVertex *getVertexByTag(int n) const;
   std::vector<int> getEdgesByStringTag(const std::string tag);
-
-  // for python, temporary solution while iterator are not binded
-  std::vector<GRegion*> bindingsGetRegions();
-  std::vector<GFace*> bindingsGetFaces();
-  std::vector<GEdge*> bindingsGetEdges();
-  std::vector<GVertex*> bindingsGetVertices();
-
-  // get the boundary layer columns
-  BoundaryLayerColumns *getColumns () {return &_columns;}
 
   // add/remove an entity in the model
   void add(GRegion *r) { regions.insert(r); }
@@ -361,11 +358,6 @@ class GModel
   // access a mesh element by coordinates (using an octree search)
   MElement *getMeshElementByCoord(SPoint3 &p, int dim=-1, bool strict=true);
   std::vector<MElement*> getMeshElementsByCoord(SPoint3 &p, int dim=-1, bool strict=true);
-  //  inline std::vector<MElement*> getMeshElementsByCoords(std::vector<std::vector<double, std::allocator<double> >, int dim=-1, bool strict=true){
-  //    std::vector<MElement*> e;
-  //    for (unsigned int i = 0;i<p.size();i++)e.push_back (getMeshElementByCoord (p[i],dim,strict));
-  //    return e;
-  //  }
 
   // access a mesh element by tag, using the element cache
   MElement *getMeshElementByTag(int n);
@@ -509,7 +501,7 @@ class GModel
                                              int dir=1, int view=-1);
   GEntity *addPipe(GEntity *e, std::vector<GEdge *>  edges);
 
-  void addRuledFaces(std::vector<std::vector<GEdge *> > edges);
+  std::vector<GFace *> addRuledFaces(std::vector<std::vector<GEdge *> > edges);
   GFace *addFace(std::vector<GEdge *> edges, std::vector< std::vector<double > > points);
   GFace *addPlanarFace(std::vector<std::vector<GEdge *> > edges);
   GFace *add2Drect(double x0, double y0, double dx, double dy);
@@ -533,16 +525,16 @@ class GModel
   GModel *computeBooleanUnion(GModel *tool, int createNewModel=0);
   GModel *computeBooleanIntersection(GModel *tool, int createNewModel=0);
   GModel *computeBooleanDifference(GModel *tool, int createNewModel=0);
-  void    salomeconnect(); 
+  void    salomeconnect();
   void    occconnect();
-	
+
 	// do stuff for all entities inside a bounding box
   void    setPeriodicAllFaces(std::vector<double> FaceTranslationVector);
-  void    setPeriodicPairOfFaces(int numFaceMaster, std::vector<int> EdgeListMaster, 
+  void    setPeriodicPairOfFaces(int numFaceMaster, std::vector<int> EdgeListMaster,
 																 int numFaceSlave, std::vector<int> EdgeListSlave);
-  void    setPhysicalNumToEntitiesInBox(int EntityType, int PhysicalGroupNumber, 
+  void    setPhysicalNumToEntitiesInBox(int EntityType, int PhysicalGroupNumber,
 																				std::vector<double> p1,std::vector<double> p2);
-	
+
 
   // build a new GModel by cutting the elements crossed by the levelset ls
   // if cutElem is set to false, split the model without cutting the elements
@@ -658,6 +650,9 @@ class GModel
   int writeBDF(const std::string &name, int format=0, int elementTagType=1,
                bool saveAll=false, double scalingFactor=1.0);
 
+  // Actran mesh
+  int readACTRAN(const std::string &name);
+
   // Plot3D structured mesh format
   int readP3D(const std::string &name);
   int writeP3D(const std::string &name,
@@ -690,12 +685,18 @@ class GModel
   int writeINP(const std::string &name, bool saveAll=false,
                bool saveGroupsOfNodes=false, double scalingFactor=1.0);
 
+  // CELUM
+  int writeCELUM(const std::string &name, bool saveAll=false,
+                 double scalingFactor=1.0);
+
   // Geomview mesh
   int readGEOM(const std::string &name);
 
   // CEA triangulation
   int writeMAIL(const std::string &name, bool saveAll, double scalingFactor);
 
+  // SU2 mesh file
+  int writeSU2(const std::string &name, bool saveAll, double scalingFactor);
 };
 
 #endif

@@ -47,6 +47,9 @@
 #define FORMAT_IR3   38
 #define FORMAT_INP   39
 #define FORMAT_PLY2  40
+#define FORMAT_CELUM 41
+#define FORMAT_SU2   42
+#define FORMAT_MPEG_PREVIEW 43
 
 // Element types
 #define TYPE_PNT     1
@@ -93,8 +96,8 @@
 #define MSH_TET_20   29
 #define MSH_TET_35   30
 #define MSH_TET_56   31
-#define MSH_TET_34   32
-#define MSH_TET_52   33
+#define MSH_TET_22   32
+#define MSH_TET_28   33
 #define MSH_POLYG_   34
 #define MSH_POLYH_   35
 #define MSH_QUA_16   36
@@ -132,16 +135,19 @@
 #define MSH_TRI_B    68
 #define MSH_POLYG_B  69
 #define MSH_LIN_C    70
+// TETS COMPLETE (6->10)
 #define MSH_TET_84   71
 #define MSH_TET_120  72
 #define MSH_TET_165  73
 #define MSH_TET_220  74
 #define MSH_TET_286  75
-#define MSH_TET_74   79
-#define MSH_TET_100  80
-#define MSH_TET_130  81
-#define MSH_TET_164  82
-#define MSH_TET_202  83
+// TETS INCOMPLETE (6->10)
+#define MSH_TET_34   79
+#define MSH_TET_40   80
+#define MSH_TET_46   81
+#define MSH_TET_52   82
+#define MSH_TET_58   83
+//
 #define MSH_LIN_1    84
 #define MSH_TRI_1    85
 #define MSH_QUA_1    86
@@ -202,8 +208,9 @@
 #define MSH_LIN_SUB 134
 #define MSH_TRI_SUB 135
 #define MSH_TET_SUB 136
+#define MSH_TET_16  137
 
-#define MSH_NUM_TYPE 136
+#define MSH_NUM_TYPE 137
 
 // Geometric entities
 #define ENT_NONE     0
@@ -238,11 +245,11 @@
 #define MESH_UNSTRUCTURED 2
 
 // QuadTri options (structured/unstructured coupling with pyramids)
-#define NO_QUADTRI               0
-#define QUADTRI_DBL_1            1
-#define QUADTRI_DBL_1_RECOMB     2
-#define QUADTRI_SNGL_1           3
-#define QUADTRI_SNGL_1_RECOMB    4
-#define TRANSFINITE_QUADTRI_1    5
+#define NO_QUADTRI                    0
+#define QUADTRI_ADDVERTS_1            1
+#define QUADTRI_ADDVERTS_1_RECOMB     2
+#define QUADTRI_NOVERTS_1             3
+#define QUADTRI_NOVERTS_1_RECOMB      4
+#define TRANSFINITE_QUADTRI_1         5
 
 #endif

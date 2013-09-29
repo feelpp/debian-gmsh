@@ -27,6 +27,7 @@ class onelabGroup : public Fl_Group{
   bool _stop;
   int _baseWidth, _indent;
   int _minWindowWidth, _minWindowHeight;
+  double _widgetLabelRatio;
   std::set<std::string> _manuallyClosed;
   void _computeWidths();
   template <class T> void _addParameter(T &p);
@@ -54,12 +55,7 @@ class onelabGroup : public Fl_Group{
   bool isBusy();
   int getMinWindowWidth(){ return _minWindowWidth; }
   int getMinWindowHeight(){ return _minWindowHeight; }
-  std::string getPath(Fl_Tree_Item *item)
-  {
-    char path[1024];
-    _tree->item_pathname(path, 1024, item);
-    return std::string(path);
-  }
+  std::string getPath(Fl_Tree_Item *item);
   void insertInManuallyClosed(const std::string &path)
   {
     _manuallyClosed.insert(path);

@@ -179,7 +179,7 @@ class PViewDataGModel : public PViewData {
   bool finalize(bool computeMinMax=true, const std::string &interpolationScheme="");
   std::string getFileName(int step=-1);
   int getNumTimeSteps();
-  int getFirstNonEmptyTimeStep();
+  int getFirstNonEmptyTimeStep(int start=0);
   double getTime(int step);
   double getMin(int step=-1, bool onlyVisible=false, int forceNumComponents=0,
                 int componentMap[9]=0);
@@ -250,7 +250,8 @@ class PViewDataGModel : public PViewData {
                double time, int partition, int numComp, int numNodes,
                const std::string &interpolationScheme);
   virtual bool writeMSH(const std::string &fileName, double version=2.2, bool binary=false,
-                        bool savemesh=true, bool multipleView=false);
+                        bool savemesh=true, bool multipleView=false,
+                        int partitionNum=0, bool saveInterpolationMatrices=true);
   bool readMED(const std::string &fileName, int fileIndex);
   bool writeMED(const std::string &fileName);
 };

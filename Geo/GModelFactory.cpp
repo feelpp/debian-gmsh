@@ -1141,7 +1141,7 @@ void OCCFactory::setPeriodicAllFaces(GModel *gm, std::vector<double> FaceTransla
 
         std::vector<int>  EdgeListMaster(NumberOfEdgesInFace1);
         std::vector<int>  EdgeListSlave(NumberOfEdgesInFace2);
-        int i1=0,i2=0;
+        int i1=0;//,i2=0;
 
         // ici il faut imbriquer la seconde boucle pour fournir des edges qui match slave/master
         for (TopExp_Explorer aEdgeExplorer1(aFace1,TopAbs_EDGE); aEdgeExplorer1.More();
@@ -1149,7 +1149,7 @@ void OCCFactory::setPeriodicAllFaces(GModel *gm, std::vector<double> FaceTransla
           TopoDS_Edge aEdge1 = TopoDS::Edge(aEdgeExplorer1.Current());
           int numEdgeMaster  = gm->getOCCInternals()->getGTagOfOCCEdgeByNativePtr(gm,aEdge1);
           EdgeListMaster[i1] = numEdgeMaster;
-          i2=0;
+          //i2=0;
           for (TopExp_Explorer aEdgeExplorer2(aFace2,TopAbs_EDGE); aEdgeExplorer2.More();
                aEdgeExplorer2.Next()) {
             TopoDS_Edge aEdge2 = TopoDS::Edge(aEdgeExplorer2.Current());
@@ -1411,7 +1411,7 @@ void OCCFactory::rotate(GModel *gm, std::vector<double> p1, std::vector<double> 
 }
 
 std::vector<GFace *> OCCFactory::addRuledFaces(GModel *gm,
-					      std::vector< std::vector<GEdge *> > wires)
+                                               std::vector< std::vector<GEdge *> > wires)
 {
   std::vector<GFace*> faces;
   Standard_Boolean anIsSolid = Standard_False;
@@ -1545,5 +1545,46 @@ GEntity *OCCFactory::addPipe(GModel *gm, GEntity *base, std::vector<GEdge *> wir
   }
   return ret;
 }
+
+//Prepare SGEOM integration
+#if defined(HAVE_SGEOM) && defined(HAVE_OCC)
+
+#include "SGEOMIncludes.h"
+
+GVertex* SGEOMFactory::addVertex(GModel *gm,double x, double y, double z, double lc)
+{
+  //if (!gm->_sgeom_internals)
+  //  gm->_sgeom_internals = new SGEOM_Internals;
+
+  //gp_Pnt aPnt;
+  //aPnt = gp_Pnt(x, y, z);
+  //BRepBuilderAPI_MakeVertex mkVertex(aPnt);
+  //TopoDS_Vertex occv = mkVertex.Vertex();
+
+  //return gm->_occ_internals->addVertexToModel(gm, occv);
+
+  Msg::Error("addVertex not implemented yet for SGEOMFactory");
+  return 0;
+}
+
+GEdge* SGEOMFactory::addLine(GModel *gm,GVertex *v1, GVertex *v2)
+{
+  Msg::Error("addLine not implemented yet for SGEOMFactory");
+  return 0;
+}
+
+GFace* SGEOMFactory::addPlanarFace(GModel *gm, std::vector<std::vector<GEdge *> > edges)
+{
+  Msg::Error("addPlanarFace not implemented yet for SGEOMFactory");
+  return 0;
+}
+
+GRegion* SGEOMFactory::addVolume(GModel *gm, std::vector<std::vector<GFace *> > faces)
+{
+  Msg::Error("addVolume not implemented yet for SGEOMFactory");
+  return 0;
+}
+
+#endif
 
 #endif

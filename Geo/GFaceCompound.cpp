@@ -1014,6 +1014,8 @@ void GFaceCompound::getBoundingEdges()
   getUniqueEdges(_unique);
 
   l_edges.clear();
+  l_dirs.clear();    // added by Trevor Strickler
+
 
   if(_U0.size()){
     // in case the bounding edges are explicitely given
@@ -1066,7 +1068,35 @@ void GFaceCompound::getBoundingEdges()
       }
     }
   }
+
+    // Added by Trevor Strickler (fill in the l_dirs)
+  std::list<GEdge*>::iterator it_loop;
+  std::list<std::list<GEdge*> >::iterator it_interior;
+  l_edges.clear();
+
+  for( it_interior = _interior_loops.begin(); it_interior != _interior_loops.end(); it_interior++ ){
+    for( it_loop = it_interior->begin(); it_loop != it_interior->end(); it_loop++ ){
+      l_edges.push_back( (*it_loop) );
+      std::list<GEdge*>::iterator it_loop_next = it_loop;
+      it_loop_next++;
+      if( it_loop_next == it_interior->end() )
+        it_loop_next = it_interior->begin();
+      GVertex *vB = (*it_loop)->getBeginVertex();
+      GVertex *vE = (*it_loop)->getEndVertex();
+      GVertex *vB_next = (*it_loop_next)->getBeginVertex();
+      GVertex *vE_next = (*it_loop_next)->getEndVertex();
+      if( vB == vB_next || vB == vE_next )
+        l_dirs.push_back(-1);
+      else if( vE == vB_next || vE == vE_next )
+        l_dirs.push_back(1);
+      else{
+       l_dirs.push_back(0);
+      }
+    }
+  }
+
 }
+
 
 double GFaceCompound::getSizeH() const
 {
@@ -1134,6 +1164,49 @@ void GFaceCompound::computeALoop(std::set<GEdge*> &_unique, std::list<GEdge*> &l
     _unique.erase(it);
 
     bool found = false;
+/* Mod by Trevor Strickler: In the old implementation, the iterator
+    itx was incremented twice per loop and _loops was not set up correctly.
+    The While Loop below replaces the old for loop.
+*/
+    for(int i = 0; i < 2; i++) {
+      std::set<GEdge*>::iterator itx = _unique.begin();
+      while (itx != _unique.end() ){
+        GVertex *v1 = (*itx)->getBeginVertex();
+        GVertex *v2 = (*itx)->getEndVertex();
+
+        std::set<GEdge*>::iterator itp = itx;
+        itx++;
+
+        if(v1 == vE ){
+          _loop.push_back(*itp);
+          vE = v2;
+          i = -1;
+          _unique.erase(itp);
+        }
+        else if(v2 == vE){
+          _loop.push_back(*itp);
+          vE = v1;
+          i=-1;
+          _unique.erase(itp);
+        }
+      }
+
+      if(vB == vE) {
+        found = true;
+        break;
+      }
+
+      if(_unique.empty())  break;
+
+      // Mod by Trevor Strickler: had to wrap this in an if
+      //  or else it was executed when i == -1, which is not good.
+      if( i != -1 ){
+        GVertex *temp = vB;
+        vB = vE;
+        vE = temp;
+      }
+    }
+    /* This is the old version of above nested loops before modified by Trevor Strickler
     for(int i = 0; i < 2; i++) {
       for(std::set<GEdge*>::iterator itx = _unique.begin();
           itx != _unique.end(); ++itx){
@@ -1170,7 +1243,7 @@ void GFaceCompound::computeALoop(std::set<GEdge*> &_unique, std::list<GEdge*> &l
       GVertex *temp = vB;
       vB = vE;
       vE = temp;
-    }
+    }*/
 
     if(found == true) break;
 
@@ -1277,6 +1350,10 @@ GFaceCompound::~GFaceCompound()
   delete ONE;
   delete MONE;
  _deleteInternals();
+}
+
+void GFaceCompound::deleteInternals(){
+  _deleteInternals();
 }
 
 void GFaceCompound::_deleteInternals()
@@ -1965,7 +2042,7 @@ GPoint GFaceCompound::pointInRemeshedOctree(double par1, double par2) const
 
   //create new octree with new mesh elements
   if(!octNew){
-    printf("create new octrre \n");
+    //printf("create new octree \n");
     std::vector<MElement *> myElems;
     for (unsigned int i = 0; i < triangles.size(); i++) myElems.push_back(triangles[i]);
     for (unsigned int i = 0; i < quadrangles.size(); i++) myElems.push_back(quadrangles[i]);
@@ -2001,7 +2078,7 @@ GPoint GFaceCompound::pointInRemeshedOctree(double par1, double par2) const
     octNew = new MElementOctree(myParamElems);
 
     //build kdtree boundary nodes in parametric space
-    printf("build bc kdtree \n");
+    //printf("build bc kdtree \n");
     int nbBCNodes  = myBCNodes.size();
     ANNpointArray uv_nodes = annAllocPts(nbBCNodes, 3);
     std::set<SPoint2>::iterator itp = myBCNodes.begin();
@@ -2602,20 +2679,24 @@ double GFaceCompound::checkAspectRatio() const
       for(int k = 0; k < 3; k++){
         v[k] = t->getVertex(k);
       }
-      std::map<MVertex*,SPoint3>::const_iterator it0 = coordinates.find(v[0]);
-      std::map<MVertex*,SPoint3>::const_iterator it1 = coordinates.find(v[1]);
-      std::map<MVertex*,SPoint3>::const_iterator it2 = coordinates.find(v[2]);
       double p0[3] = {v[0]->x(), v[0]->y(), v[0]->z()};
       double p1[3] = {v[1]->x(), v[1]->y(), v[1]->z()};
       double p2[3] = {v[2]->x(), v[2]->y(), v[2]->z()};
       double a_3D = fabs(triangle_area(p0, p1, p2));
       area3D += a_3D;
-      double q0[3] = {it0->second.x(), it0->second.y(), 0.0};
-      double q1[3] = {it1->second.x(), it1->second.y(), 0.0};
-      double q2[3] = {it2->second.x(), it2->second.y(), 0.0};
-      double a_2D = fabs(triangle_area(q0, q1, q2));
-      if (a_2D > limit) nb++;
-      areaMin = std::min(areaMin,a_2D);
+      std::map<MVertex*,SPoint3>::const_iterator it0 = coordinates.find(v[0]);
+      std::map<MVertex*,SPoint3>::const_iterator it1 = coordinates.find(v[1]);
+      std::map<MVertex*,SPoint3>::const_iterator it2 = coordinates.find(v[2]);
+      if(it0 != coordinates.end() &&
+         it1 != coordinates.end() &&
+         it2 != coordinates.end()){
+        double q0[3] = {it0->second.x(), it0->second.y(), 0.0};
+        double q1[3] = {it1->second.x(), it1->second.y(), 0.0};
+        double q2[3] = {it2->second.x(), it2->second.y(), 0.0};
+        double a_2D = fabs(triangle_area(q0, q1, q2));
+        if (a_2D > limit) nb++;
+        areaMin = std::min(areaMin, a_2D);
+      }
     }
   }
 
@@ -2627,11 +2708,11 @@ double GFaceCompound::checkAspectRatio() const
 
   double AR = M_PI*area3D/(tot_length*tot_length);
 
-  if (areaMin > 0 && areaMin < limit && nb > 3) {
+  if (nb > 3 && areaMin > 0 && areaMin < limit) {
     Msg::Warning("Too small triangles in mapping (a_2D=%g)", areaMin);
   }
   else {
-    Msg::Debug("Geometrical aspect ratio is OK  :-)");
+    Msg::Debug("Geometrical aspect ratio is OK :-)");
   }
 
   return AR;

@@ -41,6 +41,7 @@
 #include "fullMatrix.h"
 #include <vector>
 #if defined(HAVE_PETSC)
+
 #ifndef SWIG
 #include "petsc.h"
 #include "petscksp.h"
@@ -50,39 +51,54 @@ typedef struct _p_Vec* Vec;
 typedef struct _p_KSP* KSP;
 #endif
 
+//support old PETSc version, try to avoid using PETSC_VERSION in other places
+#if PETSC_VERSION_RELEASE != 0 && (PETSC_VERSION_MAJOR < 3  || (PETSC_VERSION_MAJOR == 3 && PETSC_VERSION_MINOR < 2))
+#define KSPDestroy(k) KSPDestroy(*(k))
+#define MatDestroy(m) MatDestroy(*(m))
+#define VecDestroy(v) VecDestroy(*(v))
+#define PetscViewerDestroy(v) PetscViewerDestroy(*(v))
+#define PetscBool PetscTruth
+#define PetscOptionsGetBool PetscOptionsGetTruth
+#endif
+
+
 template <class scalar>
 class linearSystemPETSc : public linearSystem<scalar> {
   protected:
-  int _blockSize; // for block Matrix
-  bool _isAllocated, _kspAllocated, _entriesPreAllocated, _matrixModified;
+  bool _isAllocated, _kspAllocated, _entriesPreAllocated;
+  bool _matrixChangedSinceLastSolve;
+  bool _valuesNotAssembled; //cannot use MatAssembled since MatAssembled return false for an empty matrix
   Mat _a;
   Vec _b, _x;
   KSP _ksp;
   int _localRowStart, _localRowEnd, _localSize, _globalSize;
   sparsityPattern _sparsity;
   void _kspCreate();
+  void _assembleMatrixIfNeeded();
   #ifndef SWIG
   MPI_Comm _comm;
   #endif
+  int _getBlockSizeFromParameters() const;
  public:
-  virtual ~linearSystemPETSc();
+  ~linearSystemPETSc();
   void insertInSparsityPattern (int i, int j);
-  virtual bool isAllocated() const { return _isAllocated; }
-  virtual void preAllocateEntries();
-  virtual void allocate(int nbRows);
+  bool isAllocated() const { return _isAllocated; }
+  void preAllocateEntries();
+  void allocate(int nbRows);
   void print();
-  virtual void clear();
-  virtual void getFromMatrix(int row, int col, scalar &val) const;
-  virtual void addToRightHandSide(int row, const scalar &val);
-  virtual void getFromRightHandSide(int row, scalar &val) const;
-  virtual double normInfRightHandSide() const;
-  virtual void addToMatrix(int row, int col, const scalar &val);
-  virtual void addToSolution(int row, const scalar &val);
-  virtual void getFromSolution(int row, scalar &val) const;
-  virtual void zeroMatrix();
-  virtual void zeroRightHandSide();
-  virtual void zeroSolution();
-  virtual int systemSolve();
+  void clear();
+  void getFromMatrix(int row, int col, scalar &val) const;
+  void addToRightHandSide(int row, const scalar &val);
+  void getFromRightHandSide(int row, scalar &val) const;
+  double normInfRightHandSide() const;
+  void addToMatrix(int row, int col, const scalar &val);
+  void addToSolution(int row, const scalar &val);
+  void getFromSolution(int row, scalar &val) const;
+  void zeroMatrix();
+  void zeroRightHandSide();
+  void zeroSolution();
+  void printMatlab(const char *filename) const;
+  int systemSolve();
   Mat &getMatrix(){ return _a; }
   //std::vector<scalar> getData();
   //std::vector<int> getRowPointers();
@@ -93,38 +109,6 @@ class linearSystemPETSc : public linearSystem<scalar> {
   #endif
   linearSystemPETSc();
 };
-
-class linearSystemPETScBlockDouble : public linearSystem<fullMatrix<double> > {
-  bool _entriesPreAllocated, _isAllocated, _kspAllocated, _matrixModified;
-  sparsityPattern _sparsity;
-  Mat _a;
-  Vec _b, _x;
-  KSP _ksp;
-  int _blockSize, _localRowStart, _localRowEnd, _globalSize, _localSize;
-  bool _sequential;
-  public:
-  void _kspCreate();
-  void print();
-  virtual void addToMatrix(int row, int col, const fullMatrix<double> &val);
-  virtual void addToRightHandSide(int row, const fullMatrix<double> &val);
-  virtual void addToSolution(int row,  const fullMatrix<double> &val);
-  virtual void getFromMatrix(int row, int col, fullMatrix<double> &val ) const;
-  virtual void getFromRightHandSide(int row, fullMatrix<double> &val) const;
-  virtual void getFromSolution(int row, fullMatrix<double> &val) const;
-  void allocate(int nbRows);
-  bool isAllocated() const;
-  int systemSolve();
-  void preAllocateEntries();
-  void clear();
-  void zeroMatrix();
-  void zeroRightHandSide();
-  void zeroSolution();
-  double normInfRightHandSide() const;
-  void insertInSparsityPattern (int i, int j);
-  linearSystemPETScBlockDouble(bool sequential = false);
-  ~linearSystemPETScBlockDouble();
-};
-
 #else
 
 template <class scalar>
@@ -134,20 +118,21 @@ class linearSystemPETSc : public linearSystem<scalar> {
   {
     Msg::Error("PETSc is not available in this version of Gmsh");
   }
-  virtual bool isAllocated() const { return false; }
-  virtual void allocate(int nbRows) {}
-  virtual void clear(){}
-  virtual void addToMatrix(int row, int col, const scalar &val) {}
-  virtual void getFromMatrix(int row, int col, scalar &val) const {}
-  virtual void addToRightHandSide(int row, const scalar &val) {}
-  virtual void addToSolution(int row, const scalar &val) {}
-  virtual void getFromRightHandSide(int row, scalar &val) const {}
-  virtual void getFromSolution(int row, scalar &val) const {}
-  virtual void zeroMatrix() {}
-  virtual void zeroRightHandSide() {}
-  virtual void zeroSolution() {}
-  virtual int systemSolve() { return 0; }
-  virtual double normInfRightHandSide() const{return 0;}
+  bool isAllocated() const { return false; }
+  void allocate(int nbRows) {}
+  void clear(){}
+  void addToMatrix(int row, int col, const scalar &val) {}
+  void getFromMatrix(int row, int col, scalar &val) const {}
+  void addToRightHandSide(int row, const scalar &val) {}
+  void addToSolution(int row, const scalar &val) {}
+  void getFromRightHandSide(int row, scalar &val) const {}
+  void getFromSolution(int row, scalar &val) const {}
+  void zeroMatrix() {}
+  void zeroRightHandSide() {}
+  void zeroSolution() {}
+  void printMatlab(const char *filename) const{};
+  int systemSolve() { return 0; }
+  double normInfRightHandSide() const{return 0;}
 };
 #endif
 #endif

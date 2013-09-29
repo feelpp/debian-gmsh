@@ -10,6 +10,7 @@
 #include "StringUtils.h"
 #include "Context.h"
 #include "Options.h"
+#include "OpenFile.h"
 #include "OS.h"
 
 #if defined(HAVE_OPENGL)
@@ -46,6 +47,8 @@ int GetFileFormatFromExtension(const std::string &ext)
   else if(ext == ".bdf")  return FORMAT_BDF;
   else if(ext == ".diff") return FORMAT_DIFF;
   else if(ext == ".inp")  return FORMAT_INP;
+  else if(ext == ".celum")return FORMAT_CELUM;
+  else if(ext == ".su2")  return FORMAT_SU2;
   else if(ext == ".nas")  return FORMAT_BDF;
   else if(ext == ".p3d")  return FORMAT_P3D;
   else if(ext == ".wrl")  return FORMAT_VRML;
@@ -99,6 +102,8 @@ std::string GetDefaultFileName(int format)
   case FORMAT_BDF:  name += ".bdf"; break;
   case FORMAT_DIFF: name += ".diff"; break;
   case FORMAT_INP:  name += ".inp"; break;
+  case FORMAT_CELUM:name += ".celum"; break;
+  case FORMAT_SU2:  name += ".su2"; break;
   case FORMAT_P3D:  name += ".p3d"; break;
   case FORMAT_VRML: name += ".wrl"; break;
   case FORMAT_PLY2: name += ".ply2"; break;
@@ -204,7 +209,21 @@ static PixelBuffer *GetCompositePixelBuffer(GLenum format, GLenum type)
 }
 #endif
 
-void CreateOutputFile(const std::string &fileName, int format, bool redraw)
+static void change_print_parameter(int frame)
+{
+  double first = CTX::instance()->print.parameterFirst;
+  double last = CTX::instance()->print.parameterLast;
+  double steps = CTX::instance()->print.parameterSteps - 1;
+  if(steps <= 0) steps = 1;
+  double step = (last - first) / steps;
+  double v = first + frame * step * CTX::instance()->post.animStep;
+  Msg::Info("Setting Print.Parameter = %g", v);
+  opt_print_parameter(0, GMSH_SET | GMSH_GUI, v);
+  ParseString(CTX::instance()->print.parameterCommand);
+}
+
+void CreateOutputFile(const std::string &fileName, int format,
+                      bool status, bool redraw)
 {
   std::string name = fileName;
   if(name.empty()) name = GetDefaultFileName(format);
@@ -214,13 +233,13 @@ void CreateOutputFile(const std::string &fileName, int format, bool redraw)
   CTX::instance()->printing = 1;
   bool error = false;
 
-  if(redraw)
+  if(status)
     Msg::StatusBar(true, "Writing '%s'...", name.c_str());
 
   switch (format) {
 
   case FORMAT_AUTO:
-    CreateOutputFile(name, GuessFileFormatFromFileName(name), false);
+    CreateOutputFile(name, GuessFileFormatFromFileName(name), false, false);
     break;
 
   case FORMAT_OPT:
@@ -309,6 +328,16 @@ void CreateOutputFile(const std::string &fileName, int format, bool redraw)
     GModel::current()->writeINP
       (name, CTX::instance()->mesh.saveAll, CTX::instance()->mesh.saveGroupsOfNodes,
        CTX::instance()->mesh.scalingFactor);
+    break;
+
+  case FORMAT_CELUM:
+    GModel::current()->writeCELUM
+      (name, CTX::instance()->mesh.saveAll, CTX::instance()->mesh.scalingFactor);
+    break;
+
+  case FORMAT_SU2:
+    GModel::current()->writeSU2
+      (name, CTX::instance()->mesh.saveAll, CTX::instance()->mesh.scalingFactor);
     break;
 
   case FORMAT_P3D:
@@ -496,66 +525,92 @@ void CreateOutputFile(const std::string &fileName, int format, bool redraw)
 
 #if defined(HAVE_MPEG_ENCODE)
   case FORMAT_MPEG:
+  case FORMAT_MPEG_PREVIEW:
     {
       std::string parFileName = CTX::instance()->homeDir + ".gmsh-mpeg_encode.par";
-      FILE *fp = Fopen(parFileName.c_str(), "w");
-      if(!fp){
-        Msg::Error("Unable to open file '%s'", parFileName.c_str());
-        error = true;
-        break;
+      FILE *fp = 0;
+      if(format != FORMAT_MPEG_PREVIEW){
+        fp = Fopen(parFileName.c_str(), "w");
+        if(!fp){
+          Msg::Error("Unable to open file '%s'", parFileName.c_str());
+          error = true;
+          break;
+        }
       }
-      int numViews = (int)opt_post_nb_views(0, GMSH_GET, 0), numSteps = 0;
-      for(int i = 0; i < numViews; i++){
-        if(opt_view_visible(i, GMSH_GET, 0))
-          numSteps = std::max(numSteps,
-                              (int)opt_view_nb_non_empty_timestep(i, GMSH_GET, 0));
+
+      int numViews = (int)opt_post_nb_views(0, GMSH_GET, 0);
+      int numSteps = 0;
+      int cycle = CTX::instance()->post.animCycle;
+      if(cycle == 0){
+        for(int i = 0; i < numViews; i++){
+          if(opt_view_visible(i, GMSH_GET, 0))
+            numSteps = std::max(numSteps,
+                                (int)opt_view_nb_non_empty_timestep(i, GMSH_GET, 0));
+        }
       }
+      else if(cycle == 1){
+        numSteps = numViews;
+      }
+      else{
+        numSteps = CTX::instance()->print.parameterSteps;
+      }
+
       std::vector<std::string> frames;
-      for(int i = 0; i < (CTX::instance()->post.animCycle ? numViews : numSteps);
-          i += CTX::instance()->post.animStep){
+      for(int i = 0; i < numSteps; i += CTX::instance()->post.animStep){
         char tmp[256];
         sprintf(tmp, ".gmsh-%06d.ppm", (int)frames.size());
         frames.push_back(tmp);
       }
-      status_play_manual(!CTX::instance()->post.animCycle, 0, false);
+      if(cycle != 2)
+        status_play_manual(!cycle, 0, false);
       for(unsigned int i = 0; i < frames.size(); i++){
-        CreateOutputFile(CTX::instance()->homeDir + frames[i], FORMAT_PPM, false);
-        status_play_manual(!CTX::instance()->post.animCycle,
-                           CTX::instance()->post.animStep, false);
+        if(cycle == 2)
+          change_print_parameter(i);
+        if(fp)
+          CreateOutputFile(CTX::instance()->homeDir + frames[i], FORMAT_PPM,
+                           false, false);
+        else{
+          drawContext::global()->draw();
+          SleepInSeconds(CTX::instance()->post.animDelay);
+        }
+        if(cycle != 2)
+          status_play_manual(!cycle, CTX::instance()->post.animStep, false);
       }
-      int repeat = (int)(CTX::instance()->post.animDelay * 24);
-      if(repeat < 1) repeat = 1;
-      std::string pattern("I");
-      // including P frames would lead to smaller files, but the quality
-      // degradation is perceptible:
-      // for(int i = 1; i < repeat; i++) pattern += "P";
-      fprintf(fp, "PATTERN %s\nBASE_FILE_FORMAT PPM\nGOP_SIZE %d\n"
-              "SLICES_PER_FRAME 1\nPIXEL FULL\nRANGE 10\n"
-              "PSEARCH_ALG EXHAUSTIVE\nBSEARCH_ALG CROSS2\n"
-              "IQSCALE 1\nPQSCALE 1\nBQSCALE 25\nREFERENCE_FRAME DECODED\n"
-              "OUTPUT %s\nINPUT_CONVERT *\nINPUT_DIR %s\nINPUT\n",
-              pattern.c_str(), repeat, name.c_str(),
-              CTX::instance()->homeDir.c_str());
-      for(unsigned int i = 0; i < frames.size(); i++){
-        fprintf(fp, "%s", frames[i].c_str());
-        if(repeat > 1) fprintf(fp, " [1-%d]", repeat);
-        fprintf(fp, "\n");
-      }
-      fprintf(fp, "END_INPUT\n");
-      fclose(fp);
-      extern int mpeg_encode_main(int, char**);
-      char *args[] = {(char*)"gmsh", (char*)parFileName.c_str()};
-      try{
-        mpeg_encode_main(2, args);
-      }
-      catch (const char *msg){
-        Msg::Error("%s", msg);
-        error = true;
-      }
-      if(opt_print_delete_tmp_files(0, GMSH_GET, 0)){
-        UnlinkFile(parFileName);
-        for(unsigned int i = 0; i < frames.size(); i++)
-          UnlinkFile(CTX::instance()->homeDir + frames[i]);
+      if(fp){
+        int repeat = (int)(CTX::instance()->post.animDelay * 30);
+        if(repeat < 1) repeat = 1;
+        std::string pattern("I");
+        // including P frames would lead to smaller files, but the quality
+        // degradation is perceptible:
+        // for(int i = 1; i < repeat; i++) pattern += "P";
+        fprintf(fp, "PATTERN %s\nBASE_FILE_FORMAT PPM\nGOP_SIZE %d\n"
+                "SLICES_PER_FRAME 1\nPIXEL FULL\nRANGE 10\n"
+                "PSEARCH_ALG EXHAUSTIVE\nBSEARCH_ALG CROSS2\n"
+                "IQSCALE 1\nPQSCALE 1\nBQSCALE 25\nREFERENCE_FRAME DECODED\n"
+                "OUTPUT %s\nINPUT_CONVERT *\nINPUT_DIR %s\nINPUT\n",
+                pattern.c_str(), repeat, name.c_str(),
+                CTX::instance()->homeDir.c_str());
+        for(unsigned int i = 0; i < frames.size(); i++){
+          fprintf(fp, "%s", frames[i].c_str());
+          if(repeat > 1) fprintf(fp, " [1-%d]", repeat);
+          fprintf(fp, "\n");
+        }
+        fprintf(fp, "END_INPUT\n");
+        fclose(fp);
+        extern int mpeg_encode_main(int, char**);
+        char *args[] = {(char*)"gmsh", (char*)parFileName.c_str()};
+        try{
+          mpeg_encode_main(2, args);
+        }
+        catch (const char *msg){
+          Msg::Error("%s", msg);
+          error = true;
+        }
+        if(opt_print_delete_tmp_files(0, GMSH_GET, 0)){
+          UnlinkFile(parFileName);
+          for(unsigned int i = 0; i < frames.size(); i++)
+            UnlinkFile(CTX::instance()->homeDir + frames[i]);
+        }
       }
     }
     break;
@@ -572,7 +627,7 @@ void CreateOutputFile(const std::string &fileName, int format, bool redraw)
   CTX::instance()->print.fileFormat = oldFormat;
   CTX::instance()->printing = 0;
 
-  if(redraw && !error)
+  if(status && !error)
     Msg::StatusBar(true, "Done writing '%s'", name.c_str());
 
 #if defined(HAVE_OPENGL)

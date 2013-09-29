@@ -9,7 +9,7 @@
 #include "Context.h"
 
 int MPrism::getVolumeSign()
-{ 
+{
   double mat[3][3];
   mat[0][0] = _v[1]->x() - _v[0]->x();
   mat[0][1] = _v[2]->x() - _v[0]->x();
@@ -32,52 +32,20 @@ void MPrism::getIntegrationPoints(int pOrder, int *npts, IntPt **pts)
   *pts = getGQPriPts(pOrder);
 }
 
-const nodalBasis* MPrism::getFunctionSpace(int o) const
+const nodalBasis* MPrism::getFunctionSpace(int order) const
 {
-  int order = (o == -1) ? getPolynomialOrder() : o;
+  if (order == -1) return BasisFactory::getNodalBasis(getTypeForMSH());
 
-  int nv = getNumVolumeVertices();
-
-  if ((nv == 0) && (o == -1)) {
-    switch (order) {
-    case 0: return BasisFactory::getNodalBasis(MSH_PRI_1);
-    case 1: return BasisFactory::getNodalBasis(MSH_PRI_6);
-    case 2: return BasisFactory::getNodalBasis(MSH_PRI_18);
-    default: Msg::Error("Order %d prism function space not implemented", order);
-    }
-  }
-  else {
-    switch (order) {
-    case 0: return BasisFactory::getNodalBasis(MSH_PRI_1);
-    case 1: return BasisFactory::getNodalBasis(MSH_PRI_6);
-    case 2: return BasisFactory::getNodalBasis(MSH_PRI_18);
-    default: Msg::Error("Order %d prism function space not implemented", order);
-    }
-  }
-  return 0;
+  int tag = ElementType::getTag(TYPE_PRI, order);
+  return tag ? BasisFactory::getNodalBasis(tag) : NULL;
 }
 
-const JacobianBasis* MPrism::getJacobianFuncSpace(int o) const
+const JacobianBasis* MPrism::getJacobianFuncSpace(int order) const
 {
-  int order = (o == -1) ? getPolynomialOrder() : o;
+  if (order == -1) return BasisFactory::getJacobianBasis(getTypeForMSH());
 
-  int nv = getNumVolumeVertices();
-  
-  if ((nv == 0) && (o == -1)) {
-    switch (order) {
-    case 1: return BasisFactory::getJacobianBasis(MSH_PRI_6);
-    case 2: return BasisFactory::getJacobianBasis(MSH_PRI_18);
-    default: Msg::Error("Order %d prism function space not implemented", order);
-    }
-  }
-  else { 
-    switch (order) {
-    case 1: return BasisFactory::getJacobianBasis(MSH_PRI_6);
-    case 2: return BasisFactory::getJacobianBasis(MSH_PRI_18);
-    default: Msg::Error("Order %d prism function space not implemented", order);
-    }
-  }
-  return 0;
+  int tag = ElementType::getTag(TYPE_PRI, order);
+  return tag ? BasisFactory::getJacobianBasis(tag) : NULL;
 }
 
 double MPrism::getInnerRadius()
@@ -123,7 +91,7 @@ void MPrism::getFaceInfo(const MFace &face, int &ithFace, int &sign, int &rot) c
     }
     else {
       MVertex *v3 = _v[faces_prism(ithFace, 3)];
-      if (v0 == face.getVertex(0) && v1 == face.getVertex(1) && 
+      if (v0 == face.getVertex(0) && v1 == face.getVertex(1) &&
           v2 == face.getVertex(2) && v3 == face.getVertex(3)){
         sign = 1; rot = 0; return;
       }
@@ -135,7 +103,7 @@ void MPrism::getFaceInfo(const MFace &face, int &ithFace, int &sign, int &rot) c
           v2 == face.getVertex(0) && v3 == face.getVertex(1)){
         sign = 1; rot = 2; return;
       }
-      if (v0 == face.getVertex(3) && v1 == face.getVertex(0) && 
+      if (v0 == face.getVertex(3) && v1 == face.getVertex(0) &&
           v2 == face.getVertex(1) && v3 == face.getVertex(2)){
         sign = 1; rot = 3; return;
       }
@@ -147,7 +115,7 @@ void MPrism::getFaceInfo(const MFace &face, int &ithFace, int &sign, int &rot) c
           v2 == face.getVertex(3) && v3 == face.getVertex(2)){
         sign = -1; rot = 1; return;
       }
-      if (v0 == face.getVertex(2) && v1 == face.getVertex(1) && 
+      if (v0 == face.getVertex(2) && v1 == face.getVertex(1) &&
           v2 == face.getVertex(0) && v3 == face.getVertex(3)){
         sign = -1; rot = 2; return;
       }
@@ -156,7 +124,7 @@ void MPrism::getFaceInfo(const MFace &face, int &ithFace, int &sign, int &rot) c
         sign = -1; rot = 3; return;
       }
     }
-      
+
   }
   Msg::Error("Could not get face information for prism %d", getNum());
 }
@@ -208,11 +176,19 @@ void MPrism18::getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n)
   _myGetEdgeRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
 }
 
+void MPrismN::getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n) {
+  _myGetEdgeRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
+}
+
 int MPrism15::getNumEdgesRep() {
   return 9 * CTX::instance()->mesh.numSubEdges;
 }
 
 int MPrism18::getNumEdgesRep() {
+  return 9 * CTX::instance()->mesh.numSubEdges;
+}
+
+int MPrismN::getNumEdgesRep() {
   return 9 * CTX::instance()->mesh.numSubEdges;
 }
 
@@ -445,10 +421,100 @@ void MPrism18::getFaceRep(int num, double *x, double *y, double *z, SVector3 *n)
   _myGetFaceRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
 }
 
+void MPrismN::getFaceRep(int num, double *x, double *y, double *z, SVector3 *n)
+{
+  _myGetFaceRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
+}
+
 int MPrism15::getNumFacesRep() {
   return 4 * (CTX::instance()->mesh.numSubEdges * CTX::instance()->mesh.numSubEdges * 2);
 }
 
 int MPrism18::getNumFacesRep() {
   return 4 * (CTX::instance()->mesh.numSubEdges * CTX::instance()->mesh.numSubEdges * 2);
+}
+
+int MPrismN::getNumFacesRep() {
+  return 4 * (CTX::instance()->mesh.numSubEdges * CTX::instance()->mesh.numSubEdges * 2);
+}
+
+namespace {
+
+void _addEdgeNodes(int num, bool reverse, int order, const std::vector<MVertex*> &vs,
+                   int &ind, std::vector<MVertex*> &v)
+{
+
+  const int nNode = order-1, startNode = num*nNode, endNode = startNode+nNode-1;
+
+  if (reverse)
+    for (int i=endNode; i>=startNode; i--, ind++) v[ind] = vs[i];
+  else
+    for (int i=startNode; i<=endNode; i++, ind++) v[ind] = vs[i];
+
+}
+
+void _addFaceNodes(int num, int order, const std::vector<MVertex*> &vs,
+                   int &ind, std::vector<MVertex*> &v)
+{
+
+  const int nNodeEd = order-1, nNodeTri = (order-2)*(order-1)/2;
+
+  int startNode, endNode;
+  if (num < 2) {
+    startNode = 9*nNodeEd+num*nNodeTri;
+    endNode = startNode+nNodeTri;
+  }
+  else {
+    const int nNodeQuad = (order-1)*(order-1);
+    startNode = 9*nNodeEd+2*nNodeTri+(num-2)*nNodeQuad;
+    endNode = startNode+nNodeQuad;
+  }
+
+  for (int i=startNode; i<endNode; i++, ind++) v[ind] = vs[i];
+
+}
+
+}
+
+// To be tested
+void MPrismN::getFaceVertices(const int num, std::vector<MVertex*> &v) const
+{
+
+  static const int edge[5][4] = {
+      {1, 3, 0, -1},
+      {6, 8, 7, -1},
+      {0, 4, 6, 2},
+      {2, 7, 5, 1},
+      {3, 5, 8, 4}
+  };
+  static const bool reverse[5][4] = {
+      {false, true, true, false},
+      {false, false, true, false},
+      {false, false, true, true},
+      {false, false, true, true},
+      {false, false, true, true}
+  };
+
+  int nNodeTotal, nEdge;
+  if (num < 2) {                            // Triangular face
+    nNodeTotal = (_order+1)*(_order+2)/2;
+    nEdge = 3;
+  }
+  else {                                    // Quad face
+    nNodeTotal = (_order+1)*(_order+1);
+    nEdge = 4;
+  }
+
+  v.resize(nNodeTotal);
+
+  // Add corner nodes (there are nEdge corner nodes)
+  MPrism::_getFaceVertices(num, v);
+  int ind = nEdge;
+
+  // Add edge nodes
+  for (int iE=0; iE<nEdge; iE++) _addEdgeNodes(edge[num][iE],reverse[num][iE],_order,_vs,ind,v);
+
+  // Add face nodes
+  _addFaceNodes(num,_order,_vs,ind,v);
+
 }

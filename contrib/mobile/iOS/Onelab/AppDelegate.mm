@@ -7,15 +7,19 @@
 //
 
 #import "AppDelegate.h"
+#import "ModelListController.h"
 
 @implementation AppDelegate
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
     // Override point for customization after application launch.
-    UISplitViewController *splitViewController = (UISplitViewController *)self.window.rootViewController;
-    UINavigationController *navigationController = [splitViewController.viewControllers lastObject];
-    splitViewController.delegate = (id)navigationController.topViewController;
+    self.modelListController = (ModelListController *)self.window.rootViewController;
+    if([[UIDevice currentDevice].model isEqualToString:@"iPad"] || [[UIDevice currentDevice].model isEqualToString:@"iPad Simulator"]) {
+        UIStoryboard *storyboard = [UIStoryboard storyboardWithName:@"iPadStoryboard" bundle:nil];
+        self.splitViewController = [storyboard instantiateViewControllerWithIdentifier:@"SplitViewController"];
+    }
+    compute = false;
     return YES;
 }
 							
@@ -44,6 +48,12 @@
 - (void)applicationWillTerminate:(UIApplication *)application
 {
     // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
+}
+
+-(void)application:(UIApplication *)application didReceiveLocalNotification:(UILocalNotification *)notification
+{
+	application.applicationIconBadgeNumber = -1;
+	[UIApplication sharedApplication].applicationIconBadgeNumber = -1;
 }
 
 @end

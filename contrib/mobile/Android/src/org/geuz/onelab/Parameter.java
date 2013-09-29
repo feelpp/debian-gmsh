@@ -1,6 +1,5 @@
 package org.geuz.onelab;
 
-
 import android.content.Context;
 import android.graphics.Color;
 import android.widget.LinearLayout;
@@ -10,18 +9,15 @@ import android.widget.TextView;
 public class Parameter {
 	protected Context _context;
 	protected Gmsh _gmsh;
-	protected SeparatedListView _listView;
-	protected mGLSurfaceView _glView;
 	protected String _name;
 	protected String _label;
 	protected boolean _readOnly;
 	protected boolean _changed;
 	protected TextView _title;
 
-	public Parameter(Context context, Gmsh gmsh, mGLSurfaceView glView, String name){
+	public Parameter(Context context, Gmsh gmsh, String name){
 		_context = context;
 		_gmsh = gmsh;
-		_glView = glView;
 		_readOnly = false;
 		_name = name;
 		_title = new TextView(context);
@@ -29,8 +25,8 @@ public class Parameter {
 		_title.setTextAppearance(context, android.R.style.TextAppearance_DeviceDefault_Medium);
 		_title.setTextColor(Color.DKGRAY);
 	}
-	public Parameter(Context context, Gmsh gmsh, mGLSurfaceView glView, String name, boolean readOnly){
-		this(context, gmsh, glView, name);
+	public Parameter(Context context, Gmsh gmsh, String name, boolean readOnly){
+		this(context, gmsh, name);
 		_readOnly = readOnly;
 		_changed = false;
 	}
@@ -38,21 +34,30 @@ public class Parameter {
 	protected void update(){
 		if(_label != null && !_label.equals(""))
 			_title.setText(_label);
-		else {
-			String tmp[] = _name.split("/");
-			_title.setText(tmp[tmp.length-1]);
-		}
+		else
+			_title.setText(getShortName());
 		if(isReadOnly()) _title.setAlpha(0.423f);
 	}
 	
 	public void setName(String name) {_name = name;this.update();}
 	public void setReadOnly(boolean readOnly) {_readOnly = readOnly;this.update();}
-	public void setLabel(String label) {_label = label;this.update();}
-	public String getName() {return _name;}
+	public void setLabel(String label) {
+		_label = label;
+		this.update();
+	}
+	public String getName() { return _name;}
+	public String getShortName() {
+		if(_label != null && _label.length() > 0) return _label;
+		String[] splited = _name.split("/");
+		String name = splited[splited.length-1];
+		while(name.length() > 0 && name.charAt(0) >= '0' && name.charAt(0) <= '9')
+			name = name.substring(1);
+		return name;
+	}
 	public boolean isReadOnly() {return _readOnly;}
 	public String getLabel() {return _label;}
 	public int fromString(String s){
-		String[] infos = s.split("\n");
+		String[] infos = s.split(Character.toString((char)0x03));
 		int pos=0;
 		pos++;// version
 		pos++;// type
@@ -72,8 +77,6 @@ public class Parameter {
 	}
 	public boolean changed() { if(_changed){_changed=false; return true;}return _changed;}
 	public String getType(){return "Parameter";}
-	
-	public void setList(SeparatedListView list){ _listView = list;}
 	
 	public LinearLayout getView() {
 		LinearLayout paramLayout = new LinearLayout(_context);

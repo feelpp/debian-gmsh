@@ -78,7 +78,9 @@ GModel::GModel(std::string name)
   // at the moment we always create (at least an empty) GEO model
   _createGEOInternals();
 
-#if defined(HAVE_OCC)
+#if defined(HAVE_OCC) && defined(HAVE_SGEOM)
+  setFactory("SGEOM");
+#elif defined(HAVE_OCC)
   setFactory("OpenCASCADE");
 #else
   setFactory("Gmsh");
@@ -139,7 +141,15 @@ int GModel::setCurrent(GModel *m)
 void GModel::setFactory(std::string name)
 {
   if(_factory) delete _factory;
-  if(name == "OpenCASCADE"){
+  if(name == "SGEOM"){
+#if defined(HAVE_OCC) && defined(HAVE_SGEOM)
+    _factory = new SGEOMFactory();
+#else
+    Msg::Error("Missing OpenCASCADE or SGEOM support: using Gmsh GEO factory instead");
+    _factory = new GeoFactory();
+#endif
+  }
+  else if(name == "OpenCASCADE"){
 #if defined(HAVE_OCC)
     _factory = new OCCFactory();
 #else
@@ -231,26 +241,6 @@ void GModel::deleteMesh()
 bool GModel::empty() const
 {
   return vertices.empty() && edges.empty() && faces.empty() && regions.empty();
-}
-
-std::vector<GRegion*> GModel::bindingsGetRegions()
-{
-  return std::vector<GRegion*> (regions.begin(), regions.end());
-}
-
-std::vector<GFace*> GModel::bindingsGetFaces()
-{
-  return std::vector<GFace*> (faces.begin(), faces.end());
-}
-
-std::vector<GEdge*> GModel::bindingsGetEdges()
-{
-  return std::vector<GEdge*> (edges.begin(), edges.end());
-}
-
-std::vector<GVertex*> GModel::bindingsGetVertices()
-{
-  return std::vector<GVertex*> (vertices.begin(), vertices.end());
 }
 
 GRegion *GModel::getRegionByTag(int n) const
@@ -877,6 +867,7 @@ MElement *GModel::getMeshElementByTag(int n)
 int GModel::getMeshElementIndex(MElement *e)
 {
   if(!e) return 0;
+  if(_elementIndexCache.empty()) return e->getNum();
   std::map<int, int>::iterator it = _elementIndexCache.find(e->getNum());
   if(it != _elementIndexCache.end()) return it->second;
   return e->getNum();
@@ -2672,10 +2663,12 @@ GEdge *GModel::addNURBS(GVertex *start, GVertex *end,
   return 0;
 }
 
-void GModel::addRuledFaces (std::vector<std::vector<GEdge *> > edges)
+std::vector<GFace *> GModel::addRuledFaces (std::vector<std::vector<GEdge *> > edges)
 {
+  std::vector<GFace *> faces;
   if(_factory)
-    _factory->addRuledFaces(this, edges);
+    faces = _factory->addRuledFaces(this, edges);
+  return faces;
 }
 
 GFace* GModel::addFace (std::vector<GEdge *> edges,
@@ -2686,13 +2679,15 @@ GFace* GModel::addFace (std::vector<GEdge *> edges,
   return 0;
 }
 
-GFace* GModel::addPlanarFace (std::vector<std::vector<GEdge *> > edges){
+GFace* GModel::addPlanarFace (std::vector<std::vector<GEdge *> > edges)
+{
   if(_factory)
     return _factory->addPlanarFace(this, edges);
   return 0;
 }
 
-GRegion* GModel::addVolume (std::vector<std::vector<GFace *> > faces){
+GRegion* GModel::addVolume (std::vector<std::vector<GFace *> > faces)
+{
   if(_factory)
     return _factory->addVolume(this, faces);
   return 0;
@@ -2727,7 +2722,8 @@ GEntity *GModel::extrude(GEntity *e, std::vector<double> p1, std::vector<double>
   return 0;
 }
 
-std::vector<GEntity*> GModel::extrudeBoundaryLayer(GEntity *e, int nbLayers, double hLayers, int dir, int view)
+std::vector<GEntity*> GModel::extrudeBoundaryLayer(GEntity *e, int nbLayers,
+                                                   double hLayers, int dir, int view)
 {
   if(_factory)
     return _factory->extrudeBoundaryLayer(this, e, nbLayers,hLayers, dir, view);
