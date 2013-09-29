@@ -201,7 +201,7 @@ class MElement
   virtual double getOuterRadius(){ return 0.; }
 
   // compute the barycenter
-  virtual SPoint3 barycenter() const;
+  virtual SPoint3 barycenter(bool primary = false) const;
   virtual SPoint3 barycenterUVW() const;
   // compute the barycenter in infinity norm
   virtual SPoint3 barycenter_infty() const;
@@ -238,7 +238,7 @@ class MElement
   virtual void getShapeFunctions(double u, double v, double w, double s[],
                                  int order=-1) const;
 
-  // return the gradient of of the nodal shape functions evaluated at
+  // return the gradient of the nodal shape functions evaluated at
   // point (u,v,w) in parametric coordinates (if order == -1, use the
   // polynomial order of the element)
   virtual void getGradShapeFunctions(double u, double v, double w, double s[][3],
@@ -343,6 +343,7 @@ class MElement
   virtual void writeDIFF(FILE *fp, int num, bool binary=false,
                          int physical_property=1);
   virtual void writeINP(FILE *fp, int num);
+  virtual void writeSU2(FILE *fp, int num);
 
   // info for specific IO formats (returning 0 means that the element
   // is not implemented in that format)

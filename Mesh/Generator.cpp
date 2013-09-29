@@ -4,6 +4,7 @@
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
 
 #include <stdlib.h>
+#include <stack>
 #include "GmshConfig.h"
 #include "GmshMessage.h"
 #include "Numeric.h"
@@ -491,8 +492,30 @@ static void Mesh2D(GModel *m)
 #endif
       for(size_t K = 0 ; K < temp.size() ; K++){
 	if (temp[K]->meshStatistics.status == GFace::PENDING){
+          backgroundMesh::current()->unset();
 	  meshGFace mesher(true, CTX::instance()->mesh.multiplePasses);
 	  mesher(temp[K]);
+
+#if defined(HAVE_BFGS)
+          if(CTX::instance()->mesh.optimizeLloyd){
+            if (temp[K]->geomType()==GEntity::CompoundSurface ||
+                temp[K]->geomType()==GEntity::Plane || temp[K]->geomType()==GEntity::RuledSurface) {
+              if (temp[K]->meshAttributes.method != MESH_TRANSFINITE &&
+                  !temp[K]->meshAttributes.extrude) {
+                smoothing smm(CTX::instance()->mesh.optimizeLloyd,6);
+                //m->writeMSH("beforeLLoyd.msh");
+                smm.optimize_face(temp[K]);
+                int rec = ((CTX::instance()->mesh.recombineAll ||
+                            temp[K]->meshAttributes.recombine) &&
+                           !CTX::instance()->mesh.recombine3DAll);
+                //m->writeMSH("afterLLoyd.msh");
+                if (rec) recombineIntoQuads(temp[K]);
+                //m->writeMSH("afterRecombine.msh");
+              }
+            }
+          }
+#endif
+
 #if defined(_OPENMP)
 #pragma omp critical
 #endif
@@ -508,8 +531,30 @@ static void Mesh2D(GModel *m)
       for(std::set<GFace*, GEntityLessThan>::iterator it = cf.begin();
           it != cf.end(); ++it){
         if ((*it)->meshStatistics.status == GFace::PENDING){
-	  meshGFace mesher(true, CTX::instance()->mesh.multiplePasses);
+          backgroundMesh::current()->unset();
+          meshGFace mesher(true, CTX::instance()->mesh.multiplePasses);
           mesher(*it);
+
+#if defined(HAVE_BFGS)
+          if(CTX::instance()->mesh.optimizeLloyd){
+            if ((*it)->geomType()==GEntity::CompoundSurface ||
+                (*it)->geomType()==GEntity::Plane || (*it)->geomType()==GEntity::RuledSurface) {
+              if ((*it)->meshAttributes.method != MESH_TRANSFINITE &&
+                  !(*it)->meshAttributes.extrude) {
+                smoothing smm(CTX::instance()->mesh.optimizeLloyd,6);
+                //m->writeMSH("beforeLLoyd.msh");
+                smm.optimize_face(*it);
+                int rec = ((CTX::instance()->mesh.recombineAll ||
+                            (*it)->meshAttributes.recombine) &&
+                           !CTX::instance()->mesh.recombine3DAll);
+                //m->writeMSH("afterLLoyd.msh");
+                if (rec) recombineIntoQuads(*it);
+                //m->writeMSH("afterRecombine.msh");
+              }
+            }
+          }
+#endif
+
           nPending++;
         }
         if(!nIter) Msg::ProgressMeter(nPending, nTot, false, "Meshing 2D...");
@@ -518,36 +563,6 @@ static void Mesh2D(GModel *m)
       if(nIter++ > 10) break;
     }
   }
-
-#if defined(HAVE_BFGS)
-  // lloyd optimization
-  if (CTX::instance()->mesh.optimizeLloyd){
-    for(GModel::fiter it = m->firstFace(); it != m->lastFace(); ++it){
-      if((*it)->geomType()==GEntity::CompoundSurface || (*it)->geomType()==GEntity::Plane){
-	smoothing smm(CTX::instance()->mesh.optimizeLloyd,6);
-	m->writeMSH("beforeLLoyd.msh");
-	smm.optimize_face(*it);
-	//int rec = 1;//(CTX::instance()->mesh.recombineAll ||
-        //              (*it)->meshAttributes.recombine);
-	m->writeMSH("afterLLoyd.msh");
-	//if(rec) recombineIntoQuads(*it);
-	//m->writeMSH("afterRecombine.msh");
-      }
-    }
-    /*
-    for(GModel::fiter it = m->firstFace(); it != m->lastFace(); ++it){
-      GFace *gf = *it;
-      if(gf->geomType() == GEntity::DiscreteSurface) continue;
-      if(gf->geomType() == GEntity::CompoundSurface) {
-        GFaceCompound *gfc = (GFaceCompound*) gf;
-        if(gfc->getNbSplit() != 0) continue;
-      }
-      Msg::Info("Lloyd optimization for face %d", gf->tag());
-      gf->lloyd(25, rec);
-    }
-    */
-  }
-#endif
 
   // collapseSmallEdges(*m);
 
@@ -561,8 +576,36 @@ static void Mesh2D(GModel *m)
 static void FindConnectedRegions(std::vector<GRegion*> &delaunay,
                                  std::vector<std::vector<GRegion*> > &connected)
 {
-  // FIXME: need to split region vector into connected components here!
-  connected.push_back(delaunay);
+  const unsigned int nbVolumes = delaunay.size();
+  if (!nbVolumes)return;
+  while (delaunay.size()){
+    std::set<GRegion*> oneDomain;
+    std::stack<GRegion*> _stack;  
+    GRegion *r = delaunay[0];
+    _stack.push(r);  
+    while(!_stack.empty()){
+      r = _stack.top();
+      _stack.pop();
+      oneDomain.insert(r);
+      std::list<GFace*> faces = r->faces();
+      for (std::list<GFace*> :: iterator it = faces.begin(); it != faces.end() ; ++it){
+	GFace *gf = *it;
+	GRegion *other = gf->getRegion(0) == r ? gf->getRegion(1) : gf->getRegion(0);
+	if (other != 0 && oneDomain.find(other) == oneDomain.end())
+	  _stack.push (other);
+      }
+    }
+    std::vector<GRegion*> temp1,temp2;
+    for (unsigned int i=0;i<delaunay.size();i++){
+      r = delaunay[i];
+      if (oneDomain.find(r) == oneDomain.end())temp1.push_back(r);
+      else temp2.push_back(r);
+    }
+    connected.push_back(temp2);
+    delaunay=temp1;
+  }
+  Msg::Info("Delaunay Meshing %d volumes with %d connected components",
+	    nbVolumes,connected.size()); 
 }
 
 static void Mesh3D(GModel *m)
@@ -592,6 +635,7 @@ static void Mesh3D(GModel *m)
   FindConnectedRegions(delaunay, connected);
 
   // remove quads elements for volumes that are recombined
+  // pragma OMP ICI ?? 
   for(unsigned int i = 0; i < connected.size(); i++){
     for(unsigned j=0;j<connected[i].size();j++){
       GRegion *gr = connected[i][j];
@@ -603,6 +647,7 @@ static void Mesh3D(GModel *m)
     }
   }
 
+  // pragma OMP ICI ?? 
   for(unsigned int i = 0; i < connected.size(); i++){
     MeshDelaunayVolume(connected[i]);
 

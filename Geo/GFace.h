@@ -17,6 +17,7 @@
 #include "SVector3.h"
 #include "Pair.h"
 #include "Numeric.h"
+#include "boundaryLayersData.h"
 
 class MElement;
 class MTriangle;
@@ -49,6 +50,7 @@ class GFace : public GEntity
   // replace edges (for gluing) for specific modelers, we have to
   // re-create internal data
   virtual void replaceEdgesInternal(std::list<GEdge*> &){}
+  BoundaryLayerColumns _columns;
 
  public: // this will become protected or private
   std::list<GEdgeLoop> edgeLoops;
@@ -93,8 +95,9 @@ class GFace : public GEntity
   // edges that bound the face
   virtual std::list<GEdge*> edges() const { return l_edges; }
   virtual std::list<int> edgeOrientations() const { return l_dirs; }
-  inline bool containsEdge (int iEdge) const {
-    for (std::list<GEdge*>::const_iterator it = l_edges.begin() ; it !=l_edges.end() ; ++it)
+  inline bool containsEdge (int iEdge) const
+  {
+    for (std::list<GEdge*>::const_iterator it = l_edges.begin(); it !=l_edges.end(); ++it)
       if ((*it)->tag() == iEdge) return true;
     return false;
   }
@@ -261,7 +264,7 @@ class GFace : public GEntity
   // points are at most maxDist apart
   bool fillPointCloud(double maxDist,
 		      std::vector<SPoint3> *points,
-		      std::vector<SPoint2> *uvpoints,
+		      std::vector<SPoint2> *uvpoints=0,
                       std::vector<SVector3> *normals=0);
 
   // apply Lloyd's algorithm to the mesh
@@ -332,6 +335,14 @@ class GFace : public GEntity
   void addTriangle(MTriangle *t){ triangles.push_back(t); }
   void addQuadrangle(MQuadrangle *q){ quadrangles.push_back(q); }
   void addPolygon(MPolygon *p){ polygons.push_back(p); }
+
+  // get the boundary layer columns
+  BoundaryLayerColumns *getColumns () {return &_columns;}
+
+  std::vector<SPoint3> storage1; //sizes and directions storage
+  std::vector<SVector3> storage2; //sizes and directions storage
+  std::vector<SVector3> storage3; //sizes and directions storage
+  std::vector<double> storage4; //sizes and directions storage
 };
 
 #endif

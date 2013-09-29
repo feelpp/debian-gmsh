@@ -109,6 +109,7 @@ std::string opt_view_stipple7(OPT_ARGS_STR);
 std::string opt_view_stipple8(OPT_ARGS_STR);
 std::string opt_view_stipple9(OPT_ARGS_STR);
 std::string opt_view_attributes(OPT_ARGS_STR);
+std::string opt_print_parameter_command(OPT_ARGS_STR);
 
 // NUMBERS
 
@@ -433,6 +434,7 @@ double opt_mesh_algo3d(OPT_ARGS_NUM);
 double opt_mesh_algo_recombine(OPT_ARGS_NUM);
 double opt_mesh_recombine_all(OPT_ARGS_NUM);
 double opt_mesh_recombine3d_all(OPT_ARGS_NUM);
+double opt_mesh_flexible_transfinite(OPT_ARGS_NUM);
 double opt_mesh_do_recombination_test(OPT_ARGS_NUM);
 double opt_mesh_recombination_test_start(OPT_ARGS_NUM);
 double opt_mesh_recombination_no_greedy_strat(OPT_ARGS_NUM);
@@ -667,6 +669,10 @@ double opt_print_composite_windows(OPT_ARGS_NUM);
 double opt_print_delete_tmp_files(OPT_ARGS_NUM);
 double opt_print_height(OPT_ARGS_NUM);
 double opt_print_width(OPT_ARGS_NUM);
+double opt_print_parameter(OPT_ARGS_NUM);
+double opt_print_parameter_first(OPT_ARGS_NUM);
+double opt_print_parameter_last(OPT_ARGS_NUM);
+double opt_print_parameter_steps(OPT_ARGS_NUM);
 
 // COLORS
 

@@ -270,6 +270,10 @@ static int _save_diff(const char *name){ return genericMeshFileDialog
     (name, "Diffpack Options", FORMAT_DIFF, true, false); }
 static int _save_inp(const char *name){ return unvinpFileDialog
     (name, "Abaqus INP Options", FORMAT_INP); }
+static int _save_celum(const char *name){ return genericMeshFileDialog
+    (name, "CELUM Options", FORMAT_CELUM, false, false); }
+static int _save_su2(const char *name){ return genericMeshFileDialog
+    (name, "SU2 Options", FORMAT_SU2, false, false); }
 static int _save_med(const char *name){ return genericMeshFileDialog
     (name, "MED Options", FORMAT_MED, false, false); }
 static int _save_mesh(const char *name){ return genericMeshFileDialog
@@ -332,6 +336,8 @@ static int _save_auto(const char *name)
   case FORMAT_BDF  : return _save_bdf(name);
   case FORMAT_DIFF : return _save_diff(name);
   case FORMAT_INP  : return _save_inp(name);
+  case FORMAT_CELUM: return _save_celum(name);
+  case FORMAT_SU2  : return _save_su2(name);
   case FORMAT_P3D  : return _save_p3d(name);
   case FORMAT_IR3  : return _save_ir3(name);
   case FORMAT_STL  : return _save_stl(name);
@@ -371,6 +377,7 @@ static void file_save_as_cb(Fl_Widget *w, void *data)
 #endif
     {"Mesh - Gmsh MSH" TT "*.msh", _save_msh},
     {"Mesh - Abaqus INP" TT "*.inp", _save_inp},
+    {"Mesh - CELUM" TT "*.celum", _save_celum},
 #if defined(HAVE_LIBCGNS)
     {"Mesh - CGNS (Experimental)" TT "*.cgns", _save_cgns},
 #endif
@@ -388,6 +395,7 @@ static void file_save_as_cb(Fl_Widget *w, void *data)
     {"Mesh - VRML Surface" TT "*.wrl", _save_vrml},
     {"Mesh - VTK" TT "*.vtk", _save_vtk},
     {"Mesh - PLY2 Surface" TT "*.ply2", _save_ply2},
+    {"Mesh - SU2" TT "*.su2", _save_su2},
     {"Post-processing - Gmsh POS" TT "*.pos", _save_view_pos},
 #if defined(HAVE_MED)
     {"Post-processing - MED" TT "*.rmed", _save_view_med},
@@ -1604,6 +1612,13 @@ static std::vector<std::string> getInfoStrings(MElement *ele)
   }
   {
     std::ostringstream sstream;
+    sstream << " Edge length: "
+            << "min = " << ele->minEdge() << " "
+            << "max = " << ele->maxEdge();
+    info.push_back(sstream.str());
+  }
+  {
+    std::ostringstream sstream;
     sstream << " Quality: "
             << "rho = " << ele->rhoShapeMeasure() << " "
             << "gamma = " << ele->gammaShapeMeasure() << " "
@@ -2171,27 +2186,178 @@ void status_xyz1p_cb(Fl_Widget *w, void *data)
   FlGui::instance()->manip->update();
 }
 
-void status_options_cb(Fl_Widget *w, void *data)
+void quick_access_cb(Fl_Widget *w, void *data)
 {
-  const char *str = (const char*)data;
-  if(!strcmp(str, "model")){ // model selection
-    modelChooser();
+  if(!data) return;
+  std::string what((const char*)data);
+  if(what == "general")
+    general_options_cb(0, 0);
+  else if(what == "geometry")
+    geometry_options_cb(0, 0);
+  else if(what == "mesh")
+    mesh_options_cb(0, 0);
+  else if(what == "view")
+    view_options_cb(0, (void *)-1);
+  else if(what == "axes"){
+    opt_general_axes(0, GMSH_SET|GMSH_GUI, !opt_general_axes(0, GMSH_GET, 0));
+    for(unsigned int i = 0; i < PView::list.size(); i++)
+      if(opt_view_visible(i, GMSH_GET, 0))
+        opt_view_axes(i, GMSH_SET | GMSH_GUI, !opt_view_axes(i, GMSH_GET, 0));
   }
-  else if(!strcmp(str, "?")){ // display options
-    help_options_cb(0, 0);
-    FlGui::instance()->help->options->show();
-  }
-  else if(!strcmp(str, "p")){ // toggle projection mode
-    if(!Fl::event_state(FL_SHIFT)){
-      opt_general_orthographic(0, GMSH_SET | GMSH_GUI,
-                               !opt_general_orthographic(0, GMSH_GET, 0));
-    }
-    else{
-      perspectiveEditor();
-    }
+  else if(what == "orthographic")
+    opt_general_orthographic(0, GMSH_SET | GMSH_GUI, 1);
+  else if(what == "perspective"){
+    opt_general_orthographic(0, GMSH_SET | GMSH_GUI, 0);
     drawContext::global()->draw();
+    numberOrStringOptionChooser("General", 0, "ClipFactor",
+                                true, "Factor", true, 0.1, 20., 0.1);
   }
-  else if(!strcmp(str, "M")){ // toggle mesh display
+  else if(what == "geometry_points")
+    opt_geometry_points(0, GMSH_SET|GMSH_GUI,
+                        !opt_geometry_points(0, GMSH_GET, 0));
+  else if(what == "geometry_lines")
+    opt_geometry_lines(0, GMSH_SET|GMSH_GUI,
+                       !opt_geometry_lines(0, GMSH_GET, 0));
+  else if(what == "geometry_surfaces")
+    opt_geometry_surfaces(0, GMSH_SET|GMSH_GUI,
+                          !opt_geometry_surfaces(0, GMSH_GET, 0));
+  else if(what == "geometry_volumes")
+    opt_geometry_volumes(0, GMSH_SET|GMSH_GUI,
+                         !opt_geometry_volumes(0, GMSH_GET, 0));
+  else if(what == "mesh_points")
+    opt_mesh_points(0, GMSH_SET|GMSH_GUI,
+                    !opt_mesh_points(0, GMSH_GET, 0));
+  else if(what == "mesh_lines")
+    opt_mesh_lines(0, GMSH_SET|GMSH_GUI,
+                   !opt_mesh_lines(0, GMSH_GET, 0));
+  else if(what == "mesh_surfaces_edges")
+    opt_mesh_surfaces_edges(0, GMSH_SET|GMSH_GUI,
+                            !opt_mesh_surfaces_edges(0, GMSH_GET, 0));
+  else if(what == "mesh_surfaces_faces")
+    opt_mesh_surfaces_faces(0, GMSH_SET|GMSH_GUI,
+                            !opt_mesh_surfaces_faces(0, GMSH_GET, 0));
+  else if(what == "mesh_volumes_edges")
+    opt_mesh_volumes_edges(0, GMSH_SET|GMSH_GUI,
+                           !opt_mesh_volumes_edges(0, GMSH_GET, 0));
+  else if(what == "mesh_volumes_faces")
+    opt_mesh_volumes_faces(0, GMSH_SET|GMSH_GUI,
+                           !opt_mesh_volumes_faces(0, GMSH_GET, 0));
+  else if(what == "mesh_size")
+    numberOrStringOptionChooser("Mesh", 0, "CharacteristicLengthFactor",
+                                true, "Factor", true, 0.01, 100, 0.01);
+  else if(what == "view_element_outlines"){
+    int set = 0;
+    for(unsigned int i = 0; i < PView::list.size(); i++)
+      if(opt_view_visible(i, GMSH_GET, 0) &&
+         (set = opt_view_show_element(i, GMSH_GET, 0)))
+        break;
+    for(unsigned int i = 0; i < PView::list.size(); i++)
+      if(opt_view_visible(i, GMSH_GET, 0))
+        opt_view_show_element(i, GMSH_SET|GMSH_GUI, !set);
+  }
+  else if(what == "view_normal_raise"){
+    double val = 0.;
+    for(unsigned int i = 0; i < PView::list.size(); i++){
+      if(opt_view_visible(i, GMSH_GET, 0)){
+        double maxval = std::max(fabs(opt_view_min(i, GMSH_GET, 0)),
+                                 fabs(opt_view_max(i, GMSH_GET, 0)));
+        if(!maxval) maxval = 1.;
+        double val2 = 2. * CTX::instance()->lc / maxval;
+        val = numberOrStringOptionChooser("View", i, "NormalRaise",
+                                          true, "Raise", true, -val2, val2, val2 / 200.);
+        break;
+      }
+    }
+    for(unsigned int i = 0; i < PView::list.size(); i++)
+      if(opt_view_visible(i, GMSH_GET, 0))
+        opt_view_normal_raise(i, GMSH_SET|GMSH_GUI, val);
+  }
+  else if(what == "view_iso"){
+    for(unsigned int i = 0; i < PView::list.size(); i++)
+      if(opt_view_visible(i, GMSH_GET, 0))
+        opt_view_intervals_type(i, GMSH_SET|GMSH_GUI, 1);
+    drawContext::global()->draw();
+    double val = 0.;
+    for(unsigned int i = 0; i < PView::list.size(); i++){
+      if(opt_view_visible(i, GMSH_GET, 0)){
+        val = numberOrStringOptionChooser("View", i, "NbIso",
+                                          true, "Intervals", true, 1, 100, 1);
+        break;
+      }
+    }
+    for(unsigned int i = 0; i < PView::list.size(); i++)
+      if(opt_view_visible(i, GMSH_GET, 0))
+        opt_view_nb_iso(i, GMSH_SET|GMSH_GUI, val);
+  }
+  else if(what == "view_continous"){
+    for(unsigned int i = 0; i < PView::list.size(); i++)
+      if(opt_view_visible(i, GMSH_GET, 0))
+        opt_view_intervals_type(i, GMSH_SET|GMSH_GUI, 2);
+  }
+  else if(what == "view_filled"){
+    for(unsigned int i = 0; i < PView::list.size(); i++)
+      if(opt_view_visible(i, GMSH_GET, 0))
+        opt_view_intervals_type(i, GMSH_SET|GMSH_GUI, 3);
+    drawContext::global()->draw();
+    double val = 0.;
+    for(unsigned int i = 0; i < PView::list.size(); i++){
+      if(opt_view_visible(i, GMSH_GET, 0)){
+        val = numberOrStringOptionChooser("View", i, "NbIso",
+                                          true, "Intervals", true, 1, 100, 1);
+        break;
+      }
+    }
+    for(unsigned int i = 0; i < PView::list.size(); i++)
+      if(opt_view_visible(i, GMSH_GET, 0))
+        opt_view_nb_iso(i, GMSH_SET|GMSH_GUI, val);
+  }
+  else if(what == "view_numeric"){
+    for(unsigned int i = 0; i < PView::list.size(); i++)
+      if(opt_view_visible(i, GMSH_GET, 0))
+        opt_view_intervals_type(i, GMSH_SET|GMSH_GUI, 4);
+  }
+  else if(what == "view_line"){
+    for(unsigned int i = 0; i < PView::list.size(); i++)
+      if(opt_view_visible(i, GMSH_GET, 0))
+        opt_view_vector_type(i, GMSH_SET|GMSH_GUI, 1);
+  }
+  else if(what == "view_3d_arrow"){
+    for(unsigned int i = 0; i < PView::list.size(); i++)
+      if(opt_view_visible(i, GMSH_GET, 0))
+        opt_view_vector_type(i, GMSH_SET|GMSH_GUI, 4);
+  }
+  else if(what == "view_displacement"){
+    for(unsigned int i = 0; i < PView::list.size(); i++)
+      if(opt_view_visible(i, GMSH_GET, 0))
+        opt_view_vector_type(i, GMSH_SET|GMSH_GUI, 5);
+    drawContext::global()->draw();
+    double val = 0.;
+    for(unsigned int i = 0; i < PView::list.size(); i++){
+      if(opt_view_visible(i, GMSH_GET, 0)){
+        double maxval = std::max(fabs(opt_view_min(i, GMSH_GET, 0)),
+                                 fabs(opt_view_max(i, GMSH_GET, 0)));
+        if(!maxval) maxval = 1.;
+        double val3 = 2. * CTX::instance()->lc / maxval;
+        val = numberOrStringOptionChooser("View", i, "DisplacementFactor",
+                                          true, "Factor", true, 0, val3, val3 / 100.);
+        break;
+      }
+    }
+    for(unsigned int i = 0; i < PView::list.size(); i++)
+      if(opt_view_visible(i, GMSH_GET, 0))
+        opt_view_displacement_factor(i, GMSH_SET|GMSH_GUI, val);
+  }
+  else if(what == "view_range_default"){
+    for(unsigned int i = 0; i < PView::list.size(); i++)
+      if(opt_view_visible(i, GMSH_GET, 0))
+        opt_view_range_type(i, GMSH_SET|GMSH_GUI, 1);
+  }
+  else if(what == "view_range_per_step"){
+    for(unsigned int i = 0; i < PView::list.size(); i++)
+      if(opt_view_visible(i, GMSH_GET, 0))
+        opt_view_range_type(i, GMSH_SET|GMSH_GUI, 3);
+  }
+  else if(what == "mesh_toggle"){
     static int value = 1;
     static int old_p = (int)opt_mesh_points(0, GMSH_GET, 0.);
     static int old_l = (int)opt_mesh_lines(0, GMSH_GET, 0.);
@@ -2225,12 +2391,160 @@ void status_options_cb(Fl_Widget *w, void *data)
       opt_mesh_volumes_edges(0, GMSH_SET | GMSH_GUI, 0);
       opt_mesh_volumes_faces(0, GMSH_SET | GMSH_GUI, 0);
     }
+  }
+}
+
+static void model_switch_cb(Fl_Widget* w, void *data)
+{
+  int index = (intptr_t)data;
+  GModel::current(index);
+  SetBoundingBox();
+  for(unsigned int i = 0; i < GModel::list.size(); i++)
+    GModel::list[i]->setVisibility(0);
+  GModel::current()->setVisibility(1);
+  CTX::instance()->mesh.changed = ENT_ALL;
+  FlGui::instance()->setGraphicTitle(GModel::current()->getFileName());
+  FlGui::instance()->resetVisibility();
+  drawContext::global()->draw();
+}
+
+void status_options_cb(Fl_Widget *w, void *data)
+{
+  if(!data) return;
+  std::string what((const char*)data);
+
+  if(what == "model"){ // model selection
+    std::vector<char*> tofree;
+    std::vector<Fl_Menu_Item> menu;
+    int selected = 0;
+    for(unsigned int i = 0; i < GModel::list.size(); i++){
+      char tmp[256];
+      sprintf(tmp, "Model [%d] <<%s>> ", i, GModel::list[i]->getName().c_str());
+      char *str = strdup(tmp);
+      Fl_Menu_Item menuItem = {str, 0, model_switch_cb, (void*)i, FL_MENU_RADIO};
+      if(GModel::list[i] == GModel::current()){
+        selected = i;
+        menuItem.flags |= FL_MENU_VALUE;
+      }
+      menu.push_back(menuItem);
+      tofree.push_back(str);
+    }
+    Fl_Menu_Item it = {0};
+    menu.push_back(it);
+    Fl_Menu_Item *m = (Fl_Menu_Item*)(&menu[0])->popup(Fl::event_x(), Fl::event_y(),
+                                                       0, &menu[selected], 0);
+    if(m) m->do_callback(0);
+    for(unsigned int i = 0; i < tofree.size(); i++) free(tofree[i]);
     drawContext::global()->draw();
   }
-  else if(!strcmp(str, "clscale")){
-    meshSizeEditor();
+  else if(what == "?"){ // display options
+    help_options_cb(0, 0);
+    FlGui::instance()->help->options->show();
   }
-  else if(!strcmp(str, "S")){ // mouse selection
+  else if(what == "p"){ // toggle projection mode
+    opt_general_orthographic(0, GMSH_SET | GMSH_GUI,
+                             !opt_general_orthographic(0, GMSH_GET, 0));
+    drawContext::global()->draw();
+  }
+  else if(what == "quick_access"){ // quick access menu
+    static Fl_Menu_Item menu[] = {
+      { "Axes", 0, quick_access_cb, (void*)"axes",
+        FL_MENU_TOGGLE },
+      { "Projection mode", 0, 0, 0, FL_SUBMENU },
+         { "Orthographic", 0, quick_access_cb, (void*)"orthographic"},
+         { "Perspective", 0, quick_access_cb, (void*)"perspective"},
+         { 0 },
+      { "All general options...", 0, quick_access_cb, (void*)"general",
+        FL_MENU_DIVIDER, 0, FL_ITALIC },
+      { "Geometry visibility", 0, 0, 0, FL_SUBMENU },
+         { "Points", 0, quick_access_cb, (void*)"geometry_points",
+           FL_MENU_TOGGLE },
+         { "Lines", 0, quick_access_cb, (void*)"geometry_lines",
+           FL_MENU_TOGGLE },
+         { "Surfaces ", 0, quick_access_cb, (void*)"geometry_surfaces",
+         FL_MENU_TOGGLE },
+         { "Volumes", 0, quick_access_cb, (void*)"geometry_volumes",
+           FL_MENU_TOGGLE },
+         { 0 },
+      { "All geometry options...", 0, quick_access_cb, (void*)"geometry",
+        FL_MENU_DIVIDER, 0, FL_ITALIC },
+      { "Mesh visibility", 0, 0, 0, FL_SUBMENU },
+         { "Nodes", 0, quick_access_cb, (void*)"mesh_points",
+           FL_MENU_TOGGLE },
+         { "Lines", 0, quick_access_cb, (void*)"mesh_lines",
+           FL_MENU_TOGGLE },
+         { "Surface edges ", 0, quick_access_cb, (void*)"mesh_surfaces_edges",
+           FL_MENU_TOGGLE },
+         { "Surface faces", 0, quick_access_cb, (void*)"mesh_surfaces_faces",
+           FL_MENU_TOGGLE },
+         { "Volume edges", 0, quick_access_cb, (void*)"mesh_volumes_edges",
+           FL_MENU_TOGGLE },
+         { "Volume faces", 0, quick_access_cb, (void*)"mesh_volumes_faces",
+           FL_MENU_TOGGLE },
+         { 0 },
+      { "Toggle mesh display", 0, quick_access_cb, (void*)"mesh_toggle" },
+      { "Global mesh size factor", 0, quick_access_cb, (void*)"mesh_size" },
+      { "All mesh options...", 0, quick_access_cb, (void*)"mesh",
+        FL_MENU_DIVIDER, 0, FL_ITALIC },
+      { "View element outlines ", 0, quick_access_cb, (void*)"view_element_outlines",
+        FL_MENU_TOGGLE },
+      { "View normal raise", 0, quick_access_cb, (void*)"view_normal_raise" },
+      { "View intervals", 0, 0, 0, FL_SUBMENU },
+         { "Iso-values", 0, quick_access_cb, (void*)"view_iso"},
+         { "Continuous map", 0, quick_access_cb, (void*)"view_continous"},
+         { "Filled iso-values", 0, quick_access_cb, (void*)"view_filled"},
+         { "Numeric values", 0, quick_access_cb, (void*)"view_numeric"},
+         { 0 },
+      { "View vector display", 0, 0, 0, FL_SUBMENU },
+         { "Line", 0, quick_access_cb, (void*)"view_line"},
+         { "3D arrow", 0, quick_access_cb, (void*)"view_3d_arrow"},
+         { "Displacement", 0, quick_access_cb, (void*)"view_displacement"},
+         { 0 },
+      { "View range", 0, 0, 0, FL_SUBMENU },
+         { "Default", 0, quick_access_cb, (void*)"view_range_default"},
+         { "Per time step", 0, quick_access_cb, (void*)"view_range_per_step"},
+         { 0 },
+      { "All view options...", 0, quick_access_cb, (void*)"view",
+        0, 0, FL_ITALIC },
+      { 0 }
+    };
+    if(opt_general_axes(0, GMSH_GET, 0)) menu[0].set(); else menu[0].clear();
+    for(unsigned int i = 0; i < PView::list.size(); i++)
+      if(opt_view_visible(i, GMSH_GET, 0) && opt_view_axes(i, GMSH_GET, 0))
+        menu[0].set();
+    if(opt_geometry_points(0, GMSH_GET, 0)) menu[7].set(); else menu[7].clear();
+    if(opt_geometry_lines(0, GMSH_GET, 0)) menu[8].set(); else menu[8].clear();
+    if(opt_geometry_surfaces(0, GMSH_GET, 0)) menu[9].set(); else menu[9].clear();
+    if(opt_geometry_volumes(0, GMSH_GET, 0)) menu[10].set(); else menu[10].clear();
+    if(opt_mesh_points(0, GMSH_GET, 0)) menu[14].set(); else menu[14].clear();
+    if(opt_mesh_lines(0, GMSH_GET, 0)) menu[15].set(); else menu[15].clear();
+    if(opt_mesh_surfaces_edges(0, GMSH_GET, 0)) menu[16].set(); else menu[16].clear();
+    if(opt_mesh_surfaces_faces(0, GMSH_GET, 0)) menu[17].set(); else menu[17].clear();
+    if(opt_mesh_volumes_edges(0, GMSH_GET, 0)) menu[18].set(); else menu[18].clear();
+    if(opt_mesh_volumes_faces(0, GMSH_GET, 0)) menu[19].set(); else menu[19].clear();
+    if(PView::list.empty()){
+      menu[23].flags = 0;
+      for(int i = 24; i < 42; i++) menu[i].hide();
+    }
+    else{
+      menu[23].flags = FL_MENU_DIVIDER;
+      for(int i = 24; i < 42; i++) menu[i].show();
+      menu[24].clear();
+      for(unsigned int i = 0; i < PView::list.size(); i++){
+        if(opt_view_visible(i, GMSH_GET, 0) && opt_view_show_element(i, GMSH_GET, 0)){
+          menu[24].set();
+          break;
+        }
+      }
+    }
+    static Fl_Menu_Item *picked = &menu[21];
+    picked = (Fl_Menu_Item*)menu->popup(Fl::event_x(), Fl::event_y(), 0,
+                                        (picked && picked->visible()) ? picked :
+                                        &menu[21], 0);
+    if(picked && picked->callback()) picked->do_callback(0, picked->user_data());
+    drawContext::global()->draw();
+  }
+  else if(what == "S"){ // mouse selection
     if(CTX::instance()->mouseSelection){
       opt_general_mouse_selection(0, GMSH_SET | GMSH_GUI, 0);
       for(unsigned int i = 0; i < FlGui::instance()->graph.size(); i++)
@@ -2550,17 +2864,22 @@ graphicWindow::graphicWindow(bool main, int numTiles, bool detachedMenu)
   _butt[5]->callback(status_options_cb, (void *)"model");
   _butt[5]->tooltip("Select active model");
   x += sw;
+  _butt[8] = new Fl_Button(x, mh + glheight + mheight + 2, sw, sht, "O");
+  _butt[8]->callback(status_options_cb, (void *)"quick_access");
+  _butt[8]->tooltip("Open quick access menu (also available by double-clicking "
+                     "in the graphic window)");
+  x += sw;
   _butt[0] = new Fl_Button(x, mh + glheight + mheight + 2, sw, sht, "X");
   _butt[0]->callback(status_xyz1p_cb, (void *)"x");
-  _butt[0]->tooltip("Set +X or -X view (Alt+x or Alt+Shift+x)");
+  _butt[0]->tooltip("Set +X or -X (Shift) view (Alt+x or Alt+Shift+x)");
   x += sw;
   _butt[1] = new Fl_Button(x, mh + glheight + mheight + 2, sw, sht, "Y");
   _butt[1]->callback(status_xyz1p_cb, (void *)"y");
-  _butt[1]->tooltip("Set +Y or -Y view (Alt+y or Alt+Shift+y)");
+  _butt[1]->tooltip("Set +Y or -Y (Shift) view (Alt+y or Alt+Shift+y)");
   x += sw;
   _butt[2] = new Fl_Button(x, mh + glheight + mheight + 2, sw, sht, "Z");
   _butt[2]->callback(status_xyz1p_cb, (void *)"z");
-  _butt[2]->tooltip("Set +Z or -Z view (Alt+z or Alt+Shift+z)");
+  _butt[2]->tooltip("Set +Z or -Z (Shift) view (Alt+z or Alt+Shift+z)");
   x += sw;
   _butt[4] = new Fl_Button(x, mh + glheight + mheight + 2, sw, sht, "@-1gmsh_rotate");
   _butt[4]->callback(status_xyz1p_cb, (void *)"r");
@@ -2570,23 +2889,12 @@ graphicWindow::graphicWindow(bool main, int numTiles, bool detachedMenu)
   _butt[3]->callback(status_xyz1p_cb, (void *)"1:1");
   _butt[3]->tooltip("Set unit scale, sync scale between viewports (Alt), "
                    "or reset bounding box around visible entities (Shift)");
-  x += 2 * FL_NORMAL_SIZE;
-  _butt[8] = new Fl_Button(x, mh + glheight + mheight + 2, sw, sht, "@-1gmsh_ortho");
-  _butt[8]->callback(status_options_cb, (void *)"p");
-  _butt[8]->tooltip("Toggle projection mode (Alt+o or Alt+Shift+o)");
-  x += sw;
-  _butt[12] = new Fl_Button(x, mh + glheight + mheight + 2, sw, sht, "M");
-  _butt[12]->callback(status_options_cb, (void *)"M");
-  _butt[12]->tooltip("Toggle mesh visibility (Alt+m)");
-  x += sw;
-  _butt[13] = new Fl_Button(x, mh + glheight + mheight + 2, sw, sht, "@-1gmsh_clscale");
-  _butt[13]->callback(status_options_cb, (void *)"clscale");
-  _butt[13]->tooltip("Change mesh element size factor");
-  x += sw;
+  x += 1.75 * FL_NORMAL_SIZE;
   _butt[9] = new Fl_Button(x, mh + glheight + mheight + 2, sw, sht, "S");
   _butt[9]->callback(status_options_cb, (void *)"S");
   _butt[9]->tooltip("Toggle mouse selection ON/OFF (Escape)");
   x += sw;
+  x += 4;
   _butt[6] = new Fl_Button(x, mh + glheight + mheight + 2, sw, sht, "@-1gmsh_rewind");
   _butt[6]->callback(status_rewind_cb);
   _butt[6]->tooltip("Rewind animation");
@@ -2594,7 +2902,7 @@ graphicWindow::graphicWindow(bool main, int numTiles, bool detachedMenu)
   x += sw;
   _butt[10] = new Fl_Button(x, mh + glheight + mheight + 2, sw, sht, "@-1gmsh_back");
   _butt[10]->callback(status_stepbackward_cb);
-  _butt[10]->tooltip("Step backward");
+  _butt[10]->tooltip("Step backward (Left arrow)");
   _butt[10]->deactivate();
   x += sw;
   _butt[7] = new Fl_Button(x, mh + glheight + mheight + 2, sw, sht, "@-1gmsh_play");
@@ -2604,11 +2912,11 @@ graphicWindow::graphicWindow(bool main, int numTiles, bool detachedMenu)
   x += sw;
   _butt[11] = new Fl_Button(x, mh + glheight + mheight + 2, sw, sht, "@-1gmsh_forward");
   _butt[11]->callback(status_stepforward_cb);
-  _butt[11]->tooltip("Step forward");
+  _butt[11]->tooltip("Step forward (Right arrow)");
   _butt[11]->deactivate();
   x += sw;
 
-  for(int i = 0; i < 14; i++) {
+  for(int i = 0; i < 12; i++) {
     _butt[i]->box(FL_FLAT_BOX);
     _butt[i]->selection_color(FL_WHITE);
     _butt[i]->align(FL_ALIGN_CENTER | FL_ALIGN_INSIDE | FL_ALIGN_CLIP);

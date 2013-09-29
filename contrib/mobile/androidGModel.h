@@ -5,7 +5,7 @@
 #ifndef _Included_org_geuz_onelab_Gmsh
 #define _Included_org_geuz_onelab_Gmsh
 void requestRender();
-unsigned char *getBitmapFromString(const char *text);
+void getBitmapFromString(const char *text, int textsize, unsigned char **map, int *height, int *width, int *realWidth=NULL);
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -15,7 +15,7 @@ extern "C" {
  * Signature: (Ljava/lang/String;)J
  */
 JNIEXPORT jlong JNICALL Java_org_geuz_onelab_Gmsh_init
-  (JNIEnv *, jobject, jstring);
+  (JNIEnv *, jobject);
 
 /*
  * Class:     org_geuz_onelab_Gmsh
@@ -51,19 +51,51 @@ JNIEXPORT void JNICALL Java_org_geuz_onelab_Gmsh_eventHandler
 
 /*
  * Class:     org_geuz_onelab_Gmsh
- * Method:    setShow
- * Signature: (JLjava/lang/String;Z)V
+ * Method:    setStringOption
+ * Signature: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)I
  */
-JNIEXPORT void JNICALL Java_org_geuz_onelab_Gmsh_setShow
-  (JNIEnv *, jobject, jlong, jstring, jboolean);
+JNIEXPORT jint JNICALL Java_org_geuz_onelab_Gmsh_setStringOption
+  (JNIEnv *, jobject, jstring, jstring, jstring);
 
 /*
  * Class:     org_geuz_onelab_Gmsh
- * Method:    getOnelabInstance
- * Signature: ()J
+ * Method:    setDoubleOption
+ * Signature: (Ljava/lang/String;Ljava/lang/String;D)I
  */
-JNIEXPORT jlong JNICALL Java_org_geuz_onelab_Gmsh_getOnelabInstance
-  (JNIEnv *, jobject);
+JNIEXPORT jint JNICALL Java_org_geuz_onelab_Gmsh_setDoubleOption
+  (JNIEnv *, jobject, jstring, jstring, jdouble);
+
+/*
+ * Class:     org_geuz_onelab_Gmsh
+ * Method:    setIntegerOption
+ * Signature: (Ljava/lang/String;Ljava/lang/String;I)I
+ */
+JNIEXPORT jint JNICALL Java_org_geuz_onelab_Gmsh_setIntegerOption
+  (JNIEnv *, jobject, jstring, jstring, jint);
+
+/*
+ * Class:     org_geuz_onelab_Gmsh
+ * Method:    getStringOption
+ * Signature: (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_org_geuz_onelab_Gmsh_getStringOption
+  (JNIEnv *, jobject, jstring, jstring);
+
+/*
+ * Class:     org_geuz_onelab_Gmsh
+ * Method:    getDoubleOption
+ * Signature: (Ljava/lang/String;Ljava/lang/String;)D
+ */
+JNIEXPORT jdouble JNICALL Java_org_geuz_onelab_Gmsh_getDoubleOption
+  (JNIEnv *, jobject, jstring, jstring);
+
+/*
+ * Class:     org_geuz_onelab_Gmsh
+ * Method:    getIntegerOption
+ * Signature: (Ljava/lang/String;Ljava/lang/String;)I
+ */
+JNIEXPORT jint JNICALL Java_org_geuz_onelab_Gmsh_getIntegerOption
+  (JNIEnv *, jobject, jstring, jstring);
 
 /*
  * Class:     org_geuz_onelab_Gmsh
@@ -92,10 +124,10 @@ JNIEXPORT jobjectArray JNICALL Java_org_geuz_onelab_Gmsh_getPView
 /*
  * Class:     org_geuz_onelab_Gmsh
  * Method:    setPView
- * Signature: (IIII)V
+ * Signature: (IIIIF)V
  */
 JNIEXPORT void JNICALL Java_org_geuz_onelab_Gmsh_setPView
-  (JNIEnv *, jobject, jint, jint, jint, jint);
+  (JNIEnv *, jobject, jint, jint, jint, jint, jfloat);
 
 /*
  * Class:     org_geuz_onelab_Gmsh
@@ -104,6 +136,38 @@ JNIEXPORT void JNICALL Java_org_geuz_onelab_Gmsh_setPView
  */
 JNIEXPORT jint JNICALL Java_org_geuz_onelab_Gmsh_onelabCB
   (JNIEnv *, jobject, jstring);
+
+/*
+ * Class:     org_geuz_onelab_Gmsh
+ * Method:    numberOfAnimation
+ * Signature: ()I
+ */
+JNIEXPORT jint JNICALL Java_org_geuz_onelab_Gmsh_numberOfAnimation
+  (JNIEnv *, jobject);
+
+/*
+ * Class:     org_geuz_onelab_Gmsh
+ * Method:    animationNext
+ * Signature: ()I
+ */
+JNIEXPORT jint JNICALL Java_org_geuz_onelab_Gmsh_animationNext
+  (JNIEnv *, jobject);
+
+/*
+ * Class:     org_geuz_onelab_Gmsh
+ * Method:    animationPrev
+ * Signature: ()I
+ */
+JNIEXPORT jint JNICALL Java_org_geuz_onelab_Gmsh_animationPrev
+  (JNIEnv *, jobject);
+
+/*
+ * Class:     org_geuz_onelab_Gmsh
+ * Method:    setAnimation
+ * Signature: (I)V
+ */
+JNIEXPORT void JNICALL Java_org_geuz_onelab_Gmsh_setAnimation
+  (JNIEnv *, jobject, jint);
 
 #ifdef __cplusplus
 }

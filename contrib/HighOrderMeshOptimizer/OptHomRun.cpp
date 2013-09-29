@@ -59,8 +59,11 @@ double distMaxStraight(MElement *el)
   }
   for (int i = nV1; i < nV; ++i) {
     double f[256];
-    lagrange1->f(lagrange->points(i, 0), lagrange->points(i, 1),
-                 lagrange->points(i, 2), f);
+    double u = 0., v = 0., w = 0.;
+    if(lagrange->points.size2() > 0) u = lagrange->points(i, 0);
+    if(lagrange->points.size2() > 1) v = lagrange->points(i, 1);
+    if(lagrange->points.size2() > 2) w = lagrange->points(i, 2);
+    lagrange1->f(u, v, w, f);
     for (int j = 0; j < nV1; ++j)
       sxyz[i] += sxyz[j] * f[j];
   }
@@ -164,7 +167,7 @@ static std::set<MElement*> getSurroundingBlob
 {
 
   const SPoint3 p = el->barycenter_infty();
-  const double limDist = distMaxStraight(el)*distFactor;
+  const double limDist = distMaxStraight(el) * distFactor;
 
   std::set<MElement*> blob;
   std::list<MElement*> currentLayer, lastLayer;
@@ -308,8 +311,12 @@ static void optimizeConnectedBlobs
     //std::ostringstream ossI1;
     //ossI1 << "initial_ITER_" << i << ".msh";
     //temp.mesh.writeMSH(ossI1.str().c_str());
-    int success = temp.optimize(p.weightFixed, p.weightFree, p.BARRIER_MIN, p.BARRIER_MAX,
-                                false, samples, p.itMax, p.optPassMax);
+    int success = -1;
+    if (temp.mesh.nPC() == 0)
+      Msg::Info("Blob %i has no degree of freedom, skipping", i+1);
+    else
+      success = temp.optimize(p.weightFixed, p.weightFree, p.BARRIER_MIN,
+                              p.BARRIER_MAX, false, samples, p.itMax, p.optPassMax);
     if (success >= 0 && p.BARRIER_MIN_METRIC > 0) {
       Msg::Info("Jacobian optimization succeed, starting svd optimization");
       success = temp.optimize(p.weightFixed, p.weightFree, p.BARRIER_MIN_METRIC, p.BARRIER_MAX,
@@ -374,7 +381,7 @@ static std::set<MElement*> getSurroundingBlob3D
    const std::map<MVertex*, std::vector<MElement*> > &vertex2elements,
    const double distFactor)
 {
-  const double limDist = distMaxStraight(el)*distFactor;
+  const double limDist = distMaxStraight(el) * distFactor;
 
   std::set<MElement*> blob;
   std::list<MElement*> currentLayer, lastLayer;

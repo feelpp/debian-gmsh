@@ -179,7 +179,11 @@ bool gmshLocalNetworkClient::receiveMessage(gmshLocalNetworkClient *master)
     return false;
   }
 
-  if(message == blank){
+  if(message == blank && !(type == GmshSocket::GMSH_PROGRESS ||
+                           type == GmshSocket::GMSH_INFO ||
+                           type == GmshSocket::GMSH_WARNING ||
+                           type == GmshSocket::GMSH_ERROR)){
+    // we should still allow blank msg strings to be sent
     Msg::Error("Abnormal server termination (blank message: client not stopped?)");
     return false;
   }
@@ -972,6 +976,7 @@ static void onelab_tree_cb(Fl_Widget *w, void *data)
   setOpenedClosed(item, tree->callback_reason());
 }
 
+#if 0 // FIXME until the FLTK bug with widgets is solved
 static void onelab_subtree_cb(Fl_Widget *w, void *data)
 {
   Fl_Tree_Item *n = (Fl_Tree_Item*)data;
@@ -987,6 +992,7 @@ static void onelab_subtree_cb(Fl_Widget *w, void *data)
   setOpenedClosed(n, reason);
   FlGui::instance()->onelab->redrawTree();
 }
+#endif
 
 void onelabGroup::_computeWidths()
 {
@@ -1030,6 +1036,7 @@ onelabGroup::onelabGroup(int x, int y, int w, int h, const char *l)
   _tree->end();
 
   _computeWidths();
+  _widgetLabelRatio = 0.48;
 
   int BB2 = BB / 2 + 4;
 
@@ -1125,12 +1132,9 @@ void onelabGroup::_addParameter(T &p)
   Fl_Widget *widget = _addParameterWidget(p, n, highlight, c);
   _treeWidgets.push_back(widget);
   widget->copy_label(p.getShortName().c_str());
-  if(p.getLabel().size()){
-    std::string help = p.getLabel();
-    if(p.getHelp().size())
-      help += ":\n" + p.getHelp();
-    widget->copy_tooltip(help.c_str());
-  }
+  std::string help = p.getLabel().size() ? p.getLabel() : p.getShortName();
+  if(p.getHelp().size()) help += ":\n" + p.getHelp();
+  widget->copy_tooltip(help.c_str());
   n->widget(widget);
   _tree->end();
 }
@@ -1278,7 +1282,7 @@ Fl_Widget *onelabGroup::_addParameterWidget(onelab::number &p, Fl_Tree_Item *n,
 {
   n->labelsize(FL_NORMAL_SIZE + 4);
   int ww = _baseWidth - (n->depth() + 1) * _indent;
-  ww /= 2;
+  ww *= _widgetLabelRatio;
 
   char *path = strdup(getPath(n).c_str());
   _treeStrings.push_back(path);
@@ -1316,7 +1320,7 @@ Fl_Widget *onelabGroup::_addParameterWidget(onelab::number &p, Fl_Tree_Item *n,
   if(p.getChoices().size() == 2 &&
      p.getChoices()[0] == 0 && p.getChoices()[1] == 1){
     n->labelsize(FL_NORMAL_SIZE + 2);
-    Fl_Check_Button *but = new Fl_Check_Button(1, 1, 2 * ww, 1);
+    Fl_Check_Button *but = new Fl_Check_Button(1, 1, ww / _widgetLabelRatio, 1);
     but->box(FL_FLAT_BOX);
     but->color(_tree->color());
     but->value(p.getValue());
@@ -1471,7 +1475,7 @@ Fl_Widget *onelabGroup::_addParameterWidget(onelab::string &p, Fl_Tree_Item *n,
     return but;
   }
 
-  ww /= 2;
+  ww *= _widgetLabelRatio;
   n->labelsize(FL_NORMAL_SIZE + 4);
 
   // non-editable value
@@ -1552,7 +1556,7 @@ Fl_Widget *onelabGroup::_addParameterWidget(onelab::region &p, Fl_Tree_Item *n,
 {
   n->labelsize(FL_NORMAL_SIZE + 4);
   int ww = _baseWidth - (n->depth() + 1) * _indent;
-  ww /= 2;
+  ww *= _widgetLabelRatio;
 
   char *path = strdup(getPath(n).c_str());
   _treeStrings.push_back(path);
@@ -1579,7 +1583,7 @@ Fl_Widget *onelabGroup::_addParameterWidget(onelab::function &p, Fl_Tree_Item *n
 {
   n->labelsize(FL_NORMAL_SIZE + 4);
   int ww = _baseWidth - (n->depth() + 1) * _indent;
-  ww /= 2;
+  ww *= _widgetLabelRatio;
 
   // non-editable value
   if(1 || p.getReadOnly()){
@@ -1657,11 +1661,19 @@ void onelabGroup::rebuildTree(bool deleteWidgets)
     if(n->has_children()){
       int ww = _baseWidth - (n->depth() + 1) * _indent;
       _tree->begin();
+#if 0 // FIXME this can crash FLTK when submenus are intially closed (somehow
+      // the widget is badly positioned and overlaps the open icon, leading to
+      // a corrupted Fl_Tree_Item)
       Fl_Button *but = new Fl_Button(1, 1, ww, 1);
       but->box(FL_NO_BOX);
       but->clear_visible_focus();
       but->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
       but->callback(onelab_subtree_cb, (void*)n);
+#else
+      Fl_Box *but = new Fl_Box(1, 1, ww, 1);
+      //but->labelfont(FL_HELVETICA_ITALIC);
+      but->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
+#endif
       _treeWidgets.push_back(but);
       onelab::string o(n->label());
       but->copy_label(o.getShortName().c_str());
@@ -1780,6 +1792,20 @@ bool onelabGroup::isBusy()
   std::string s(_butt[1]->label());
   if(s == "Run") return false;
   return true;
+}
+
+std::string onelabGroup::getPath(Fl_Tree_Item *item)
+{
+  if(!item){
+    Msg::Error("No item for path");
+    return "";
+  }
+  char path[1024];
+  if(_tree->item_pathname(path, sizeof(path), item)){
+    Msg::Error("Could not get path for item");
+    return "";
+  }
+  return std::string(path);
 }
 
 void onelabGroup::rebuildSolverList()

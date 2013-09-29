@@ -7,85 +7,97 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		9C95B7F61726C88E00C0CCE2 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 9C95B7F51726C88E00C0CCE2 /* main.m */; };
+		9C1C10FA17BA5E7D00BFD483 /* OptionsViewController.mm in Sources */ = {isa = PBXBuildFile; fileRef = 9C1C10F917BA5E7D00BFD483 /* OptionsViewController.mm */; };
+		9C6A645817A7C3DB00DEDAFC /* drawString.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9C6A645617A7C3DB00DEDAFC /* drawString.cpp */; };
+		9C95B7F61726C88E00C0CCE2 /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = 9C95B7F51726C88E00C0CCE2 /* main.mm */; };
 		9C96083B1712C16300E1D4A0 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9C96083A1712C16300E1D4A0 /* UIKit.framework */; };
 		9C96083D1712C16300E1D4A0 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9C96083C1712C16300E1D4A0 /* Foundation.framework */; };
 		9C96083F1712C16300E1D4A0 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9C96083E1712C16300E1D4A0 /* CoreGraphics.framework */; };
 		9C96084B1712C16400E1D4A0 /* AppDelegate.mm in Sources */ = {isa = PBXBuildFile; fileRef = 9C96084A1712C16300E1D4A0 /* AppDelegate.mm */; };
-		9C9608511712C16400E1D4A0 /* MasterViewController.mm in Sources */ = {isa = PBXBuildFile; fileRef = 9C9608501712C16400E1D4A0 /* MasterViewController.mm */; };
-		9C9608541712C16400E1D4A0 /* DetailViewController.mm in Sources */ = {isa = PBXBuildFile; fileRef = 9C9608531712C16400E1D4A0 /* DetailViewController.mm */; };
-		9C96085C1712C16400E1D4A0 /* SenTestingKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9C96085B1712C16400E1D4A0 /* SenTestingKit.framework */; };
-		9C96085D1712C16400E1D4A0 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9C96083A1712C16300E1D4A0 /* UIKit.framework */; };
-		9C96085E1712C16400E1D4A0 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9C96083C1712C16300E1D4A0 /* Foundation.framework */; };
-		9C9608661712C16400E1D4A0 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 9C9608641712C16400E1D4A0 /* InfoPlist.strings */; };
-		9C9608691712C16400E1D4A0 /* OnelabTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 9C9608681712C16400E1D4A0 /* OnelabTests.m */; };
+		9C9608511712C16400E1D4A0 /* ParametersViewController.mm in Sources */ = {isa = PBXBuildFile; fileRef = 9C9608501712C16400E1D4A0 /* ParametersViewController.mm */; };
+		9C9608541712C16400E1D4A0 /* ModelViewController.mm in Sources */ = {isa = PBXBuildFile; fileRef = 9C9608531712C16400E1D4A0 /* ModelViewController.mm */; };
 		9C9608741712C47200E1D4A0 /* EAGLView.mm in Sources */ = {isa = PBXBuildFile; fileRef = 9C9608731712C47200E1D4A0 /* EAGLView.mm */; };
 		9C9608991712C7B600E1D4A0 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9C9608981712C7B600E1D4A0 /* Accelerate.framework */; };
 		9C96089B1712C7BE00E1D4A0 /* OpenGLES.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9C96089A1712C7BE00E1D4A0 /* OpenGLES.framework */; };
 		9C96089D1712C7F600E1D4A0 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9C96089C1712C7F600E1D4A0 /* QuartzCore.framework */; };
 		9C96089F1712C8EB00E1D4A0 /* emulatorFix.c in Sources */ = {isa = PBXBuildFile; fileRef = 9C96089E1712C8EB00E1D4A0 /* emulatorFix.c */; };
-		9C9608AC1712EF0900E1D4A0 /* MainStoryboard.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 9C9608AA1712EF0900E1D4A0 /* MainStoryboard.storyboard */; };
+		9C9608AC1712EF0900E1D4A0 /* iPadStoryboard.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 9C9608AA1712EF0900E1D4A0 /* iPadStoryboard.storyboard */; };
 		9C9F8BCD174B5A1B004332C5 /* ic_launcher_retina.png in Resources */ = {isa = PBXBuildFile; fileRef = 9C9F8BCC174B5A1B004332C5 /* ic_launcher_retina.png */; };
 		9C9F8BCF174B5A23004332C5 /* ic_launcher.png in Resources */ = {isa = PBXBuildFile; fileRef = 9C9F8BCE174B5A23004332C5 /* ic_launcher.png */; };
+		9CC6EBB717BA0A38001CA21A /* drawGeom.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9CC6EBB617BA0A38001CA21A /* drawGeom.cpp */; };
+		9CC6EBB917BA1CC7001CA21A /* drawMesh.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9CC6EBB817BA1CC7001CA21A /* drawMesh.cpp */; };
 		9CC85C021790286C00F241C4 /* files in Resources */ = {isa = PBXBuildFile; fileRef = 9CC85C011790286C00F241C4 /* files */; };
+		9CDCED2317D5C00500B39082 /* Model.mm in Sources */ = {isa = PBXBuildFile; fileRef = 9CDCED2217D5C00500B39082 /* Model.mm */; };
 		9CE08E10178AEB1600A83B4B /* GetDP.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9CE08E0D178AEB1600A83B4B /* GetDP.framework */; };
 		9CE08E11178AEB1600A83B4B /* Gmsh.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9CE08E0E178AEB1600A83B4B /* Gmsh.framework */; };
 		9CE08E12178AEB1600A83B4B /* petsc.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9CE08E0F178AEB1600A83B4B /* petsc.framework */; };
 		9CE08E13178AEC5F00A83B4B /* drawContext.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9CE08E01178AE6BE00A83B4B /* drawContext.cpp */; };
-		9CE08E14178AEC5F00A83B4B /* drawContext.h in Sources */ = {isa = PBXBuildFile; fileRef = 9CE08E02178AE6BE00A83B4B /* drawContext.h */; };
-		9CE08E15178AEC5F00A83B4B /* iosGModel.h in Sources */ = {isa = PBXBuildFile; fileRef = 9C99754C17390DEE0036EC24 /* iosGModel.h */; };
-		9CE08E16178AEC5F00A83B4B /* movePosition.h in Sources */ = {isa = PBXBuildFile; fileRef = 9CE08E03178AE6BE00A83B4B /* movePosition.h */; };
 		9CE08E17178AEC5F00A83B4B /* Trackball.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9CE08E04178AE6BE00A83B4B /* Trackball.cpp */; };
-		9CE08E18178AEC5F00A83B4B /* Trackball.h in Sources */ = {isa = PBXBuildFile; fileRef = 9CE08E05178AE6BE00A83B4B /* Trackball.h */; };
+		9CE18C2017B27EDB009BA06E /* Parameter.mm in Sources */ = {isa = PBXBuildFile; fileRef = 9CE18C1F17B27EDB009BA06E /* Parameter.mm */; };
+		9CE1A65717B0F39D00E5152F /* Utils.mm in Sources */ = {isa = PBXBuildFile; fileRef = 9CE1A65617B0F39D00E5152F /* Utils.mm */; };
+		9CE1A65A17B0FB9700E5152F /* iPhoneiPodStoryboard.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 9CE1A65817B0FB9600E5152F /* iPhoneiPodStoryboard.storyboard */; };
+		9CE2773B17E197F50076E728 /* Social.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9CE2773917E197DA0076E728 /* Social.framework */; };
+		9CEAE86E17AF824B00813524 /* iosGModel.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9CEAE86D17AF824B00813524 /* iosGModel.cpp */; };
+		9CEAE87D17AFD5BB00813524 /* SplitViewController.mm in Sources */ = {isa = PBXBuildFile; fileRef = 9CEAE87C17AFD5BB00813524 /* SplitViewController.mm */; };
+		9CEAECC717A91CD20014D229 /* ModelListController.mm in Sources */ = {isa = PBXBuildFile; fileRef = 9CEAECC617A91CD20014D229 /* ModelListController.mm */; };
+		9CF34DE417C62FC500A3D5E3 /* PostProcessingViewController.mm in Sources */ = {isa = PBXBuildFile; fileRef = 9CF34DE317C62FC500A3D5E3 /* PostProcessingViewController.mm */; };
 /* End PBXBuildFile section */
 
-/* Begin PBXContainerItemProxy section */
-		9C96085F1712C16400E1D4A0 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 9C96082D1712C16300E1D4A0 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 9C9608351712C16300E1D4A0;
-			remoteInfo = Onelab;
-		};
-/* End PBXContainerItemProxy section */
-
 /* Begin PBXFileReference section */
-		9C95B7F51726C88E00C0CCE2 /* main.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		9C1C10F817BA5E7D00BFD483 /* OptionsViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = OptionsViewController.h; sourceTree = "<group>"; };
+		9C1C10F917BA5E7D00BFD483 /* OptionsViewController.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = OptionsViewController.mm; sourceTree = "<group>"; };
+		9C6A645617A7C3DB00DEDAFC /* drawString.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = drawString.cpp; sourceTree = "<group>"; usesTabs = 1; };
+		9C6A645717A7C3DB00DEDAFC /* drawString.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = drawString.h; sourceTree = "<group>"; usesTabs = 1; };
+		9C95B7F51726C88E00C0CCE2 /* main.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
 		9C9608361712C16300E1D4A0 /* Onelab.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Onelab.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9C96083A1712C16300E1D4A0 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		9C96083C1712C16300E1D4A0 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		9C96083E1712C16300E1D4A0 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
-		9C9608491712C16300E1D4A0 /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
-		9C96084A1712C16300E1D4A0 /* AppDelegate.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = AppDelegate.mm; sourceTree = "<group>"; };
-		9C96084F1712C16400E1D4A0 /* MasterViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MasterViewController.h; sourceTree = "<group>"; };
-		9C9608501712C16400E1D4A0 /* MasterViewController.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = MasterViewController.mm; sourceTree = "<group>"; };
-		9C9608521712C16400E1D4A0 /* DetailViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DetailViewController.h; sourceTree = "<group>"; };
-		9C9608531712C16400E1D4A0 /* DetailViewController.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = DetailViewController.mm; sourceTree = "<group>"; };
-		9C96085A1712C16400E1D4A0 /* OnelabTests.octest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OnelabTests.octest; sourceTree = BUILT_PRODUCTS_DIR; };
+		9C9608491712C16300E1D4A0 /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; usesTabs = 1; };
+		9C96084A1712C16300E1D4A0 /* AppDelegate.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = AppDelegate.mm; sourceTree = "<group>"; usesTabs = 1; };
+		9C96084F1712C16400E1D4A0 /* ParametersViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ParametersViewController.h; sourceTree = "<group>"; usesTabs = 1; };
+		9C9608501712C16400E1D4A0 /* ParametersViewController.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = ParametersViewController.mm; sourceTree = "<group>"; usesTabs = 1; };
+		9C9608521712C16400E1D4A0 /* ModelViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ModelViewController.h; sourceTree = "<group>"; usesTabs = 1; };
+		9C9608531712C16400E1D4A0 /* ModelViewController.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = ModelViewController.mm; sourceTree = "<group>"; usesTabs = 1; };
 		9C96085B1712C16400E1D4A0 /* SenTestingKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SenTestingKit.framework; path = Library/Frameworks/SenTestingKit.framework; sourceTree = DEVELOPER_DIR; };
-		9C9608631712C16400E1D4A0 /* OnelabTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "OnelabTests-Info.plist"; sourceTree = "<group>"; };
-		9C9608651712C16400E1D4A0 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
-		9C9608671712C16400E1D4A0 /* OnelabTests.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = OnelabTests.h; sourceTree = "<group>"; };
-		9C9608681712C16400E1D4A0 /* OnelabTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = OnelabTests.m; sourceTree = "<group>"; };
-		9C9608721712C47200E1D4A0 /* EAGLView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = EAGLView.h; sourceTree = "<group>"; };
-		9C9608731712C47200E1D4A0 /* EAGLView.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = EAGLView.mm; sourceTree = "<group>"; };
+		9C9608721712C47200E1D4A0 /* EAGLView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = EAGLView.h; sourceTree = "<group>"; usesTabs = 1; };
+		9C9608731712C47200E1D4A0 /* EAGLView.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = EAGLView.mm; sourceTree = "<group>"; usesTabs = 1; };
 		9C9608981712C7B600E1D4A0 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
 		9C96089A1712C7BE00E1D4A0 /* OpenGLES.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = OpenGLES.framework; path = System/Library/Frameworks/OpenGLES.framework; sourceTree = SDKROOT; };
 		9C96089C1712C7F600E1D4A0 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
-		9C96089E1712C8EB00E1D4A0 /* emulatorFix.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = emulatorFix.c; sourceTree = "<group>"; };
-		9C9608AB1712EF0900E1D4A0 /* en */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = en; path = en.lproj/MainStoryboard.storyboard; sourceTree = "<group>"; };
-		9C99754C17390DEE0036EC24 /* iosGModel.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = iosGModel.h; sourceTree = "<group>"; };
+		9C96089E1712C8EB00E1D4A0 /* emulatorFix.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = emulatorFix.c; sourceTree = "<group>"; usesTabs = 1; };
+		9C9608AB1712EF0900E1D4A0 /* en */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = en; path = en.lproj/iPadStoryboard.storyboard; sourceTree = "<group>"; };
+		9C99754C17390DEE0036EC24 /* iosGModel.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = iosGModel.h; sourceTree = "<group>"; usesTabs = 1; };
 		9C9F8BCC174B5A1B004332C5 /* ic_launcher_retina.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = ic_launcher_retina.png; sourceTree = "<group>"; };
 		9C9F8BCE174B5A23004332C5 /* ic_launcher.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = ic_launcher.png; sourceTree = "<group>"; };
+		9CC6EBB617BA0A38001CA21A /* drawGeom.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = drawGeom.cpp; sourceTree = "<group>"; usesTabs = 1; };
+		9CC6EBB817BA1CC7001CA21A /* drawMesh.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = drawMesh.cpp; sourceTree = "<group>"; };
 		9CC85C011790286C00F241C4 /* files */ = {isa = PBXFileReference; lastKnownFileType = folder; path = files; sourceTree = "<group>"; };
-		9CE08E01178AE6BE00A83B4B /* drawContext.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = drawContext.cpp; sourceTree = "<group>"; };
-		9CE08E02178AE6BE00A83B4B /* drawContext.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = drawContext.h; sourceTree = "<group>"; };
-		9CE08E03178AE6BE00A83B4B /* movePosition.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = movePosition.h; sourceTree = "<group>"; };
-		9CE08E04178AE6BE00A83B4B /* Trackball.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Trackball.cpp; sourceTree = "<group>"; };
-		9CE08E05178AE6BE00A83B4B /* Trackball.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Trackball.h; sourceTree = "<group>"; };
+		9CDCED2117D5C00500B39082 /* Model.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Model.h; sourceTree = "<group>"; };
+		9CDCED2217D5C00500B39082 /* Model.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = Model.mm; sourceTree = "<group>"; };
+		9CE08E01178AE6BE00A83B4B /* drawContext.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = drawContext.cpp; sourceTree = "<group>"; usesTabs = 1; };
+		9CE08E02178AE6BE00A83B4B /* drawContext.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = drawContext.h; sourceTree = "<group>"; usesTabs = 1; };
+		9CE08E03178AE6BE00A83B4B /* movePosition.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = movePosition.h; sourceTree = "<group>"; usesTabs = 1; };
+		9CE08E04178AE6BE00A83B4B /* Trackball.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Trackball.cpp; sourceTree = "<group>"; usesTabs = 1; };
+		9CE08E05178AE6BE00A83B4B /* Trackball.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Trackball.h; sourceTree = "<group>"; usesTabs = 1; };
 		9CE08E0D178AEB1600A83B4B /* GetDP.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GetDP.framework; path = Onelab/frameworks/GetDP.framework; sourceTree = "<group>"; };
 		9CE08E0E178AEB1600A83B4B /* Gmsh.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Gmsh.framework; path = Onelab/frameworks/Gmsh.framework; sourceTree = "<group>"; };
 		9CE08E0F178AEB1600A83B4B /* petsc.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = petsc.framework; path = Onelab/frameworks/petsc.framework; sourceTree = "<group>"; };
+		9CE18C1E17B27EDB009BA06E /* Parameter.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Parameter.h; sourceTree = "<group>"; usesTabs = 1; };
+		9CE18C1F17B27EDB009BA06E /* Parameter.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = Parameter.mm; sourceTree = "<group>"; usesTabs = 1; };
+		9CE1A65517B0F39C00E5152F /* Utils.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Utils.h; sourceTree = "<group>"; usesTabs = 1; };
+		9CE1A65617B0F39D00E5152F /* Utils.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = Utils.mm; sourceTree = "<group>"; usesTabs = 1; };
+		9CE1A65917B0FB9700E5152F /* en */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = en; path = en.lproj/iPhoneiPodStoryboard.storyboard; sourceTree = "<group>"; };
+		9CE2773917E197DA0076E728 /* Social.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Social.framework; path = System/Library/Frameworks/Social.framework; sourceTree = SDKROOT; };
+		9CEAE86D17AF824B00813524 /* iosGModel.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = iosGModel.cpp; sourceTree = "<group>"; usesTabs = 1; };
+		9CEAE87B17AFD5BB00813524 /* SplitViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SplitViewController.h; sourceTree = "<group>"; usesTabs = 1; };
+		9CEAE87C17AFD5BB00813524 /* SplitViewController.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = SplitViewController.mm; sourceTree = "<group>"; usesTabs = 1; };
+		9CEAECC517A91CD20014D229 /* ModelListController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ModelListController.h; sourceTree = "<group>"; usesTabs = 1; };
+		9CEAECC617A91CD20014D229 /* ModelListController.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = ModelListController.mm; sourceTree = "<group>"; usesTabs = 1; };
+		9CF1C1EE17AA8997002CD2E3 /* Onelab-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "Onelab-Info.plist"; sourceTree = "<group>"; };
+		9CF1C1F117AA8A7D002CD2E3 /* Onelab-Prefix.pch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "Onelab-Prefix.pch"; sourceTree = "<group>"; };
+		9CF34DE217C62FC500A3D5E3 /* PostProcessingViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PostProcessingViewController.h; sourceTree = "<group>"; };
+		9CF34DE317C62FC500A3D5E3 /* PostProcessingViewController.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = PostProcessingViewController.mm; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -99,19 +111,10 @@
 				9C96083B1712C16300E1D4A0 /* UIKit.framework in Frameworks */,
 				9C96083D1712C16300E1D4A0 /* Foundation.framework in Frameworks */,
 				9C96083F1712C16300E1D4A0 /* CoreGraphics.framework in Frameworks */,
+				9CE2773B17E197F50076E728 /* Social.framework in Frameworks */,
 				9CE08E10178AEB1600A83B4B /* GetDP.framework in Frameworks */,
 				9CE08E11178AEB1600A83B4B /* Gmsh.framework in Frameworks */,
 				9CE08E12178AEB1600A83B4B /* petsc.framework in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		9C9608561712C16400E1D4A0 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				9C96085C1712C16400E1D4A0 /* SenTestingKit.framework in Frameworks */,
-				9C96085D1712C16400E1D4A0 /* UIKit.framework in Frameworks */,
-				9C96085E1712C16400E1D4A0 /* Foundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -124,7 +127,6 @@
 				9C9F8BCE174B5A23004332C5 /* ic_launcher.png */,
 				9C9F8BCC174B5A1B004332C5 /* ic_launcher_retina.png */,
 				9C9608401712C16300E1D4A0 /* Onelab */,
-				9C9608611712C16400E1D4A0 /* OnelabTests */,
 				9C9608391712C16300E1D4A0 /* Frameworks */,
 				9C9608371712C16300E1D4A0 /* Products */,
 			);
@@ -134,7 +136,6 @@
 			isa = PBXGroup;
 			children = (
 				9C9608361712C16300E1D4A0 /* Onelab.app */,
-				9C96085A1712C16400E1D4A0 /* OnelabTests.octest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -142,6 +143,7 @@
 		9C9608391712C16300E1D4A0 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				9CE2773917E197DA0076E728 /* Social.framework */,
 				9CE08E0D178AEB1600A83B4B /* GetDP.framework */,
 				9CE08E0E178AEB1600A83B4B /* Gmsh.framework */,
 				9CE08E0F178AEB1600A83B4B /* petsc.framework */,
@@ -160,42 +162,53 @@
 			isa = PBXGroup;
 			children = (
 				9CC85C011790286C00F241C4 /* files */,
-				9C95B7F51726C88E00C0CCE2 /* main.m */,
-				9C9608AA1712EF0900E1D4A0 /* MainStoryboard.storyboard */,
+				9C9608AA1712EF0900E1D4A0 /* iPadStoryboard.storyboard */,
+				9CE1A65817B0FB9600E5152F /* iPhoneiPodStoryboard.storyboard */,
 				9C9608491712C16300E1D4A0 /* AppDelegate.h */,
-				9CE08E01178AE6BE00A83B4B /* drawContext.cpp */,
-				9CE08E02178AE6BE00A83B4B /* drawContext.h */,
-				9C99754C17390DEE0036EC24 /* iosGModel.h */,
-				9CE08E03178AE6BE00A83B4B /* movePosition.h */,
-				9CE08E04178AE6BE00A83B4B /* Trackball.cpp */,
-				9CE08E05178AE6BE00A83B4B /* Trackball.h */,
 				9C96084A1712C16300E1D4A0 /* AppDelegate.mm */,
-				9C96084F1712C16400E1D4A0 /* MasterViewController.h */,
-				9C9608501712C16400E1D4A0 /* MasterViewController.mm */,
-				9C9608521712C16400E1D4A0 /* DetailViewController.h */,
-				9C9608531712C16400E1D4A0 /* DetailViewController.mm */,
+				9C99754C17390DEE0036EC24 /* iosGModel.h */,
+				9CEAE86D17AF824B00813524 /* iosGModel.cpp */,
+				9CE08E02178AE6BE00A83B4B /* drawContext.h */,
+				9CE08E01178AE6BE00A83B4B /* drawContext.cpp */,
+				9CC6EBB617BA0A38001CA21A /* drawGeom.cpp */,
+				9CC6EBB817BA1CC7001CA21A /* drawMesh.cpp */,
+				9C6A645717A7C3DB00DEDAFC /* drawString.h */,
+				9C6A645617A7C3DB00DEDAFC /* drawString.cpp */,
+				9CE08E03178AE6BE00A83B4B /* movePosition.h */,
+				9CE08E05178AE6BE00A83B4B /* Trackball.h */,
+				9CE08E04178AE6BE00A83B4B /* Trackball.cpp */,
+				9CE1A65517B0F39C00E5152F /* Utils.h */,
+				9CE1A65617B0F39D00E5152F /* Utils.mm */,
+				9CDCED2117D5C00500B39082 /* Model.h */,
+				9CDCED2217D5C00500B39082 /* Model.mm */,
+				9CE18C1E17B27EDB009BA06E /* Parameter.h */,
+				9CE18C1F17B27EDB009BA06E /* Parameter.mm */,
+				9CEAECC517A91CD20014D229 /* ModelListController.h */,
+				9CEAECC617A91CD20014D229 /* ModelListController.mm */,
+				9CEAE87B17AFD5BB00813524 /* SplitViewController.h */,
+				9CEAE87C17AFD5BB00813524 /* SplitViewController.mm */,
+				9C96084F1712C16400E1D4A0 /* ParametersViewController.h */,
+				9C9608501712C16400E1D4A0 /* ParametersViewController.mm */,
+				9C9608521712C16400E1D4A0 /* ModelViewController.h */,
+				9C9608531712C16400E1D4A0 /* ModelViewController.mm */,
+				9C1C10F817BA5E7D00BFD483 /* OptionsViewController.h */,
+				9C1C10F917BA5E7D00BFD483 /* OptionsViewController.mm */,
+				9CF34DE217C62FC500A3D5E3 /* PostProcessingViewController.h */,
+				9CF34DE317C62FC500A3D5E3 /* PostProcessingViewController.mm */,
 				9C9608721712C47200E1D4A0 /* EAGLView.h */,
 				9C9608731712C47200E1D4A0 /* EAGLView.mm */,
 				9C96089E1712C8EB00E1D4A0 /* emulatorFix.c */,
+				9CF1C1F017AA8A46002CD2E3 /* Supporting Files */,
 			);
 			path = Onelab;
 			sourceTree = "<group>";
 		};
-		9C9608611712C16400E1D4A0 /* OnelabTests */ = {
+		9CF1C1F017AA8A46002CD2E3 /* Supporting Files */ = {
 			isa = PBXGroup;
 			children = (
-				9C9608671712C16400E1D4A0 /* OnelabTests.h */,
-				9C9608681712C16400E1D4A0 /* OnelabTests.m */,
-				9C9608621712C16400E1D4A0 /* Supporting Files */,
-			);
-			path = OnelabTests;
-			sourceTree = "<group>";
-		};
-		9C9608621712C16400E1D4A0 /* Supporting Files */ = {
-			isa = PBXGroup;
-			children = (
-				9C9608631712C16400E1D4A0 /* OnelabTests-Info.plist */,
-				9C9608641712C16400E1D4A0 /* InfoPlist.strings */,
+				9CF1C1F117AA8A7D002CD2E3 /* Onelab-Prefix.pch */,
+				9C95B7F51726C88E00C0CCE2 /* main.mm */,
+				9CF1C1EE17AA8997002CD2E3 /* Onelab-Info.plist */,
 			);
 			name = "Supporting Files";
 			sourceTree = "<group>";
@@ -220,32 +233,13 @@
 			productReference = 9C9608361712C16300E1D4A0 /* Onelab.app */;
 			productType = "com.apple.product-type.application";
 		};
-		9C9608591712C16400E1D4A0 /* OnelabTests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 9C96086F1712C16400E1D4A0 /* Build configuration list for PBXNativeTarget "OnelabTests" */;
-			buildPhases = (
-				9C9608551712C16400E1D4A0 /* Sources */,
-				9C9608561712C16400E1D4A0 /* Frameworks */,
-				9C9608571712C16400E1D4A0 /* Resources */,
-				9C9608581712C16400E1D4A0 /* ShellScript */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				9C9608601712C16400E1D4A0 /* PBXTargetDependency */,
-			);
-			name = OnelabTests;
-			productName = OnelabTests;
-			productReference = 9C96085A1712C16400E1D4A0 /* OnelabTests.octest */;
-			productType = "com.apple.product-type.bundle";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
 		9C96082D1712C16300E1D4A0 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 0440;
+				LastUpgradeCheck = 0460;
 				ORGANIZATIONNAME = "Maxime Graulich";
 			};
 			buildConfigurationList = 9C9608301712C16300E1D4A0 /* Build configuration list for PBXProject "Onelab" */;
@@ -261,7 +255,6 @@
 			projectRoot = "";
 			targets = (
 				9C9608351712C16300E1D4A0 /* Onelab */,
-				9C9608591712C16400E1D4A0 /* OnelabTests */,
 			);
 		};
 /* End PBXProject section */
@@ -271,38 +264,15 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				9C9608AC1712EF0900E1D4A0 /* MainStoryboard.storyboard in Resources */,
+				9C9608AC1712EF0900E1D4A0 /* iPadStoryboard.storyboard in Resources */,
 				9C9F8BCD174B5A1B004332C5 /* ic_launcher_retina.png in Resources */,
 				9C9F8BCF174B5A23004332C5 /* ic_launcher.png in Resources */,
 				9CC85C021790286C00F241C4 /* files in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		9C9608571712C16400E1D4A0 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				9C9608661712C16400E1D4A0 /* InfoPlist.strings in Resources */,
+				9CE1A65A17B0FB9700E5152F /* iPhoneiPodStoryboard.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		9C9608581712C16400E1D4A0 /* ShellScript */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# Run the unit tests in this test bundle.\n\"${SYSTEM_DEVELOPER_DIR}/Tools/RunUnitTests\"\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		9C9608321712C16300E1D4A0 /* Sources */ = {
@@ -310,53 +280,44 @@
 			buildActionMask = 2147483647;
 			files = (
 				9CE08E13178AEC5F00A83B4B /* drawContext.cpp in Sources */,
-				9CE08E14178AEC5F00A83B4B /* drawContext.h in Sources */,
-				9CE08E15178AEC5F00A83B4B /* iosGModel.h in Sources */,
-				9CE08E16178AEC5F00A83B4B /* movePosition.h in Sources */,
 				9CE08E17178AEC5F00A83B4B /* Trackball.cpp in Sources */,
-				9CE08E18178AEC5F00A83B4B /* Trackball.h in Sources */,
 				9C96084B1712C16400E1D4A0 /* AppDelegate.mm in Sources */,
-				9C9608511712C16400E1D4A0 /* MasterViewController.mm in Sources */,
-				9C9608541712C16400E1D4A0 /* DetailViewController.mm in Sources */,
+				9C9608511712C16400E1D4A0 /* ParametersViewController.mm in Sources */,
+				9C9608541712C16400E1D4A0 /* ModelViewController.mm in Sources */,
 				9C9608741712C47200E1D4A0 /* EAGLView.mm in Sources */,
 				9C96089F1712C8EB00E1D4A0 /* emulatorFix.c in Sources */,
-				9C95B7F61726C88E00C0CCE2 /* main.m in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		9C9608551712C16400E1D4A0 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				9C9608691712C16400E1D4A0 /* OnelabTests.m in Sources */,
+				9C95B7F61726C88E00C0CCE2 /* main.mm in Sources */,
+				9C6A645817A7C3DB00DEDAFC /* drawString.cpp in Sources */,
+				9CEAECC717A91CD20014D229 /* ModelListController.mm in Sources */,
+				9CEAE86E17AF824B00813524 /* iosGModel.cpp in Sources */,
+				9CEAE87D17AFD5BB00813524 /* SplitViewController.mm in Sources */,
+				9CE1A65717B0F39D00E5152F /* Utils.mm in Sources */,
+				9CE18C2017B27EDB009BA06E /* Parameter.mm in Sources */,
+				9CC6EBB717BA0A38001CA21A /* drawGeom.cpp in Sources */,
+				9CC6EBB917BA1CC7001CA21A /* drawMesh.cpp in Sources */,
+				9C1C10FA17BA5E7D00BFD483 /* OptionsViewController.mm in Sources */,
+				9CF34DE417C62FC500A3D5E3 /* PostProcessingViewController.mm in Sources */,
+				9CDCED2317D5C00500B39082 /* Model.mm in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
-/* Begin PBXTargetDependency section */
-		9C9608601712C16400E1D4A0 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 9C9608351712C16300E1D4A0 /* Onelab */;
-			targetProxy = 9C96085F1712C16400E1D4A0 /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
-
 /* Begin PBXVariantGroup section */
-		9C9608641712C16400E1D4A0 /* InfoPlist.strings */ = {
-			isa = PBXVariantGroup;
-			children = (
-				9C9608651712C16400E1D4A0 /* en */,
-			);
-			name = InfoPlist.strings;
-			sourceTree = "<group>";
-		};
-		9C9608AA1712EF0900E1D4A0 /* MainStoryboard.storyboard */ = {
+		9C9608AA1712EF0900E1D4A0 /* iPadStoryboard.storyboard */ = {
 			isa = PBXVariantGroup;
 			children = (
 				9C9608AB1712EF0900E1D4A0 /* en */,
 			);
-			name = MainStoryboard.storyboard;
+			name = iPadStoryboard.storyboard;
+			sourceTree = "<group>";
+		};
+		9CE1A65817B0FB9600E5152F /* iPhoneiPodStoryboard.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				9CE1A65917B0FB9700E5152F /* en */,
+			);
+			name = iPhoneiPodStoryboard.storyboard;
 			sourceTree = "<group>";
 		};
 /* End PBXVariantGroup section */
@@ -369,7 +330,11 @@
 				ARCHS = "$(ARCHS_STANDARD_32_BIT)";
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
 				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				COPY_PHASE_STRIP = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu99;
@@ -385,6 +350,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 5.1;
+				PROVISIONING_PROFILE = "";
+				"PROVISIONING_PROFILE[sdk=iphoneos*]" = "";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 2;
 			};
@@ -397,7 +364,11 @@
 				ARCHS = "$(ARCHS_STANDARD_32_BIT)";
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
 				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				COPY_PHASE_STRIP = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu99;
@@ -407,6 +378,8 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 5.1;
 				OTHER_CFLAGS = "-DNS_BLOCK_ASSERTIONS=1";
+				PROVISIONING_PROFILE = "";
+				"PROVISIONING_PROFILE[sdk=iphoneos*]" = "";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 2;
 				VALIDATE_PRODUCT = YES;
@@ -417,25 +390,20 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_WARN_OBJCPP_ARC_ABI = YES;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				CODE_SIGN_IDENTITY = "";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
-					"\"$(SRCROOT)/../../getdp-iOS\"",
-					"\"$(SRCROOT)/../../gmsh-iOS\"",
-					"\"$(SRCROOT)/../..\"",
 					"\"$(SRCROOT)/Onelab/frameworks\"",
 				);
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "Onelab/Onelab-Prefix.pch";
 				INFOPLIST_FILE = "Onelab/Onelab-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 5.1;
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				OTHER_CFLAGS = "-DNS_BLOCK_ASSERTIONS=1";
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				PROVISIONING_PROFILE = "";
-				"PROVISIONING_PROFILE[sdk=iphoneos*]" = "";
-				TARGETED_DEVICE_FAMILY = 2;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				VALID_ARCHS = armv7;
 				WRAPPER_EXTENSION = app;
 			};
@@ -445,9 +413,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_WARN_OBJCPP_ARC_ABI = YES;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				CODE_SIGN_IDENTITY = "";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"\"$(SRCROOT)/../../getdp-iOS\"",
@@ -458,47 +425,12 @@
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "Onelab/Onelab-Prefix.pch";
 				INFOPLIST_FILE = "Onelab/Onelab-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 5.1;
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				PROVISIONING_PROFILE = "";
-				"PROVISIONING_PROFILE[sdk=iphoneos*]" = "";
-				TARGETED_DEVICE_FAMILY = 2;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				VALID_ARCHS = armv7;
 				WRAPPER_EXTENSION = app;
-			};
-			name = Release;
-		};
-		9C9608701712C16400E1D4A0 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(BUILT_PRODUCTS_DIR)/Onelab.app/Onelab";
-				FRAMEWORK_SEARCH_PATHS = (
-					"\"$(SDKROOT)/Developer/Library/Frameworks\"",
-					"\"$(DEVELOPER_LIBRARY_DIR)/Frameworks\"",
-				);
-				GCC_PRECOMPILE_PREFIX_HEADER = YES;
-				GCC_PREFIX_HEADER = "Onelab/Onelab-Prefix.pch";
-				INFOPLIST_FILE = "OnelabTests/OnelabTests-Info.plist";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				TEST_HOST = "$(BUNDLE_LOADER)";
-				WRAPPER_EXTENSION = octest;
-			};
-			name = Debug;
-		};
-		9C9608711712C16400E1D4A0 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(BUILT_PRODUCTS_DIR)/Onelab.app/Onelab";
-				FRAMEWORK_SEARCH_PATHS = (
-					"\"$(SDKROOT)/Developer/Library/Frameworks\"",
-					"\"$(DEVELOPER_LIBRARY_DIR)/Frameworks\"",
-				);
-				GCC_PRECOMPILE_PREFIX_HEADER = YES;
-				GCC_PREFIX_HEADER = "Onelab/Onelab-Prefix.pch";
-				INFOPLIST_FILE = "OnelabTests/OnelabTests-Info.plist";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				TEST_HOST = "$(BUNDLE_LOADER)";
-				WRAPPER_EXTENSION = octest;
 			};
 			name = Release;
 		};
@@ -519,15 +451,6 @@
 			buildConfigurations = (
 				9C96086D1712C16400E1D4A0 /* Debug */,
 				9C96086E1712C16400E1D4A0 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		9C96086F1712C16400E1D4A0 /* Build configuration list for PBXNativeTarget "OnelabTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				9C9608701712C16400E1D4A0 /* Debug */,
-				9C9608711712C16400E1D4A0 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -120,7 +120,8 @@ for Gmsh @value{GMSH-VERSION} (@today{}).
 * File formats::                Input and output file formats
 * Tutorial::                    A step-by-step tutorial
 * Options::                     List of all available options
-* Information for developers::  Info for Gmsh developers
+* Compiling the source code::   Information on how to comile Gmsh from source
+* Information for developers::  Information for Gmsh developers
 * Frequently asked questions::  The Gmsh FAQ
 * Version history::             Changelog
 * Copyright and credits::       Copyright information and list of contributors
@@ -249,7 +250,6 @@ Options
 
 Information for developers
 
-* Getting the source::          
 * Source code structure::       
 * Coding style::                
 * Adding a new option::         
@@ -519,9 +519,10 @@ formats (@pxref{General options list}), and can generate complex
 animations (see @ref{General tools}, and @ref{t8.geo});
 @item
 run on low end machines and/or machines with no graphical
-interface. Gmsh can be compiled with or without the GUI, and all
-versions can be used either interactively or directly from the command
-line (@pxref{Running Gmsh on your system});
+interface. Gmsh can be compiled with or without the GUI
+(@pxref{Compiling the source code}), and all versions can be used either
+interactively or directly from the command line (@pxref{Running Gmsh on
+your system});
 @item
 configure your preferred options. Gmsh has a large number of
 configuration options that can be set interactively using the GUI,
@@ -654,11 +655,9 @@ Application Programming Interface (API). No complete documentation of
 this API is available yet; a good starting point is @ref{Source code
 structure}, which gives a short introduction to Gmsh's internal source
 code structure. Then have a look e.g. at the examples in the
-@file{utils/api_demos/} directory in the source code. Due to the many
-possible configuration options (and associated external dependencies),
-we currently do not distibute precompiled versions of the Gmsh
-library. To build the library see the instructions in the top-level
-@file{README.txt} file in the source distribution.
+@file{utils/api_demos/} directory in the source code.  To build the
+library see the instructions in @ref{Compiling the source code} and in
+the top-level @file{README.txt} file in the source distribution.
 
 @c -------------------------------------------------------------------------
 @c Syntactic rules used in the manual
@@ -817,9 +816,9 @@ menu.
 @cindex Non-interactive mode
 
 Gmsh can be run non-interactively in `batch' mode, without
-GUI@footnote{If you compile Gmsh without the GUI, this is the only mode
-you have access to.}. For example, to mesh the first tutorial in batch
-mode, just type:
+GUI@footnote{If you compile Gmsh without the GUI (@pxref{Compiling the
+source code}), this is the only mode you have access to.}. For example,
+to mesh the first tutorial in batch mode, just type:
 
 @example
 > gmsh t1.geo -2
@@ -970,6 +969,7 @@ parsing of the script file:
 @var{expression}:
   @var{real} |
   @var{string} |
+  @var{string} ~ @{ @var{expression} @}
   @var{string} [ @var{expression} ] |
   # @var{string} [ ] |
   ( @var{expression} ) |
@@ -986,19 +986,37 @@ parsing of the script file:
 @end example
 
 Such @w{@var{expression}s} are used in most of Gmsh's scripting
-commands.  The third and fourth cases in this definition permit to
-extract one item from a list (see below) and get the size of a list,
-respectively. The operators @var{operator-unary-left},
-@var{operator-unary-right}, @var{operator-binary},
-@var{operator-ternary-left} and @var{operator-ternary-right} are defined
-in @ref{Operators}. For the definition of @w{@var{built-in-function}s},
-see @ref{Built-in functions}. The various @w{@var{real-option}s} are
-listed in @ref{Options}. @code{StrFind} searches the first
-@var{char-expression} for any occurrence of the second
-@var{char-expression}. @code{StrCmp} compares the two strings (returns
-an integer greater than, equal to, or less than 0, according as the
-first string is greater than, equal to, or less than the second string).
-@code{TextAttributes} creates attributes for text strings.
+commands. When @code{~@{@var{expression-cst}@}} is appended to a string
+@var{string}, the result is a new string formed by the concatenation of
+@var{string}, @code{_} (an underscore) and the value of the
+@var{expression-cst}. This is most useful in loops (@pxref{Loops and
+conditionals}), where it permits to define unique strings
+automatically. For example,
+@example
+For i In @{1:3@}
+  x~@{i@} = i;
+EndFor
+@end example
+is the same as
+@example
+x_1 = 1;
+x_2 = 2;
+x_3 = 3;
+@end example
+
+The brackets @code{[]} permit to extract one item from a list and to get
+the size of a list, respectively. The operators
+@var{operator-unary-left}, @var{operator-unary-right},
+@var{operator-binary}, @var{operator-ternary-left} and
+@var{operator-ternary-right} are defined in @ref{Operators}. For the
+definition of @w{@var{built-in-function}s}, see @ref{Built-in
+functions}. The various @w{@var{real-option}s} are listed in
+@ref{Options}. @code{StrFind} searches the first @var{char-expression}
+for any occurrence of the second @var{char-expression}. @code{StrCmp}
+compares the two strings (returns an integer greater than, equal to, or
+less than 0, according as the first string is greater than, equal to, or
+less than the second string).  @code{TextAttributes} creates attributes
+for text strings.
 
 The last case in the definition allows to ask the user for a value
 interactively. For example, inserting @code{GetValue("Value of parameter
@@ -1081,7 +1099,7 @@ Character expressions are defined as:
   StrPrefix ( @var{char-expression} ) |
   StrRelative ( @var{char-expression} ) |
   StrCat ( @var{char-expression} , @var{char-expression} ) |
-  Str [ @var{char-expression} , @dots{} ] |
+  Str ( @var{char-expression} , @dots{} ) |
   Sprintf ( @var{char-expression} , @var{expression-list} ) |
   Sprintf ( @var{char-expression} ) |
   Sprintf ( @var{char-option} ) |
@@ -1101,7 +1119,9 @@ etc.) The various @w{@var{char-option}s} are listed in
 @ref{Options}. @code{GetEnvThe} gets the value of an environment
 variable from the operating system. @code{GetString} allows to ask the
 user for a value interactively. @code{StrReplace}'s arguments are: input
-string, old substring, new substring.
+string, old substring, new substring.@footnote{For compatibility with GetDP
+(@uref{http://geuz.org/getdp/}), parentheses can be replaced by brackets
+@code{[]} in @code{Str} and @code{Sprintf}.}
 
 Character expressions are mostly used to specify non-numeric options and
 input/output file names. See @ref{t8.geo}, for an interesting usage of
@@ -1333,6 +1353,9 @@ see @code{Fmod( @var{expression}, @var{expression} )}.
 @item Rand ( @var{expression} )
 Random number between zero and @var{expression}.
 
+@item Round ( @var{expression} )
+Rounds @var{expression} to the nearest integer.
+
 @item Sqrt ( @var{expression} )
 Square root of @var{expression} (@var{expression} >= 0).
 
@@ -1480,11 +1503,18 @@ Returns Gmsh's minor version number.
 Returns Gmsh's patch version number.
 
 @item MPI_Size
-Returns the number of processors on which Gmsh is running (always 1, except
-if you compiled Gmsh's parallel extensions).
+Returns the number of processors on which Gmsh is running. It is always
+1, except if you compiled Gmsh with @code{ENABLE_MPI}
+(@pxref{Compiling the source code}).
 
 @item MPI_Rank
 Returns the rank of the current processor.
+
+@item Cpu
+Returns the current CPU time (in seconds).
+
+@item Memory
+Returns the current memory usage (in Mb).
 
 @item newp
 Returns the next available point number. As explained in @ref{Geometry
@@ -1632,6 +1662,11 @@ current file.
 
 @item Draw;
 Redraws the scene.
+
+@item SetChanged;
+Force the mesh and post-processing vertex arrays to be
+regenerated. Useful e.g. for creating animations with changing clipping
+planes, etc.
 
 @item BoundingBox;
 Recomputes the bounding box of the scene (which is normally computed only
@@ -2225,7 +2260,7 @@ example, if a point is used as a control point of a curve),
 @code{Delete} has no effect (the line will have to be deleted before the
 point can).
 
-@item Hide @{ Point | Line | Surface | Volume @{ @var{expression-list} @}; @dots{} @}
+@item < Recursive > Hide @{ Point | Line | Surface | Volume @{ @var{expression-list} @}; @dots{} @}
 Hide the entities listed in @var{expression-list}, if
 @code{General.VisibilityMode} is set to @code{0} or @code{1}.
 
@@ -2234,7 +2269,7 @@ Hide the entity @var{char-expression}, if @code{General.VisibilityMode} is
 set to @code{0} or @code{1} (@var{char-expression} can for example be
 @code{"*"}).
 
-@item Show @{ Point | Line | Surface | Volume @{ @var{expression-list} @}; @dots{} @}
+@item < Recursive > Show @{ Point | Line | Surface | Volume @{ @var{expression-list} @}; @dots{} @}
 Show the entities listed in @var{expression-list}, if
 @code{General.VisibilityMode} is set to @code{0} or @code{1}.
 
@@ -2600,6 +2635,8 @@ extruded and has the following syntax:
   Layers @{ @var{expression} @} | 
   Layers @{ @{ @var{expression-list} @}, @{ @var{expression-list} @} @} | 
   Recombine; @dots{}
+  QuadTriNoNewVerts <RecombLaterals>; | 
+  QuadTriAddVerts <RecombLaterals>; ...
 @end group
 @end example
 
@@ -2626,6 +2663,57 @@ surface in @code{num[0]} and the id of the new volume in @code{num[1]}:
 num[] = Extrude @{0,0,1@} @{ Surface@{1@}; Layers@{10@}; @};
 @end example
 
+@code{QuadTriNoNewVerts} and @code{QuadTriAddVerts} allow to connect
+structured, extruded volumes containing quadrangle-faced elements to
+structured or unstructured tetrahedral volumes, by subdividing into
+triangles any quadrangles on boundary surfaces shared with tetrahedral
+volumes. (They have no effect for 1D or 2D extrusions.)
+@code{QuadTriNoNewVerts} subdivides any of the region's quad-faced 3D
+elements that touch these boundary triangles into pyramids, prisms, or
+tetrahedra as necessary, all WITHOUT adding new
+vertices. @code{QuadTriAddVerts} works in a simular way, but subdivides
+3D elements touching the boundary triangles by adding a new vertex
+inside each element at the vertex-based centroid. Either method results
+in a structured extrusion with an outer layer of subdivided elements
+that interface the inner, unmodified elements to the triangle-meshed
+region boundaries.
+
+In some rare cases, due to certain lateral boundary conditions, it may
+not be possible make a valid element subdivision with
+@code{QuadTriNoNewVerts} without adding additional vertices. In this
+case, an internal vertex is created at the vertex-based centroid of the
+element. The element is then divided using that vertex. When an internal
+vertex is created with @code{QuadTriNoNewVerts}, the user is alerted by
+a warning message sent for each instance; however, the mesh will still
+be valid and conformal.
+
+Both @code{QuadTriNoNewVerts} and @code{QuadTriAddVerts} can be used
+with the optional @code{RecombLaterals} keyword. By default, the QuadTri
+algorithms will mesh any free laterals as triangles, if
+possible. @code{RecombLaterals} forces any free laterals to remain as
+quadrangles, if possible. Lateral surfaces between two QuadTri regions
+will always be meshed as quadrangles.
+
+Note that the QuadTri algorithms will handle all potential meshing
+conflicts along the lateral surfaces of the extrusion.  In other words,
+QuadTri will not subdivide a lateral that must remain as quadrangles,
+nor will it leave a lateral as quadrangles if it @emph{must} be divided.
+The user should therefore feel free to mix different types of
+neighboring regions with a QuadTri meshed region; the mesh should work.
+However, be aware that the top surface of the QuadTri extrusion will
+always be meshed as triangles, unless it is extruded back onto the
+original source in a toroidal loop (a case which also works with
+QuadTri).
+
+@code{QuadTriNoNewVerts} and @code{QuadTriAddVerts} may be used
+interchangeably, but @code{QuadTriAddVerts} often gives better element
+quality.
+
+If the user wishes to interface a structured extrusion to a tetrahedral
+volume without modifying the original structured mesh, the user may
+create dedicated interface volumes around the structured geometry and
+apply a QuadTri algorithm to those volumes only.
+
 @item Extrude @{ @{ @var{expression-list} @}, @{ @var{expression-list} @}, @var{expression} @} @{ @var{extrude-list} @var{layers} @}
 Extrudes both the geometry and the mesh using a rotation
 (@pxref{Extrusions}). The @var{layers} option is defined as above.
@@ -2635,11 +2723,23 @@ Extrudes both the geometry and the mesh using a combined translation and
 rotation (@pxref{Extrusions}). The @var{layers} option is defined as
 above.
 
-@item Extrude @{ Surface @{ @var{expression-list} @}; @var{layers} < Using Index[@var{expr}]; > < Using View[@var{expr}]; > @}
+@item Extrude @{ Surface @{ @var{expression-list} @}; @var{layers} < Using Index[@var{expr}]; > < Using View[@var{expr}]; > < ScaleLastLayer; > @}
 Extrudes a boundary layer from the specified surfaces. If no view is
 specified, the boundary layer is created using gouraud-shaped (smoothed)
 normal field. Specifying a boundary layer index allows to extrude
 several independent boundary layers (with independent normal smoothing).
+
+@code{ScaleLastLayer} scales the height of the last (top) layer of each
+normal's extrusion by the average length of the edges in all the source
+elements that contain the source vertex (actually, the average of the
+averages for each element--edges actually touching the source vertex are
+counted twice). This allows the height of the last layer to vary along
+with the size of the source elements in order to achieve better element
+quality. For example, in a boundary layer extruded with the Layers
+definition 'Layers@{ @{1,4,2@}, @{0.5, 0.6, 1.6@} @},' a source vertex
+adjacent to elements with an overall average edge length of 5.0 will
+extrude to have a last layer height = (1.6-0.6) * 5.0 = 5.0.
+
 
 @item Transfinite Line @{ @var{expression-list} @} | "*" = @var{expression} < Using Progression | Bump @var{expression} >;
 Selects the lines in @var{expression-list} to be meshed with the 1D
@@ -2671,6 +2771,15 @@ contain the identification numbers of the six or eight points on the
 boundary of the volume that define the corners of the transfinite
 interpolation. If no identification numbers are given, the transfinite
 algorithm will try to find the corners automatically.
+
+@item TransfQuadTri @{ @var{expression-list} @} | "*";
+
+Applies the transfinite QuadTri algorithm on the @var{expression-list}
+list of volumes (@code{"*"} can be used to apply TransfQuadTri to all
+existing volumes).  A transfinite volume with any combination of
+recombined and un-recombined transfinite boundary surfaces is valid when
+meshed with @code{TransfQuadTri}. When applied to non-Transfinite
+volumes, TransfQuadTri has no effect on those volumes.
 
 @end ftable
 
@@ -2710,10 +2819,10 @@ right-hand side (master, with boundary edges specified between braces).
 @item Coherence Mesh;
 Removes all duplicate mesh vertices.
 
-@item Color @var{color-expression} @{ Point | Line | Surface | Volume @{ @var{expression-list} @}; @dots{} @}
+@item < Recursive > Color @var{color-expression} @{ Point | Line | Surface | Volume @{ @var{expression-list} @}; @dots{} @}
 Sets the mesh color of the entities in @var{expression-list} to @var{color-expression}.
 
-@item Hide @{ Point | Line | Surface | Volume @{ @var{expression-list} @}; @dots{} @}
+@item < Recursive > Hide @{ Point | Line | Surface | Volume @{ @var{expression-list} @}; @dots{} @}
 Hides the mesh of the entities in @var{expression-list}, if
 @code{General.VisibilityMode} is set to @code{0} or @code{2}.
 
@@ -2740,7 +2849,7 @@ Saves the mesh in a file named @var{char-expression}, using the current
 @var{char-expression} is not absolute, @var{char-expression} is appended
 to the path of the current file.
 
-@item Show @{ Point | Line | Surface | Volume @{ @var{expression-list} @}; @dots{} @}
+@item < Recursive > Show @{ Point | Line | Surface | Volume @{ @var{expression-list} @}; @dots{} @}
 Shows the mesh of the entities in @var{expression-list}, if
 @code{General.VisibilityMode} is set to @code{0} or @code{2}.
 
@@ -3705,7 +3814,7 @@ for(i = 0; i < number_of_triangles; i++)@{
 
 @cindex Nodes, ordering
 
-Historically, Gmsh developpers have started by implementing linear elements (lines,
+Historically, Gmsh developers have started by implementing linear elements (lines,
 triangles, quads, tets, prisms and hexes). Then, second and sometimes third
 order elements have been hardcoded. We here distinguish ``low order elements'' that
 have been hardcoded initially and ``high order elements'' that have been coded in
@@ -4424,7 +4533,7 @@ system}. Screencasts that show how to use the GUI are available on
 @c Options
 @c =========================================================================
 
-@node Options, Information for developers, Tutorial, Top
+@node Options, Compiling the source code, Tutorial, Top
 @appendix Options
 
 This appendix lists all the available options.  Gmsh's default behavior
@@ -4510,41 +4619,15 @@ by hand.
 @c The @code{ColorTable} is defined as a list...
 
 @c =========================================================================
-@c Information for developers
+@c Compiling the source code
 @c =========================================================================
 
-@node Information for developers, Frequently asked questions, Options, Top
-@appendix Information for developers
-
-@cindex Developer, information
-@cindex Programming, notes
-
-Gmsh is written in C++, the scripting language is parsed using Lex and
-Yacc (actually, Flex and Bison), and the GUI relies on OpenGL for the 3D
-graphics and FLTK (@uref{http://www.fltk.org}) for the widget
-set. Gmsh's build system is based on CMake
-(@uref{http://www.cmake.org}). Practical notes on how to compile Gmsh's
-source code are included in the distribution. See @ref{Frequently asked
-questions}, for more information.
-
-@menu
-* Getting the source::          
-* Source code structure::       
-* Coding style::                
-* Adding a new option::         
-@end menu
-
-@c -------------------------------------------------------------------------
-@c Getting the source
-@c -------------------------------------------------------------------------
-
-@node Getting the source, Source code structure, Information for developers, Information for developers
-@section Getting the source
+@node Compiling the source code, Information for developers, Options, Top
+@appendix Compiling the source code
 
 Stable releases and nightly source snapshots are available from
-@uref{http://geuz.org/gmsh/src/}.
-
-You can also access the subversion repository directly:
+@uref{http://geuz.org/gmsh/src/}. You can also access the subversion
+repository directly:
 
 @enumerate
 @item
@@ -4575,11 +4658,48 @@ svn commit
 
 @end enumerate
 
+Once you have the source code, you need to run CMake to configure your
+build (see the @file{README.txt} file in the top-level source directory
+for detailed information on how to run CMake). 
+
+Each build can be configured using a series of options, to selectively
+enable optional modules or features. Here is the list of CMake options:
+
+@ftable @code
+
+@include cmake_options.texi
+
+@end ftable
+
+@c =========================================================================
+@c Information for developers
+@c =========================================================================
+
+@node Information for developers, Frequently asked questions, Compiling the source code, Top
+@appendix Information for developers
+
+@cindex Developer, information
+@cindex Programming, notes
+
+Gmsh is written in C++, the scripting language is parsed using Lex and
+Yacc (actually, Flex and Bison), and the GUI relies on OpenGL for the 3D
+graphics and FLTK (@uref{http://www.fltk.org}) for the widget
+set. Gmsh's build system is based on CMake
+(@uref{http://www.cmake.org}). Practical notes on how to compile Gmsh's
+source code is provided in @ref{Compiling the source code} (see also
+@ref{Frequently asked questions}).
+
+@menu
+* Source code structure::       
+* Coding style::                
+* Adding a new option::         
+@end menu
+
 @c -------------------------------------------------------------------------
 @c Source code structure
 @c -------------------------------------------------------------------------
 
-@node Source code structure, Coding style, Getting the source, Information for developers
+@node Source code structure, Coding style, Information for developers, Information for developers
 @section Source code structure
 
 Gmsh's code is structured in several subdirectories, roughly separated
@@ -4866,9 +4986,9 @@ found at @url{http://www.mesa3d.org}.
 
 @item How do I compile Gmsh from the source code?
 
-You need cmake (@url{http://www.cmake.org}) and a C++ compiler. See the
-@file{README.txt} file in the top-level source directory for more
-information.
+You need cmake (@url{http://www.cmake.org}) and a C++ compiler. See
+@ref{Compiling the source code} and the @file{README.txt} file in the
+top-level source directory for more information.
 
 @item Where does Gmsh save its configuration files?
 
@@ -4927,7 +5047,12 @@ image file.
 
 @item How can I save MPEG, AVI, ..., animations?
 
-Using a script. Have a look at @file{tutorial/t8.geo} or
+You can create simple MPEG animations by choosing MPEG as the format in
+`File->Save As': this allows you to loop over time steps or
+post-processing data sets. To create more complicated animations
+(flyovers, animated clipping or modification of meshes, etc.) or to use
+different output formats (AVI, MP4, etc.), you should write a
+script. Have a look at @file{tutorial/t8.geo} or
 @file{demos/anim.script} for some examples.
 
 @item Can I change values in input fields with the mouse in the GUI?
@@ -5231,7 +5356,9 @@ Evaluate plugin.
 
 @item Is there a way to save animations?
 
-Yes, using scripts. Have a look at @file{tutorial/t8.geo} or
+You can save simple MPEG animations directly from the `File->Save As'
+menu. For more other formats or more complex animations, you should
+write a script. Have a look at @file{tutorial/t8.geo} or
 @file{demos/anim.script} for some examples.
 
 @item Is there a way to visualize only certain components of vector/tensor fields?

@@ -1,6 +1,10 @@
 #ifndef _DRAW_GMODEL_H_
 #define _DRAW_GMODEL_H_
 
+#ifndef __cplusplus
+#error You need a Cpp compiler!
+#endif
+
 #if !defined(BUILD_ANDROID)
 #define BUILD_IOS 1
 #endif
@@ -15,7 +19,12 @@
 
 #include "movePosition.h"
 
+void drawArray(VertexArray *va, int type, bool useColorArray=false, bool useNormalArray=false);
 int onelab_cb(std::string);
+int animation_next();
+int animation_prev();
+int number_of_animation();
+void set_animation(int step);
 
 class drawContext{
 private:
@@ -27,8 +36,6 @@ private:
 	int _width, _height; // size of OpenGL context in pixel
 	float _left, _right, _top, _bottom; // value of "border"
 	bool _gradiant, // show the background gradiant
-	_showGeom, // show the Geometry
-	_showMesh, // show the Mesh
 	_fillMesh; // fill the Mesh
     
 	void OrthofFromGModel(void);
@@ -49,17 +56,12 @@ public:
 	float getScale(int i) {if(i>=0 && i<3) return this->_scale[i]; return 0;}
 	void initView(int w, int h);
 	void drawView();
-	void drawAxes(double x0=0., double y0=0., double z0=0., double h=0.5);
+	void drawAxes(float x0=0., float y0=0., float z0=0., float h=0.5);
 	void drawGeom();
 	void drawMesh();
 	void drawPost();
 	void drawScale();
 	void useGradiant(bool gradiant=true) {_gradiant = gradiant;}
-	void showGeom(bool show=true) {_showGeom = show;}
-	void showMesh(bool show=true) {_showMesh = show;}
-	void fillMesh(bool show=true) {_fillMesh = show;}
-    bool isShowedMesh(){return _showMesh;}
-    bool isShowedGeom(){return _showGeom;}
 };
 
 #endif

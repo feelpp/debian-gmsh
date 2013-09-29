@@ -397,6 +397,7 @@ void Recombinator::pattern1(GRegion* gr){
 
   for(i=0;i<gr->getNumMeshElements();i++){
     element = gr->getMeshElement(i);
+	//for(index=0;index<4;index++){
     max_scaled_jacobian(element,index);
 
     a = element->getVertex(index);
@@ -446,6 +447,7 @@ void Recombinator::pattern1(GRegion* gr){
         }
       }
     }
+	//}
   }
 }
 
@@ -461,7 +463,9 @@ void Recombinator::pattern2(GRegion* gr){
 
   for(i=0;i<gr->getNumMeshElements();i++){
     element = gr->getMeshElement(i);
-    diagonal(element,index1,index2);
+	//for(index1=0;index1<3;index1++){
+	//for(index2=index1+1;index2<4;index2++){
+	diagonal(element,index1,index2);
     two_others(index1,index2,index3,index4);
 
     b = element->getVertex(index1);
@@ -494,6 +498,8 @@ void Recombinator::pattern2(GRegion* gr){
         }
       }
     }
+	//}
+	//}
   }
 }
 
@@ -4151,7 +4157,7 @@ void PostOp::statistics(GRegion* gr){
   printf("  percentage of tetrahedra : %.2f\n",vol4*100.0/vol);
   printf("Total number of elements : %d\n",gr->getNumMeshElements());
   printf("Total volume : %f\n",vol);
-  printf("Misc : %d %d %f\n",estimate1,estimate2,iterations/estimate2);
+  printf("Misc : %d %d %d\n",estimate1,estimate2,iterations);
 }
 
 void PostOp::build_tuples(GRegion* gr){

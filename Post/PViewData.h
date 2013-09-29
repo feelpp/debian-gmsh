@@ -81,7 +81,7 @@ class PViewData {
 
   // get number of time steps in the data
   virtual int getNumTimeSteps() = 0;
-  virtual int getFirstNonEmptyTimeStep(){ return 0; }
+  virtual int getFirstNonEmptyTimeStep(int start=0){ return start; }
 
   // get the time value associated with the step-th time step
   virtual double getTime(int step){ return 0.; }
@@ -270,7 +270,8 @@ class PViewData {
   virtual bool writePOS(const std::string &fileName, bool binary=false,
                         bool parsed=true, bool append=false);
   virtual bool writeMSH(const std::string &fileName, double version=2.2, bool binary=false,
-                        bool savemesh=true, bool multipleView=false);
+                        bool savemesh=true, bool multipleView=false,
+                        int partitionNum=0, bool saveInterpolationMatrices=true);
   virtual bool writeMED(const std::string &fileName);
   virtual bool toVector(std::vector<std::vector<double> > &vec);
   virtual bool fromVector(const std::vector<std::vector<double> > &vec);

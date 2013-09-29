@@ -32,7 +32,7 @@ struct contextMeshOptions {
   int lcFromPoints, lcFromCurvature, lcExtendFromBoundary;
   int dual, voronoi, drawSkinOnly, colorCarousel, labelSampling;
   int fileFormat, nbSmoothing, algo2d, algo3d, algoSubdivide;
-  int algoRecombine, recombineAll, recombine3DAll;
+  int algoRecombine, recombineAll, recombine3DAll, flexibleTransfinite;
   //-- for recombination test (amaury) --
     int doRecombinationTest, recombinationTestStart;
     int recombinationTestNoGreedyStrat, recombinationTestNewStrat;
@@ -252,6 +252,8 @@ class CTX {
     int posElementary, posElement, posGamma, posEta, posRho, posDisto;
     int compositeWindows, deleteTmpFiles, background;
     int width, height;
+    double parameter, parameterFirst, parameterLast, parameterSteps;
+    std::string parameterCommand;
   } print;
   // color options
   struct{

@@ -16,6 +16,7 @@
 #include <Gmsh/onelabUtils.h>
 #include <Gmsh/PView.h>
 #include <Gmsh/PViewOptions.h>
+#include <Gmsh/PViewData.h>
 #include <Gmsh/Context.h>
 #include <Gmsh/StringUtils.h>
 
@@ -34,6 +35,7 @@
 #include <gmsh/onelabUtils.h>
 #include <gmsh/PView.h>
 #include <gmsh/PViewOptions.h>
+#include <gmsh/PViewData.h>
 #include <gmsh/Context.h>
 #include <gmsh/StringUtils.h>
 
@@ -43,6 +45,7 @@
 #endif
 
 #include "drawContext.h"
+#include "drawString.h"
 #include "Trackball.h"
 
 static bool locked = false;
@@ -50,7 +53,7 @@ static bool locked = false;
 drawContext::drawContext()
 {
 	GmshInitialize();
-    GmshSetOption("General", "Terminal", 1.0);
+	GmshSetOption("General", "Terminal", 1.0);
 	onelabUtils::setFirstComputationFlag(false);
 	for(int i = 0; i < 3; i++){
 		_translate[i] = 0.;
@@ -59,13 +62,11 @@ drawContext::drawContext()
 	setQuaternion(0., 0., 0., 1.);
     
 	_fillMesh = false;
-	_showMesh = false;
-	_showGeom = true;
 	_gradiant = true;
 }
 
 static void checkGlError(const char* op) {
-	for (GLint error = glGetError(); error; error	= glGetError())
+	for (GLint error = glGetError(); error; error = glGetError())
 		Msg::Error("%s: glError (0x%x)",op,error);
 }
 
@@ -83,7 +84,7 @@ void drawContext::load(std::string filename)
 	// run getdp witout parameter
 	onelab_cb("check");
     
-	// to allow the firs run
+	// to allow the first run
 	onelab::server::instance()->setChanged(true, "Gmsh");
 	onelab::server::instance()->setChanged(true, "GetDP");
 }
@@ -91,6 +92,9 @@ void drawContext::load(std::string filename)
 void drawContext::eventHandler(int event, float x, float y)
 {
 	this->_current.set(this->_scale, this->_translate, this->_right, this->_left, this->_bottom, this->_top, this->_width, this->_height, x, y);
+    double xx[3] = {1.,0.,0.};
+    double yy[3] = {0.,1.,0.};
+    double q[4];
 	switch(event)
 	{
 		case 0: // finger(s) press the screen
@@ -107,7 +111,7 @@ void drawContext::eventHandler(int event, float x, float y)
 		case 2: // fingers move (scale)
 			// in this case we don't care about previous and current position, x represent the scale
 			this->_scale[0] = this->_scale[1] = this->_scale[2] = x;
-			this->_start.recenter(this->_scale, this->_translate); // FIXME somethink change the value of win
+			this->_start.recenter(this->_scale, this->_translate);
 			break;
 		case 3: // fingers move (rotate)
 			this->addQuaternion((2. * this->_previous.win[0] - this->_width) / this->_width,
@@ -117,6 +121,17 @@ void drawContext::eventHandler(int event, float x, float y)
 			break;
 		case 4: // release the finger(s)
 			// Do nothink ?
+			break;
+		case 5: // X view
+			axis_to_quat(xx, M_PI/2, q);
+			setQuaternion(q[0], q[1], q[2], q[3]);
+			break;
+		case 6: // Y view
+			axis_to_quat(yy, M_PI/2, q);
+			setQuaternion(q[0], q[1], q[2], q[3]);
+			break;
+		case 7: // Z view
+			setQuaternion(0., 0., 0., 1.);
 			break;
 		default: // all other reset the position
 			setQuaternion(0., 0., 0., 1.);
@@ -155,13 +170,20 @@ void drawContext::OrthofFromGModel()
 {
 	SBoundingBox3d bb = GModel::current()->bounds();
 	double ratio = (double)(this->_width ? this->_width : 1.) / (double)(this->_height ? this->_height : 1.);
-	double modelh = bb.max().y() - bb.min().y(), modelw = bb.max().x() - bb.min().x();
-	double modelratio = (modelw ? modelw : 1.) / (modelh ? modelh : 1.);
+	double bbRation = (bb.max().x() - bb.min().x()) / (bb.max().y() - bb.min().y());
 	double xmin = -ratio, xmax = ratio, ymin = -1., ymax = 1.;
-	xmin = bb.min().x();
-	xmax = bb.max().x();
-	ymin = bb.min().x() / ratio;
-	ymax = bb.max().x() / ratio;
+	if(bbRation < 1) {
+		xmin = bb.min().y() * ratio + bb.max().x() + bb.min().x();
+		xmax = bb.max().y() * ratio + bb.max().x() + bb.min().x();
+		ymin = bb.min().y() + bb.max().y() + bb.min().y();
+		ymax = bb.max().y() + bb.max().y() + bb.min().y();
+	}
+	else {
+		xmin = bb.min().x() + bb.max().x() + bb.min().x();
+		xmax = bb.max().x() + bb.max().x() + bb.min().x();
+		ymin = bb.min().x() / ratio + bb.max().y() + bb.min().y();
+		ymax = bb.max().x() / ratio + bb.max().y() + bb.min().y();
+	}
 	xmax += (xmax - xmin) / 5.;
 	xmin -= (xmax - xmin) / 5.;
 	ymax += (ymax - ymin) / 5.;
@@ -194,10 +216,13 @@ void drawContext::initView(int w, int h)
 	this->OrthofFromGModel();
     
 	glClearColor(.83,.85,.98,1.);
+	glDepthMask(GL_TRUE);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	glDepthFunc(GL_LESS);
 }
 
-void drawArray(VertexArray *va, GLint type, bool colorArray=false)
+void drawArray(VertexArray *va, GLint type, bool useColorArray, bool useNormalArray)
 {
 	if(!va) return;
 	glEnable(GL_BLEND);
@@ -205,14 +230,15 @@ void drawArray(VertexArray *va, GLint type, bool colorArray=false)
 	glShadeModel(GL_SMOOTH);
 	glVertexPointer(3, GL_FLOAT, 0, va->getVertexArray());
 	glEnableClientState(GL_VERTEX_ARRAY);
-	glNormalPointer(GL_BYTE, 0, va->getNormalArray());
-	glEnableClientState(GL_NORMAL_ARRAY);
-	if(colorArray){
+	if(useNormalArray){
+		glNormalPointer(GL_BYTE, 0, va->getNormalArray());
+		glEnableClientState(GL_NORMAL_ARRAY);
+	}
+	if(useColorArray){
 		glColorPointer(4, GL_UNSIGNED_BYTE, 0, va->getColorArray());
 		glEnableClientState(GL_COLOR_ARRAY);
 	}
 	glDrawArrays(type, 0, va->getNumVertices());
-	glDisable(GL_POLYGON_OFFSET_FILL);
 	glDisableClientState(GL_VERTEX_ARRAY);
 	glDisableClientState(GL_NORMAL_ARRAY);
 	glDisableClientState(GL_COLOR_ARRAY);
@@ -319,15 +345,14 @@ void drawContext::drawVectorArray(PViewOptions *opt, VertexArray *va)
 void drawContext::drawPView(PView *p)
 {
 	PViewOptions *opt = p->getOptions();
-	PViewData *data = p->getData(true);
 	if(!opt->visible) return;
     
 	glPointSize((GLfloat)opt->pointSize);
 	glLineWidth((GLfloat)opt->lineWidth);
     
-	drawArray(p->va_points, GL_POINTS,true);
-	drawArray(p->va_lines, GL_LINES,true);
-	drawArray(p->va_triangles, GL_TRIANGLES,true);
+	drawArray(p->va_points, GL_POINTS, true);
+	drawArray(p->va_lines, GL_LINES, true);
+	drawArray(p->va_triangles, GL_TRIANGLES, true, true);
 
 	glLineWidth(1);
 	glPointSize(1);
@@ -340,113 +365,118 @@ void drawContext::drawScale()
 	glPushMatrix();
 	glLoadIdentity();
 	// Draw the scale bar
-	if(PView::list.size() < 1) return;
-	PView *p = PView::list[PView::list.size()-1];
-	PViewOptions *opt = p->getOptions();
-    
-	double width = 6*(this->_right -this->_left) / 10.;
-	double height = (this->_top - this->_bottom) / 20.;
-	double box = width / (opt->nbIso ? opt->nbIso : 1);
-	double xmin = this->_left + (this->_right - this->_left -width)/2.;
-	double ymin = this->_bottom + height;
-    
-    GLfloat *vertex = (GLfloat *)malloc(opt->nbIso*3*4*sizeof(GLfloat));
-    GLubyte *color = (GLubyte *)malloc(opt->nbIso*4*4*sizeof(GLubyte));
-	for(int i = 0; i < opt->nbIso; i++){
-		if(opt->intervalsType == PViewOptions::Discrete || opt->intervalsType == PViewOptions::Numeric)
-		{
-			unsigned int col = opt->getColor(i, opt->nbIso);
-			color[i*4*4+0] = color[i*4*4+4] = color[i*4*4+8] = color[i*4*4+12] = (GLubyte)CTX::instance()->unpackRed(col);
-			color[i*4*4+1] = color[i*4*4+5] = color[i*4*4+9] = color[i*4*4+13] = (GLubyte)CTX::instance()->unpackGreen(col);
-			color[i*4*4+2] = color[i*4*4+6] = color[i*4*4+10] = color[i*4*4+14] = (GLubyte)CTX::instance()->unpackBlue(col);
-			color[i*4*4+3] = color[i*4*4+7] = color[i*4*4+11] = color[i*4*4+15] = (GLubyte)CTX::instance()->unpackAlpha(col);
-			vertex[i*3*4+0] = xmin + i * box;
-			vertex[i*3*4+1] = ymin;
-			vertex[i*3*4+2] = 0.;
-			vertex[i*3*4+3] = xmin + i * box;
-			vertex[i*3*4+4] = ymin + height;
-			vertex[i*3*4+5] = 0.;
-			vertex[i*3*4+6] = xmin + (i + 1) * box;
-			vertex[i*3*4+7] = ymin;
-			vertex[i*3*4+8] = 0.;
-			vertex[i*3*4+9] = xmin + (i + 1) * box;
-			vertex[i*3*4+10] = ymin + height;
-			vertex[i*3*4+11] = 0.;
-		}
-		else if(opt->intervalsType == PViewOptions::Continuous)
-		{
-			double dv = (opt->tmpMax - opt->tmpMin) / (opt->nbIso ? opt->nbIso : 1);
-			double v1 = opt->tmpMin + i * dv;
-			unsigned int col1 = opt->getColor(v1, opt->tmpMin, opt->tmpMax, true);
-			color[i*4*4+0] = color[i*4*4+4] = (GLubyte)CTX::instance()->unpackRed(col1);
-			color[i*4*4+1] = color[i*4*4+5] = (GLubyte)CTX::instance()->unpackGreen(col1);
-			color[i*4*4+2] = color[i*4*4+6] = (GLubyte)CTX::instance()->unpackBlue(col1);
-			color[i*4*4+3] = color[i*4*4+7] = (GLubyte)CTX::instance()->unpackAlpha(col1);
-			vertex[i*3*4+0] = xmin + i * box;
-			vertex[i*3*4+1] = ymin;
-			vertex[i*3*4+2] = 0.;
-			vertex[i*3*4+3] = xmin + i * box;
-			vertex[i*3*4+4] = ymin + height;
-			vertex[i*3*4+5] = 0.;
-			double v2 = opt->tmpMin + (i + 1) * dv;
-            unsigned int col2 = opt->getColor(v2, opt->tmpMin, opt->tmpMax, true);
-			color[i*4*4+8] = color[i*4*4+12] = (GLubyte)CTX::instance()->unpackRed(col2);
-			color[i*4*4+9] = color[i*4*4+13] = (GLubyte)CTX::instance()->unpackGreen(col2);
-			color[i*4*4+10] = color[i*4*4+14] = (GLubyte)CTX::instance()->unpackBlue(col2);
-			color[i*4*4+11] = color[i*4*4+15] = (GLubyte)CTX::instance()->unpackAlpha(col2);
-			vertex[i*3*4+6] = xmin + (i + 1) * box;
-			vertex[i*3*4+7] = ymin;
-			vertex[i*3*4+8] = 0.;
-			vertex[i*3*4+9] = xmin + (i + 1) * box;
-			vertex[i*3*4+10] = ymin + height;
-			vertex[i*3*4+11] = 0.;
-		}
-		else
-		{
-			unsigned int col = opt->getColor(i, opt->nbIso);
-			color[i*4*4+0] = color[i*4*4+4] = color[i*4*4+8] = color[i*4*4+12] = (GLubyte)CTX::instance()->unpackRed(col);
-			color[i*4*4+1] = color[i*4*4+5] = color[i*4*4+9] = color[i*4*4+13] = (GLubyte)CTX::instance()->unpackGreen(col);
-			color[i*4*4+2] = color[i*4*4+6] = color[i*4*4+10] = color[i*4*4+14] = (GLubyte)CTX::instance()->unpackBlue(col);
-			color[i*4*4+3] = color[i*4*4+7] = color[i*4*4+11] = color[i*4*4+15] = (GLubyte)CTX::instance()->unpackAlpha(col);
-			vertex[i*3*4+0] = xmin + i * box;
-			vertex[i*3*4+1] = ymin;
-			vertex[i*3*4+2] = 0.;
-			vertex[i*3*4+3] = xmin + i * box;
-			vertex[i*3*4+4] = ymin + height;
-			vertex[i*3*4+5] = 0.;
-			vertex[i*3*4+6] = xmin + (i + 1) * box;
-			vertex[i*3*4+7] = ymin;
-			vertex[i*3*4+8] = 0.;
-			vertex[i*3*4+9] = xmin + (i + 1) * box;
-			vertex[i*3*4+10] = ymin + height;
-			vertex[i*3*4+11] = 0.;
-		}
-	}
-	
-	glVertexPointer(3, GL_FLOAT, 0, vertex);
-	glEnableClientState(GL_VERTEX_ARRAY);
-	glColorPointer(4, GL_UNSIGNED_BYTE, 0, color);
-	glEnableClientState(GL_COLOR_ARRAY);
-	if(opt->intervalsType == PViewOptions::Discrete || opt->intervalsType == PViewOptions::Numeric || opt->intervalsType == PViewOptions::Continuous)
-		glDrawArrays(GL_TRIANGLE_STRIP, 0, opt->nbIso*4);
-	else
-		glDrawArrays(GL_LINES, 0, opt->nbIso*4);
-	glDisableClientState(GL_COLOR_ARRAY);
-	glDisableClientState(GL_VERTEX_ARRAY);
-	free(vertex);
-	free(color);
-	glPopMatrix();
-}
+	int nPview = 0;
+	for(int i=0; i<PView::list.size();i++){
+		PView *p = PView::list[i];
+		PViewOptions *opt = p->getOptions();
+		if(!opt->visible) continue;
 
-void drawContext::drawMesh()
-{
-	GModel::current()->fillVertexArrays();
-    glColor4f(0,0,0,1.);
-	for(GModel::fiter it = GModel::current()->firstFace(); it != GModel::current()->lastFace(); it++){
-		if(_fillMesh) drawArray((*it)->va_triangles, GL_TRIANGLES);
-		else drawArray((*it)->va_lines, GL_LINES);
+		double width = 6*(this->_right -this->_left) / 10.;
+		double height = (this->_top - this->_bottom) / 20.;
+		double box = width / (opt->nbIso ? opt->nbIso : 1);
+		double xmin = this->_left + (this->_right - this->_left -width)/2.;
+		double ymin = this->_bottom + height + 2*height*nPview;
+    
+		GLfloat *vertex = (GLfloat *)malloc(opt->nbIso*3*4*sizeof(GLfloat));
+		GLubyte *color = (GLubyte *)malloc(opt->nbIso*4*4*sizeof(GLubyte));
+		for(int i = 0; i < opt->nbIso; i++){
+			if(opt->intervalsType == PViewOptions::Discrete || opt->intervalsType == PViewOptions::Numeric)
+			{
+				unsigned int col = opt->getColor(i, opt->nbIso);
+				color[i*4*4+0] = color[i*4*4+4] = color[i*4*4+8] = color[i*4*4+12] = (GLubyte)CTX::instance()->unpackRed(col);
+				color[i*4*4+1] = color[i*4*4+5] = color[i*4*4+9] = color[i*4*4+13] = (GLubyte)CTX::instance()->unpackGreen(col);
+				color[i*4*4+2] = color[i*4*4+6] = color[i*4*4+10] = color[i*4*4+14] = (GLubyte)CTX::instance()->unpackBlue(col);
+				color[i*4*4+3] = color[i*4*4+7] = color[i*4*4+11] = color[i*4*4+15] = (GLubyte)CTX::instance()->unpackAlpha(col);
+				vertex[i*3*4+0] = xmin + i * box;
+				vertex[i*3*4+1] = ymin;
+				vertex[i*3*4+2] = 0.;
+				vertex[i*3*4+3] = xmin + i * box;
+				vertex[i*3*4+4] = ymin + height;
+				vertex[i*3*4+5] = 0.;
+				vertex[i*3*4+6] = xmin + (i + 1) * box;
+				vertex[i*3*4+7] = ymin;
+				vertex[i*3*4+8] = 0.;
+				vertex[i*3*4+9] = xmin + (i + 1) * box;
+				vertex[i*3*4+10] = ymin + height;
+				vertex[i*3*4+11] = 0.;
+			}
+			else if(opt->intervalsType == PViewOptions::Continuous)
+			{
+				double dv = (opt->tmpMax - opt->tmpMin) / (opt->nbIso ? opt->nbIso : 1);
+				double v1 = opt->tmpMin + i * dv;
+				unsigned int col1 = opt->getColor(v1, opt->tmpMin, opt->tmpMax, true);
+				color[i*4*4+0] = color[i*4*4+4] = (GLubyte)CTX::instance()->unpackRed(col1);
+				color[i*4*4+1] = color[i*4*4+5] = (GLubyte)CTX::instance()->unpackGreen(col1);
+				color[i*4*4+2] = color[i*4*4+6] = (GLubyte)CTX::instance()->unpackBlue(col1);
+				color[i*4*4+3] = color[i*4*4+7] = (GLubyte)CTX::instance()->unpackAlpha(col1);
+				vertex[i*3*4+0] = xmin + i * box;
+				vertex[i*3*4+1] = ymin;
+				vertex[i*3*4+2] = 0.;
+				vertex[i*3*4+3] = xmin + i * box;
+				vertex[i*3*4+4] = ymin + height;
+				vertex[i*3*4+5] = 0.;
+				double v2 = opt->tmpMin + (i + 1) * dv;
+				unsigned int col2 = opt->getColor(v2, opt->tmpMin, opt->tmpMax, true);
+				color[i*4*4+8] = color[i*4*4+12] = (GLubyte)CTX::instance()->unpackRed(col2);
+				color[i*4*4+9] = color[i*4*4+13] = (GLubyte)CTX::instance()->unpackGreen(col2);
+				color[i*4*4+10] = color[i*4*4+14] = (GLubyte)CTX::instance()->unpackBlue(col2);
+				color[i*4*4+11] = color[i*4*4+15] = (GLubyte)CTX::instance()->unpackAlpha(col2);
+				vertex[i*3*4+6] = xmin + (i + 1) * box;
+				vertex[i*3*4+7] = ymin;
+				vertex[i*3*4+8] = 0.;
+				vertex[i*3*4+9] = xmin + (i + 1) * box;
+				vertex[i*3*4+10] = ymin + height;
+				vertex[i*3*4+11] = 0.;
+			}
+			else
+			{
+				unsigned int col = opt->getColor(i, opt->nbIso);
+				color[i*4*4+0] = color[i*4*4+4] = color[i*4*4+8] = color[i*4*4+12] = (GLubyte)CTX::instance()->unpackRed(col);
+				color[i*4*4+1] = color[i*4*4+5] = color[i*4*4+9] = color[i*4*4+13] = (GLubyte)CTX::instance()->unpackGreen(col);
+				color[i*4*4+2] = color[i*4*4+6] = color[i*4*4+10] = color[i*4*4+14] = (GLubyte)CTX::instance()->unpackBlue(col);
+				color[i*4*4+3] = color[i*4*4+7] = color[i*4*4+11] = color[i*4*4+15] = (GLubyte)CTX::instance()->unpackAlpha(col);
+				vertex[i*3*4+0] = xmin + i * box;
+				vertex[i*3*4+1] = ymin;
+				vertex[i*3*4+2] = 0.;
+				vertex[i*3*4+3] = xmin + i * box;
+				vertex[i*3*4+4] = ymin + height;
+				vertex[i*3*4+5] = 0.;
+				vertex[i*3*4+6] = xmin + (i + 1) * box;
+				vertex[i*3*4+7] = ymin;
+				vertex[i*3*4+8] = 0.;
+				vertex[i*3*4+9] = xmin + (i + 1) * box;
+				vertex[i*3*4+10] = ymin + height;
+				vertex[i*3*4+11] = 0.;
+			}
+		}
+	
+		glVertexPointer(3, GL_FLOAT, 0, vertex);
+		glEnableClientState(GL_VERTEX_ARRAY);
+		glColorPointer(4, GL_UNSIGNED_BYTE, 0, color);
+		glEnableClientState(GL_COLOR_ARRAY);
+		if(opt->intervalsType == PViewOptions::Discrete || opt->intervalsType == PViewOptions::Numeric || opt->intervalsType == PViewOptions::Continuous)
+			glDrawArrays(GL_TRIANGLE_STRIP, 0, opt->nbIso*4);
+		else
+			glDrawArrays(GL_LINES, 0, opt->nbIso*4);
+		glDisableClientState(GL_COLOR_ARRAY);
+		glDisableClientState(GL_VERTEX_ARRAY);
+		free(vertex);
+		free(color);
+
+		char label[1024];
+		drawString *lbl = new drawString(p->getData()->getName().c_str(), 20);
+		lbl->draw(xmin+width/2, ymin-height/2, 0., _width/(_right-_left), _height/(_top-_bottom));
+		drawString *val = new drawString(p->getData()->getName().c_str(), 14);
+		for(int i = 0; i < 3; i++) {
+			double v = opt->getScaleValue(i, 3, opt->tmpMin, opt->tmpMax);
+			sprintf(label, opt->format.c_str(), v);
+			val->setText(label);
+			val->draw(xmin+i*width/2, ymin+height/2, 0., _width/(_right-_left), _height/(_top-_bottom));
+		}
+    
+		nPview++;
 	}
-    CTX::instance()->mesh.changed = 0;
+	glPopMatrix();
 }
 
 void drawContext::drawPost()
@@ -459,39 +489,7 @@ void drawContext::drawPost()
 	}
 }
 
-void drawContext::drawGeom()
-{
-    unsigned int col = CTX::instance()->color.geom.line;
-	glColor4ub((GLubyte)CTX::instance()->unpackRed(col),
-               (GLubyte)CTX::instance()->unpackGreen(col),
-               (GLubyte)CTX::instance()->unpackBlue(col),
-               (GLubyte)CTX::instance()->unpackAlpha(col));
-	glLineWidth(CTX::instance()->geom.lineWidth);
-	for(GModel::eiter it = GModel::current()->firstEdge(); it != GModel::current()->lastEdge(); it++){
-		GEdge *e = *it;
-		int N = e->minimumDrawSegments() + 1;
-		Range<double> t_bounds = e->parBounds(0);
-		double t_min = t_bounds.low();
-		double t_max = t_bounds.high();
-        
-		// Create a VA for this edge
-		GLfloat edge[N*3];
-        
-		for(unsigned int i=0; i < N; i++) {
-			double t = t_min + (double)i / (double)(N-1) * (t_max - t_min);
-			GPoint p = e->point(t);
-			edge[i*3] = p.x(); edge[i*3+1] = p.y(); edge[i*3+2] = p.z();
-		}
-		// Then print the VA
-		glVertexPointer(3, GL_FLOAT, 0, edge);
-		glEnableClientState(GL_VERTEX_ARRAY);
-		glDrawArrays(GL_LINE_STRIP, 0, N);
-		glDisableClientState(GL_VERTEX_ARRAY);
-	}
-	glLineWidth(1);
-}
-
-void drawContext::drawAxes(double x0, double y0, double z0, double h)
+void drawContext::drawAxes(float x0, float y0, float z0, float h)
 {
 	glLineWidth(1.);
 	glPushMatrix();
@@ -500,7 +498,7 @@ void drawContext::drawAxes(double x0, double y0, double z0, double h)
 	glMultMatrixf(_rotatef);
 	glTranslatef(-x0, -y0, -z0);
     
-    const GLfloat axes[] = {
+  const GLfloat axes[] = {
 		(GLfloat)x0, (GLfloat)y0, (GLfloat)z0,
 		(GLfloat)(x0+h), (GLfloat)y0, (GLfloat)z0,
 		(GLfloat)x0, (GLfloat)y0, (GLfloat)z0,
@@ -508,21 +506,27 @@ void drawContext::drawAxes(double x0, double y0, double z0, double h)
 		(GLfloat)x0, (GLfloat)y0, (GLfloat)z0,
 		(GLfloat)x0, (GLfloat)y0, (GLfloat)(z0+h),
 	};
-    const GLubyte colors[] = {
-        255, 0, 0, 255,
-        255, 0, 0, 255,
-        0, 0, 255, 255,
-        0, 0, 255, 255,
-        0, 255, 0, 255,
-        0, 255, 0, 255,
-    };
+  GLfloat colors[] = {
+		1., 0, 0, 1.,
+		1., 0, 0, 1.,
+		0, 0, 1., 1.,
+		0, 0, 1., 1.,
+		0, 1., 0, 1.,
+		0, 1., 0, 1.,
+	};
 	glVertexPointer(3, GL_FLOAT, 0, axes);
 	glEnableClientState(GL_VERTEX_ARRAY);
-    glColorPointer(4, GL_UNSIGNED_BYTE, 0, colors);
-    glEnableClientState(GL_COLOR_ARRAY);
+	glColorPointer(4, GL_FLOAT, 0, colors);
+	glEnableClientState(GL_COLOR_ARRAY);
 	glDrawArrays(GL_LINES, 0, 6);
 	glDisableClientState(GL_VERTEX_ARRAY);
-    glDisableClientState(GL_COLOR_ARRAY);
+	glDisableClientState(GL_COLOR_ARRAY);
+	drawString *x = new drawString("X", 16,colors);
+	x->draw(x0+h, y0, z0, _width/(_right-_left), _height/(_top-_bottom));
+	drawString *y = new drawString("Y", 16,colors+8);
+	y->draw(x0, y0+h, z0, _width/(_right-_left), _height/(_top-_bottom));
+	drawString *z = new drawString("Z", 16,colors+16);
+	z->draw(x0, y0, z0+h, _width/(_right-_left), _height/(_top-_bottom));
 	glPopMatrix();
 	glLineWidth(1);
 }
@@ -566,19 +570,23 @@ void drawContext::drawView()
 	glTranslatef(_translate[0], _translate[1], _translate[2]);
 	this->buildRotationMatrix();
 	glMultMatrixf(_rotatef);
-	//glTranslatef(this->_translate[0]/this->_height,this->_translate[1]/this->_width,0);
-	//glScalef(this->_scale[0], this->_scale[1], this->_scale[2]);
 	checkGlError("Initialize position");
 
 	//
+  glEnable(GL_DEPTH_TEST);
+	this->drawMesh();
+	checkGlError("Draw mesh");
+	this->drawGeom();
+	checkGlError("Draw geometry");
+	this->drawPost();
+	checkGlError("Draw post-pro");
+  glDisable(GL_DEPTH_TEST);
+	this->drawScale();
+	checkGlError("Draw scales");
 	this->drawAxes(this->_right - (this->_top - this->_bottom)/15.0,
                    this->_bottom + (this->_top - this->_bottom)/15.0,
                     0, (this->_top - this->_bottom)/20.);
-	this->drawPost();
-	if(_showGeom) this->drawGeom();
-	if(_showMesh) this->drawMesh();
-	//this->drawScale();
-	checkGlError("Draw model,post-pro,...");
+	checkGlError("Draw axes");
 }
 
 std::vector<std::string> commandToVector(const std::string cmd)
@@ -670,8 +678,64 @@ int onelab_cb(std::string action)
 	} while(action == "compute" && (onelabUtils::incrementLoop("3") || onelabUtils::incrementLoop("2") || onelabUtils::incrementLoop("1")));
     
 	locked = false;
-    
+
 	return redraw;
+}
+
+int number_of_animation() {
+	int ret = 0;
+	for(unsigned int i = 0; i < PView::list.size(); i++){
+		PView * p = PView::list[i];
+		if(p->getOptions()->visible){
+			int numSteps = (int)p->getData()->getNumTimeSteps();
+			if(numSteps > ret) ret = numSteps;
+		}
+	}
+	return ret;
+}
+
+void set_animation(int step) {
+	for(unsigned int i = 0; i < PView::list.size(); i++){
+		PView * p = PView::list[i];
+		if(p->getOptions()->visible){
+			p->getOptions()->timeStep = step;
+			p->setChanged(true);
+		}
+	}	
+}
+
+int animation_next() {
+	int ret = 0;
+	for(unsigned int i = 0; i < PView::list.size(); i++){
+		PView * p = PView::list[i];
+		if(p->getOptions()->visible){
+			int step = (int)p->getOptions()->timeStep + 1;
+			int numSteps = (int)p->getData()->getNumTimeSteps();
+			if(step < 0) step = numSteps - 1;
+			if(step > numSteps - 1) step = 0;
+			p->getOptions()->timeStep = step;
+			p->setChanged(true);
+			ret = step;
+		}
+	}
+	return ret;
+}
+int animation_prev() {
+	int ret = 0;
+	for(unsigned int i = 0; i < PView::list.size(); i++){
+		PView * p = PView::list[i];
+		if(p->getOptions()->visible){
+			// skip empty steps
+			int step = (int)p->getOptions()->timeStep - 1;
+			int numSteps = (int)p->getData()->getNumTimeSteps();
+			if(step < 0) step = numSteps - 1;
+			if(step > numSteps - 1) step = 0;
+			p->getOptions()->timeStep = step;
+			p->setChanged(true);
+			ret = step;
+		}
+	}
+	return ret;
 }
 
 // vim:set ts=2:

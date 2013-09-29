@@ -1,8 +1,10 @@
 package org.geuz.onelab;
 
 import android.os.Handler;
+import android.os.Parcel;
+import android.os.Parcelable;
 
-public class Gmsh {
+public class Gmsh implements Parcelable {
 	/** From C / C++ code **/
 	static {
 		System.loadLibrary("f2cblas");
@@ -11,31 +13,36 @@ public class Gmsh {
 		System.loadLibrary("Gmsh");
 		System.loadLibrary("GetDP");
 		System.loadLibrary("Onelab");
-        
     }
-	private native long init(String name); // Init Gmsh
+	private native long init(); // Init Gmsh
 	private native void loadFile(long ptr, String name); // load a file(OpenProjet)
 	private native void initView(long ptr, int w, int h); // Called each time the GLView change
 	private native void drawView(long ptr); // Called each time the GLView request a render
-	private native void setTranslation(long ptr, float tx, float ty, float tz); // translate the current GModel
-	private native void setScale(long ptr, float sx, float sy, float sz); // scale the current GModel
-	private native void setRotate(long ptr, float rx, float ry, float rz); // rotate the current GModel
-	private native void setShow(long ptr, String what, boolean show); // select what to show / hide
-	private native long getOnelabInstance(); // return the singleton of the onelab server
+	private native void eventHandler(long ptr, int event, float x, float y);
 	public native String[] getParams(); // return the parameters for onelab
 	public native int setParam(String type, String name, String value); // change a parameters
+	public native int setStringOption(String category, String name, String value);
+	public native int setDoubleOption(String category, String name, double value);
+	public native int setIntegerOption(String category, String name, int value);
+	public native String getStringOption(String category, String name);
+	public native double getDoubleOption(String category, String name);
+	public native int getIntegerOption(String category, String name);
 	public native String[] getPView(); // get a list of PViews
-	public native void setPView(int position, int intervalsType,int visible,int nbIso); // Change options for a PView
+	public native void setPView(int position, int intervalsType,int visible,int nbIso, float raisez); // Change options for a PView
 	public native int onelabCB(String action); // Call onelab
-	
+
+	public boolean haveAnimation() {return numberOfAnimation() > 1;}
+	public native int numberOfAnimation();
+	public native int animationNext();
+	public native int animationPrev();
+	public native void setAnimation(int animation);
+
 	/** Java CLASS **/
 	private long ptr;
-	private long onelab;
 	private Handler handler;
 
-	public Gmsh(String name, Handler handler) {
-		ptr = this.init(name);
-		onelab = this.getOnelabInstance();
+	public Gmsh(Handler handler) {
+		ptr = this.init();
 		this.handler = handler;
 	}
 
@@ -51,40 +58,65 @@ public class Gmsh {
 		this.loadFile(ptr, filename);
 	}
 
-	public void translation(float tx, float ty, float tz)
+	public void startEvent(float x, float y)
 	{
-		this.setTranslation(ptr, tx, ty, tz);
+		this.eventHandler(ptr, 0, x, y);
 	}
-
-	public void scale(float sx, float sy, float sz)
+	public void translate(float x, float y)
 	{
-		this.setScale(ptr, sx, sy, sz);
+		this.eventHandler(ptr, 1, x, y);
 	}
-
-	public void rotate(float rx, float ry, float rz) {
-		this.setRotate(ptr, rx, ry, rz);
-	}
-	public void showGeom(boolean show)
+	public void scale(float s)
 	{
-		this.setShow(ptr, "geom", show);
+		this.eventHandler(ptr, 2, s, 0);
 	}
-	public void showMesh(boolean show)
+	public void rotate(float x, float y)
 	{
-		this.setShow(ptr, "mesh", show);
+		this.eventHandler(ptr, 3, x, y);
 	}
-	public long getOnelab() {
-		return this.onelab;
+	public void viewX() { this.eventHandler(ptr, 5, 0, 0);}
+	public void viewY() { this.eventHandler(ptr, 6, 0, 0);}
+	public void viewZ() { this.eventHandler(ptr, 7, 0, 0);}
+	public void endEvent(float x, float y)
+	{
+		this.eventHandler(ptr, 4, x, y);
+	}
+	public void resetPosition()
+	{
+		this.eventHandler(ptr, 10, 0, 0);
 	}
 	public void ShowPopup(String message) {
-		handler.obtainMessage(0, message).sendToTarget();
+		if(handler != null)
+			handler.obtainMessage(0, message).sendToTarget();
 	}
 	public void RequestRender() {
-		handler.obtainMessage(1).sendToTarget();
+		if(handler != null)
+			handler.obtainMessage(1).sendToTarget();
 	}
 	public void SetLoading(String message) {
-		handler.obtainMessage(2, message).sendToTarget();
+		if(handler != null)
+			handler.obtainMessage(2, message).sendToTarget();
 	}
 	public void SetLoading(int percent) {
-		handler.obtainMessage(3, percent, 100).sendToTarget();
+		if(handler != null)
+			handler.obtainMessage(3, percent, 100).sendToTarget();
 	}
+	// Parcelable methods/constructors
+	private Gmsh(Parcel in) {
+		this.ptr = in.readLong();
+	}
+	public int describeContents() {return 0;}
+	public void writeToParcel(Parcel out, int flags) {
+		out.writeLong(this.ptr);
+	}
+	public static Parcelable.Creator<Gmsh> CREATOR = new Parcelable.Creator<Gmsh>() {
+
+		public Gmsh createFromParcel(Parcel source) {
+			return new Gmsh(source);
+		}
+
+		public Gmsh[] newArray(int size) {
+			return new Gmsh[size];
+		}
+	};
 }

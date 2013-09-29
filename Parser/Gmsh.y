@@ -105,22 +105,24 @@ struct doubleXstring{
 
 %token tEND tAFFECT tDOTS tPi tMPI_Rank tMPI_Size tEuclidian tCoordinates
 %token tExp tLog tLog10 tSqrt tSin tAsin tCos tAcos tTan tRand
-%token tAtan tAtan2 tSinh tCosh tTanh tFabs tFloor tCeil
+%token tAtan tAtan2 tSinh tCosh tTanh tFabs tFloor tCeil tRound
 %token tFmod tModulo tHypot tList
 %token tPrintf tError tStr tSprintf tStrCat tStrPrefix tStrRelative tStrReplace
 %token tStrFind tStrCmp
 %token tTextAttributes
-%token tBoundingBox tDraw tToday tSyncModel tCreateTopology tCreateTopologyNoHoles
+%token tBoundingBox tDraw tSetChanged tToday tCpu tMemory tSyncModel
+%token tCreateTopology tCreateTopologyNoHoles
 %token tDistanceFunction tDefineConstant tUndefineConstant
 %token tPoint tCircle tEllipse tLine tSphere tPolarSphere tSurface tSpline tVolume
 %token tCharacteristic tLength tParametric tElliptic tRefineMesh tAdaptMesh
 %token tPlane tRuled tTransfinite tComplex tPhysical tCompound tPeriodic
-%token tUsing tPlugin tDegenerated
+%token tUsing tPlugin tDegenerated tRecursive
 %token tRotate tTranslate tSymmetry tDilate tExtrude tLevelset
 %token tRecombine tSmoother tSplit tDelete tCoherence
 %token tIntersect tMeshAlgorithm tReverse
-%token tLayers tHole tAlias tAliasWithOptions
-%token tQuadTriDbl tQuadTriSngl tRecombLaterals tTransfQuadTri
+%token tLayers tScaleLast tHole tAlias tAliasWithOptions
+%token tQuadTriAddVerts tQuadTriNoNewVerts tQuadTriSngl tQuadTriDbl
+%token tRecombLaterals tTransfQuadTri
 %token tText2D tText3D tInterpolationScheme  tTime tCombine
 %token tBSpline tBezier tNurbs tNurbsOrder tNurbsKnots
 %token tColor tColorTable tFor tIn tEndFor tIf tEndIf tExit tAbort
@@ -134,6 +136,7 @@ struct doubleXstring{
 %type <i> TransfiniteArrangement RecombineAngle
 %type <u> ColorExpr
 %type <c> StringExpr StringExprVar SendToFile HomologyCommand
+%type <c> StringIndex String__Index
 %type <l> RecursiveListOfStringExprVar
 %type <l> FExpr_Multi ListOfDouble ListOfDoubleOrAll RecursiveListOfDouble
 %type <l> RecursiveListOfListOfDouble Enumeration
@@ -206,17 +209,17 @@ SendToFile :
 ;
 
 Printf :
-    tPrintf '(' tBIGSTR ')' tEND
+    tPrintf '(' StringExprVar ')' tEND
     {
       Msg::Direct($3);
       Free($3);
     }
-  | tError '(' tBIGSTR ')' tEND
+  | tError '(' StringExprVar ')' tEND
     {
       Msg::Error($3);
       Free($3);
     }
-  | tPrintf '(' tBIGSTR ')' SendToFile StringExprVar tEND
+  | tPrintf '(' StringExprVar ')' SendToFile StringExprVar tEND
     {
       std::string tmp = FixRelativePath(gmsh_yyname, $6);
       FILE *fp = Fopen(tmp.c_str(), $5);
@@ -230,7 +233,7 @@ Printf :
       Free($3);
       Free($6);
     }
-  | tPrintf '(' tBIGSTR ',' RecursiveListOfDouble ')' tEND
+  | tPrintf '(' StringExprVar ',' RecursiveListOfDouble ')' tEND
     {
       char tmpstring[5000];
       int i = PrintListOfDouble($3, $5, tmpstring);
@@ -243,7 +246,7 @@ Printf :
       Free($3);
       List_Delete($5);
     }
-  | tError '(' tBIGSTR ',' RecursiveListOfDouble ')' tEND
+  | tError '(' StringExprVar ',' RecursiveListOfDouble ')' tEND
     {
       char tmpstring[5000];
       int i = PrintListOfDouble($3, $5, tmpstring);
@@ -256,7 +259,7 @@ Printf :
       Free($3);
       List_Delete($5);
     }
-  | tPrintf '(' tBIGSTR ',' RecursiveListOfDouble ')' SendToFile StringExprVar tEND
+  | tPrintf '(' StringExprVar ',' RecursiveListOfDouble ')' SendToFile StringExprVar tEND
     {
       char tmpstring[5000];
       int i = PrintListOfDouble($3, $5, tmpstring);
@@ -284,7 +287,7 @@ Printf :
 // V I E W
 
 View :
-    tSTRING tBIGSTR '{' Views '}' tEND
+    tSTRING StringExprVar '{' Views '}' tEND
     {
 #if defined(HAVE_POST)
       if(!strcmp($1, "View") && ViewData->finalize()){
@@ -615,7 +618,7 @@ Affectation :
 
   | tUndefineConstant '[' UndefineConstants ']' tEND
 
-  | tSTRING NumericAffectation ListOfDouble tEND
+  | String__Index NumericAffectation ListOfDouble tEND
     {
       if(!gmsh_yysymbols.count($1) && $2 && List_Nbr($3) == 1){
         yymsg(0, "Unknown variable '%s'", $1);
@@ -871,7 +874,7 @@ Affectation :
       List_Delete($8);
     }
 
-  | tSTRING NumericIncrement tEND
+  | String__Index NumericIncrement tEND
     {
       if(!gmsh_yysymbols.count($1))
 	yymsg(0, "Unknown variable '%s'", $1);
@@ -902,7 +905,7 @@ Affectation :
       }
       Free($1);
     }
-  | tSTRING tAFFECT StringExpr tEND
+  | String__Index tAFFECT StringExpr tEND
     {
       gmsh_yystringsymbols[$1] = std::string($3);
       Free($1);
@@ -1180,7 +1183,7 @@ Comma : /* none */ | ',' ;
 
 DefineConstants :
     /* none */
-  | DefineConstants Comma tSTRING
+  | DefineConstants Comma String__Index
     {
       std::string key($3);
       std::vector<double> val(1, 0.);
@@ -1191,7 +1194,7 @@ DefineConstants :
       }
       Free($3);
     }
-  | DefineConstants Comma tSTRING tAFFECT FExpr
+  | DefineConstants Comma String__Index tAFFECT FExpr
     {
       std::string key($3);
       std::vector<double> val(1, $5);
@@ -1202,7 +1205,7 @@ DefineConstants :
       }
       Free($3);
     }
-  | DefineConstants Comma tSTRING tAFFECT '{' FExpr
+  | DefineConstants Comma String__Index tAFFECT '{' FExpr
     { floatOptions.clear(); charOptions.clear(); }
     FloatParameterOptions '}'
     {
@@ -1214,7 +1217,7 @@ DefineConstants :
       }
       Free($3);
     }
-  | DefineConstants Comma tSTRING tAFFECT StringExpr
+  | DefineConstants Comma String__Index tAFFECT StringExpr
     {
       std::string key($3), val($5);
       floatOptions.clear(); charOptions.clear();
@@ -1225,7 +1228,7 @@ DefineConstants :
       Free($3);
       Free($5);
     }
-  | DefineConstants Comma tSTRING tAFFECT '{' StringExpr
+  | DefineConstants Comma String__Index tAFFECT '{' StringExpr
     { floatOptions.clear(); charOptions.clear(); }
       CharParameterOptions '}'
     {
@@ -1845,6 +1848,8 @@ Shape :
         for(int i = 0; i < List_Nbr($7); i++){
           s->compound.push_back((int)*(double*)List_Pointer($7, i));
 	}
+        // Added by Trevor Strickler
+	setSurfaceGeneratrices(s, (List_T*) 0 );
 	Tree_Add(GModel::current()->getGEOInternals()->Surfaces, &s);
       }
       List_Delete($7);
@@ -1872,6 +1877,9 @@ Shape :
             s->compoundBoundary[i].push_back((int)*(double*)List_Pointer(l, j));
 	  }
 	}
+        // Added by Trevor Strickler
+        setSurfaceGeneratrices(s, (List_T*) 0 );
+
 	Tree_Add(GModel::current()->getGEOInternals()->Surfaces, &s);
       }
       List_Delete($7);
@@ -2626,9 +2634,18 @@ Colorify :
       for(int i = 0; i < List_Nbr($4); i++){
 	Shape TheShape;
 	List_Read($4, i, &TheShape);
-	ColorShape(TheShape.Type, TheShape.Num, $2);
+	ColorShape(TheShape.Type, TheShape.Num, $2, false);
       }
       List_Delete($4);
+    }
+  | tRecursive tColor ColorExpr '{' ListOfShapes '}'
+    {
+      for(int i = 0; i < List_Nbr($5); i++){
+	Shape TheShape;
+	List_Read($5, i, &TheShape);
+	ColorShape(TheShape.Type, TheShape.Num, $3, true);
+      }
+      List_Delete($5);
     }
 ;
 
@@ -2638,13 +2655,13 @@ Visibility :
     tShow tBIGSTR tEND
     {
       for(int i = 0; i < 4; i++)
-	VisibilityShape($2, i, 1);
+	VisibilityShape($2, i, 1, false);
       Free($2);
     }
   | tHide tBIGSTR tEND
     {
       for(int i = 0; i < 4; i++)
-	VisibilityShape($2, i, 0);
+	VisibilityShape($2, i, 0, false);
       Free($2);
     }
   | tShow '{' ListOfShapes '}'
@@ -2652,18 +2669,36 @@ Visibility :
       for(int i = 0; i < List_Nbr($3); i++){
 	Shape TheShape;
 	List_Read($3, i, &TheShape);
-	VisibilityShape(TheShape.Type, TheShape.Num, 1);
+	VisibilityShape(TheShape.Type, TheShape.Num, 1, false);
       }
       List_Delete($3);
+    }
+  | tRecursive tShow '{' ListOfShapes '}'
+    {
+      for(int i = 0; i < List_Nbr($4); i++){
+	Shape TheShape;
+	List_Read($4, i, &TheShape);
+	VisibilityShape(TheShape.Type, TheShape.Num, 1, true);
+      }
+      List_Delete($4);
     }
   | tHide '{' ListOfShapes '}'
     {
       for(int i = 0; i < List_Nbr($3); i++){
 	Shape TheShape;
 	List_Read($3, i, &TheShape);
-	VisibilityShape(TheShape.Type, TheShape.Num, 0);
+	VisibilityShape(TheShape.Type, TheShape.Num, 0, false);
       }
       List_Delete($3);
+    }
+  | tRecursive tHide '{' ListOfShapes '}'
+    {
+      for(int i = 0; i < List_Nbr($4); i++){
+	Shape TheShape;
+	List_Read($4, i, &TheShape);
+	VisibilityShape(TheShape.Type, TheShape.Num, 0, true);
+      }
+      List_Delete($4);
     }
 ;
 
@@ -2833,6 +2868,14 @@ Command :
     {
 #if defined(HAVE_OPENGL)
       drawContext::global()->draw();
+#endif
+    }
+   | tSetChanged tEND
+    {
+#if defined(HAVE_OPENGL)
+     CTX::instance()->mesh.changed = ENT_ALL;
+     for(unsigned int index = 0; index < PView::list.size(); index++)
+       PView::list[index]->setChanged(true);
 #endif
     }
    | tCreateTopology tEND
@@ -3089,6 +3132,7 @@ Extrude :
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
       extr.mesh.QuadToTri = NO_QUADTRI;
+      extr.mesh.ScaleLast = false;
     }
                        ExtrudeParameters '}'
     {
@@ -3102,6 +3146,7 @@ Extrude :
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
       extr.mesh.QuadToTri = NO_QUADTRI;
+      extr.mesh.ScaleLast = false;
     }
                                                    ExtrudeParameters '}'
     {
@@ -3115,6 +3160,7 @@ Extrude :
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
       extr.mesh.QuadToTri = NO_QUADTRI;
+      extr.mesh.ScaleLast = false;
     }
                                                              ExtrudeParameters '}'
     {
@@ -3128,6 +3174,7 @@ Extrude :
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
       extr.mesh.QuadToTri = NO_QUADTRI;
+      extr.mesh.ScaleLast = false;
     }
                        ExtrudeParameters '}'
     {
@@ -3204,6 +3251,7 @@ Extrude :
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
       extr.mesh.QuadToTri = NO_QUADTRI;
+      extr.mesh.ScaleLast = false;
     }
                     '{' ExtrudeParameters '}' tEND
     {
@@ -3216,6 +3264,7 @@ Extrude :
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
       extr.mesh.QuadToTri = NO_QUADTRI;
+      extr.mesh.ScaleLast = false;
     }
                    '{' ExtrudeParameters '}' tEND
     {
@@ -3228,6 +3277,7 @@ Extrude :
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
       extr.mesh.QuadToTri = NO_QUADTRI;
+      extr.mesh.ScaleLast = false;
     }
                       '{' ExtrudeParameters '}' tEND
     {
@@ -3240,6 +3290,7 @@ Extrude :
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
       extr.mesh.QuadToTri = NO_QUADTRI;
+      extr.mesh.ScaleLast = false;
     }
                     '{' ExtrudeParameters '}' tEND
     {
@@ -3252,6 +3303,7 @@ Extrude :
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
       extr.mesh.QuadToTri = NO_QUADTRI;
+      extr.mesh.ScaleLast = false;
     }
                    '{' ExtrudeParameters '}' tEND
     {
@@ -3264,6 +3316,7 @@ Extrude :
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
       extr.mesh.QuadToTri = NO_QUADTRI;
+      extr.mesh.ScaleLast = false;
     }
                       '{' ExtrudeParameters '}' tEND
     {
@@ -3276,6 +3329,7 @@ Extrude :
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
       extr.mesh.QuadToTri = NO_QUADTRI;
+      extr.mesh.ScaleLast = false;
     }
                     '{' ExtrudeParameters '}' tEND
     {
@@ -3288,6 +3342,7 @@ Extrude :
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
       extr.mesh.QuadToTri = NO_QUADTRI;
+      extr.mesh.ScaleLast = false;
     }
                    '{' ExtrudeParameters '}' tEND
     {
@@ -3300,6 +3355,7 @@ Extrude :
     {
       extr.mesh.ExtrudeMesh = extr.mesh.Recombine = false;
       extr.mesh.QuadToTri = NO_QUADTRI;
+      extr.mesh.ScaleLast = false;
     }
                       '{' ExtrudeParameters '}' tEND
     {
@@ -3376,25 +3432,47 @@ ExtrudeParameter :
       List_Delete($5);
       List_Delete($7);
     }
+//Added by Trevor Strickler 07/07/2013
+  | tScaleLast tEND
+    {
+      extr.mesh.ScaleLast = true;
+    }
+
   | tRecombine tEND
     {
       extr.mesh.Recombine = true;
     }
-  | tQuadTriDbl tEND
-    {
-      extr.mesh.QuadToTri = QUADTRI_DBL_1;
-    }
-  | tQuadTriDbl tRecombLaterals tEND
-    {
-      extr.mesh.QuadToTri = QUADTRI_DBL_1_RECOMB;
-    }
   | tQuadTriSngl tEND
     {
-      extr.mesh.QuadToTri = QUADTRI_SNGL_1;
+      yymsg(0, "Keyword 'QuadTriSngl' deprecated. Use 'QuadTriNoNewVerts' instead.");
     }
   | tQuadTriSngl tRecombLaterals tEND
     {
-      extr.mesh.QuadToTri = QUADTRI_SNGL_1_RECOMB;
+      yymsg(0, "Keyword 'QuadTriSngl' deprecated. Use 'QuadTriNoNewVerts' instead.");
+    }
+  | tQuadTriDbl tEND
+    {
+      yymsg(0, "Method 'QuadTriDbl' deprecated. Use 'QuadTriAddVerts' instead, which has no requirement for the number of extrusion layers and meshes with body-centered vertices.");
+    }
+  | tQuadTriDbl tRecombLaterals tEND
+    {
+      yymsg(0, "Method 'QuadTriDbl' deprecated. Use 'QuadTriAddVerts' instead, which has no requirement for the number of extrusion layers and meshes with body-centered vertices.");
+    }
+  | tQuadTriAddVerts tEND
+    {
+      extr.mesh.QuadToTri = QUADTRI_ADDVERTS_1;
+    }
+  | tQuadTriAddVerts tRecombLaterals tEND
+    {
+      extr.mesh.QuadToTri = QUADTRI_ADDVERTS_1_RECOMB;
+    }
+  | tQuadTriNoNewVerts tEND
+    {
+      extr.mesh.QuadToTri = QUADTRI_NOVERTS_1;
+    }
+  | tQuadTriNoNewVerts tRecombLaterals tEND
+    {
+      extr.mesh.QuadToTri = QUADTRI_NOVERTS_1_RECOMB;
     }
   | tHole '(' FExpr ')' tAFFECT ListOfDouble tUsing FExpr tEND
     {
@@ -3943,6 +4021,10 @@ Constraints :
           yymsg(0, "Unknown surface %d", (int)$8);
       }
     }
+  | tPoint '{' RecursiveListOfDouble '}' tIn tVolume '{' FExpr '}' tEND
+    {
+      Msg::Error("Point in Volume not implemented yet");
+    }
   | tLine '{' RecursiveListOfDouble '}' tIn tVolume '{' FExpr '}' tEND
     {
       Msg::Error("Line in Volume not implemented yet");
@@ -4216,6 +4298,7 @@ FExpr :
   | tFabs   '(' FExpr ')'            { $$ = fabs($3);     }
   | tFloor  '(' FExpr ')'            { $$ = floor($3);    }
   | tCeil   '(' FExpr ')'            { $$ = ceil($3);     }
+  | tRound  '(' FExpr ')'            { $$ = floor($3 + 0.5); }
   | tFmod   '(' FExpr ',' FExpr ')'  { $$ = fmod($3, $5); }
   | tModulo '(' FExpr ',' FExpr ')'  { $$ = fmod($3, $5); }
   | tHypot  '(' FExpr ',' FExpr ')'  { $$ = sqrt($3 * $3 + $5 * $5); }
@@ -4239,6 +4322,7 @@ FExpr :
   | tFabs   '[' FExpr ']'            { $$ = fabs($3);     }
   | tFloor  '[' FExpr ']'            { $$ = floor($3);    }
   | tCeil   '[' FExpr ']'            { $$ = ceil($3);     }
+  | tRound  '[' FExpr ']'            { $$ = floor($3 + 0.5);    }
   | tFmod   '[' FExpr ',' FExpr ']'  { $$ = fmod($3, $5); }
   | tModulo '[' FExpr ',' FExpr ']'  { $$ = fmod($3, $5); }
   | tHypot  '[' FExpr ',' FExpr ']'  { $$ = sqrt($3 * $3 + $5 * $5); }
@@ -4258,10 +4342,12 @@ FExpr_Single :
   | tGMSH_MAJOR_VERSION { $$ = GetGmshMajorVersion(); }
   | tGMSH_MINOR_VERSION { $$ = GetGmshMinorVersion(); }
   | tGMSH_PATCH_VERSION { $$ = GetGmshPatchVersion(); }
+  | tCpu { $$ = Cpu(); }
+  | tMemory { $$ = GetMemoryUsage()/1024./1024.; }
 
   // Variables
 
-  | tSTRING
+  | String__Index
     {
       if(!gmsh_yysymbols.count($1)){
 	yymsg(0, "Unknown variable '%s'", $1);
@@ -4279,28 +4365,6 @@ FExpr_Single :
       Free($1);
     }
 
-  // for compatibility with GetDP (we should generalize it so
-  // that we can create variables with this syntax, use them
-  // recursively, etc., but I don't have time to do it now)
-  | tSTRING '~' '{' FExpr '}'
-    {
-      char tmpstring[1024];
-      sprintf(tmpstring, "%s_%d", $1, (int)$4) ;
-      if(!gmsh_yysymbols.count(tmpstring)){
-	yymsg(0, "Unknown variable '%s'", tmpstring);
-	$$ = 0.;
-      }
-      else{
-        gmsh_yysymbol &s(gmsh_yysymbols[tmpstring]);
-        if(s.value.empty()){
-          yymsg(0, "Uninitialized variable '%s'", tmpstring);
-          $$ = 0.;
-        }
-        else
-          $$ = s.value[0];
-      }
-      Free($1);
-    }
   | tSTRING '[' FExpr ']'
     {
       int index = (int)$3;
@@ -4331,7 +4395,7 @@ FExpr_Single :
       }
       Free($2);
     }
-  | tSTRING NumericIncrement
+  | String__Index NumericIncrement
     {
       if(!gmsh_yysymbols.count($1)){
 	yymsg(0, "Unknown variable '%s'", $1);
@@ -4927,7 +4991,7 @@ StringExprVar :
     {
       $$ = $1;
     }
-  | tSTRING
+  | String__Index
     {
       if(!gmsh_yystringsymbols.count($1)){
 	yymsg(0, "Unknown string variable '%s'", $1);
@@ -5035,6 +5099,23 @@ StringExpr :
       Free($5);
       Free($7);
     }
+  | tStr '(' RecursiveListOfStringExprVar ')'
+    {
+      int size = 0;
+      for(int i = 0; i < List_Nbr($3); i++)
+        size += strlen(*(char**)List_Pointer($3, i)) + 1;
+      $$ = (char*)Malloc(size * sizeof(char));
+      $$[0] = '\0';
+      for(int i = 0; i < List_Nbr($3); i++){
+        char *s;
+        List_Read($3, i, &s);
+        strcat($$, s);
+        Free(s);
+        if(i != List_Nbr($3) - 1) strcat($$, "\n");
+      }
+      List_Delete($3);
+    }
+  // for compatibility with GetDP
   | tStr '[' RecursiveListOfStringExprVar ']'
     {
       int size = 0;
@@ -5109,6 +5190,38 @@ RecursiveListOfStringExprVar :
     }
   | RecursiveListOfStringExprVar ',' StringExprVar
     { List_Add($$, &($3)); }
+ ;
+
+StringIndex :
+
+    tSTRING '~' '{' FExpr '}'
+    {
+      char tmpstr[256];
+      sprintf(tmpstr, "_%d", (int)$4);
+      $$ = (char *)Malloc((strlen($1)+strlen(tmpstr)+1)*sizeof(char));
+      strcpy($$, $1); strcat($$, tmpstr);
+      Free($1);
+    }
+
+  | StringIndex '~' '{' FExpr '}'
+    {
+      char tmpstr[256];
+      sprintf(tmpstr, "_%d", (int)$4);
+      $$ = (char *)Malloc((strlen($1)+strlen(tmpstr)+1)*sizeof(char)) ;
+      strcpy($$, $1) ; strcat($$, tmpstr) ;
+      Free($1);
+    }
+
+ ;
+
+String__Index :
+
+    tSTRING
+    { $$ = $1; }
+
+  | StringIndex
+    { $$ = $1; }
+
  ;
 
 %%

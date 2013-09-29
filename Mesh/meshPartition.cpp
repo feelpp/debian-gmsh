@@ -184,6 +184,7 @@ int PartitionMeshFace(std::list<GFace*> &cFaces, meshPartitionOptions &options)
 
 int RenumberMeshElements(std::vector<MElement*> &elements, meshPartitionOptions &options)
 {
+  Msg::Warning("Mesh renumbering is still experimental...");
   if (elements.size() < 3) return 1;
   GModel *tmp_model = new GModel();
   std::set<MVertex *> setv;
@@ -220,6 +221,8 @@ int RenumberMeshElements(std::vector<MElement*> &elements, meshPartitionOptions 
         gr->pyramids.push_back((MPyramid*)(*it));
     }
     tmp_model->add(gr);
+    RenumberMesh(tmp_model, options, elements);
+    tmp_model->remove(gr);
   }
   delete tmp_model;
   return 1;
@@ -388,7 +391,7 @@ int PartitionGraph(Graph &graph, meshPartitionOptions &options)
         int metisOptions[5];
 		std::vector<float> ubvec(options.ncon);
 //        float ubvec[options.ncon];
-        int edgeCut;
+        int edgeCut = 0;
         const int iSec = 0;
         switch(options.algorithm) {
         case 1:  // Recursive

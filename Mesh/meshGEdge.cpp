@@ -149,6 +149,9 @@ static double F_Transfinite(GEdge *ge, double t_)
   int type = ge->meshAttributes.typeTransfinite;
   int nbpt = ge->meshAttributes.nbPointsTransfinite;
 
+  if(CTX::instance()->mesh.flexibleTransfinite && CTX::instance()->mesh.lcFactor)
+    nbpt /= CTX::instance()->mesh.lcFactor;
+
   Range<double> bounds = ge->parBounds(0);
   double t_begin = bounds.low();
   double t_end = bounds.high();
@@ -388,6 +391,8 @@ void meshGEdge::operator() (GEdge *ge)
     a = Integration(ge, t_begin, t_end, F_Transfinite, Points,
                     CTX::instance()->mesh.lcIntegrationPrecision);
     N = ge->meshAttributes.nbPointsTransfinite;
+    if(CTX::instance()->mesh.flexibleTransfinite && CTX::instance()->mesh.lcFactor)
+      N /= CTX::instance()->mesh.lcFactor;
   }
   else{
     if (CTX::instance()->mesh.algo2d == ALGO_2D_BAMG || blf){
@@ -410,9 +415,10 @@ void meshGEdge::operator() (GEdge *ge)
   }
 
   // force odd number of points if blossom is used for recombination
-  if(ge->meshAttributes.method != MESH_TRANSFINITE &&
+  if((ge->meshAttributes.method != MESH_TRANSFINITE ||
+      CTX::instance()->mesh.flexibleTransfinite) &&
      CTX::instance()->mesh.algoRecombine == 1 && N % 2 == 0){
-    if(/* 1 ||*/ CTX::instance()->mesh.recombineAll){
+    if(CTX::instance()->mesh.recombineAll){
       N++;
     }
     else{
@@ -492,31 +498,6 @@ void meshGEdge::operator() (GEdge *ge)
     v0->z() = beg_p.z();
   }
 
-#if defined(HAVE_ANN)
-  if (blf && !blf->isEdgeBL(ge->tag()))
-    {
-      GVertex *g0 = ge->getBeginVertex();
-      GVertex *g1 = ge->getEndVertex();
-      BoundaryLayerColumns* _columns = ge->model()->getColumns();
-      MVertex * v0 = g0->mesh_vertices[0];
-      MVertex * v1 = g1->mesh_vertices[0];
-      std::vector<MVertex*> invert;
-      std::vector<SMetric3> _metrics;
-      for(unsigned int i = 0; i < mesh_vertices.size() ; i++)
-	{
-	  invert.push_back(mesh_vertices[mesh_vertices.size() - i - 1]);
-	  _metrics.push_back(SMetric3(1.0));
-	}
-      SVector3 t (v1->x()-v0->x(), v1->y()-v0->y(),v1->z()-v0->z());
-      t.normalize();
-      if (blf->isVertexBL(g0->tag())){
-	_columns->addColumn(t, v0, mesh_vertices,_metrics);
-      }
-      if (blf->isVertexBL(g1->tag())){
-	  _columns->addColumn(t*-1.0, v1,invert,_metrics);
-      }
-    }
-#endif
   ge->meshStatistics.status = GEdge::DONE;
 }
 

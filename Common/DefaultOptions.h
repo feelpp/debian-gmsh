@@ -195,7 +195,9 @@ StringXString SolverOptions_String[] = {
 #else
     ".gmshsock" , // otherwise use Unix sockets by default
 #endif
-    "Base name of socket (TCP/IP if it contains the `:' character, UNIX otherwise)" },
+    "Base name of socket (UNIX socket if the name does not contain a colon, TCP/IP "
+    "otherwise, in the form 'host:baseport'; the actual name/port is constructed "
+    "by appending the unique client id)"},
 
   { 0, 0 , 0 , "" , 0 }
 } ;
@@ -264,6 +266,11 @@ StringXString ViewOptions_String[] = {
 } ;
 
 StringXString PrintOptions_String[] = {
+  { F|O, "ParameterCommand" , opt_print_parameter_command ,
+    "Mesh.Clip=1; View.Clip=1; General.ClipWholeElements=1; "
+    "General.Clip0D=Print.Parameter; SetChanged;" ,
+    "Command parsed when the print parameter is changed" },
+
   { 0, 0 , 0 , "" , 0 }
 } ;
 
@@ -872,7 +879,8 @@ StringXNumber MeshOptions_Number[] = {
   { F|O, "Binary" , opt_mesh_binary , 0. ,
     "Write mesh files in binary format (if possible)" },
   { F|O, "Bunin" , opt_mesh_bunin , 0. ,
-    "Apply Bunin optimization on quad meshes (the parameter is the maximal size of a cavity that may be remeshed)" },
+    "Apply Bunin optimization on quad meshes (the parameter is the maximal size of "
+    "a cavity that may be remeshed)" },
   { F|O, "Lloyd" , opt_mesh_lloyd , 0. ,
     "Apply lloyd optimization on surface meshes" },
   { F|O, "SmoothCrossField" , opt_mesh_smooth_cross_field , 0. ,
@@ -953,6 +961,8 @@ StringXNumber MeshOptions_Number[] = {
   { F|O, "Explode" , opt_mesh_explode , 1.0 ,
     "Element shrinking factor (between 0 and 1)" },
 
+  { F|O, "FlexibleTransfinite" , opt_mesh_flexible_transfinite , 0 ,
+    "Allow transfinite contraints to be modified for Blossom or by global mesh size factor" },
   { F|O, "Format" , opt_mesh_file_format , FORMAT_AUTO ,
     "Mesh output format (1=msh, 2=unv, 10=automatic, 19=vrml, 27=stl, 30=mesh, 31=bdf, "
     "32=cgns, 33=med, 40=ply2)" },
@@ -1223,8 +1233,8 @@ StringXNumber PostProcessingOptions_Number[] = {
     "Display value scales horizontally" },
 
   { F|O, "Link" , opt_post_link , 0. ,
-    "Link post-processing views (0=none, 1/2=changes in visible/all, "
-    "3/4=everything in visible/all)" },
+    "Post-processing view links (0=apply next option changes to selected views, "
+    "1=force same options for all selected views)" },
 
   { F,   "NbViews" , opt_post_nb_views , 0. ,
     "Current number of views merged (read-only)" },
@@ -1513,6 +1523,15 @@ StringXNumber ViewOptions_Number[] = {
 } ;
 
 StringXNumber PrintOptions_Number[] = {
+  { F|O, "Parameter" , opt_print_parameter , 0. ,
+    "Current value of the print parameter" },
+  { F|O, "ParameterFirst" , opt_print_parameter_first , -1. ,
+    "First value of print parameter in loop" },
+  { F|O, "ParameterLast" , opt_print_parameter_last , 1. ,
+    "Last value of print parameter in loop" },
+  { F|O, "ParameterSteps" , opt_print_parameter_steps , 10. ,
+    "Number of steps in loop over print parameter" },
+
   { F|O, "Background" , opt_print_background , 0. ,
     "Print background?" },
 

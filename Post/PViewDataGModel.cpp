@@ -168,7 +168,7 @@ bool PViewDataGModel::finalize(bool computeMinMax, const std::string &interpolat
     // type, assume isoparametric elements (except for ElementData,
     // for which we know the interpolation: it's constant)
     int types[] = {TYPE_PNT, TYPE_LIN, TYPE_TRI, TYPE_QUA, TYPE_TET, TYPE_HEX,
-                   TYPE_PRI, TYPE_PYR, TYPE_POLYG, TYPE_POLYH};
+                   TYPE_PRI, /*TYPE_PYR - Not polynomial!,*/ TYPE_POLYG, TYPE_POLYH};
     for(unsigned int i = 0; i < sizeof(types) / sizeof(types[0]); i++){
       if(!haveInterpolationMatrices(types[i])){
         MElement *e = _getOneElementOfGivenType(model, types[i]);
@@ -223,11 +223,11 @@ int PViewDataGModel::getNumTimeSteps()
   return _steps.size();
 }
 
-int PViewDataGModel::getFirstNonEmptyTimeStep()
+int PViewDataGModel::getFirstNonEmptyTimeStep(int start)
 {
-  for(unsigned int i = 0; i < _steps.size(); i++)
+  for(unsigned int i = start; i < _steps.size(); i++)
     if(_steps[i]->getNumData()) return i;
-  return 0;
+  return start;
 }
 
 double PViewDataGModel::getTime(int step)
