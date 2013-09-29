@@ -6,7 +6,7 @@ Last-Update: 2012-02-10
 
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -919,15 +919,6 @@
+@@ -925,15 +925,6 @@
  endif(HAVE_SOLVER)
  
  if(ENABLE_OCC)
@@ -22,7 +22,7 @@ Last-Update: 2012-02-10
    set(OCC_LIBS_REQUIRED
        # subset of DataExchange
        TKSTEP TKSTEP209 TKSTEPAttr TKSTEPBase TKIGES TKXSBase
-@@ -938,6 +929,30 @@
+@@ -944,6 +935,30 @@
        TKBRep TKGeomBase TKG3d TKG2d
        # FoundationClasses
        TKAdvTools TKMath TKernel)
@@ -50,14 +50,14 @@ Last-Update: 2012-02-10
 +    else(WIN32 OR CYGWIN)
 +      set(OCC_SYS_NAME ${CMAKE_SYSTEM_NAME})
 +    endif(WIN32 OR CYGWIN)
-   list(LENGTH OCC_LIBS_REQUIRED NUM_OCC_LIBS_REQUIRED)
-   set(OCC_LIBS)
-   foreach(OCC ${OCC_LIBS_REQUIRED})
-@@ -973,6 +988,7 @@
+   if(ENABLE_SGEOM)
+     set(OCC_LIBS_REQUIRED ${OCC_LIBS_REQUIRED}
+       # For SGEOM
+@@ -987,6 +1002,7 @@
        endif(NOT OCC_CONFIG_H)
      endif(OCC_INC)
    endif(NUM_OCC_LIBS EQUAL NUM_OCC_LIBS_REQUIRED)
 +  endif(OCE_ALL_FOUND)
-   if(HAVE_OCC AND ENABLE_SALOME)
-     add_subdirectory(contrib/Salome)
-     include_directories(contrib/Salome)
+   if(HAVE_OCC)
+     if(ENABLE_SGEOM)
+       add_subdirectory(contrib/SGEOM)

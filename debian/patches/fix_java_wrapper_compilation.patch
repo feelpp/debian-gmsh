@@ -2,9 +2,9 @@ Description: <short summary of the patch>
 Author: Anton Gladky <gladk@debian.org>
 Last-Update: 2013-07-24
 
---- gmsh-2.8.2+dfsg.orig/wrappers/java/CMakeLists.txt
-+++ gmsh-2.8.2+dfsg/wrappers/java/CMakeLists.txt
-@@ -13,7 +13,7 @@ include_directories(${JAVA_INCLUDE_PATH}
+--- a/wrappers/java/CMakeLists.txt
++++ b/wrappers/java/CMakeLists.txt
+@@ -13,7 +13,7 @@
  include_directories(${JAVA_INCLUDE_PATH2})
  include_directories(${CMAKE_CURRENT_SOURCE_DIR})
  # define where the interface file (used by SWIG) are
