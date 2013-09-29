@@ -17,6 +17,8 @@ Build-Depends: debhelper (>= 9), cmake, gfortran, libgl1-mesa-dev,
  libblas-dev, liblapack-dev, libgl2ps-dev, freeglut3-dev,
  python-dev (>= 2.6.6-3~), swig2.0,
  chrpath, libann-dev,
+ libpetsc3.4.2-dev [!kfreebsd-amd64 !kfreebsd-i386 !armel !armhf !s390x !powerpcspe],
+ libslepc3.4.2-dev [!kfreebsd-amd64 !kfreebsd-i386 !armel !armhf !s390x !powerpcspe],
  javahelper, default-jdk
 Standards-Version: 3.9.4
 X-Python-Version: current
