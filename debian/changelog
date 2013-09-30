@@ -1,3 +1,9 @@
+gmsh (2.8.3+dfsg-2) unstable; urgency=low
+
+  * [a0adb60] Fix an issue in onelabparser.
+
+ -- Anton Gladky <gladk@debian.org>  Mon, 30 Sep 2013 21:33:39 +0200
+
 gmsh (2.8.3+dfsg-1) unstable; urgency=low
 
   * [55ddcd9] Imported Upstream version 2.8.3+dfsg
