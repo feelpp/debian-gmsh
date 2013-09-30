@@ -8,3 +8,4 @@ fix_gmshpy_import.patch
 fix_libdir.patch
 fix_script_header.patch
 fix_java_wrapper_compilation.patch
+fix_onelab_issue.patch

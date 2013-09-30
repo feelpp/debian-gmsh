@@ -1,0 +1,16 @@
+Description: fix an issue in onelabparser
+Author: Alexandre Ancel <alexandre.ancel@cemosis.fr>
+Reviewed-By: Anton Gladky <gladk@debian.org>
+Last-Update: 2013-09-30
+
+--- a/contrib/onelab/OnelabParser.cpp
++++ b/contrib/onelab/OnelabParser.cpp
+@@ -591,7 +591,7 @@
+       	  strings[0].setNeverChanged(true);
+       	}
+ 	else
+-	  std::string val=resolveGetVal(arguments[0]);
++	  val=resolveGetVal(arguments[0]);
+ 	strings[0].setValue(val);
+       }
+       // choices list is reset
