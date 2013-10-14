@@ -1,3 +1,11 @@
+gmsh (2.8.3+dfsg-3) unstable; urgency=low
+
+  * [9fd583b] Disable petsc/slepc temorarly, while they 
+              are not able migrate to testing.
+  * [7df1e36] Use wrap-and-sort.
+
+ -- Anton Gladky <gladk@debian.org>  Mon, 14 Oct 2013 21:59:25 +0200
+
 gmsh (2.8.3+dfsg-2) unstable; urgency=low
 
   * [a0adb60] Fix an issue in onelabparser.
