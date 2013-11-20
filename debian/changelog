@@ -1,3 +1,9 @@
+gmsh (2.8.3+dfsg-4) unstable; urgency=low
+
+  * [05effde] Disable mpi-test on ia64. (Closes: #729654)
+
+ -- Anton Gladky <gladk@debian.org>  Wed, 20 Nov 2013 16:42:30 +0100
+
 gmsh (2.8.3+dfsg-3) unstable; urgency=low
 
   * [9fd583b] Disable petsc/slepc temorarly, while they 
