@@ -11,7 +11,7 @@ export DEB_HOST_MULTIARCH := $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
 %:
 	dh $@ --buildsystem=cmake --builddirectory=$(BUILDDIR) --with python2 --with javahelper --parallel
 
-export OMPI_MCA_plm_orte_agent=/bin/false                #workaround to start MPI-applications in chroot
+export OMPI_MCA_orte_rsh_agent=/bin/false                #workaround to start MPI-applications in chroot
 
 
 disable_mpi_archs = armel armhf kfreebsd-amd64 kfreebsd-i386 mips mipsel ia64
