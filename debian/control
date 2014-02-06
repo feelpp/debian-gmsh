@@ -38,7 +38,7 @@ Build-Depends:
  texinfo,
  texlive,
  zlib1g-dev
-Standards-Version: 3.9.4
+Standards-Version: 3.9.5
 X-Python-Version: current
 Vcs-Git: git://anonscm.debian.org/debian-science/packages/gmsh.git
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=debian-science/packages/gmsh.git
