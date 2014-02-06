@@ -22,7 +22,7 @@ Build-Depends:
  libgl2ps-dev,
  libglu1-mesa-dev,
  libgmm++-dev [!hurd-i386 !s390x],
- libhdf5-mpi-dev (>= 1.8.8) [alpha amd64 i386 ia64 kfreebsd-amd64 kfreebsd-i386 powerpc sparc],
+ libhdf5-mpi-dev (>= 1.8.8) [alpha amd64 i386 ia64 kfreebsd-amd64 kfreebsd-i386 powerpc powerpcspe sparc],
  libjpeg-dev,
  liblapack-dev,
  libmed-dev (>= 2.3.6),
@@ -45,7 +45,7 @@ Vcs-Browser: http://anonscm.debian.org/gitweb/?p=debian-science/packages/gmsh.gi
 Homepage: http://www.geuz.org/gmsh/
 
 Package: gmsh
-Architecture: amd64 armel armhf i386 ia64 powerpc s390 s390x sparc
+Architecture: amd64 armel armhf i386 ia64 powerpc powerpcspe s390 s390x sparc
 Depends:
  mpi-default-bin,
  ${misc:Depends},
@@ -94,7 +94,7 @@ Description: Three-dimensional finite element mesh generator
  The package contains documentation and examples.
 
 Package: libgmsh-dev
-Architecture: amd64 armel armhf i386 ia64 powerpc s390 s390x sparc
+Architecture: amd64 armel armhf i386 ia64 powerpc powerpcspe s390 s390x sparc
 Section: libdevel
 Replaces:
  gmsh (<< 2.6.0.dfsg-3)
@@ -125,7 +125,7 @@ Description: Three-dimensional finite element mesh generator. Development files
  The package contains development files.
 
 Package: libgmsh2
-Architecture: amd64 armel armhf i386 ia64 powerpc s390 s390x sparc
+Architecture: amd64 armel armhf i386 ia64 powerpc powerpcspe s390 s390x sparc
 Section: libs
 Depends:
  ${misc:Depends},
@@ -160,7 +160,7 @@ Description: Three-dimensional finite element mesh generator. Shared library
 
 Package: libjava-gmsh2
 Section: java
-Architecture: amd64 armel armhf i386 ia64 powerpc s390 s390x sparc
+Architecture: amd64 armel armhf i386 ia64 powerpc powerpcspe s390 s390x sparc
 Replaces:
  gmsh (<< 2.6.0.dfsg-3)
 Breaks:
@@ -193,7 +193,7 @@ Pre-Depends:
 
 Package: python-gmsh
 Section: python
-Architecture: amd64 armel armhf i386 ia64 powerpc s390 s390x sparc
+Architecture: amd64 armel armhf i386 ia64 powerpc powerpcspe s390 s390x sparc
 Replaces:
  gmsh (<< 2.6.0.dfsg-3)
 Breaks:
