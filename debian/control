@@ -74,8 +74,10 @@ Depends:
  ${misc:Depends},
  ${shlibs:Depends}
 Multi-Arch: foreign
-Replaces: gmsh (<< 2.6.0.dfsg-3)
-Breaks: gmsh (<< 2.6.0.dfsg-3)
+Replaces:
+ gmsh (<< 2.6.0.dfsg-3)
+Breaks:
+ gmsh (<< 2.6.0.dfsg-3)
 Section: doc
 Description: Three-dimensional finite element mesh generator
  Gmsh is an automatic 3D finite element mesh generator (primarily
@@ -191,13 +193,20 @@ Pre-Depends:
 
 Package: python-gmsh
 Section: python
-Architecture: amd64 i386 armel armhf ia64 powerpc s390 s390x sparc
-Replaces: gmsh (<< 2.6.0.dfsg-3)
-Breaks: gmsh (<< 2.6.0.dfsg-3)
-Recommends: gmsh
+Architecture: amd64 armel armhf i386 ia64 powerpc s390 s390x sparc
+Replaces:
+ gmsh (<< 2.6.0.dfsg-3)
+Breaks:
+ gmsh (<< 2.6.0.dfsg-3)
+Recommends:
+ gmsh
 Multi-Arch: foreign
-Depends: ${shlibs:Depends}, ${misc:Depends}, python (>= 2.7), python (<<2.8), 
-  libgmsh2 (= ${binary:Version})
+Depends:
+ libgmsh2 (= ${binary:Version}),
+ python (<<2.8),
+ python (>= 2.7),
+ ${misc:Depends},
+ ${shlibs:Depends}
 Description: Three-dimensional finite element mesh generator. Python wrapper
  Gmsh is an automatic 3D finite element mesh generator (primarily
  Delaunay) with build-in CAD and post-processing facilities. Its
