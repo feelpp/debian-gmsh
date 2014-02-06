@@ -67,6 +67,30 @@ Description: Three-dimensional finite element mesh generator
  See Gmsh's reference manual for a more thorough overview of Gmsh's
  capabilities.
 
+Package: gmsh-doc
+Architecture: all
+Depends:
+ mpi-default-bin,
+ ${misc:Depends},
+ ${shlibs:Depends}
+Multi-Arch: foreign
+Replaces: gmsh (<< 2.6.0.dfsg-3)
+Breaks: gmsh (<< 2.6.0.dfsg-3)
+Section: doc
+Description: Three-dimensional finite element mesh generator
+ Gmsh is an automatic 3D finite element mesh generator (primarily
+ Delaunay) with build-in CAD and post-processing facilities. Its
+ design goal is to provide a simple meshing tool for academic test
+ cases with parametric input and up to date visualization
+ capabilities.
+ .
+ Gmsh is built around four modules: geometry, mesh, solver and
+ post-processing. The specification of any input to these modules is
+ done either interactively using the graphical user interface or in
+ ASCII text files using Gmsh's own scripting language.
+ .
+ The package contains documentation and examples.
+
 Package: libgmsh-dev
 Architecture: amd64 armel armhf i386 ia64 powerpc s390 s390x sparc
 Section: libdevel
@@ -164,3 +188,29 @@ Description: Three-dimensional finite element mesh generator. Java wrapper
  This package contains the Java wrappers for gmsh
 Pre-Depends:
  ${misc:Pre-Depends}
+
+Package: python-gmsh
+Section: python
+Architecture: amd64 i386 armel armhf ia64 powerpc s390 s390x sparc
+Replaces: gmsh (<< 2.6.0.dfsg-3)
+Breaks: gmsh (<< 2.6.0.dfsg-3)
+Recommends: gmsh
+Multi-Arch: foreign
+Depends: ${shlibs:Depends}, ${misc:Depends}, python (>= 2.7), python (<<2.8), 
+  libgmsh2 (= ${binary:Version})
+Description: Three-dimensional finite element mesh generator. Python wrapper
+ Gmsh is an automatic 3D finite element mesh generator (primarily
+ Delaunay) with build-in CAD and post-processing facilities. Its
+ design goal is to provide a simple meshing tool for academic test
+ cases with parametric input and up to date visualization
+ capabilities.
+ .
+ Gmsh is built around four modules: geometry, mesh, solver and
+ post-processing. The specification of any input to these modules is
+ done either interactively using the graphical user interface or in
+ ASCII text files using Gmsh's own scripting language.
+ .
+ See Gmsh's reference manual for a more thorough overview of Gmsh's
+ capabilities.
+ .
+ This package contains the Python wrapper for gmsh

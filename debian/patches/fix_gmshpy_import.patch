@@ -1,14 +1,14 @@
 Description: Fix import of gmshpy
 Author: Anton Gladky <gladk@debian.org>
 Bug-Debian: http://bugs.debian.org/696420
-Last-Update: 2013-01-26
+Last-Update: 2014-02-06
 
 --- a/wrappers/gmshpy/__init__.py.in
 +++ b/wrappers/gmshpy/__init__.py.in
 @@ -1,4 +1,7 @@
  # set Ctrl-C to default signal (terminates immediately)
 +from ctypes import *
-+mpi = CDLL('libmpi.so.0', RTLD_GLOBAL)
++mpi = CDLL('libmpi.so.1', RTLD_GLOBAL)
 +
  import signal
  signal.signal(signal.SIGINT, signal.SIG_DFL)
