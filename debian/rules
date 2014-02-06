@@ -31,7 +31,7 @@ extra_flags += \
 
 ifeq (,$(filter $(DEB_HOST_ARCH),$(disable_mpi_archs)))
 	extra_flags += \
-	-DCMAKE_CXX_FLAGS="-DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX -fopenmp -lmpi -fPIC \
+	-DCMAKE_CXX_FLAGS="-DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX -lmpi -fPIC \
 	                   -Wall $(shell dpkg-buildflags --get CXXFLAGS)" \
 	-DENABLE_MPI:BOOL=ON
 else
