@@ -1,3 +1,14 @@
+gmsh (2.8.3+dfsg-5) unstable; urgency=medium
+
+  * [6168e45] Return back python-gmsh and gmsh-doc removed accidentally 
+              in last uploads. (Closes: #729653)
+  * [a6c5815] Use wrap-and-sort.
+  * [e1cb0a0] Set Standards-Version: 3.9.5. No changes.
+  * [7a492a8] Remove fopenmp option to escape race condition. (Closes: #737103)
+  * [cfdec5c] Enable powerpcspe arch. (Closes: #735018)
+
+ -- Anton Gladky <gladk@debian.org>  Thu, 06 Feb 2014 22:51:15 +0100
+
 gmsh (2.8.3+dfsg-4) unstable; urgency=low
 
   * [05effde] Disable mpi-test on ia64. (Closes: #729654)
