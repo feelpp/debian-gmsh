@@ -4,12 +4,12 @@ Last-Update: 2013-05-12
 
 --- a/contrib/onelab/python/onelab.py
 +++ b/contrib/onelab/python/onelab.py
-@@ -26,7 +26,7 @@
- Please report all bugs and problems to the public mailing list
+@@ -27,6 +27,8 @@
  <gmsh@geuz.org>.
  """
--
+ 
 +#!/usr/bin/env python
- import socket, struct, os, sys
++
+ import socket, struct, os, sys, subprocess
  _VERSION = '1.05'
  

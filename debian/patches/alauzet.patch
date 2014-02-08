@@ -196,7 +196,7 @@
      }
      return v;
    }
-@@ -2148,6 +2294,7 @@
+@@ -2154,6 +2300,7 @@
  #endif
    map_type_name["Box"] = new FieldFactoryT<BoxField>();
    map_type_name["Cylinder"] = new FieldFactoryT<CylinderField>();
@@ -204,7 +204,7 @@
    map_type_name["Frustum"] = new FieldFactoryT<FrustumField>();
    map_type_name["LonLat"] = new FieldFactoryT<LonLatField>();
  #if defined(HAVE_POST)
-@@ -2157,6 +2304,7 @@
+@@ -2163,6 +2310,7 @@
    map_type_name["Restrict"] = new FieldFactoryT<RestrictField>();
    map_type_name["Min"] = new FieldFactoryT<MinField>();
    map_type_name["MinAniso"] = new FieldFactoryT<MinAnisoField>();

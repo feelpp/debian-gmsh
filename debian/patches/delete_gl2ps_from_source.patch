@@ -14,7 +14,7 @@ Last-Update: 2012-11-28
    gl2png.cpp
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -1229,7 +1229,7 @@
+@@ -1321,7 +1321,7 @@
      add_executable(gmsh Common/Main.cpp ${GMSH_SRC})
    endif(ENABLE_BUILD_DYNAMIC)
  endif(HAVE_FLTK)
