@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -179,8 +179,8 @@ bool PViewData::writePOS(const std::string &fileName, bool binary, bool parsed,
 }
 
 bool PViewData::writeMSH(const std::string &fileName, double version, bool binary,
-                         bool savemesh, bool multipleView, int partitionNum,
-                         bool saveInterpolationMatrices)
+                         bool saveMesh, bool multipleView, int partitionNum,
+                         bool saveInterpolationMatrices, bool forceNodeData)
 {
   Msg::Error("MSH export not implemented for this view type");
   return false;
@@ -228,9 +228,7 @@ bool PViewData::fromVector(const std::vector<std::vector<double> > &vec)
         if(skipElement(step, ent, ele)) continue;
         for(int nod = 0; nod < getNumNodes(step, ent, ele); nod++){
           double x, y, z;
-          int tag = getNode(step, ent, ele, nod, x, y, z);
-          if(tag) continue; // node has already been modified
-          tagNode(step, ent, ele, nod, 1);
+          getNode(step, ent, ele, nod, x, y, z);
           for(int comp = 0; comp < getNumComponents(step, ent, ele); comp++){
             if(i < (int)vec[step].size()){
               setValue(step, ent, ele, nod, comp, vec[step][i++]);

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -80,6 +80,13 @@ class GFace : public GEntity
 
   // get number of regions
   int numRegions() const { int num=0; if(r1) num++; if(r2) num++; return num; }
+
+  std::list<GRegion*> regions() const
+  {
+    std::list<GRegion*>r ;
+    for (int i = 0; i <numRegions(); i++) r.push_back(getRegion(i));
+    return r;
+  }
 
   // add embedded vertices/edges
   void addEmbeddedVertex(GVertex *v){ embedded_vertices.push_back(v); }
@@ -327,6 +334,9 @@ class GFace : public GEntity
   // a array for accessing the transfinite vertices using a pair of
   // indices
   std::vector<std::vector<MVertex*> > transfinite_vertices;
+
+  // relocate mesh vertices using parametric coordinates
+  void relocateMeshVertices();
 
   std::vector<MTriangle*> triangles;
   std::vector<MQuadrangle*> quadrangles;

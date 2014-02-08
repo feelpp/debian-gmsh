@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -23,7 +23,7 @@ class JacobianBasis {
 
   int numJacNodes, numPrimJacNodes;
   int numMapNodes, numPrimMapNodes;
-  static const int numJacNodesFast = 1;
+  int numJacNodesFast;
 
   void getSignedJacobianGeneral(int nJacNodes, const fullMatrix<double> &gSMatX,
                                 const fullMatrix<double> &gSMatY, const fullMatrix<double> &gSMatZ,

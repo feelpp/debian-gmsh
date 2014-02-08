@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -71,8 +71,8 @@ class MPrism : public MElement {
   {
     return MEdge(_v[edges_prism(num, 0)], _v[edges_prism(num, 1)]);
   }
-  virtual int getNumEdgesRep(){ return 9; }
-  virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n)
+  virtual int getNumEdgesRep(bool curved){ return 9; }
+  virtual void getEdgeRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n)
   {
     static const int f[9] = {0, 1, 2, 0, 2, 3, 1, 1, 1};
     MEdge e(getEdge(num));
@@ -97,8 +97,8 @@ class MPrism : public MElement {
                    _v[faces_prism(num, 2)],
                    _v[faces_prism(num, 3)]);
   }
-  virtual int getNumFacesRep(){ return 8; }
-  virtual void getFaceRep(int num, double *x, double *y, double *z, SVector3 *n)
+  virtual int getNumFacesRep(bool curved){ return 8; }
+  virtual void getFaceRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n)
   {
     static const int f[8][3] = {
       {0, 2, 1},
@@ -241,16 +241,16 @@ class MPrism15 : public MPrism {
   }
   virtual MVertex *getVertexINP(int num){ return getVertexBDF(num); }
   virtual int getNumEdgeVertices() const { return 9; }
-  virtual int getNumEdgesRep();
-  virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n);
+  virtual int getNumEdgesRep(bool curved);
+  virtual void getEdgeRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n);
   virtual void getEdgeVertices(const int num, std::vector<MVertex*> &v) const
   {
     v.resize(3);
     MPrism::_getEdgeVertices(num, v);
     v[2] = _vs[num];
   }
-  virtual int getNumFacesRep();
-  virtual void getFaceRep(int num, double *x, double *y, double *z, SVector3 *n);
+  virtual int getNumFacesRep(bool curved);
+  virtual void getFaceRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n);
   virtual void getFaceVertices(const int num, std::vector<MVertex*> &v) const
   {
     v.resize((num < 2) ? 6 : 8);
@@ -335,16 +335,16 @@ class MPrism18 : public MPrism {
   virtual const MVertex *getVertex(int num) const{ return num < 6 ? _v[num] : _vs[num - 6]; }
   virtual int getNumEdgeVertices() const { return 9; }
   virtual int getNumFaceVertices() const { return 3; }
-  virtual int getNumEdgesRep();
-  virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n);
+  virtual int getNumEdgesRep(bool curved);
+  virtual void getEdgeRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n);
   virtual void getEdgeVertices(const int num, std::vector<MVertex*> &v) const
   {
     v.resize(3);
     MPrism::_getEdgeVertices(num, v);
     v[2] = _vs[num];
   }
-  virtual int getNumFacesRep();
-  virtual void getFaceRep(int num, double *x, double *y, double *z, SVector3 *n);
+  virtual int getNumFacesRep(bool curved);
+  virtual void getFaceRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n);
   virtual void getFaceVertices(const int num, std::vector<MVertex*> &v) const
   {
     v.resize((num < 2) ? 6 : 9);
@@ -411,10 +411,22 @@ class MPrismN : public MPrism {
   virtual MVertex *getVertex(int num){ return num < 6 ? _v[num] : _vs[num-6]; }
   virtual const MVertex *getVertex(int num) const{ return num < 6 ? _v[num] : _vs[num-6]; }
   virtual int getNumEdgeVertices() const { return 9*(_order-1); }
-  virtual int getNumFaceVertices() const { int n = _order-1; return n*((n-1)+3*n); }
-  virtual int getNumVolumeVertices() const { int n = _order-1; return _vs.size()-n*(9+(n-1)+3*n); }
-  virtual int getNumEdgesRep();
-  virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n);
+  virtual int getNumFaceVertices() const
+  {
+    if (ElementType::SerendipityFromTag(getTypeForMSH()) > 0)
+      return 0;
+    else
+      {int n = _order-1; return (n-1 + 3*n) * n;}
+  }
+  virtual int getNumVolumeVertices() const
+  {
+    if (ElementType::SerendipityFromTag(getTypeForMSH()) > 0)
+      return 0;
+    else
+      {int n = _order-1; return n * (n * (n+1) / 2);}
+  }
+  virtual int getNumEdgesRep(bool curved);
+  virtual void getEdgeRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n);
   virtual void getEdgeVertices(const int num, std::vector<MVertex*> &v) const
   {
     v.resize(_order+1);
@@ -422,8 +434,8 @@ class MPrismN : public MPrism {
     const int n = _order-1;
     for (int i=0; i<n; i++) v[2+i] = _vs[num*n+i];
   }
-  virtual int getNumFacesRep();
-  virtual void getFaceRep(int num, double *x, double *y, double *z, SVector3 *n);
+  virtual int getNumFacesRep(bool curved);
+  virtual void getFaceRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n);
   virtual void getFaceVertices(const int num, std::vector<MVertex*> &v) const;
   virtual int getTypeForMSH() const {
     switch (_order) {
@@ -433,35 +445,35 @@ class MPrismN : public MPrism {
       return MSH_PRI_6;
     case 2:
       if (_vs.size() == 12) return MSH_PRI_18;
-      else if (_vs.size() == 9) return MSH_PRI_15;
+      if (_vs.size() == 9) return MSH_PRI_15;
       break;
     case 3:
       if (_vs.size() == 34) return MSH_PRI_40;
-      else if (_vs.size() == 18) return MSH_PRI_24;
+      if (_vs.size() == 18) return MSH_PRI_24;
       break;
     case 4:
       if (_vs.size() == 69) return MSH_PRI_75;
-      else if (_vs.size() == 27) return MSH_PRI_33;
+      if (_vs.size() == 27) return MSH_PRI_33;
       break;
     case 5:
       if (_vs.size() == 120) return MSH_PRI_126;
-      else if (_vs.size() == 36) return MSH_PRI_42;
+      if (_vs.size() == 36) return MSH_PRI_42;
       break;
     case 6:
       if (_vs.size() == 190) return MSH_PRI_196;
-      else if (_vs.size() == 45) return MSH_PRI_51;
+      if (_vs.size() == 45) return MSH_PRI_51;
       break;
     case 7:
       if (_vs.size() == 282) return MSH_PRI_288;
-      else if (_vs.size() == 54) return MSH_PRI_60;
+      if (_vs.size() == 54) return MSH_PRI_60;
       break;
     case 8:
       if (_vs.size() == 399) return MSH_PRI_405;
-      else if (_vs.size() == 63) return MSH_PRI_69;
+      if (_vs.size() == 63) return MSH_PRI_69;
       break;
     case 9:
       if (_vs.size() == 544) return MSH_PRI_550;
-      else if (_vs.size() == 72) return MSH_PRI_78;
+      if (_vs.size() == 72) return MSH_PRI_78;
       break;
     }
     Msg::Error("No tag matches a p%d prism with %d vertices", _order, 6+_vs.size());
@@ -481,6 +493,10 @@ class MPrismN : public MPrism {
     case 9: return "SI9";
     }
     return "";
+  }
+  virtual void reverse()
+  {
+    Msg::Error("Reverse not implemented yet for MPrismN");
   }
   virtual void getNode(int num, double &u, double &v, double &w) const
   {

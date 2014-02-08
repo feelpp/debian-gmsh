@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -191,13 +191,14 @@ StringXString SolverOptions_String[] = {
 
   { F|O, "SocketName" , opt_solver_socket_name ,
 #if defined(WIN32) && !defined(__CYGWIN__)
-    "127.0.0.1:4412" , // use TCP/IP sockets by default on Windows
+    "127.0.0.1:0" , // use TCP/IP sockets by default on Windows
 #else
     ".gmshsock" , // otherwise use Unix sockets by default
 #endif
     "Base name of socket (UNIX socket if the name does not contain a colon, TCP/IP "
     "otherwise, in the form 'host:baseport'; the actual name/port is constructed "
-    "by appending the unique client id)"},
+    "by appending the unique client id. If baseport is 0, the port is chosen "
+    "automatically (recommended))"},
 
   { 0, 0 , 0 , "" , 0 }
 } ;
@@ -963,6 +964,8 @@ StringXNumber MeshOptions_Number[] = {
 
   { F|O, "FlexibleTransfinite" , opt_mesh_flexible_transfinite , 0 ,
     "Allow transfinite contraints to be modified for Blossom or by global mesh size factor" },
+  { F|O, "NewtonConvergenceTestXYZ" , opt_mesh_newton_convergence_test_xyz , 0. ,
+    "Force inverse surface mapping algorithm (Newton-Raphson) to converge in real coordinates (experimental)" },
   { F|O, "Format" , opt_mesh_file_format , FORMAT_AUTO ,
     "Mesh output format (1=msh, 2=unv, 10=automatic, 19=vrml, 27=stl, 30=mesh, 31=bdf, "
     "32=cgns, 33=med, 40=ply2)" },
@@ -980,6 +983,8 @@ StringXNumber MeshOptions_Number[] = {
     "Minimum threshold for high order element optimization"},
   { F|O, "HighOrderThresholdMax", opt_mesh_ho_threshold_max, 2.0,
     "Maximum threshold for high order element optimization"},
+  { F|O, "HighOrderOptPrimSurfMesh", opt_mesh_ho_opt_prim_surf_mesh, 0,
+    "Try to fix flipped surface mesh elements in high-order optimizer"},
 
   { F|O, "LabelSampling" , opt_mesh_label_sampling , 1. ,
     "Label sampling rate (display one label every `LabelSampling' elements)" },
@@ -1207,6 +1212,9 @@ StringXNumber SolverOptions_Number[] = {
   { F|O, "Plugins" , opt_solver_plugins , 0. ,
     "Enable default solver plugins?" },
 
+  { F|O, "ShowInvisibleParameters" , opt_solver_show_invisible_parameters , 0. ,
+    "Show all parameters, even those marked invisible" },
+
   { F|O, "Timeout" , opt_solver_timeout , 5. ,
     "Time (in seconds) before closing the socket if no connection is happening" },
 
@@ -1223,6 +1231,9 @@ StringXNumber PostProcessingOptions_Number[] = {
 
   { F|O, "CombineRemoveOriginal" , opt_post_combine_remove_orig , 1. ,
     "Remove original views after a Combine operation" },
+
+  { F|O, "ForceNodeData" , opt_post_force_node_data , 0. ,
+    "Try to force saving datasets as NodeData" },
 
   { F|O, "Format" , opt_post_file_format , 10. ,
     "Default file format for post-processing views (0=ASCII view, 1=binary "
@@ -1292,7 +1303,7 @@ StringXNumber ViewOptions_Number[] = {
     "Draw the `N minus b'-dimensional boundary of the element (N=element "
     "dimension, b=option value)" },
 
-  { F|O, "CenterGlyphs" , opt_view_center_glyphs , 0,
+  { F|O, "CenterGlyphs" , opt_view_center_glyphs , 1,
     "Center glyphs (arrows, numbers, etc.)? (0=left, 1=centered, 2=right)" },
   { F,   "Clip" , opt_view_clip , 0.,
     "Enable clipping planes? (Plane[i]=2^i, i=0,...,5)" },

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -281,7 +281,7 @@ helpWindow::helpWindow()
     o->box(FL_FLAT_BOX);
     std::ostringstream sstream;
     sstream << "<center><h3>Gmsh</h3><br>version " << GetGmshVersion()
-            << "<p>Copyright (C) 1997-2013"
+            << "<p>Copyright (C) 1997-2014"
             << "<br>Christophe Geuzaine and Jean-Francois Remacle"
             << "<p><a href=\"http://geuz.org/gmsh/doc/CREDITS.txt\">Credits</a> "
             << "and <a href=\"http://geuz.org/gmsh/doc/LICENSE.txt\">licensing "
@@ -391,7 +391,7 @@ helpWindow::helpWindow()
     o->box(FL_DOWN_BOX);
     o->color(FL_BACKGROUND2_COLOR);
     search = new Fl_Input
-      (3 * WB + 2 * BW + 25, WB + 2, BW - 27, BH - 4, "@gmsh_search");
+      (3 * WB + 2 * BW + BH, WB + 2, BW - BH - 2, BH - 4, "@gmsh_search");
     search->box(FL_FLAT_BOX);
     search->callback(help_options_cb);
     search->when(FL_WHEN_CHANGED);

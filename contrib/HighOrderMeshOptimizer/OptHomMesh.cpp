@@ -35,22 +35,13 @@
 #include "ParamCoord.h"
 #include "OptHomMesh.h"
 
-Mesh::Mesh(const std::set<MElement*> &els, std::set<MVertex*> &toFix,
+Mesh::Mesh(const std::map<MElement*,GEntity*> &element2entity,
+           const std::set<MElement*> &els, std::set<MVertex*> &toFix,
            bool fixBndNodes, bool fastJacEval) :
   _fastJacEval(fastJacEval)
 {
 
   _dim = (*els.begin())->getDim();
-
-  if (fixBndNodes) {
-    if (_dim == 2) _pc = new ParamCoordPhys2D;
-    else _pc = new ParamCoordPhys3D;
-    Msg::Debug("METHOD: Fixing boundary nodes and using physical coordinates");
-  }
-  else {
-    _pc = new ParamCoordParent;
-    Msg::Debug("METHOD: Freeing boundary nodes and using parent parametric coordinates");
-  }
 
   // Initialize elements, vertices, free vertices and element->vertices
   // connectivity
@@ -63,6 +54,7 @@ Mesh::Mesh(const std::set<MElement*> &els, std::set<MVertex*> &toFix,
   _nNodEl.resize(nElements);
   _indPCEl.resize(nElements);
   int iEl = 0;
+  bool nonGeoMove = false;
   for(std::set<MElement*>::const_iterator it = els.begin();
       it != els.end(); ++it, ++iEl) {
     _el[iEl] = *it;
@@ -71,31 +63,36 @@ Mesh::Mesh(const std::set<MElement*> &els, std::set<MVertex*> &toFix,
     _nNodEl[iEl] = jac->getNumMapNodes();
     for (int iVEl = 0; iVEl < jac->getNumMapNodes(); iVEl++) {
       MVertex *vert = _el[iEl]->getVertex(iVEl);
+      GEntity *ge = vert->onWhat();
+      const int vDim = ge->dim();
+      const bool hasParam = ge->haveParametrization();
       int iV = addVert(vert);
       _el2V[iEl].push_back(iV);
-      const int nPCV = _pc->nCoord(vert);
-      bool isFV = false;
-      if (nPCV > 0) {
-        if (fixBndNodes)
-          isFV = (vert->onWhat()->dim() == _dim) && (toFix.find(vert) == toFix.end());
-        else
-          isFV = (vert->onWhat()->dim() >= 1) && (toFix.find(vert) == toFix.end());
-      }
-      if (isFV) {
-        int iFV = addFreeVert(vert,iV,nPCV,toFix);
+      if ((vDim > 0) && (toFix.find(vert) == toFix.end()) && (!fixBndNodes || vDim == _dim)) {   // Free vertex?
+        ParamCoord *param;
+        if (vDim == 3) param = new ParamCoordPhys3D();
+        else if (hasParam) param = new ParamCoordParent(vert);
+        else {
+          if (vDim == 2) param = new ParamCoordLocalSurf(vert);
+          else param = new ParamCoordLocalLine(vert);
+          nonGeoMove = true;
+        }
+        int iFV = addFreeVert(vert,iV,vDim,param,toFix);
         _el2FV[iEl].push_back(iFV);
-        for (int i=_startPCFV[iFV]; i<_startPCFV[iFV]+nPCV; i++)
-          _indPCEl[iEl].push_back(i);
+        for (int i=_startPCFV[iFV]; i<_startPCFV[iFV]+vDim; i++) _indPCEl[iEl].push_back(i);
       }
       else _el2FV[iEl].push_back(-1);
     }
   }
 
+  if (nonGeoMove) Msg::Info("WARNING: Some vertices will be moved along local lines "
+                            "or planes, they may not remain on the exact geometry");
+
   // Initial coordinates
   _ixyz.resize(nVert());
   for (int iV = 0; iV < nVert(); iV++) _ixyz[iV] = _vert[iV]->point();
   _iuvw.resize(nFV());
-  for (int iFV = 0; iFV < nFV(); iFV++) _iuvw[iFV] = _pc->getUvw(_freeVert[iFV]);
+  for (int iFV = 0; iFV < nFV(); iFV++) _iuvw[iFV] = _paramFV[iFV]->getUvw(_freeVert[iFV]);
 
   // Set current coordinates
   _xyz = _ixyz;
@@ -105,7 +102,7 @@ Mesh::Mesh(const std::set<MElement*> &els, std::set<MVertex*> &toFix,
   // Jacobians of 3D elements
   if (_dim == 2) {
     _scaledNormEl.resize(nEl());
-    for (int iEl = 0; iEl < nEl(); iEl++) calcScaledNormalEl2D(iEl);
+    for (int iEl = 0; iEl < nEl(); iEl++) calcScaledNormalEl2D(element2entity,iEl);
   }
   else {
     _invStraightJac.resize(nEl(),1.);
@@ -116,24 +113,41 @@ Mesh::Mesh(const std::set<MElement*> &els, std::set<MVertex*> &toFix,
 
 }
 
-void Mesh::calcScaledNormalEl2D(int iEl)
+void Mesh::calcScaledNormalEl2D(const std::map<MElement*,GEntity*> &element2entity, int iEl)
 {
   const JacobianBasis *jac = _el[iEl]->getJacobianFuncSpace();
 
   fullMatrix<double> primNodesXYZ(jac->getNumPrimMapNodes(),3);
+  SVector3 geoNorm(0.,0.,0.);
+  std::map<MElement*,GEntity*>::const_iterator itEl2ent = element2entity.find(_el[iEl]);
+  GEntity *ge = (itEl2ent == element2entity.end()) ? 0 : itEl2ent->second;
+  const bool hasGeoNorm = ge && (ge->dim() == 2) && ge->haveParametrization();
   for (int i=0; i<jac->getNumPrimMapNodes(); i++) {
     const int &iV = _el2V[iEl][i];
     primNodesXYZ(i,0) = _xyz[iV].x();
     primNodesXYZ(i,1) = _xyz[iV].y();
     primNodesXYZ(i,2) = _xyz[iV].z();
+    if (hasGeoNorm && (_vert[iV]->onWhat() == ge)) {
+      double u, v;
+      _vert[iV]->getParameter(0,u);
+      _vert[iV]->getParameter(1,v);
+      geoNorm += ((GFace*)ge)->normal(SPoint2(u,v));
+    }
+  }
+  if (hasGeoNorm && (geoNorm.normSq() == 0.)) {
+    SPoint2 param = ((GFace*)ge)->parFromPoint(_el[iEl]->barycenter(true),false);
+    geoNorm = ((GFace*)ge)->normal(param);
   }
 
-  _scaledNormEl[iEl].resize(1,3);
-  const double norm = jac->getPrimNormal2D(primNodesXYZ,_scaledNormEl[iEl]);
-
-  _scaledNormEl[iEl](0,0) /= norm;         // Re-scaling normal here is faster than an
-  _scaledNormEl[iEl](0,1) /= norm;         // extra scaling operation on the Jacobian
-  _scaledNormEl[iEl](0,2) /= norm;
+  fullMatrix<double> &elNorm = _scaledNormEl[iEl];
+  elNorm.resize(1,3);
+  const double norm = jac->getPrimNormal2D(primNodesXYZ,elNorm);
+  double factor = 1./norm;
+  if (hasGeoNorm) {
+    const double scal = geoNorm(0)*elNorm(0,0)+geoNorm(1)*elNorm(0,1)+geoNorm(2)*elNorm(0,2);
+    if (scal < 0.) factor = -factor;
+  }
+  elNorm.scale(factor);   // Re-scaling normal here is faster than an extra scaling operation on the Jacobian
 
 }
 
@@ -149,7 +163,7 @@ int Mesh::addVert(MVertex* vert)
 }
 
 int Mesh::addFreeVert(MVertex* vert, const int iV, const int nPCV,
-                      std::set<MVertex*> &toFix)
+                      ParamCoord *param, std::set<MVertex*> &toFix)
 {
   std::vector<MVertex*>::iterator itVert = find(_freeVert.begin(),
                                                 _freeVert.end(),vert);
@@ -157,6 +171,7 @@ int Mesh::addFreeVert(MVertex* vert, const int iV, const int nPCV,
     const int iStart = (_startPCFV.size() == 0)? 0 : _startPCFV.back()+_nPCFV.back();
     const bool forcedV = (vert->onWhat()->dim() < 2) || (toFix.find(vert) != toFix.end());
     _freeVert.push_back(vert);
+    _paramFV.push_back(param);
     _fv2V.push_back(iV);
     _startPCFV.push_back(iStart);
     _nPCFV.push_back(nPCV);
@@ -187,36 +202,23 @@ void Mesh::updateMesh(const double *it)
     uvwV[0] = *it; it++;
     if (_nPCFV[iFV] >= 2) { uvwV[1] = *it; it++; }
     if (_nPCFV[iFV] == 3) { uvwV[2] = *it; it++; }
-    _xyz[iV] = _pc->uvw2Xyz(_freeVert[iFV],uvwV);
+    _xyz[iV] = _paramFV[iFV]->uvw2Xyz(uvwV);
   }
 
 }
 
-void Mesh::distSqToStraight(std::vector<double> &dSq)
-{
-  std::vector<SPoint3> sxyz(nVert());
+void Mesh::distSqToStraight(std::vector<double> &dSq) {
   for (int iEl = 0; iEl < nEl(); iEl++) {
-    MElement *el = _el[iEl];
-    const polynomialBasis *lagrange = (polynomialBasis*)el->getFunctionSpace();
-    const polynomialBasis *lagrange1 = (polynomialBasis*)el->getFunctionSpace(1);
-    int nV = lagrange->points.size1();
-    int nV1 = lagrange1->points.size1();
-    for (int i = 0; i < nV1; ++i) {
-      sxyz[_el2V[iEl][i]] = _vert[_el2V[iEl][i]]->point();
-    }
-    int dim = lagrange->points.size2();
-    for (int i = nV1; i < nV; ++i) {
-      double f[256];
-      lagrange1->f(lagrange->points(i, 0), dim > 1 ? lagrange->points(i, 1) : 0.,
-                   dim > 2 ? lagrange->points(i, 2) : 0., f);
-      for (int j = 0; j < nV1; ++j)
-        sxyz[_el2V[iEl][i]] += sxyz[_el2V[iEl][j]] * f[j];
-    }
+    const double d = _el[iEl]->maxDistToStraight();
+    dSq[iEl] = d*d;
   }
+}
 
-  for (int iV = 0; iV < nVert(); iV++) {
-    SPoint3 d = _xyz[iV]-sxyz[iV];
-    dSq[iV] = d[0]*d[0]+d[1]*d[1]+d[2]*d[2];
+void Mesh::elSizeSq(std::vector<double> &sSq)
+{
+  for (int iEl = 0; iEl < nEl(); iEl++) {
+    const double s = _el[iEl]->getOuterRadius();
+    sSq[iEl] = s*s;
   }
 }
 
@@ -225,7 +227,7 @@ void Mesh::updateGEntityPositions()
   for (int iV = 0; iV < nVert(); iV++)
     _vert[iV]->setXYZ(_xyz[iV].x(),_xyz[iV].y(),_xyz[iV].z());
   for (int iFV = 0; iFV < nFV(); iFV++)
-    _pc->exportParamCoord(_freeVert[iFV], _uvw[iFV]);
+    _paramFV[iFV]->exportParamCoord(_uvw[iFV]);
 }
 
 void Mesh::metricMinAndGradients(int iEl, std::vector<double> &lambda,
@@ -273,7 +275,7 @@ void Mesh::metricMinAndGradients(int iEl, std::vector<double> &lambda,
         gXyzV [l] = SPoint3(gradLambdaB(l,i+0*numMapNodes),
                             gradLambdaB(l,i+1*numMapNodes),/*BDB(l,i+2*nbNod)*/ 0.);
       }
-      _pc->gXyz2gUvw(_freeVert[iFVi],_uvw[iFVi],gXyzV,gUvwV);
+      _paramFV[iFVi]->gXyz2gUvw(_uvw[iFVi],gXyzV,gUvwV);
       for (int l = 0; l < numJacNodes; l++) {
         gradLambda[indGSJ(iEl,l,iPC)] = gUvwV[l][0];
         if (_nPCFV[iFVi] >= 2) gradLambda[indGSJ(iEl,l,iPC+1)] = gUvwV[l][1];
@@ -328,7 +330,7 @@ void Mesh::scaledJacAndGradients(int iEl, std::vector<double> &sJ,
       for (int l = 0; l < numJacNodes; l++)
         gXyzV [l] = SPoint3(BDB(l,i+0*numMapNodes), BDB(l,i+1*numMapNodes),
                             BDB(l,i+2*numMapNodes));
-      _pc->gXyz2gUvw(_freeVert[iFVi],_uvw[iFVi],gXyzV,gUvwV);
+      _paramFV[iFVi]->gXyz2gUvw(_uvw[iFVi],gXyzV,gUvwV);
       for (int l = 0; l < numJacNodes; l++) {
         gSJ[indGSJ(iEl,l,iPC)] = gUvwV[l][0];
         if (_nPCFV[iFVi] >= 2) gSJ[indGSJ(iEl,l,iPC+1)] = gUvwV[l][1];
@@ -345,9 +347,9 @@ void Mesh::pcScale(int iFV, std::vector<double> &scale)
   // Calc. derivative of x, y & z w.r.t. parametric coordinates
   const SPoint3 dX(1.,0.,0.), dY(0.,1.,0.), dZ(0.,0.,1.);
   SPoint3 gX, gY, gZ;
-  _pc->gXyz2gUvw(_freeVert[iFV],_uvw[iFV],dX,gX);
-  _pc->gXyz2gUvw(_freeVert[iFV],_uvw[iFV],dY,gY);
-  _pc->gXyz2gUvw(_freeVert[iFV],_uvw[iFV],dZ,gZ);
+  _paramFV[iFV]->gXyz2gUvw(_uvw[iFV],dX,gX);
+  _paramFV[iFV]->gXyz2gUvw(_uvw[iFV],dY,gY);
+  _paramFV[iFV]->gXyz2gUvw(_uvw[iFV],dZ,gZ);
 
   // Scale = inverse norm. of vector (dx/du, dy/du, dz/du)
   scale[0] = 1./sqrt(gX[0]*gX[0]+gY[0]*gY[0]+gZ[0]*gZ[0]);

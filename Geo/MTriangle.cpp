@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -92,31 +92,28 @@ double MTriangle::gammaShapeMeasure()
 #endif
 }
 
- void MTriangle::xyz2uvw(double xyz[3], double uvw[3]) const
- {
-   const double O[3] = {_v[0]->x(), _v[0]->y(), _v[0]->z()};
-   const double d[3] = {xyz[0] - O[0], xyz[1] - O[1], xyz[2] - O[2]};
-   const double d1[3] = {_v[1]->x() - O[0], _v[1]->y() - O[1], _v[1]->z() - O[2]};
-   const double d2[3] = {_v[2]->x() - O[0], _v[2]->y() - O[1], _v[2]->z() - O[2]};
-   const double Jxy = d1[0] * d2[1] - d1[1] * d2[0];
-   const double Jxz = d1[0] * d2[2] - d1[2] * d2[0];
-   const double Jyz = d1[1] * d2[2] - d1[2] * d2[1];
-   if ((fabs(Jxy) > fabs(Jxz)) && (fabs(Jxy) > fabs(Jyz)))
-   {
-     uvw[0] = (d[0] * d2[1] - d[1] * d2[0]) / Jxy;
-     uvw[1] = (d[1] * d1[0] - d[0] * d1[1]) / Jxy;
-   }
-   else if (fabs(Jxz) > fabs(Jyz))
-   {
-     uvw[0] = (d[0] * d2[2] - d[2] * d2[0]) / Jxz;
-     uvw[1] = (d[2] * d1[0] - d[0] * d1[2]) / Jxz;
-   }
-   else
-   {
-     uvw[0] = (d[1] * d2[2] - d[2] * d2[1]) / Jyz;
-     uvw[1] = (d[2] * d1[1] - d[1] * d1[2]) / Jyz;
-   }
-   uvw[2] = 0.;
+void MTriangle::xyz2uvw(double xyz[3], double uvw[3]) const
+{
+  const double O[3] = {_v[0]->x(), _v[0]->y(), _v[0]->z()};
+  const double d[3] = {xyz[0] - O[0], xyz[1] - O[1], xyz[2] - O[2]};
+  const double d1[3] = {_v[1]->x() - O[0], _v[1]->y() - O[1], _v[1]->z() - O[2]};
+  const double d2[3] = {_v[2]->x() - O[0], _v[2]->y() - O[1], _v[2]->z() - O[2]};
+  const double Jxy = d1[0] * d2[1] - d1[1] * d2[0];
+  const double Jxz = d1[0] * d2[2] - d1[2] * d2[0];
+  const double Jyz = d1[1] * d2[2] - d1[2] * d2[1];
+  if ((fabs(Jxy) > fabs(Jxz)) && (fabs(Jxy) > fabs(Jyz))){
+    uvw[0] = (d[0] * d2[1] - d[1] * d2[0]) / Jxy;
+    uvw[1] = (d[1] * d1[0] - d[0] * d1[1]) / Jxy;
+  }
+  else if (fabs(Jxz) > fabs(Jyz)){
+    uvw[0] = (d[0] * d2[2] - d[2] * d2[0]) / Jxz;
+    uvw[1] = (d[2] * d1[0] - d[0] * d1[2]) / Jxz;
+  }
+  else{
+    uvw[0] = (d[1] * d2[2] - d[2] * d2[1]) / Jyz;
+    uvw[1] = (d[2] * d1[1] - d[1] * d1[2]) / Jyz;
+  }
+  uvw[2] = 0.;
 }
 
 const nodalBasis* MTriangle::getFunctionSpace(int order) const
@@ -135,8 +132,13 @@ const JacobianBasis* MTriangle::getJacobianFuncSpace(int order) const
   return tag ? BasisFactory::getJacobianBasis(tag) : NULL;
 }
 
-int MTriangleN::getNumEdgesRep(){ return 3 * CTX::instance()->mesh.numSubEdges; }
-int MTriangle6::getNumEdgesRep(){ return 3 * CTX::instance()->mesh.numSubEdges; }
+int MTriangleN::getNumEdgesRep(bool curved) {
+  return curved ? 3 * CTX::instance()->mesh.numSubEdges : 3;
+}
+
+int MTriangle6::getNumEdgesRep(bool curved) {
+  return curved ? 3 * CTX::instance()->mesh.numSubEdges : 3;
+}
 
 static void _myGetEdgeRep(MTriangle *t, int num, double *x, double *y, double *z,
                           SVector3 *n, int numSubEdges)
@@ -173,18 +175,24 @@ static void _myGetEdgeRep(MTriangle *t, int num, double *x, double *y, double *z
   }
 }
 
-void MTriangleN::getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n)
+void MTriangleN::getEdgeRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n)
 {
-  _myGetEdgeRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
+  if (curved) _myGetEdgeRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
+  else MTriangle::getEdgeRep(false, num, x, y, z, n);
 }
 
-void MTriangle6::getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n)
+void MTriangle6::getEdgeRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n)
 {
-  _myGetEdgeRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
+  if (curved) _myGetEdgeRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
+  else MTriangle::getEdgeRep(false, num, x, y, z, n);
 }
 
-int MTriangle6::getNumFacesRep(){ return SQU(CTX::instance()->mesh.numSubEdges); }
-int MTriangleN::getNumFacesRep(){ return SQU(CTX::instance()->mesh.numSubEdges); }
+int MTriangle6::getNumFacesRep(bool curved) {
+  return curved ? SQU(CTX::instance()->mesh.numSubEdges) : 1;
+}
+int MTriangleN::getNumFacesRep(bool curved) {
+  return curved ? SQU(CTX::instance()->mesh.numSubEdges) : 1;
+}
 
 static void _myGetFaceRep(MTriangle *t, int num, double *x, double *y, double *z,
                           SVector3 *n, int numSubEdges)
@@ -249,13 +257,15 @@ static void _myGetFaceRep(MTriangle *t, int num, double *x, double *y, double *z
   z[0] = pnt1.z(); z[1] = pnt2.z(); z[2] = pnt3.z();
 }
 
-void MTriangleN::getFaceRep(int num, double *x, double *y, double *z, SVector3 *n)
+void MTriangleN::getFaceRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n)
 {
-  _myGetFaceRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
+  if (curved) _myGetFaceRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
+  else MTriangle::getFaceRep(false, num, x, y, z, n);
 }
-void MTriangle6::getFaceRep(int num, double *x, double *y, double *z, SVector3 *n)
+void MTriangle6::getFaceRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n)
 {
-  _myGetFaceRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
+  if (curved) _myGetFaceRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
+  else MTriangle::getFaceRep(false, num, x, y, z, n);
 }
 
 void MTriangle::getIntegrationPoints(int pOrder, int *npts, IntPt **pts)

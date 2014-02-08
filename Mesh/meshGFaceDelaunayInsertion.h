@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -10,6 +10,7 @@
 #include "MQuadrangle.h"
 #include "STensor3.h"
 #include "GEntity.h"
+#include "MFace.h"
 #include <list>
 #include <set>
 #include <map>
@@ -19,15 +20,15 @@ class GFace;
 class BDS_Mesh;
 class BDS_Point;
 
-struct bidimMeshData 
+struct bidimMeshData
 {
   std::map<MVertex*,int> indices;
   std::vector<double> Us, Vs, vSizes, vSizesBGM;
   std::vector<SMetric3> vMetricsBGM;
   std::map<MVertex* , MVertex*>* equivalence;
   std::map<MVertex*, SPoint2> * parametricCoordinates;
-  std::set<MEdge,Less_Edge> internalEdges; // embedded edges 
-  //  std::set<MVertex*> internalVertices; // embedded vertices 
+  std::set<MEdge,Less_Edge> internalEdges; // embedded edges
+  //  std::set<MVertex*> internalVertices; // embedded vertices
   inline void addVertex (MVertex* mv, double u, double v, double size, double sizeBGM){
     int index = Us.size();
     if (mv->onWhat()->dim() == 2)mv->setIndex(index);
@@ -57,16 +58,16 @@ struct bidimMeshData
     }
     return 0;
   }
-  bidimMeshData (std::map<MVertex* , MVertex*>* e = 0, std::map<MVertex*, SPoint2> *p = 0) : equivalence(e), parametricCoordinates(p)  
+  bidimMeshData (std::map<MVertex* , MVertex*>* e = 0, std::map<MVertex*, SPoint2> *p = 0) : equivalence(e), parametricCoordinates(p)
   {
   }
 };
 
 
 void buildMetric(GFace *gf, double *uv, double *metric);
-int inCircumCircleAniso(GFace *gf, double *p1, double *p2, double *p3, 
+int inCircumCircleAniso(GFace *gf, double *p1, double *p2, double *p3,
                         double *p4, double *metric);
-int inCircumCircleAniso(GFace *gf, MTriangle *base, const double *uv, 
+int inCircumCircleAniso(GFace *gf, MTriangle *base, const double *uv,
                         const double *metric, bidimMeshData & data);
 void circumCenterMetric(double *pa, double *pb, double *pc, const double *metric,
                         double *x, double &Radius2);
@@ -127,30 +128,28 @@ class compareTri3Ptr
   {
     if(a->getRadius() > b->getRadius()) return true;
     if(a->getRadius() < b->getRadius()) return false;
-    return a<b;
+    Less_Face lf;
+    return lf(a->tri()->getFace(0), b->tri()->getFace(0));
   }
 };
 
 void connectTriangles(std::list<MTri3*> &);
 void connectTriangles(std::vector<MTri3*> &);
 void connectTriangles(std::set<MTri3*,compareTri3Ptr> &AllTris);
-void gmshRuppert(GFace *gf, double minqual = 0.2, int MAXPNT= 1000000000,
-		 std::map<MVertex* , MVertex*>* equivalence = 0,  
-		 std::map<MVertex*, SPoint2> * parametricCoordinates = 0);
 void bowyerWatson(GFace *gf, int MAXPNT= 1000000000,
-		  std::map<MVertex* , MVertex*>* equivalence= 0,  
+		  std::map<MVertex* , MVertex*>* equivalence= 0,
 		  std::map<MVertex*, SPoint2> * parametricCoordinates= 0);
 void bowyerWatsonFrontal(GFace *gf,
-		  std::map<MVertex* , MVertex*>* equivalence= 0,  
+		  std::map<MVertex* , MVertex*>* equivalence= 0,
 		  std::map<MVertex*, SPoint2> * parametricCoordinates= 0);
 void bowyerWatsonFrontalLayers(GFace *gf, bool quad,
-		  std::map<MVertex* , MVertex*>* equivalence= 0,  
+		  std::map<MVertex* , MVertex*>* equivalence= 0,
 		  std::map<MVertex*, SPoint2> * parametricCoordinates= 0);
 void bowyerWatsonParallelograms(GFace *gf,
-		  std::map<MVertex* , MVertex*>* equivalence= 0,  
+		  std::map<MVertex* , MVertex*>* equivalence= 0,
 		  std::map<MVertex*, SPoint2> * parametricCoordinates= 0);
 void buildBackGroundMesh (GFace *gf,
-		  std::map<MVertex* , MVertex*>* equivalence= 0,  
+		  std::map<MVertex* , MVertex*>* equivalence= 0,
 		  std::map<MVertex*, SPoint2> * parametricCoordinates= 0);
 
 struct edgeXface
@@ -162,18 +161,23 @@ struct edgeXface
   {
     v[0] = t1->tri()->getVertex(iFac == 0 ? 2 : iFac-1);
     v[1] = t1->tri()->getVertex(iFac);
-    std::sort(v, v + 2);
+    if (v[0]->getNum() > v[1]->getNum())
+      {
+	MVertex *tmp = v[0];
+	v[0] = v[1];
+	v[1] = tmp;
+      }
   }
   inline bool operator < ( const edgeXface &other) const
   {
-    if(v[0] < other.v[0]) return true;
-    if(v[0] > other.v[0]) return false;
-    if(v[1] < other.v[1]) return true;
+    if(v[0]->getNum() < other.v[0]->getNum()) return true;
+    if(v[0]->getNum() > other.v[0]->getNum()) return false;
+    if(v[1]->getNum() < other.v[1]->getNum()) return true;
     return false;
   }
   inline bool operator == ( const edgeXface &other) const
   {
-    if(v[0] == other.v[0] && v[1] == other.v[1]) return true;
+    if(v[0]->getNum() == other.v[0]->getNum() && v[1]->getNum() == other.v[1]->getNum()) return true;
     return false;
   }
 };

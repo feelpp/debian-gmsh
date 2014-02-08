@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -19,6 +19,7 @@
 #include "ExtrudeParams.h"
 #include "Geo.h"
 #include "GmshDefines.h"
+
 
 GVertex *GeoFactory::addVertex(GModel *gm, double x, double y, double z, double lc)
 {
@@ -481,6 +482,7 @@ std::vector<GEntity*> GeoFactory::extrudeBoundaryLayer(GModel *gm, GEntity *e,
 #include <TopoDS_Wire.hxx>
 #include <TopoDS_Compound.hxx>
 #include <TopTools_ListOfShape.hxx>
+#include <GeomAPI_PointsToBSpline.hxx>
 #include "OCC_Connect.h"
 #if defined(HAVE_SALOME)
 #include "Partition_Spliter.hxx"
@@ -496,7 +498,13 @@ GVertex *OCCFactory::addVertex(GModel *gm, double x, double y, double z, double 
   BRepBuilderAPI_MakeVertex mkVertex(aPnt);
   TopoDS_Vertex occv = mkVertex.Vertex();
 
-  return gm->_occ_internals->addVertexToModel(gm, occv);
+  GVertex *vertex = gm->_occ_internals->addVertexToModel(gm, occv);
+
+  lc *= CTX::instance()->geom.scalingFactor;
+  if(lc == 0.) lc = MAX_LC; // no mesh size given at the point
+  vertex->setPrescribedMeshSizeAtVertex(lc);
+
+  return vertex;
 }
 
 GEdge *OCCFactory::addLine(GModel *gm, GVertex *start, GVertex *end)
@@ -514,7 +522,7 @@ GEdge *OCCFactory::addLine(GModel *gm, GVertex *start, GVertex *end)
   else{
     gp_Pnt p1(start->x(),start->y(),start->z());
     gp_Pnt p2(end->x(),end->y(),end->z());
-    TopoDS_Edge occEdge = BRepBuilderAPI_MakeEdge(p1, p2).Edge();
+    occEdge = BRepBuilderAPI_MakeEdge(p1, p2).Edge();
   }
   return gm->_occ_internals->addEdgeToModel(gm,occEdge);
 }
@@ -575,18 +583,33 @@ GEdge *OCCFactory::addSpline(GModel *gm, const splineType &type,
   TColgp_Array1OfPnt ctrlPoints(1, nbControlPoints + 2);
   int index = 1;
   ctrlPoints.SetValue(index++, gp_Pnt(start->x(), start->y(), start->z()));
+
+  //  printf("%d %d %d %d\n",points.size(),points[0].size(),points[1].size(),points[2].size());
   for (int i = 0; i < nbControlPoints; i++) {
+    //    printf("%g %g %g\n",points[i][0],points[i][1],points[i][2]);
     gp_Pnt aP(points[i][0],points[i][1],points[i][2]);
     ctrlPoints.SetValue(index++, aP);
   }
   ctrlPoints.SetValue(index++, gp_Pnt(end->x(), end->y(), end->z()));
   if (type == BEZIER) {
+    if (nbControlPoints >= 20)Msg::Fatal("OCC Bezier Curves have a maximum degree of 20");
     Handle(Geom_BezierCurve) Bez = new Geom_BezierCurve(ctrlPoints);
     if (occv1 && occv2)
       occEdge = BRepBuilderAPI_MakeEdge(Bez,occv1->getShape(),occv2->getShape()).Edge();
     else
       occEdge = BRepBuilderAPI_MakeEdge(Bez).Edge();
   }
+  else if (type == BSPLINE) {
+
+    Handle(Geom_BSplineCurve) Bez = GeomAPI_PointsToBSpline(ctrlPoints).Curve(); 
+
+    if (occv1 && occv2)
+      occEdge = BRepBuilderAPI_MakeEdge(Bez,occv1->getShape(),occv2->getShape()).Edge();
+    else
+      occEdge = BRepBuilderAPI_MakeEdge(Bez).Edge();
+  }
+
+
   return gm->_occ_internals->addEdgeToModel(gm, occEdge);
 }
 
@@ -1488,7 +1511,7 @@ GFace *OCCFactory::addPlanarFace(GModel *gm, std::vector< std::vector<GEdge *> >
   mean_plane meanPlane;
   computeMeanPlaneSimple(points, meanPlane);
 
-  gp_Pln aPlane (meanPlane.a,meanPlane.b,meanPlane.c,meanPlane.d);
+  gp_Pln aPlane (meanPlane.a, meanPlane.b, meanPlane.c, -meanPlane.d);
   BRepBuilderAPI_MakeFace aGenerator (aPlane);
 
   for (unsigned i = 0; i < wires.size() ;i++) {
@@ -1509,7 +1532,6 @@ GFace *OCCFactory::addPlanarFace(GModel *gm, std::vector< std::vector<GEdge *> >
   TopoDS_Shape aResult = aGenerator.Shape();
 
   return gm->_occ_internals->addFaceToModel(gm, TopoDS::Face(aResult));
-
 }
 
 GEntity *OCCFactory::addPipe(GModel *gm, GEntity *base, std::vector<GEdge *> wire)

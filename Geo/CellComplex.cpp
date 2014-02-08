@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -82,8 +82,7 @@ bool CellComplex::_insertCells(std::vector<MElement*>& elements,
     MElement* element = elements.at(i);
     int dim = element->getDim();
     int type = element->getType();
-    if(//type == TYPE_PYR || type == TYPE_PRI ||
-       type == TYPE_POLYG || type == TYPE_POLYH) {
+    if(type == TYPE_POLYG || type == TYPE_POLYH) {
       Msg::Error("Mesh element type %d not implemented in homology solver", type);
     }
     if(type == TYPE_QUA || type == TYPE_HEX ||
@@ -371,7 +370,7 @@ int CellComplex::reduction(int dim, int omit,
       }
 
       if(getSize(dim) == 0 || getSize(dim-1) == 0) break;
-      cit++;
+      if(cit != lastCell(dim-1)) cit++;
     }
   }
   _reduced = true;
@@ -412,7 +411,7 @@ int CellComplex::coreduction(int dim, int omit,
       }
 
       if(getSize(dim) == 0 || getSize(dim-1) == 0) break;
-      cit++;
+      if(cit != lastCell(dim)) cit++;
     }
   }
   _reduced = true;

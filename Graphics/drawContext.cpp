@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -287,7 +287,6 @@ void drawContext::draw3d()
   drawPost();
 }
 
-
 void drawContext::draw2d()
 {
   glDisable(GL_DEPTH_TEST);
@@ -313,8 +312,6 @@ void drawContext::draw2d()
 
   if(CTX::instance()->smallAxes)
     drawSmallAxes();
-
-
 }
 
 void drawContext::drawBackgroundGradient()

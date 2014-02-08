@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -262,6 +262,9 @@ namespace onelabUtils {
       for(unsigned int i = 0; i < y.size(); i++) x.push_back(i);
     }
     if(x.size() && y.size()){
+      if(x.size() != y.size())
+        Msg::Warning("X-Y data series have different length (%d != %d)",
+                     (int)x.size(), (int)y.size());
       if(view){
         view->getData()->setXY(x, y);
         view->getData()->setName(yName);
@@ -314,7 +317,7 @@ namespace onelabUtils {
         // name has changed
         modelName = GModel::current()->getName();
         redraw = true;
-        OpenProject(GModel::current()->getFileName());
+        OpenProject(GModel::current()->getFileName(), false);
       }
     }
     else if(action == "compute"){
@@ -324,7 +327,7 @@ namespace onelabUtils {
         // have been modified or if the model name has changed
         modelName = GModel::current()->getName();
         redraw = true;
-        OpenProject(GModel::current()->getFileName());
+        OpenProject(GModel::current()->getFileName(), false);
         if(getFirstComputationFlag() && !StatFile(mshFileName)){
           Msg::Info("Skipping mesh generation: assuming '%s' is up-to-date",
                     mshFileName.c_str());

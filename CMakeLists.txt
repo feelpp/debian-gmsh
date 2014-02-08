@@ -1,4 +1,4 @@
-# Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+# Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 #
 # See the LICENSE.txt file for license information. Please report all
 # bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -58,8 +58,10 @@ opt(MMG3D "Enable MMG3D 3D anisotropic mesh refinement" ${DEFAULT})
 opt(MPEG_ENCODE "Enable built-in MPEG movie encoder" ${DEFAULT})
 opt(MPI "Enable MPI (mostly for parser and solver - mesh generation is sequential)" OFF)
 opt(MSVC_STATIC_RUNTIME "Enable static Visual C++ runtime" OFF)
+opt(MUMPS "Enable MUMPS sparse direct linear solver" OFF)
 opt(NATIVE_FILE_CHOOSER "Enable native file chooser in GUI" ${DEFAULT})
 opt(NETGEN "Enable Netgen 3D frontal mesh generator" ${DEFAULT})
+opt(NUMPY "Enable conversion between fullMatrix and numpy array (requires SWIG)" OFF)
 opt(OCC "Enable Open CASCADE geometrical models" ${DEFAULT})
 opt(ONELAB "Enable OneLab solver interface" ${DEFAULT})
 opt(ONELAB_METAMODEL "Enable OneLab metamodels (experimental)" ${DEFAULT})
@@ -87,7 +89,7 @@ opt(WRAP_PYTHON "Enable generation of Python wrappers" OFF)
 
 set(GMSH_MAJOR_VERSION 2)
 set(GMSH_MINOR_VERSION 8)
-set(GMSH_PATCH_VERSION 3)
+set(GMSH_PATCH_VERSION 4)
 set(GMSH_EXTRA_VERSION "" CACHE STRING "Gmsh extra version string")
 
 set(GMSH_VERSION "${GMSH_MAJOR_VERSION}.${GMSH_MINOR_VERSION}")
@@ -124,10 +126,10 @@ set(GMSH_API
   Solver/dofManager.h Solver/femTerm.h Solver/laplaceTerm.h Solver/elasticityTerm.h
     Solver/crossConfTerm.h Solver/orthogonalTerm.h
     Solver/linearSystem.h Solver/linearSystemGMM.h Solver/linearSystemCSR.h 
-    Solver/linearSystemFull.h Solver/elasticitySolver.h Solver/sparsityPattern.h
-    Solver/groupOfElements.h Solver/linearSystemPETSc.h
+    Solver/linearSystemFull.h Solver/elasticitySolver.h Solver/sparsityPattern.h 
+    Solver/groupOfElements.h Solver/linearSystemPETSc.h Solver/linearSystemMUMPS.h
   Post/PView.h Post/PViewData.h Plugin/PluginManager.h Post/OctreePost.h 
-  Post/PViewDataGModel.h Post/PViewOptions.h Post/ColorTable.h
+  Post/PViewDataList.h Post/PViewDataGModel.h Post/PViewOptions.h Post/ColorTable.h
    Numeric/nodalBasis.h
   Graphics/drawContext.h
   contrib/kbipack/gmp_normal_form.h contrib/kbipack/gmp_matrix.h 
@@ -137,6 +139,11 @@ set(GMSH_API
   contrib/HighOrderMeshOptimizer/OptHomRun.h contrib/HighOrderMeshOptimizer/ParamCoord.h
   contrib/HighOrderMeshOptimizer/OptHomFastCurving.h contrib/HighOrderMeshOptimizer/SuperEl.h
   contrib/MathEx/mathex.h)
+
+get_property(IAMCHILD DIRECTORY  PROPERTY PARENT_DIRECTORY)
+if(IAMCHILD)
+  set(GMSH_API ${GMSH_API} PARENT_SCOPE)
+endif(IAMCHILD)
 
 execute_process(COMMAND date "+%Y%m%d" OUTPUT_VARIABLE DATE 
                 OUTPUT_STRIP_TRAILING_WHITESPACE)
@@ -237,23 +244,24 @@ endif(SIZEOF_VOID_P EQUAL 8)
 
 if(ENABLE_BLAS_LAPACK)
   if(BLAS_LAPACK_LIBRARIES)
+    # use libs as specified in the BLAS_LAPACK_LIBRARIES variable
     set_config_option(HAVE_BLAS "Blas(Custom)")
     set_config_option(HAVE_LAPACK "Lapack(Custom)")
     set(LAPACK_LIBRARIES ${BLAS_LAPACK_LIBRARIES})
   else(BLAS_LAPACK_LIBRARIES)
     if(MSVC)
-      # on Windows with Visual C++ try really hard to find blas/lapack
-      # *without* requiring a Fortran compiler: 1) try to find the Intel
-      # MKL libs using the standard search path; if not found 2) try to
-      # get the reference blas/lapack libs (useful for users with no
-      # Fortran compiler and no MKL license, who can just download our
-      # precompiled "gmsh-dep" package)
+      # on Windows with Visual C++ try really hard to find blas/lapack *without*
+      # requiring a Fortran compiler: 1) try to find the Intel MKL libs using
+      # the standard search path; if not found 2) try to get the reference
+      # blas/lapack libs (useful for users with no Fortran compiler and no MKL
+      # license, who can just download our precompiled "gmsh-dep" package)
       if(HAVE_64BIT_SIZE_T)
         set(MKL_PATH em64t/lib)
+        set(MKL_LIBS_REQUIRED libguide40 mkl_intel_lp64 mkl_intel_thread mkl_core)
       else(HAVE_64BIT_SIZE_T)
         set(MKL_PATH ia32/lib)
+        set(MKL_LIBS_REQUIRED libguide40 mkl_intel_c mkl_intel_thread mkl_core)
       endif(HAVE_64BIT_SIZE_T)
-      set(MKL_LIBS_REQUIRED libguide40 mkl_intel_c mkl_intel_thread mkl_core)
       find_all_libraries(LAPACK_LIBRARIES MKL_LIBS_REQUIRED "" ${MKL_PATH})
       if(LAPACK_LIBRARIES)
         set_config_option(HAVE_BLAS "Blas(IntelMKL)")
@@ -284,9 +292,8 @@ if(ENABLE_BLAS_LAPACK)
         set_config_option(HAVE_BLAS "Blas(IntelMKL)")
         set_config_option(HAVE_LAPACK "Lapack(IntelMKL)")
       else(LAPACK_LIBRARIES)
-        # on Linux also try to find ATLAS without a Fortran compiler,
-        # because cmake ships with a buggy FindBLAS e.g. on Ubuntu Lucid
-        # Lynx
+        # on Linux also try to find ATLAS without a Fortran compiler, because
+        # cmake ships with a buggy FindBLAS e.g. on Ubuntu Lucid Lynx
         set(ATLAS_LIBS_REQUIRED lapack f77blas cblas atlas)
         find_all_libraries(LAPACK_LIBRARIES ATLAS_LIBS_REQUIRED "" "")
         if(LAPACK_LIBRARIES)
@@ -313,10 +320,11 @@ if(ENABLE_BLAS_LAPACK)
       set_config_option(HAVE_LAPACK "Lapack(SunPerf)")
     elseif(APPLE)
       # on Mac we also know that blas and lapack are available
-      set(LAPACK_LIBRARIES "-framework vecLib")
+      set(LAPACK_LIBRARIES "-llapack -lblas")
       set_config_option(HAVE_BLAS "Blas(VecLib)")
       set_config_option(HAVE_LAPACK "Lapack(VecLib)")
     endif(MSVC)
+
     if(ENABLE_BUILD_ANDROID)
       find_library(BLAS_LIB f2cblas PATH_SUFFIXES lib)
       find_library(LAPACK_LIB f2clapack PATH_SUFFIXES lib)
@@ -329,9 +337,24 @@ if(ENABLE_BLAS_LAPACK)
         set_config_option(HAVE_LAPACK "Lapack")
       endif(LAPACK_LIB)
     endif(ENABLE_BUILD_ANDROID)
+
     if(NOT HAVE_BLAS OR NOT HAVE_LAPACK)
-      # if we haven't found blas and lapack without using the standard
-      # cmake tests, do it (this requires a working Fortran compiler)
+      # if we haven't found blas and lapack check for OpenBlas
+      set(OPENBLAS_LIBS_REQUIRED openblas)
+      find_all_libraries(LAPACK_LIBRARIES OPENBLAS_LIBS_REQUIRED "" "")
+      if(LAPACK_LIBRARIES)
+        set_config_option(HAVE_BLAS "Blas(OpenBlas)")
+        set_config_option(HAVE_LAPACK "Lapack(OpenBlas)")
+        find_library(GFORTRAN_LIB gfortran)
+        if(GFORTRAN_LIB)
+          list(APPEND LAPACK_LIBRARIES ${GFORTRAN_LIB})
+        endif(GFORTRAN_LIB)
+      endif(LAPACK_LIBRARIES)  
+    endif(NOT HAVE_BLAS OR NOT HAVE_LAPACK)
+
+    if(NOT HAVE_BLAS OR NOT HAVE_LAPACK)
+      # if we still haven't found blas and lapack, use the standard cmake tests,
+      # which require a working Fortran compiler
       enable_language(Fortran)
       find_package(BLAS)
       if(BLAS_FOUND)
@@ -353,10 +376,12 @@ if(ENABLE_BLAS_LAPACK)
         endif(CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
       endif(BLAS_FOUND)
     endif(NOT HAVE_BLAS OR NOT HAVE_LAPACK)
+
     if(NOT HAVE_BLAS OR NOT HAVE_LAPACK)
       message(STATUS "Warning: Could not find Blas or Lapack: most meshing algorithms "
               "will not be functional")
     endif(NOT HAVE_BLAS OR NOT HAVE_LAPACK)
+
   endif(BLAS_LAPACK_LIBRARIES)
 endif(ENABLE_BLAS_LAPACK)
 
@@ -389,8 +414,8 @@ if(ENABLE_PARSER)
 endif(ENABLE_PARSER)
 
 if(ENABLE_FLTK)
-  # first, try to use fltk-config for fltk >= 1.3 (FindFLTK is buggy
-  # on Unix, where e.g. xft and xinerama options are not dealt with)
+  # first, try to use fltk-config for fltk >= 1.3 (FindFLTK is buggy on Unix,
+  # where e.g. xft and xinerama options are not dealt with)
   find_program(FLTK_CONFIG_SCRIPT fltk-config)
   if(FLTK_CONFIG_SCRIPT)
     execute_process(COMMAND ${FLTK_CONFIG_SCRIPT} --api-version
@@ -470,6 +495,8 @@ if(ENABLE_ONELAB)
     include_directories(contrib/onelab)
     set_config_option(HAVE_ONELAB_METAMODEL "OneLabMetamodel")
   endif(ENABLE_ONELAB_METAMODEL)
+  file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/contrib/onelab/python/onelab.py
+            DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 endif(ENABLE_ONELAB)
 
 if(ENABLE_BUILD_IOS)
@@ -633,6 +660,7 @@ if(ENABLE_MPI)
      list(APPEND EXTERNAL_INCLUDES ${MPI_INCLUDE_DIR})
      list(APPEND EXTERNAL_LIBRARIES ${MPI_LIBRARIES})
      include(CMakeForceCompiler)
+     # Warning: this actually requires cmake >= 2.8.5
      cmake_force_c_compiler(${MPI_C_COMPILER} "MPI C Compiler")
      cmake_force_cxx_compiler(${MPI_CXX_COMPILER} "MPI C++ Compiler")
    endif(MPI_FOUND)
@@ -814,6 +842,33 @@ if(HAVE_SOLVER)
     endif(HAVE_METIS)
   endif(ENABLE_TAUCS)
 
+  if(ENABLE_MUMPS)
+    set(MUMPS_LIBS_REQUIRED smumps dmumps cmumps zmumps mumps_common pord metis)
+    if(NOT ENABLE_MPI)
+      list(APPEND MUMPS_LIBS_REQUIRED mpiseq)
+    endif(NOT ENABLE_MPI)
+    find_all_libraries(MUMPS_LIBRARIES MUMPS_LIBS_REQUIRED "" "lib")
+    find_path(SMUMPS_INC "smumps_c.h" PATH_SUFFIXES src include)
+    find_path(DMUMPS_INC "dmumps_c.h" PATH_SUFFIXES src include)
+    find_path(CMUMPS_INC "cmumps_c.h" PATH_SUFFIXES src include)
+    find_path(ZMUMPS_INC "zmumps_c.h" PATH_SUFFIXES src include)
+    if(MUMPS_LIBRARIES AND SMUMPS_INC AND DMUMPS_INC AND CMUMPS_INC AND ZMUMPS_INC)
+      set_config_option(HAVE_MUMPS "MUMPS")
+      list(APPEND EXTERNAL_LIBRARIES ${MUMPS_LIBRARIES})
+      list(APPEND EXTERNAL_INCLUDES ${SMUMPS_INC})
+      list(APPEND EXTERNAL_INCLUDES ${DMUMPS_INC})
+      list(APPEND EXTERNAL_INCLUDES ${CMUMPS_INC})
+      list(APPEND EXTERNAL_INCLUDES ${ZMUMPS_INC})
+      find_library(GFORTRAN_LIB gfortran)
+      if(GFORTRAN_LIB)
+        list(APPEND EXTERNAL_LIBRARIES ${GFORTRAN_LIB})
+      endif(GFORTRAN_LIB)
+      if(ENABLE_GMM) # use GMM/MUMPS interface
+        add_definitions(-DGMM_USES_MUMPS)
+      endif(ENABLE_GMM)
+    endif(MUMPS_LIBRARIES AND SMUMPS_INC AND DMUMPS_INC AND CMUMPS_INC AND ZMUMPS_INC)
+  endif(ENABLE_MUMPS)
+
   if(ENABLE_PETSC)
     if(PETSC_DIR)
       set(ENV_PETSC_DIR ${PETSC_DIR})
@@ -829,16 +884,25 @@ if(HAVE_SOLVER)
       # old-style PETSc installations (using PETSC_DIR and PETSC_ARCH)
       message(STATUS "Using PETSc dir: ${ENV_PETSC_DIR}")
       message(STATUS "Using PETSc arch: ${ENV_PETSC_ARCH}")
+      # find includes by parsing the petscvariables file
       file(STRINGS ${ENV_PETSC_DIR}/${ENV_PETSC_ARCH}/conf/petscvariables 
            PETSC_VARIABLES NEWLINE_CONSUME)
-      # find include directories
-      list(APPEND EXTERNAL_INCLUDES ${ENV_PETSC_DIR}/include)
-      list(APPEND EXTERNAL_INCLUDES ${ENV_PETSC_DIR}/${ENV_PETSC_ARCH}/include)
-      string(REGEX MATCH "PACKAGES_INCLUDES = [^\n\r]*" PETSC_PACKAGES_INCLUDES
+      # try to find PETSC_CC_INCLUDES for PETSc >= 3.4
+      string(REGEX MATCH "PETSC_CC_INCLUDES = [^\n\r]*" PETSC_PACKAGES_INCLUDES
              ${PETSC_VARIABLES})
       if(PETSC_PACKAGES_INCLUDES)
+        string(REPLACE "PETSC_CC_INCLUDES = " "" PETSC_PACKAGES_INCLUDES
+               ${PETSC_PACKAGES_INCLUDES})
+      else(PETSC_PACKAGES_INCLUDES)
+        # try to find PETSC_PACKAGES_INCLUDES in older versions
+        list(APPEND EXTERNAL_INCLUDES ${ENV_PETSC_DIR}/include)
+        list(APPEND EXTERNAL_INCLUDES ${ENV_PETSC_DIR}/${ENV_PETSC_ARCH}/include)
+        string(REGEX MATCH "PACKAGES_INCLUDES = [^\n\r]*" PETSC_PACKAGES_INCLUDES
+               ${PETSC_VARIABLES})
         string(REPLACE "PACKAGES_INCLUDES = " "" PETSC_PACKAGES_INCLUDES
                ${PETSC_PACKAGES_INCLUDES})
+      endif(PETSC_PACKAGES_INCLUDES)
+      if(PETSC_PACKAGES_INCLUDES)
         if(PETSC_PACKAGES_INCLUDES)
           string(REPLACE "-I" "" PETSC_PACKAGES_INCLUDES ${PETSC_PACKAGES_INCLUDES})
           string(REPLACE " " ";" PETSC_PACKAGES_INCLUDES ${PETSC_PACKAGES_INCLUDES})
@@ -1014,6 +1078,30 @@ if(ENABLE_ACIS)
   endif(ACIS_LIB)
 endif(ENABLE_ACIS)
 
+if(ENABLE_WRAP_PYTHON)
+  find_package(SWIG)
+  find_package(PythonLibs)
+  if(SWIG_FOUND AND PYTHONLIBS_FOUND)
+    message(STATUS "Found SWIG version " ${SWIG_VERSION})
+    string(SUBSTRING ${SWIG_VERSION} 0 1 SWIG_MAJOR_VERSION)
+    if(SWIG_MAJOR_VERSION EQUAL 1)
+      message(WARNING "Python bindings require SWIG >= 2: disabling Python")
+    else(SWIG_MAJOR_VERSION EQUAL 1)
+      set_config_option(HAVE_PYTHON "Python")
+    endif(SWIG_MAJOR_VERSION EQUAL 1)
+  endif(SWIG_FOUND AND PYTHONLIBS_FOUND)
+endif(ENABLE_WRAP_PYTHON)
+
+if(HAVE_PYTHON)
+  if(ENABLE_NUMPY)
+    find_path(NUMPY_INC "numpyconfig.h" HINTS ${PYTHON_INCLUDE_PATH} PATH_SUFFIXES /numpy)
+    if(NUMPY_INC)
+      list(APPEND EXTERNAL_INCLUDES ${NUMPY_INC})
+      set_config_option(HAVE_NUMPY "Numpy")
+    endif(NUMPY_INC)
+  endif(ENABLE_NUMPY)
+endif(HAVE_PYTHON)
+
 check_function_exists(vsnprintf HAVE_VSNPRINTF)
 if(NOT HAVE_VSNPRINTF AND NOT ENABLE_BUILD_IOS)
   set_config_option(HAVE_NO_VSNPRINTF "NoVsnprintf")
@@ -1065,16 +1153,20 @@ endif(WIN32 OR CYGWIN)
 # force full warnings to encourage everybody to write clean(er) code
 check_cxx_compiler_flag("-Wall" WALL)
 check_cxx_compiler_flag("-Wint-to-void-pointer-cast" WCAST)
+check_cxx_compiler_flag("-Wdeprecated-declarations" WDEPREC)
 if(WALL AND NOT MSVC)
   file(GLOB_RECURSE WALL_SRC Common/*.cpp Fltk/*.cpp FunctionSpace/*.cpp
        Geo/*.cpp Graphics/*.cpp Mesh/*.cpp Numeric/*.cpp Parser/*.cpp
        Plugin/*.cpp Post/*.cpp Qt/*.cpp Solver/*.cpp)
+  set(WF "-Wall")
   if(WCAST)
-    set_source_files_properties(${WALL_SRC} PROPERTIES COMPILE_FLAGS 
-                                "-Wall -Wno-int-to-void-pointer-cast")
-  else(WCAST)
-    set_source_files_properties(${WALL_SRC} PROPERTIES COMPILE_FLAGS "-Wall")
+    set(WF "${WF} -Wno-int-to-void-pointer-cast")
   endif(WCAST)
+  if(WDEPREC)
+    # FIXME: remove this when we have fixed the deprecated GLU code for OpenGL3
+    set(WF "${WF} -Wno-deprecated-declarations")
+  endif(WDEPREC)
+  set_source_files_properties(${WALL_SRC} PROPERTIES COMPILE_FLAGS ${WF})
 endif(WALL AND NOT MSVC)
 
 # don't issue warnings for contributed libraries
@@ -1111,10 +1203,10 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Common/GmshConfig.h.in
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Common/GmshVersion.h.in
                ${CMAKE_CURRENT_BINARY_DIR}/Common/GmshVersion.h)
 
-# process cmake environment variables so we can append them to the -I
-# include commands. This is not recommended (we should only use the
-# cache variables) but it is very convenient: otherwise we have to
-# remember providing the -D... options to cmake for each new build.
+# process cmake environment variables so we can append them to the -I include
+# commands. This is not recommended (we should only use the cache variables) but
+# it is very convenient: otherwise we have to remember providing the
+# -D... options to cmake for each new build.
 set(ENV_CMAKE_PREFIX_PATH $ENV{CMAKE_PREFIX_PATH})
 set(ENV_CMAKE_INCLUDE_PATH $ENV{CMAKE_INCLUDE_PATH})
 if(UNIX)
@@ -1268,8 +1360,8 @@ if(BISON AND FLEX)
 endif(BISON AND FLEX)
 
 if(UNIX)
-  # cannot use cmake's file search functions here (they would only
-  # find files existing at configuration time)
+  # cannot use cmake's file search functions here (they would only find files
+  # existing at configuration time)
   add_custom_target(purge 
                     COMMAND rm -f `find . -name *~ -o -name *~~`
                     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
@@ -1356,24 +1448,20 @@ if(ENABLE_BUILD_SHARED OR ENABLE_BUILD_DYNAMIC)
     # install .def file
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${LIBGMSH_DEF} 
             DESTINATION ${GMSH_LIB})
-    # install these DLLs until we figure out how to link them in statically (libstc++ and
-    # libgcc should be linkable statically with -static-libstdc++ and -static-libgcc but with
-    # current mingw64 toolchain it does not work). Also, when cross-compilating find_program
-    # does not work -> ask the compiler instead
-    if(HAVE_64BIT_SIZE_T)
-      find_program(GCC_DLL libgcc_s_sjlj-1.dll)
-    else(HAVE_64BIT_SIZE_T)
-      find_program(GCC_DLL libgcc_s_seh-1.dll)
-    endif(HAVE_64BIT_SIZE_T)
+    # install these DLLs until we figure out how to link them in statically
+    # (libstc++ and libgcc should be linkable statically with -static-libstdc++
+    # and -static-libgcc but with current mingw64 toolchain it does not
+    # work). Also, when cross-compilating find_program does not work -> ask the
+    # compiler instead
+    find_program(GCC_DLL libgcc_s_sjlj-1.dll)
     find_program(STDC_DLL libstdc++-6.dll)
     if(NOT GCC_DLL)
-      if(HAVE_64BIT_SIZE_T)
-        execute_process(COMMAND ${CMAKE_CXX_COMPILER} -print-file-name=libgcc_s_seh-1.dll
-                        OUTPUT_VARIABLE GCC_DLL OUTPUT_STRIP_TRAILING_WHITESPACE)
-      else(HAVE_64BIT_SIZE_T)
+      execute_process(COMMAND ${CMAKE_CXX_COMPILER} -print-file-name=libgcc_s_seh-1.dll
+                      OUTPUT_VARIABLE GCC_DLL OUTPUT_STRIP_TRAILING_WHITESPACE)
+      if (NOT EXISTS "${GCC_DLL}")
         execute_process(COMMAND ${CMAKE_CXX_COMPILER} -print-file-name=libgcc_s_sjlj-1.dll
                         OUTPUT_VARIABLE GCC_DLL OUTPUT_STRIP_TRAILING_WHITESPACE)
-      endif(HAVE_64BIT_SIZE_T)
+      endif(NOT EXISTS "${GCC_DLL}")
       get_filename_component(GCC_DLL ${GCC_DLL} ABSOLUTE)
     endif(NOT GCC_DLL)
     if(NOT STDC_DLL)
@@ -1390,7 +1478,9 @@ if(ENABLE_BUILD_SHARED OR ENABLE_BUILD_DYNAMIC)
   endif(WIN32 AND NOT MSVC OR CYGWIN)
 endif(ENABLE_BUILD_SHARED OR ENABLE_BUILD_DYNAMIC)
 
-install(FILES ${ONELAB_PY} DESTINATION ${GMSH_BIN})
+if(ENABLE_ONELAB)
+  install(FILES ${ONELAB_PY} DESTINATION ${GMSH_BIN})
+endif(ENABLE_ONELAB)
 if(ENABLE_BUILD_LIB OR ENABLE_BUILD_SHARED OR ENABLE_BUILD_DYNAMIC)
   install(FILES ${GMSH_API} DESTINATION include/gmsh)
 endif(ENABLE_BUILD_LIB OR ENABLE_BUILD_SHARED OR ENABLE_BUILD_DYNAMIC)
@@ -1509,10 +1599,9 @@ set(CPACK_SOURCE_IGNORE_FILES "${CMAKE_CURRENT_BINARY_DIR}" "/CVS/" "/.svn" "~$"
     "/contrib/3M/")
 
 if(UNIX)
-  # make sure we remove previous installs before doing the next one
-  # (on Mac for example "make package; make package_source" would lead
-  # to huge file lists getting generated due to the 'Applications'
-  # symlink in the bundle)
+  # make sure we remove previous installs before doing the next one (on Mac for
+  # example "make package; make package_source" would lead to huge file lists
+  # getting generated due to the 'Applications' symlink in the bundle)
   set(CPACK_INSTALL_COMMANDS "rm -rf ${CMAKE_CURRENT_BINARY_DIR}/_CPack_Packages")
 endif(UNIX)
 
@@ -1539,19 +1628,9 @@ else(APPLE AND ENABLE_OS_SPECIFIC_INSTALL)
   set(CPACK_GENERATOR TGZ)
 endif(APPLE AND ENABLE_OS_SPECIFIC_INSTALL)
 
-if(ENABLE_WRAP_PYTHON)
-  find_package(SWIG)
-  find_package(PythonLibs)
-  if(SWIG_FOUND AND PYTHONLIBS_FOUND)
-    message(STATUS "Found SWIG version " ${SWIG_VERSION})
-    string(SUBSTRING ${SWIG_VERSION} 0 1 SWIG_MAJOR_VERSION)
-    if(SWIG_MAJOR_VERSION EQUAL 1)
-      message(WARNING "Python bindings require SWIG >= 2: disabling Python")
-    else(SWIG_MAJOR_VERSION EQUAL 1)
-      add_subdirectory(wrappers/gmshpy)
-    endif(SWIG_MAJOR_VERSION EQUAL 1)
-  endif(SWIG_FOUND AND PYTHONLIBS_FOUND)
-endif(ENABLE_WRAP_PYTHON)
+if (HAVE_PYTHON)
+  add_subdirectory(wrappers/gmshpy)
+endif(HAVE_PYTHON)
 
 if(ENABLE_WRAP_JAVA) 
   if(NOT HAVE_BLAS OR NOT HAVE_LAPACK) 
@@ -1563,10 +1642,9 @@ endif(ENABLE_WRAP_JAVA)
 include(CPack)
 
 include(CTest)
-# we will need some common testing framwork to make actual tests
-file(GLOB_RECURSE TESTFILES tutorial/x*.geo)
+file(GLOB_RECURSE TESTFILES tutorial/*.geo)
 foreach(TESTFILE ${TESTFILES})
-  add_test(${TESTFILE} gmsh ${TESTFILE})
+  add_test(${TESTFILE} ./gmsh ${TESTFILE} -3 -o ./tmp.msh)
 endforeach()
 
 message(STATUS "")

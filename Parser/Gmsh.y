@@ -1,5 +1,5 @@
 %{
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -56,9 +56,9 @@ std::string gmsh_yyname;
 int gmsh_yyerrorstate = 0;
 int gmsh_yyviewindex = 0;
 std::map<std::string, gmsh_yysymbol> gmsh_yysymbols;
+std::map<std::string, std::string> gmsh_yystringsymbols;
 
 // Static parser variables (accessible only in this file)
-static std::map<std::string, std::string> gmsh_yystringsymbols;
 #if defined(HAVE_POST)
 static PViewDataList *ViewData;
 #endif
@@ -115,12 +115,13 @@ struct doubleXstring{
 %token tDistanceFunction tDefineConstant tUndefineConstant
 %token tPoint tCircle tEllipse tLine tSphere tPolarSphere tSurface tSpline tVolume
 %token tCharacteristic tLength tParametric tElliptic tRefineMesh tAdaptMesh
+%token tRelocateMesh
 %token tPlane tRuled tTransfinite tComplex tPhysical tCompound tPeriodic
 %token tUsing tPlugin tDegenerated tRecursive
 %token tRotate tTranslate tSymmetry tDilate tExtrude tLevelset
 %token tRecombine tSmoother tSplit tDelete tCoherence
 %token tIntersect tMeshAlgorithm tReverse
-%token tLayers tScaleLast tHole tAlias tAliasWithOptions
+%token tLayers tScaleLast tHole tAlias tAliasWithOptions tCopyOptions
 %token tQuadTriAddVerts tQuadTriNoNewVerts tQuadTriSngl tQuadTriDbl
 %token tRecombLaterals tTransfQuadTri
 %token tText2D tText3D tInterpolationScheme  tTime tCombine
@@ -308,6 +309,8 @@ View :
 	int index = (int)$4;
 	if(index >= 0 && index < (int)PView::list.size())
 	  new PView(PView::list[index], false);
+        else
+	  yymsg(0, "Unknown view %d", index);
       }
 #endif
       Free($2);
@@ -319,6 +322,23 @@ View :
 	int index = (int)$4;
 	if(index >= 0 && index < (int)PView::list.size())
 	  new PView(PView::list[index], true);
+        else
+	  yymsg(0, "Unknown view %d", index);
+      }
+#endif
+      Free($2);
+    }
+  | tCopyOptions tSTRING '[' FExpr ',' FExpr ']' tEND
+    {
+#if defined(HAVE_POST)
+      if(!strcmp($2, "View")){
+	int index = (int)$4, index2 = (int)$6;
+	if(index >= 0 && index < (int)PView::list.size() &&
+           index2 >= 0 && index2 < (int)PView::list.size()){
+          PView::list[index2]->setOptions(PView::list[index]->getOptions());
+        }
+        else
+	  yymsg(0, "Unknown view %d or %d", index, index2);
       }
 #endif
       Free($2);
@@ -1187,9 +1207,7 @@ DefineConstants :
     {
       std::string key($3);
       std::vector<double> val(1, 0.);
-      floatOptions.clear(); charOptions.clear();
       if(!gmsh_yysymbols.count(key)){
-        Msg::ExchangeOnelabParameter(key, val, floatOptions, charOptions);
         gmsh_yysymbols[key].value = val;
       }
       Free($3);
@@ -1198,9 +1216,7 @@ DefineConstants :
     {
       std::string key($3);
       std::vector<double> val(1, $5);
-      floatOptions.clear(); charOptions.clear();
       if(!gmsh_yysymbols.count(key)){
-        Msg::ExchangeOnelabParameter(key, val, floatOptions, charOptions);
         gmsh_yysymbols[key].value = val;
       }
       Free($3);
@@ -1220,9 +1236,7 @@ DefineConstants :
   | DefineConstants Comma String__Index tAFFECT StringExpr
     {
       std::string key($3), val($5);
-      floatOptions.clear(); charOptions.clear();
       if(!gmsh_yystringsymbols.count(key)){
-        Msg::ExchangeOnelabParameter(key, val, floatOptions, charOptions);
         gmsh_yystringsymbols[key] = val;
       }
       Free($3);
@@ -4124,8 +4138,71 @@ Constraints :
               ge->meshAttributes.reverseMesh = 1;
             }
             else
-              yymsg(1, "Unknown surface %d", (int)d);
+              yymsg(1, "Unknown line %d", (int)d);
           }
+        }
+        List_Delete($3);
+      }
+    }
+  | tRelocateMesh tPoint ListOfDoubleOrAll tEND
+    {
+      if(!$3){
+        for(GModel::viter it = GModel::current()->firstVertex();
+            it != GModel::current()->lastVertex(); it++)
+          (*it)->relocateMeshVertices();
+      }
+      else{
+        for(int i = 0; i < List_Nbr($3); i++){
+          double d;
+          List_Read($3, i, &d);
+          GVertex *gv = GModel::current()->getVertexByTag((int)d);
+          if(gv){
+            gv->relocateMeshVertices();
+          }
+          else
+            yymsg(1, "Unknown point %d", (int)d);
+        }
+        List_Delete($3);
+      }
+    }
+  | tRelocateMesh tLine ListOfDoubleOrAll tEND
+    {
+      if(!$3){
+        for(GModel::eiter it = GModel::current()->firstEdge();
+            it != GModel::current()->lastEdge(); it++)
+          (*it)->relocateMeshVertices();
+      }
+      else{
+        for(int i = 0; i < List_Nbr($3); i++){
+          double d;
+          List_Read($3, i, &d);
+          GEdge *ge = GModel::current()->getEdgeByTag((int)d);
+          if(ge){
+            ge->relocateMeshVertices();
+          }
+          else
+            yymsg(1, "Unknown line %d", (int)d);
+        }
+        List_Delete($3);
+      }
+    }
+  | tRelocateMesh tSurface ListOfDoubleOrAll tEND
+    {
+      if(!$3){
+        for(GModel::fiter it = GModel::current()->firstFace();
+            it != GModel::current()->lastFace(); it++)
+          (*it)->relocateMeshVertices();
+      }
+      else{
+        for(int i = 0; i < List_Nbr($3); i++){
+          double d;
+          List_Read($3, i, &d);
+          GFace *gf = GModel::current()->getFaceByTag((int)d);
+          if(gf){
+            gf->relocateMeshVertices();
+          }
+          else
+            yymsg(1, "Unknown surface %d", (int)d);
         }
         List_Delete($3);
       }
@@ -5052,6 +5129,15 @@ StringExpr :
       Free($5);
     }
   | tStrCat '(' StringExprVar ',' StringExprVar ')'
+    {
+      $$ = (char *)Malloc((strlen($3) + strlen($5) + 1) * sizeof(char));
+      strcpy($$, $3);
+      strcat($$, $5);
+      Free($3);
+      Free($5);
+    }
+  // for compatibility with GetDP
+  | tStrCat '[' StringExprVar ',' StringExprVar ']'
     {
       $$ = (char *)Malloc((strlen($3) + strlen($5) + 1) * sizeof(char));
       strcpy($$, $3);

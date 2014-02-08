@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -168,28 +168,31 @@ static void _myGetEdgeRep(MPrism *pri, int num, double *x, double *y, double *z,
 }
 
 
-void MPrism15::getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n) {
-  _myGetEdgeRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
+void MPrism15::getEdgeRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n) {
+  if (curved) _myGetEdgeRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
+  else MPrism::getEdgeRep(false, num, x, y, z, n);
 }
 
-void MPrism18::getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n) {
-  _myGetEdgeRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
+void MPrism18::getEdgeRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n) {
+  if (curved) _myGetEdgeRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
+  else MPrism::getEdgeRep(false, num, x, y, z, n);
 }
 
-void MPrismN::getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n) {
-  _myGetEdgeRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
+void MPrismN::getEdgeRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n) {
+  if (curved) _myGetEdgeRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
+  else MPrism::getEdgeRep(false, num, x, y, z, n);
 }
 
-int MPrism15::getNumEdgesRep() {
-  return 9 * CTX::instance()->mesh.numSubEdges;
+int MPrism15::getNumEdgesRep(bool curved) {
+  return curved ? 9 * CTX::instance()->mesh.numSubEdges : 9;
 }
 
-int MPrism18::getNumEdgesRep() {
-  return 9 * CTX::instance()->mesh.numSubEdges;
+int MPrism18::getNumEdgesRep(bool curved) {
+  return curved ? 9 * CTX::instance()->mesh.numSubEdges : 9;
 }
 
-int MPrismN::getNumEdgesRep() {
-  return 9 * CTX::instance()->mesh.numSubEdges;
+int MPrismN::getNumEdgesRep(bool curved) {
+  return curved ? 9 * CTX::instance()->mesh.numSubEdges : 9;
 }
 
 
@@ -411,31 +414,34 @@ void _myGetFaceRep(MPrism *pri, int num, double *x, double *y, double *z,
   n[2] = n[0];
 }
 
-void MPrism15::getFaceRep(int num, double *x, double *y, double *z, SVector3 *n)
+void MPrism15::getFaceRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n)
 {
-  _myGetFaceRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
+  if (curved) _myGetFaceRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
+  else MPrism::getFaceRep(false, num, x, y, z, n);
 }
 
-void MPrism18::getFaceRep(int num, double *x, double *y, double *z, SVector3 *n)
+void MPrism18::getFaceRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n)
 {
-  _myGetFaceRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
+  if (curved) _myGetFaceRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
+  else MPrism::getFaceRep(false, num, x, y, z, n);
 }
 
-void MPrismN::getFaceRep(int num, double *x, double *y, double *z, SVector3 *n)
+void MPrismN::getFaceRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n)
 {
-  _myGetFaceRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
+  if (curved) _myGetFaceRep(this, num, x, y, z, n, CTX::instance()->mesh.numSubEdges);
+  else MPrism::getFaceRep(false, num, x, y, z, n);
 }
 
-int MPrism15::getNumFacesRep() {
-  return 4 * (CTX::instance()->mesh.numSubEdges * CTX::instance()->mesh.numSubEdges * 2);
+int MPrism15::getNumFacesRep(bool curved) {
+  return curved ? 4 * (CTX::instance()->mesh.numSubEdges * CTX::instance()->mesh.numSubEdges * 2) : 8;
 }
 
-int MPrism18::getNumFacesRep() {
-  return 4 * (CTX::instance()->mesh.numSubEdges * CTX::instance()->mesh.numSubEdges * 2);
+int MPrism18::getNumFacesRep(bool curved) {
+  return curved ? 4 * (CTX::instance()->mesh.numSubEdges * CTX::instance()->mesh.numSubEdges * 2) : 8;
 }
 
-int MPrismN::getNumFacesRep() {
-  return 4 * (CTX::instance()->mesh.numSubEdges * CTX::instance()->mesh.numSubEdges * 2);
+int MPrismN::getNumFacesRep(bool curved) {
+  return curved ? 4 * (CTX::instance()->mesh.numSubEdges * CTX::instance()->mesh.numSubEdges * 2) : 8;
 }
 
 namespace {
@@ -479,7 +485,7 @@ void _addFaceNodes(int num, int order, const std::vector<MVertex*> &vs,
 // To be tested
 void MPrismN::getFaceVertices(const int num, std::vector<MVertex*> &v) const
 {
-
+  // FIXME serendipity case
   static const int edge[5][4] = {
       {1, 3, 0, -1},
       {6, 8, 7, -1},

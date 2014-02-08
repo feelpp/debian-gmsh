@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -159,11 +159,13 @@ static void getEdgeVertices(GEdge *ge, MElement *ele, std::vector<MVertex*> &ve,
             if(relax < 1.e-2)
               break;
           }
-          if(relax < 1.e-2)
+          if(relax < 1.e-2){
             Msg::Warning
               ("Failed to compute equidistant parameters (relax = %g, value = %g) "
                "for edge %d-%d parametrized with %g %g on GEdge %d linear %d",
                relax, US[1], v0->getNum(), v1->getNum(),u0,u1,ge->tag(), linear);
+            reparamOK = false;
+          }
         }
         else{
           Msg::Error("Cannot reparam a mesh Vertex in high order meshing");
@@ -224,9 +226,30 @@ static void getEdgeVertices(GFace *gf, MElement *ele, std::vector<MVertex*> &ve,
       bool reparamOK = true;
       if(!linear){
         reparamOK = reparamMeshEdgeOnFace(v0, v1, gf, p0, p1);
-        if(reparamOK)
-          computeEquidistantParameters(gf, p0[0], p1[0], p0[1], p1[1], nPts + 2,
-                                       US, VS);
+        if(reparamOK) {
+	  if (nPts >= 30)computeEquidistantParameters(gf, p0[0], p1[0], p0[1], p1[1], nPts + 2,
+						     US, VS);
+	  else {
+	    US[0]      =  p0[0];
+	    VS[0]      =  p0[1];
+	    US[nPts+1] =  p1[0];
+	    VS[nPts+1] =  p1[1];
+	    for(int j = 0; j < nPts; j++){
+	      const double t = (double)(j + 1) / (nPts + 1);
+	      SPoint3 pc = edge.interpolate(t);
+	      SPoint2 guess = p0 * (1.-t) + p1 * t;
+	      GPoint gp = gf->closestPoint(pc, guess);
+	      if(gp.succeeded()){
+		US[j+1] = gp.u();
+		VS[j+1] = gp.v();
+	      }
+	      else{
+		US[j+1] = guess.x();
+		VS[j+1] = guess.y();
+	      }
+	    }
+	  }
+	}
       }
       std::vector<MVertex*> temp;
       for(int j = 0; j < nPts; j++){
@@ -344,7 +367,11 @@ static void getFaceVertices(GFace *gf, MElement *incomplete, MElement *ele,
             }
           }
           else{
-            v = new MVertex(X, Y, Z, gf);
+            GPoint gp = gf->closestPoint(SPoint3(X, Y, Z), GUESS);
+            if(gp.succeeded())
+              v = new MVertex(gp.x(), gp.y(), gp.z(), gf);
+            else
+              v = new MVertex(X, Y, Z, gf);
           }
         }
         // should be expensive -> induces a new search each time
@@ -500,6 +527,8 @@ static void getFaceVertices(GRegion *gr, MElement *ele, std::vector<MVertex*> &v
                             faceContainer &faceVertices, edgeContainer &edgeVertices,
                             bool linear, int nPts = 1)
 {
+  // FIXME: MFace returned by getFace are of order 1
+  // Thus new face vertices are not positioned according to new edge vertices
   for(int i = 0; i < ele->getNumFaces(); i++){
     MFace face = ele->getFace(i);
     faceContainer::iterator fIter = faceVertices.find(face);
@@ -574,11 +603,13 @@ static void getFaceVertices(GRegion *gr, MElement *ele, std::vector<MVertex*> &v
   }
 }
 
-static void getRegionVertices(GRegion *gr, MElement *incomplete, MElement *ele,
-                              std::vector<MVertex*> &vr, bool linear, int nPts = 1)
+static void getFaceAndInteriorVertices(GRegion *gr, MElement *incomplete, MElement *ele,
+                                       std::vector<MVertex*> &vr, faceContainer &faceVertices,
+                                       bool linear, int nPts = 1)
 {
   fullMatrix<double> points;
-  int start = 0;
+  int startFace = 0;
+  int startInter = 0;
 
   switch (incomplete->getType()){
   case TYPE_TET :
@@ -594,10 +625,11 @@ static void getRegionVertices(GRegion *gr, MElement *incomplete, MElement *ele,
     case 8: points = BasisFactory::getNodalBasis(MSH_TET_220)->points; break;
     case 9: points = BasisFactory::getNodalBasis(MSH_TET_286)->points; break;
     default:
-      Msg::Error("getRegionVertices not implemented for order %i", nPts+1);
+      Msg::Error("getFaceAndInteriorVertices not implemented for order %i", nPts+1);
       break;
     }
-    start = ((nPts+2)*(nPts+3)*(nPts+4)-(nPts-2)*(nPts-1)*(nPts))/6;  // = 4+6*(p-1)+4*(p-2)*(p-1)/2 = 4*(p+1)*(p+2)/2-6*(p-1)-2*4 = 2*p*p+2
+    startFace = 4 + nPts*6;
+    startInter = ((nPts+2)*(nPts+3)*(nPts+4)-(nPts-2)*(nPts-1)*(nPts))/6;  // = 4+6*(p-1)+4*(p-2)*(p-1)/2 = 4*(p+1)*(p+2)/2-6*(p-1)-2*4 = 2*p*p+2
     break;
   case TYPE_HEX :
     switch (nPts){
@@ -611,15 +643,16 @@ static void getRegionVertices(GRegion *gr, MElement *incomplete, MElement *ele,
     case 7: points = BasisFactory::getNodalBasis(MSH_HEX_729)->points; break;
     case 8: points = BasisFactory::getNodalBasis(MSH_HEX_1000)->points; break;
     default :
-      Msg::Error("getRegionVertices not implemented for order %i", nPts+1);
+      Msg::Error("getFaceAndInteriorVertices not implemented for order %i", nPts+1);
       break;
     }
-    start = (nPts+2)*(nPts+2)*(nPts+2) - (nPts)*(nPts)*(nPts) ; // = 6*(p-1)*(p-1)+12*(p-1)+8 = 6*(p+1)*(p+1)-12*(p-1)-2*8 = 6*p*p+2
+    startFace = 8 + nPts*12 ;
+    startInter = (nPts+2)*(nPts+2)*(nPts+2) - (nPts)*(nPts)*(nPts) ; // = 6*(p-1)*(p-1)+12*(p-1)+8 = 6*(p+1)*(p+1)-12*(p-1)-2*8 = 6*p*p+2
     break;
   case TYPE_PRI :
     switch (nPts){
     case 0: return;
-    case 1: return;
+    case 1: points = BasisFactory::getNodalBasis(MSH_PRI_18)->points; break;
     case 2: points = BasisFactory::getNodalBasis(MSH_PRI_40)->points; break;
     case 3: points = BasisFactory::getNodalBasis(MSH_PRI_75)->points; break;
     case 4: points = BasisFactory::getNodalBasis(MSH_PRI_126)->points; break;
@@ -628,10 +661,11 @@ static void getRegionVertices(GRegion *gr, MElement *incomplete, MElement *ele,
     case 7: points = BasisFactory::getNodalBasis(MSH_PRI_405)->points; break;
     case 8: points = BasisFactory::getNodalBasis(MSH_PRI_550)->points; break;
     default:
-      Msg::Error("getRegionVertices not implemented for order %i", nPts+1);
+      Msg::Error("getFaceAndInteriorVertices not implemented for order %i", nPts+1);
       break;
     }
-    start = 4*(nPts+1)*(nPts+1)+2;  // = 4*p*p+2 = 6+9*(p-1)+2*(p-2)*(p-1)/2+3*(p-1)*(p-1) = 2*(p+1)*(p+2)/2+3*(p+1)*(p+1)-9*(p-1)-2*6
+    startFace = 6 + nPts*9;
+    startInter = 4*(nPts+1)*(nPts+1)+2;  // = 4*p*p+2 = 6+9*(p-1)+2*(p-2)*(p-1)/2+3*(p-1)*(p-1) = 2*(p+1)*(p+2)/2+3*(p+1)*(p+1)-9*(p-1)-2*6
     break;
   case TYPE_PYR:
     switch (nPts){
@@ -645,16 +679,59 @@ static void getRegionVertices(GRegion *gr, MElement *incomplete, MElement *ele,
     case 7: points = BasisFactory::getNodalBasis(MSH_PYR_285)->points; break;
     case 8: points = BasisFactory::getNodalBasis(MSH_PYR_385)->points; break;
     default :
-      Msg::Error("getRegionVertices not implemented for order %i", nPts+1);
+      Msg::Error("getFaceAndInteriorVertices not implemented for order %i", nPts+1);
       break;
     }
-    start = ( nPts+2) * ( (nPts+2) + 1) * (2*(nPts+2) + 1) / 6  -
+    startFace = 5 + nPts*8;
+    startInter = ( nPts+2) * ( (nPts+2) + 1) * (2*(nPts+2) + 1) / 6  -
       (nPts-1) * ( (nPts-1) + 1) * (2*(nPts-1) + 1) / 6;
     break;
 
   }
 
-  for(int k = start; k < points.size1(); k++){
+  int index = startFace;
+  for(int i = 0; i < ele->getNumFaces(); i++){
+    MFace face = ele->getFace(i);
+    int numVert = (face.getNumVertices() == 3) ? nPts * (nPts-1) / 2 : nPts * nPts;
+    faceContainer::iterator fIter = faceVertices.find(face);
+    if(fIter != faceVertices.end()) {
+      std::vector<MVertex*> vtcs = fIter->second;
+      if(face.getNumVertices() == 3 && nPts > 1){ // tri face
+        int orientation;
+        bool swap;
+        if (fIter->first.computeCorrespondence(face, orientation, swap))
+          reorientTrianglePoints(vtcs, orientation, swap);
+        else
+          Msg::Error("Error in face lookup for recuperation of high order face nodes");
+      }
+      else if(face.getNumVertices() == 4){ // quad face
+        int orientation;
+        bool swap;
+        if (fIter->first.computeCorrespondence(face, orientation, swap)){
+          reorientQuadPoints(vtcs, orientation, swap, nPts-1);
+        }
+        else
+          Msg::Error("Error in face lookup for recuperation of high order face nodes");
+      }
+      vr.insert(vr.end(), vtcs.begin(), vtcs.end());
+    }
+    else {
+      for(int k = index; k < index + numVert; k++){
+        MVertex *v;
+        const double t1 = points(k, 0);
+        const double t2 = points(k, 1);
+        const double t3 = points(k, 2);
+        SPoint3 pos;
+        incomplete->pnt(t1, t2, t3, pos);
+        v = new MVertex(pos.x(), pos.y(), pos.z(), gr);
+        gr->mesh_vertices.push_back(v);
+        vr.push_back(v);
+      }
+    }
+    index += numVert;
+  }
+
+  for(int k = startInter; k < points.size1(); k++){
     MVertex *v;
     const double t1 = points(k, 0);
     const double t2 = points(k, 1);
@@ -790,10 +867,8 @@ static MTetrahedron *setHighOrder(MTetrahedron *t, GRegion *gr,
       // it either way)
       MTetrahedronN incpl(t->getVertex(0), t->getVertex(1), t->getVertex(2),
                           t->getVertex(3), ve, nPts + 1, 0, t->getPartition());
-      getFaceVertices(gr, t, vf, faceVertices, edgeVertices, linear, nPts);
+      getFaceAndInteriorVertices(gr, &incpl, t, vf, faceVertices, linear, nPts);
       ve.insert(ve.end(), vf.begin(), vf.end());
-      getRegionVertices(gr, &incpl, t, vr, linear, nPts);
-      ve.insert(ve.end(), vr.begin(), vr.end());
     }
     return new MTetrahedronN(t->getVertex(0), t->getVertex(1),
                              t->getVertex(2), t->getVertex(3), ve, nPts + 1,
@@ -824,31 +899,31 @@ static MHexahedron *setHighOrder(MHexahedron *h, GRegion *gr,
     }
   }
   else{
+    // create serendipity element to place internal vertices (we used to
+    // saturate face vertices also, but the corresponding function spaces do
+    // not exist anymore, and there is no theoretical justification for doing
+    // it either way)
     if(nPts == 1){
-      getFaceVertices(gr, h, vf, faceVertices, edgeVertices, linear, nPts);
-      SPoint3 pc = h->barycenter();
-      MVertex *v = new MVertex(pc.x(), pc.y(), pc.z(), gr);
-      gr->mesh_vertices.push_back(v);
+      MHexahedron20 incpl(h->getVertex(0), h->getVertex(1), h->getVertex(2),
+                          h->getVertex(3), h->getVertex(4), h->getVertex(5),
+                          h->getVertex(6), h->getVertex(7), ve[0], ve[1], ve[2],
+                          ve[3], ve[4], ve[5], ve[6], ve[7], ve[8], ve[9], ve[10],
+                          ve[11], 0, h->getPartition());
+      getFaceAndInteriorVertices(gr, &incpl, h, vf, faceVertices, linear, nPts);
       return new MHexahedron27(h->getVertex(0), h->getVertex(1), h->getVertex(2),
                                h->getVertex(3), h->getVertex(4), h->getVertex(5),
                                h->getVertex(6), h->getVertex(7), ve[0], ve[1], ve[2],
                                ve[3], ve[4], ve[5], ve[6], ve[7], ve[8], ve[9], ve[10],
-                               ve[11], vf[0], vf[1], vf[2], vf[3], vf[4], vf[5], v,
+                               ve[11], vf[0], vf[1], vf[2], vf[3], vf[4], vf[5], vf[6],
                                0, h->getPartition());
     }
     else {
-      // create serendipity element to place internal vertices (we used to
-      // saturate face vertices also, but the corresponding function spaces do
-      // not exist anymore, and there is no theoretical justification for doing
-      // it either way)
       MHexahedronN incpl(h->getVertex(0), h->getVertex(1), h->getVertex(2),
                          h->getVertex(3), h->getVertex(4), h->getVertex(5),
                          h->getVertex(6), h->getVertex(7), ve, nPts + 1, 0,
                          h->getPartition());
-      getFaceVertices(gr, h, vf, faceVertices, edgeVertices, linear, nPts);
+      getFaceAndInteriorVertices(gr, &incpl, h, vf, faceVertices, linear, nPts);
       ve.insert(ve.end(), vf.begin(), vf.end());
-      getRegionVertices(gr, &incpl, h, vr, linear, nPts);
-      ve.insert(ve.end(), vr.begin(), vr.end());
       return new MHexahedronN(h->getVertex(0), h->getVertex(1), h->getVertex(2),
                               h->getVertex(3), h->getVertex(4), h->getVertex(5),
                               h->getVertex(6), h->getVertex(7), ve, nPts + 1,
@@ -878,8 +953,16 @@ static MPrism *setHighOrder(MPrism *p, GRegion *gr,
     }
   }
   else{
+    // create serendipity element to place internal vertices (we used to
+    // saturate face vertices also, but the corresponding function spaces do
+    // not exist anymore, and there is no theoretical justification for doing
+    // it either way)
+    MPrismN incpl(p->getVertex(0), p->getVertex(1), p->getVertex(2),
+                  p->getVertex(3), p->getVertex(4), p->getVertex(5),
+                  ve, nPts + 1, 0, p->getPartition());
+    getFaceAndInteriorVertices(gr, &incpl, p, vf, faceVertices, linear, nPts);
+
     if (nPts == 1) {
-      getFaceVertices(gr, p, vf, faceVertices, edgeVertices, linear, nPts);
       return new MPrism18(p->getVertex(0), p->getVertex(1), p->getVertex(2),
                           p->getVertex(3), p->getVertex(4), p->getVertex(5),
                           ve[0], ve[1], ve[2], ve[3], ve[4], ve[5], ve[6], ve[7], ve[8],
@@ -887,17 +970,7 @@ static MPrism *setHighOrder(MPrism *p, GRegion *gr,
                           0, p->getPartition());
     }
     else {
-      // create serendipity element to place internal vertices (we used to
-      // saturate face vertices also, but the corresponding function spaces do
-      // not exist anymore, and there is no theoretical justification for doing
-      // it either way)
-      MPrismN incpl(p->getVertex(0), p->getVertex(1), p->getVertex(2),
-                    p->getVertex(3), p->getVertex(4), p->getVertex(5),
-                    ve, nPts + 1, 0, p->getPartition());
-      getFaceVertices(gr, p, vf, faceVertices, edgeVertices, linear, nPts);
       ve.insert(ve.end(), vf.begin(), vf.end());
-      getRegionVertices(gr, &incpl, p, vr, linear, nPts);
-      ve.insert(ve.end(), vr.begin(), vr.end());
       return new MPrismN(p->getVertex(0), p->getVertex(1), p->getVertex(2),
                          p->getVertex(3), p->getVertex(4), p->getVertex(5),
                          ve, nPts + 1, 0, p->getPartition());
@@ -1144,7 +1217,7 @@ void checkHighOrderTriangles(const char* cc, GModel *m,
   minJGlob = 1.0;
   double minGGlob = 1.0;
   double avg = 0.0;
-  int count = 0, nbfair=0;
+  int count = 0, nbfair = 0;
   for(GModel::fiter it = m->firstFace(); it != m->lastFace(); ++it){
     for(unsigned int i = 0; i < (*it)->triangles.size(); i++){
       MTriangle *t = (*it)->triangles[i];
@@ -1157,9 +1230,7 @@ void checkHighOrderTriangles(const char* cc, GModel *m,
       if (disto < 0) bad.push_back(t);
       else if (disto < 0.2) nbfair++;
     }
-    /* FIXME THIS IS WRONG (crashes in distoShapeMesure -- see comment in
-       bez2LagPoints in JacobianBasis.cpp)
-
+    /*
     for(unsigned int i = 0; i < (*it)->quadrangles.size(); i++){
       MQuadrangle *t = (*it)->quadrangles[i];
       double disto_ = t->distoShapeMeasure();
@@ -1175,12 +1246,12 @@ void checkHighOrderTriangles(const char* cc, GModel *m,
   }
   if(!count) return;
   if (minJGlob > 0)
-    Msg::Info("%s : Worst Face Distorsion Mapping %g Gamma %g Nb elem. (0<d<0.2) = %d",
-              cc, minJGlob, minGGlob,nbfair );
+    Msg::Info("%s: worst distortion = %g (%d elements in ]0, 0.2]); worst gamma = %g",
+              cc, minJGlob, nbfair, minGGlob);
   else
-    Msg::Warning("%s : Worst Face Distorsion Mapping %g (%d negative jacobians) "
-                 "Worst Gamma %g Avg Smoothness %g", cc, minJGlob, bad.size(),
-                 minGGlob, avg / (count ? count : 1));
+    Msg::Warning("%s: worst distortion = %g (avg = %g, %d elements with jac. < 0); "
+                 "worst gamma = %g", cc, minJGlob, avg / (count ? count : 1),
+                 bad.size(), minGGlob);
 }
 
 void checkHighOrderTetrahedron(const char* cc, GModel *m,
@@ -1189,7 +1260,7 @@ void checkHighOrderTetrahedron(const char* cc, GModel *m,
   bad.clear();
   minJGlob = 1.0;
   double avg = 0.0;
-  int count = 0, nbfair=0;
+  int count = 0, nbfair = 0;
   for(GModel::riter it = m->firstRegion(); it != m->lastRegion(); ++it){
     for(unsigned int i = 0; i < (*it)->tetrahedra.size(); i++){
       MTetrahedron *t = (*it)->tetrahedra[i];
@@ -1201,14 +1272,13 @@ void checkHighOrderTetrahedron(const char* cc, GModel *m,
     }
   }
   if(!count) return;
-  if (minJGlob < 0)
-    Msg::Warning("%s : Worst Tetrahedron Smoothness %g (%d negative jacobians) "
-                 "Avg Smoothness %g", cc, minJGlob, bad.size(),
-                 avg / (count ? count : 1));
+
+  if (minJGlob > 0)
+    Msg::Info("%s: worst distortion = %g (%d elements in ]0, 0.2])",
+              cc, minJGlob, nbfair);
   else
-    Msg::Info("%s : Worst Tetrahedron Smoothness %g (%d negative jacobians) "
-                 "Avg Smoothness %g", cc, minJGlob, bad.size(),
-                 avg / (count ? count : 1));
+    Msg::Warning("%s: worst distortion = %g (avg = %g, %d elements with jac. < 0)",
+                 cc, minJGlob, avg / (count ? count : 1), bad.size());
 }
 
 void getMeshInfoForHighOrder(GModel *gm, int &meshOrder, bool &complete,
@@ -1302,6 +1372,7 @@ void SetOrderN(GModel *m, int order, bool linear, bool incomplete, bool onlyVisi
   double worst;
   checkHighOrderTriangles("Surface mesh", m, bad, worst);
   checkHighOrderTetrahedron("Volume Mesh", m, bad, worst);
+  // FIXME : add other element check
 
   Msg::StatusBar(true, "Done meshing order %d (%g s)", order, t2 - t1);
 }

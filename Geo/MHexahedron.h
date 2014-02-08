@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -71,8 +71,8 @@ class MHexahedron : public MElement {
   {
     return MEdge(_v[edges_hexa(num, 0)], _v[edges_hexa(num, 1)]);
   }
-  virtual int getNumEdgesRep(){ return 12; }
-  virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n)
+  virtual int getNumEdgesRep(bool curved){ return 12; }
+  virtual void getEdgeRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n)
   {
     static const int f[12] = {0, 0, 1, 0, 1, 0, 3, 2, 1, 2, 3, 4};
     MEdge e(getEdge(num));
@@ -94,8 +94,8 @@ class MHexahedron : public MElement {
   virtual double getInnerRadius();
   virtual double angleShapeMeasure();
   virtual void getFaceInfo (const MFace & face, int &ithFace, int &sign, int &rot)const;
-  virtual int getNumFacesRep(){ return 12; }
-  virtual void getFaceRep(int num, double *x, double *y, double *z, SVector3 *n)
+  virtual int getNumFacesRep(bool curved){ return 12; }
+  virtual void getFaceRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n)
   {
     static const int f[12][3] = {
       {0, 3, 2}, {0, 2, 1},
@@ -185,6 +185,20 @@ class MHexahedron : public MElement {
     };
     return f[face][vert];
   }
+  static int faces2edge_hexa(const int face, const int edge)
+  {
+    // return -iedge - 1 if edge is inverted
+    //         iedge + 1 otherwise
+    static const int e[6][4] = {
+      {2, -6,  -4,  -1},
+      {1,  5,  -9,  -3},
+      {3, 10,  -8,  -2},
+      {4,  7, -11,  -5},
+      {6,  8, -12,  -7},
+      {9, 11,  12, -10}
+    };
+    return e[face][edge];
+  }
 };
 
 /*
@@ -255,16 +269,16 @@ class MHexahedron20 : public MHexahedron {
     return getVertex(map[num]);
   }
   virtual int getNumEdgeVertices() const { return 12; }
-  virtual int getNumEdgesRep();
-  virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n);
+  virtual int getNumEdgesRep(bool curved);
+  virtual void getEdgeRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n);
   virtual void getEdgeVertices(const int num, std::vector<MVertex*> &v) const
   {
     v.resize(3);
     MHexahedron::_getEdgeVertices(num, v);
     v[2] = _vs[num];
   }
-  virtual int getNumFacesRep();
-  virtual void getFaceRep(int num, double *x, double *y, double *z, SVector3 *n);
+  virtual int getNumFacesRep(bool curved);
+  virtual void getFaceRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n);
   virtual void getFaceVertices(const int num, std::vector<MVertex*> &v) const
   {
     v.resize(8);
@@ -362,16 +376,16 @@ class MHexahedron27 : public MHexahedron {
   virtual int getNumEdgeVertices() const { return 12; }
   virtual int getNumFaceVertices() const { return 6; }
   virtual int getNumVolumeVertices() const { return 1; }
-  virtual int getNumEdgesRep();
-  virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n);
+  virtual int getNumEdgesRep(bool curved);
+  virtual void getEdgeRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n);
   virtual void getEdgeVertices(const int num, std::vector<MVertex*> &v) const
   {
     v.resize(3);
     MHexahedron::_getEdgeVertices(num, v);
     v[2] = _vs[num];
   }
-  virtual int getNumFacesRep();
-  virtual void getFaceRep(int num, double *x, double *y, double *z, SVector3 *n);
+  virtual int getNumFacesRep(bool curved);
+  virtual void getFaceRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n);
   virtual void getFaceVertices(const int num, std::vector<MVertex*> &v) const
   {
     v.resize(9);
@@ -470,25 +484,22 @@ class MHexahedronN : public MHexahedron {
   virtual const MVertex *getVertex(int num) const { return num < 8 ? _v[num] : _vs[num - 8]; }
 
   virtual int getNumEdgeVertices() const { return 12 * (_order - 1); }
-  virtual int getNumFaceVertices() const { return 6 * (_order - 1)*(_order - 1); }
+  virtual int getNumFaceVertices() const
+  {
+    if (ElementType::SerendipityFromTag(getTypeForMSH()) > 0)
+      return 0;
+    else
+      return 6 * (_order - 1)*(_order - 1);
+  }
   virtual int getNumVolumeVertices() const
   {
-    switch(getTypeForMSH()){
-    case MSH_HEX_27 :
-    case MSH_HEX_64 :
-    case MSH_HEX_125 :
-    case MSH_HEX_216 :
-    case MSH_HEX_343 :
-    case MSH_HEX_512 :
-    case MSH_HEX_729 :
-    case MSH_HEX_1000 :
-      return (_order - 1) * (_order - 1) * (_order - 1);
-    default:
+    if (ElementType::SerendipityFromTag(getTypeForMSH()) > 0)
       return 0;
-    }
+    else
+      return (_order - 1) * (_order - 1) * (_order - 1);
   }
-  virtual int getNumEdgesRep();
-  virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n);
+  virtual int getNumEdgesRep(bool curved);
+  virtual void getEdgeRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n);
   virtual void getEdgeVertices(const int num, std::vector<MVertex*> &v) const
   {
     v.resize(_order+1);
@@ -497,24 +508,33 @@ class MHexahedronN : public MHexahedron {
   }
   virtual void getFaceVertices(const int num, std::vector<MVertex*> &v) const
   {
-    v.resize((_order+1)*(_order+1));
-    MHexahedron::_getFaceVertices(num, v);
-    static const int f[6][4] = {
-      {0, 3, 2, 1},
-      {0, 1, 5, 4},
-      {0, 4, 7, 3},
-      {1, 2, 6, 5},
-      {2, 3, 7, 6},
-      {4, 5, 6, 7}
-    };
-    int count = 4;
-    for (int i = 0; i < 4; i++){
-      for (int j = 0; j < _order - 1; j++) v[count++] = _vs[(_order-1)*f[num][i]+j];
+    if (ElementType::SerendipityFromTag(getTypeForMSH()) > 0) {
+      v.resize(4 * _order);
     }
-    for (int i = 0; i < (_order + 1) * (_order + 1); i++){
-      int N = _order - 1;
-      int start = 8 + 12 * N + num * (_order - 1) * (_order - 1);
-      v[count++] = _vs[start + i];
+    else {
+      v.resize((_order+1) * (_order+1));
+    }
+
+    MHexahedron::_getFaceVertices(num, v);
+    int count = 3;
+
+    int n = _order-1;
+    for (int i = 0; i < 4; i++) {
+      if(faces2edge_hexa(num, i) > 0){
+        int edge_num = faces2edge_hexa(num, i) - 1;
+        for (int j = 0; j < n; j++) v[++count] = _vs[n*edge_num + j];
+      }
+      else{
+        int edge_num = -faces2edge_hexa(num, i) - 1;
+        for (int j = n-1; j >= 0; j--) v[++count] = _vs[n*edge_num + j];
+      }
+    }
+
+    if ((int)v.size() > count + 1) {
+      int start = 12 * n + num * n*n;
+      for (int i = 0; i < n*n; i++){
+        v[++count] = _vs[start + i];
+      }
     }
   }
   virtual int getTypeForMSH() const
@@ -542,8 +562,8 @@ class MHexahedronN : public MHexahedron {
     Msg::Error("no tag matches a p%d hexahedron with %d vertices", _order, 8+_vs.size());
     return 0;
   }
-  virtual int getNumFacesRep();
-  virtual void getFaceRep(int num, double *x, double *y, double *z, SVector3 *n);
+  virtual int getNumFacesRep(bool curved);
+  virtual void getFaceRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n);
   virtual void reverse()
   {
     Msg::Error("Reverse not implemented yet for MHexahedronN");

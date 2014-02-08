@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -36,8 +36,10 @@
 #cmakedefine HAVE_MMG3D
 #cmakedefine HAVE_MPEG_ENCODE
 #cmakedefine HAVE_MPI
+#cmakedefine HAVE_MUMPS
 #cmakedefine HAVE_NATIVE_FILE_CHOOSER
 #cmakedefine HAVE_NETGEN
+#cmakedefine HAVE_NUMPY
 #cmakedefine HAVE_NO_INTPTR_T
 #cmakedefine HAVE_NO_SOCKLEN_T
 #cmakedefine HAVE_NO_STDINT_H

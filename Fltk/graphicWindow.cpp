@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -2795,7 +2795,7 @@ graphicWindow::graphicWindow(bool main, int numTiles, bool detachedMenu)
 #if defined(__APPLE__)
   if(CTX::instance()->systemMenuBar) mh = 0;
 #endif
-  int sh = 2 * FL_NORMAL_SIZE - 5; // status bar height
+  int sh = 2 * FL_NORMAL_SIZE - 3; // status bar height
   int sw = FL_NORMAL_SIZE + 2; // status button width
 
   int mheight = main ? 10 /* dummy, nonzero! */ : 0;

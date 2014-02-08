@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -224,7 +224,7 @@ class StructuredField : public Field
     for(int i = 0; i < 3; i++) {
       id[0][i] = (int)floor((xyz[i] - o[i]) / d[i]);
       id[1][i] = id[0][i] + 1;
-      if (outside_value_set && (id[0][i] < 0 || id[1][i] >= n[i]) && n[i] > 1) 
+      if (outside_value_set && (id[0][i] < 0 || id[1][i] >= n[i]) && n[i] > 1)
         return outside_value;
       id[0][i] = std::max(std::min(id[0][i], n[i] - 1), 0);
       id[1][i] = std::max(std::min(id[1][i], n[i] - 1), 0);
@@ -1227,7 +1227,7 @@ class PostViewField : public Field
     double l = 0.;
     // use large tolerance (in element reference coordinates) to maximize chance
     // of finding an element
-    if(!octree->searchScalarWithTol(x, y, z, &l, 0, 0, 1.))
+    if(!octree->searchScalarWithTol(x, y, z, &l, 0, 0, 0.05))
       Msg::Info("No scalar element found containing point (%g,%g,%g)", x, y, z);
     if(l <= 0 && crop_negative_values) return MAX_LC;
     return l;
@@ -1241,13 +1241,13 @@ class PostViewField : public Field
       octree = new OctreePost(v);
       update_needed = false;
     }
-    double l[9];
+    double l[9] = {0., 0., 0., 0., 0., 0., 0., 0., 0.};
     // use large tolerance (in element reference coordinates) to maximize chance
     // of finding an element
-    if(!octree->searchTensorWithTol(x, y, z, l, 0, 0, 1.)){
+    if(!octree->searchTensorWithTol(x, y, z, l, 0, 0, 0.05))
       Msg::Info("No tensor element found containing point (%g,%g,%g)", x, y, z);
-      return;
-    }
+    if(l <= 0 && crop_negative_values)
+      for(int i = 0; i < 9; i++) l[i] = MAX_LC;
     metr(0, 0) = l[0];
     metr(0, 1) = l[1];
     metr(0, 2) = l[2];
@@ -1809,7 +1809,7 @@ BoundaryLayerField::BoundaryLayerField()
   hfar = 1;
   ratio = 1.1;
   thickness = 1.e-2;
-  fan_angle = 30;
+  //  fan_angle = 30;
   tgt_aniso_ratio = 1.e10;
   iRecombine = 0;
   iIntersect = 0;
@@ -1821,14 +1821,20 @@ BoundaryLayerField::BoundaryLayerField()
   options["FacesList"] = new FieldOptionList
     (faces_id, "Indices of faces in the geometric model for which a boundary "
      "layer is needed", &update_needed);
+  options["FansList"] = new FieldOptionList
+    (fans_id, "Indices of edges in the geometric model for which a fan "
+     "is created", &update_needed);
+  options["FanNodesList"] = new FieldOptionList
+    (fan_nodes_id, "Indices of vertices in the geometric model for which a fan "
+     "is created", &update_needed);
   options["Quads"] = new FieldOptionInt
     (iRecombine, "Generate recombined elements in the boundary layer");
   options["IntersectMetrics"] = new FieldOptionInt
     (iIntersect, "Intersect metrics of all faces");
   options["hwall_n"] = new FieldOptionDouble
     (hwall_n, "Mesh Size Normal to the The Wall");
-  options["fan_angle"] = new FieldOptionDouble
-    (fan_angle, "Threshold angle for creating a mesh fan in the boundary layer");
+  //  options["fan_angle"] = new FieldOptionDouble
+  //    (fan_angle, "Threshold angle for creating a mesh fan in the boundary layer");
   options["AnisoMax"] = new FieldOptionDouble
     (tgt_aniso_ratio, "Threshold angle for creating a mesh fan in the boundary layer");
   options["hwall_t"] = new FieldOptionDouble

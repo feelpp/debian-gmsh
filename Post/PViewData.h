@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -270,8 +270,9 @@ class PViewData {
   virtual bool writePOS(const std::string &fileName, bool binary=false,
                         bool parsed=true, bool append=false);
   virtual bool writeMSH(const std::string &fileName, double version=2.2, bool binary=false,
-                        bool savemesh=true, bool multipleView=false,
-                        int partitionNum=0, bool saveInterpolationMatrices=true);
+                        bool saveMesh=true, bool multipleView=false,
+                        int partitionNum=0, bool saveInterpolationMatrices=true,
+                        bool forceNodeData=false);
   virtual bool writeMED(const std::string &fileName);
   virtual bool toVector(std::vector<std::vector<double> > &vec);
   virtual bool fromVector(const std::vector<std::vector<double> > &vec);

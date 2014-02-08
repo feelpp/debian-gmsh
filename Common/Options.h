@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -415,6 +415,7 @@ double opt_mesh_light(OPT_ARGS_NUM);
 double opt_mesh_light_lines(OPT_ARGS_NUM);
 double opt_mesh_light_two_side(OPT_ARGS_NUM);
 double opt_mesh_file_format(OPT_ARGS_NUM);
+double opt_mesh_newton_convergence_test_xyz(OPT_ARGS_NUM);
 double opt_mesh_msh_file_version(OPT_ARGS_NUM);
 double opt_mesh_msh_file_partitioned(OPT_ARGS_NUM);
 double opt_mesh_partition_hex_weight(OPT_ARGS_NUM);
@@ -453,6 +454,7 @@ double opt_mesh_ho_nlayers(OPT_ARGS_NUM);
 double opt_mesh_ho_threshold_min(OPT_ARGS_NUM);
 double opt_mesh_ho_threshold_max(OPT_ARGS_NUM);
 double opt_mesh_ho_poisson(OPT_ARGS_NUM);
+double opt_mesh_ho_opt_prim_surf_mesh(OPT_ARGS_NUM);
 double opt_mesh_second_order_experimental(OPT_ARGS_NUM);
 double opt_mesh_second_order_linear(OPT_ARGS_NUM);
 double opt_mesh_second_order_incomplete(OPT_ARGS_NUM);
@@ -508,6 +510,7 @@ double opt_solver_auto_mesh(OPT_ARGS_NUM);
 double opt_solver_auto_merge_file(OPT_ARGS_NUM);
 double opt_solver_auto_hide_new_views(OPT_ARGS_NUM);
 double opt_solver_auto_show_last_step(OPT_ARGS_NUM);
+double opt_solver_show_invisible_parameters(OPT_ARGS_NUM);
 double opt_post_horizontal_scales(OPT_ARGS_NUM);
 double opt_post_link(OPT_ARGS_NUM);
 double opt_post_smooth(OPT_ARGS_NUM);
@@ -518,6 +521,7 @@ double opt_post_combine_remove_orig(OPT_ARGS_NUM);
 double opt_post_plugins(OPT_ARGS_NUM);
 double opt_post_nb_views(OPT_ARGS_NUM);
 double opt_post_file_format(OPT_ARGS_NUM);
+double opt_post_force_node_data(OPT_ARGS_NUM);
 double opt_view_nb_timestep(OPT_ARGS_NUM);
 double opt_view_nb_non_empty_timestep(OPT_ARGS_NUM);
 double opt_view_timestep(OPT_ARGS_NUM);

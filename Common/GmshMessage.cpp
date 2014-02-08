@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -880,7 +880,17 @@ void Msg::ExchangeOnelabParameter(const std::string &key,
 #if defined(HAVE_ONELAB)
   if(!_onelabClient || val.empty()) return;
 
-  std::string name = _getParameterName(key, copt);
+  std::string name;
+  if(copt.count("Name"))
+    name = copt["Name"][0];
+
+  if(name.empty()){
+    if(copt.size() || fopt.size())
+      Msg::Error("From now on you need to use the `Name' attribute to create a "
+                 "OneLab parameter: `Name \"%s\"'",
+                 _getParameterName(key, copt).c_str());
+    return;
+  }
 
   std::vector<onelab::number> ps;
   _onelabClient->get(ps, name);
@@ -975,7 +985,17 @@ void Msg::ExchangeOnelabParameter(const std::string &key,
 #if defined(HAVE_ONELAB)
   if(!_onelabClient || val.empty()) return;
 
-  std::string name = _getParameterName(key, copt);
+  std::string name;
+  if(copt.count("Name"))
+    name = copt["Name"][0];
+
+  if(name.empty()){
+    if(copt.size() || fopt.size())
+      Msg::Error("From now on you need to use the `Name' attribute to create a "
+                 "OneLab parameter: `Name \"%s\"'",
+                 _getParameterName(key, copt).c_str());
+    return;
+  }
 
   std::vector<onelab::string> ps;
   _onelabClient->get(ps, name);

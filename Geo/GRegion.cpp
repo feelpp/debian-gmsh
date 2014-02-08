@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -395,4 +395,18 @@ double GRegion::computeSolidProperties(std::vector<double> cg,
     }
   }
   return volume;
+}
+
+
+std::list<GVertex*> GRegion :: vertices() const {
+
+  std::set<GVertex*> v;
+  for (std::list<GFace*>::const_iterator it = l_faces.begin(); it != l_faces.end() ; ++it){
+    const GFace *gf = *it;
+    std::list<GVertex*> vs = gf->vertices();
+    v.insert(vs.begin(), vs.end());
+  }
+  std::list<GVertex*> res;
+  res.insert(res.begin(), v.begin(), v.end());
+  return res;
 }

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -8,6 +8,7 @@
 
 #include <map>
 #include <list>
+#include "BDS.h"
 
 class GFace;
 class GModel;
@@ -22,7 +23,7 @@ void refineMeshBDS(GFace *gf, BDS_Mesh &m, const int NIT,
                    const bool computeNodalSizeField,
                    std::map<MVertex*, BDS_Point*> *recoverMapInv=0);
 void optimizeMeshBDS(GFace *gf, BDS_Mesh &m, const int NIT, 
-                         std::map<BDS_Point*, MVertex*> *recoverMap=0);
+		     std::map<BDS_Point*, MVertex*,PointLessThan> *recoverMap=0);
 void delaunayizeBDS(GFace *gf, BDS_Mesh &m, int &nb_swap);
 void collapseSmallEdges(GModel &gm);
 BDS_Mesh *gmsh2BDS(std::list<GFace*> &l);

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -24,6 +24,7 @@ class linearSystemBase {
   virtual void zeroSolution() = 0;
   virtual int systemSolve() = 0;
   void setParameter (std::string key, std::string value);
+  std::string getParameter(std::string key) const;
   virtual void insertInSparsityPattern(int _row, int _col){};
   virtual double normInfRightHandSide() const = 0;
   virtual double normInfSolution() const {return 0;};
