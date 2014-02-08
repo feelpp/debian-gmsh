@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -185,9 +185,10 @@ void PView::deleteVertexArrays()
 
 void PView::setOptions(PViewOptions *val)
 {
+  // deep copy options
   if(val)
-    _options = val;
-  else if(_options) // deep copy options from reference view
+    *_options = *val;
+  else if(_options)
     *_options = *PViewOptions::reference();
 }
 

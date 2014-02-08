@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -58,6 +58,7 @@
 #include "Scal2Vec.h"
 #include "CutMesh.h"
 #include "NewView.h"
+#include "FaultZone.h"
 
 // for testing purposes only :-)
 #undef HAVE_DLOPEN
@@ -248,6 +249,8 @@ void PluginManager::registerDefaultPlugins()
                       ("SimplePartition", GMSH_RegisterSimplePartitionPlugin()));
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("Crack", GMSH_RegisterCrackPlugin()));
+    allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
+                      ("FaultZone", GMSH_RegisterFaultZonePlugin()));
 #if defined(HAVE_TETGEN)
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("Tetrahedralize", GMSH_RegisterTetrahedralizePlugin()));

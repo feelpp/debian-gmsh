@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -428,7 +428,7 @@ static void PrintMesh2dStatistics(GModel *m)
   }
 
   for(GModel::fiter it = m->firstFace() ; it != m->lastFace(); ++it){
-      if((*it)->geomType() != GEntity::DiscreteSurface){
+    if((*it)->geomType() != GEntity::DiscreteSurface){
       worst = std::min((*it)->meshStatistics.worst_element_shape, worst);
       best = std::max((*it)->meshStatistics.best_element_shape, best);
       avg += (*it)->meshStatistics.average_element_shape * (*it)->meshStatistics.nbTriangle;
@@ -580,9 +580,9 @@ static void FindConnectedRegions(std::vector<GRegion*> &delaunay,
   if (!nbVolumes)return;
   while (delaunay.size()){
     std::set<GRegion*> oneDomain;
-    std::stack<GRegion*> _stack;  
+    std::stack<GRegion*> _stack;
     GRegion *r = delaunay[0];
-    _stack.push(r);  
+    _stack.push(r);
     while(!_stack.empty()){
       r = _stack.top();
       _stack.pop();
@@ -605,7 +605,7 @@ static void FindConnectedRegions(std::vector<GRegion*> &delaunay,
     delaunay=temp1;
   }
   Msg::Info("Delaunay Meshing %d volumes with %d connected components",
-	    nbVolumes,connected.size()); 
+	    nbVolumes,connected.size());
 }
 
 static void Mesh3D(GModel *m)
@@ -635,7 +635,7 @@ static void Mesh3D(GModel *m)
   FindConnectedRegions(delaunay, connected);
 
   // remove quads elements for volumes that are recombined
-  // pragma OMP ICI ?? 
+  // pragma OMP ICI ??
   for(unsigned int i = 0; i < connected.size(); i++){
     for(unsigned j=0;j<connected[i].size();j++){
       GRegion *gr = connected[i][j];
@@ -647,7 +647,7 @@ static void Mesh3D(GModel *m)
     }
   }
 
-  // pragma OMP ICI ?? 
+  // pragma OMP ICI ??
   for(unsigned int i = 0; i < connected.size(); i++){
     MeshDelaunayVolume(connected[i]);
 
@@ -782,6 +782,8 @@ void GenerateMesh(GModel *m, int ask)
     }
   }
 
+  m->setAllVolumesPositive();
+
   // Subdivide into quads or hexas
   if(m->getMeshStatus() == 2 && CTX::instance()->mesh.algoSubdivide == 1)
     RefineMesh(m, CTX::instance()->mesh.secondOrderLinear, true);
@@ -808,6 +810,7 @@ void GenerateMesh(GModel *m, int ask)
       p.BARRIER_MIN = CTX::instance()->mesh.hoThresholdMin;
       p.BARRIER_MAX = CTX::instance()->mesh.hoThresholdMax;
       p.dim = GModel::current()->getDim();
+      p.optPrimSurfMesh = CTX::instance()->mesh.hoOptPrimSurfMesh;
       HighOrderMeshOptimizer(GModel::current(), p);
     }
 #else

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -2360,7 +2360,7 @@ void GFaceCompound::computeHessianMapping() const
       by(i) = vv[i]->y();
       bz(i) = vv[i]->z();
     }
-    ATAx.gemmWithAtranspose(A,A,1.,0.);
+    ATAx.gemm(A,A,1.,0., true, false);
     ATAy = ATAx; ATAz = ATAx;
     A.multWithATranspose(bx,1.,0.,ATbx);
     A.multWithATranspose(by,1.,0.,ATby);

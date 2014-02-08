@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -59,6 +59,10 @@ class GRegion : public GEntity {
 
   // edges that bound the region
   virtual std::list<GEdge*> edges() const;
+
+  // vertices that bound the region
+  virtual std::list<GVertex*> vertices() const;
+
 
   // get the bounding box
   virtual SBoundingBox3d bounds() const;

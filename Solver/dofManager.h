@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -249,6 +249,18 @@ class dofManager : public dofManagerBase{
     }
     return false;
   }
+  
+  virtual inline void getFixedDofValue(Dof key, dataVec& val) const{
+	typename std::map<Dof, dataVec>::const_iterator it = fixed.find(key);
+	if (it != fixed.end()) {
+      val =  it->second;
+    }
+	else{
+	  Msg::Error("getFixedDof: Dof is not fixed");
+	  return;
+	}
+    
+  };
 
   virtual inline void getDofValue(Dof key,  dataVec &val) const
   {

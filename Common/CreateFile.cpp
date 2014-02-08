@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -6,6 +6,7 @@
 #include "GmshConfig.h"
 #include "GmshMessage.h"
 #include "GModel.h"
+#include "PView.h"
 #include "GmshDefines.h"
 #include "StringUtils.h"
 #include "Context.h"
@@ -209,7 +210,7 @@ static PixelBuffer *GetCompositePixelBuffer(GLenum format, GLenum type)
 }
 #endif
 
-static void change_print_parameter(int frame)
+void change_print_parameter(int frame)
 {
   double first = CTX::instance()->print.parameterFirst;
   double last = CTX::instance()->print.parameterLast;
@@ -634,3 +635,4 @@ void CreateOutputFile(const std::string &fileName, int format,
   if(redraw) drawContext::global()->draw();
 #endif
 }
+

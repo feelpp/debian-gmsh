@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -1019,7 +1019,7 @@ static Curve *DuplicateCurve(Curve *c, bool copyMeshingMethod)
 static void CopySurface(Surface *s, Surface *ss, bool copyMeshingMethod)
 {
    // Trevor Strickler modified
-   if( s->Typ == MSH_SURF_COMPOUND )
+   if(s->Typ == MSH_SURF_COMPOUND)
      ss->Typ = MSH_SURF_REGL;
    else
      ss->Typ = s->Typ;
@@ -2091,11 +2091,11 @@ void BoundaryShapes(List_T *shapes, List_T *shapesBoundary, bool combined)
 }
 
 // Added by Trevor Strickler for extruding unique compound surface edges
-static List_T* GetCompoundUniqueEdges(Surface *ps)
+static List_T *GetCompoundUniqueEdges(Surface *ps)
 {
-
   // Two parts:
-  // Part 1: create map of keys with values abs(c->Num) that map to integer counts of abs(c->num) in compound
+  // Part 1: create map of keys with values abs(c->Num) that map to integer
+  //   counts of abs(c->num) in compound
   // Part 2: Make the unique list
 
   std::vector<int> comp_surfs = ps->compound;
@@ -2184,12 +2184,13 @@ static List_T* GetCompoundUniqueEdges(Surface *ps)
 
 
 // Added by Trevor Strickler
-// This function returns a pointer to an allocated List_T type that
-// contains an ordered list of unique edges for a compound surface.
-// The edges are grouped into loops if there is more than one loop.
-// The order is in order around a loop.
-// Only one problem: Sometimes holes can be selected as the first loop,
-// though this should not create many real problems on a copied top surface.
+
+// This function returns a pointer to an allocated List_T type that contains an
+// ordered list of unique edges for a compound surface.  The edges are grouped
+// into loops if there is more than one loop.  The order is in order around a
+// loop.
+// Only one problem: Sometimes holes can be selected as the first loop, though
+// this should not create many real problems on a copied top surface.
 static List_T* GetOrderedUniqueEdges( Surface *s )
 {
   List_T* unique = GetCompoundUniqueEdges(s);
@@ -2198,6 +2199,9 @@ static List_T* GetOrderedUniqueEdges( Surface *s )
   // these into the gmsh geometry system.
   // Have to get list of surface numbers
   int numgen = List_Nbr(unique);
+
+  if(!numgen) return 0;
+
   List_T *gen_nums = List_Create(numgen, 1, sizeof(int));
 
   for( int i = 0; i < numgen; i++ ){
@@ -2338,7 +2342,6 @@ static void MaxNumSurface(void *a, void *b)
 }
 
 
-// Modified by Trevor Strickler
 static void ReplaceDuplicatePoints(std::map<int, int> * v_report = 0)
 {
   // FIXME: This routine is in fact logically wrong (the compareTwoPoints
@@ -2367,10 +2370,9 @@ static void ReplaceDuplicatePoints(std::map<int, int> * v_report = 0)
     else {
       Tree_Suppress(GModel::current()->getGEOInternals()->Points, &v);
       Tree_Insert(points2delete, &v);
-      // Trevor Strickler
-      if(v_report){
+      if(v_report){ // keep track of changes
         std::map<int, int>::iterator m_it = v_report->find(v->Num);
-        if( m_it != v_report->end() ){
+        if(m_it != v_report->end()){
 	  Vertex **v_rep = (Vertex **)Tree_PQuery(allNonDuplicatedPoints, &v);
 	  m_it->second = (*v_rep)->Num;
         }
@@ -2481,9 +2483,7 @@ static void ReplaceDuplicatePoints(std::map<int, int> * v_report = 0)
   Tree_Delete(allNonDuplicatedPoints);
 }
 
-//Modified by Trevor Strickler
 static void ReplaceDuplicateCurves(std::map<int, int> * c_report = 0)
-
 {
   Curve *c, *c2, **pc, **pc2;
   Surface *s;
@@ -2516,15 +2516,15 @@ static void ReplaceDuplicateCurves(std::map<int, int> * c_report = 0)
         Tree_Suppress(GModel::current()->getGEOInternals()->Curves, &c2);
         Tree_Insert(curves2delete, &c);
         Tree_Insert(curves2delete, &c2);
-	// Trevor Strickler
-	if(c_report){
+
+	if(c_report){ // keep track of changes
 	  std::map<int, int>::iterator m_it = c_report->find(c->Num);
-	  if( m_it != c_report->end() ){
+	  if(m_it != c_report->end()){
 	    Curve **c_rep = (Curve **)Tree_PQuery(allNonDuplicatedCurves, &c);
 	    m_it->second = (*c_rep)->Num;
 	  }
 	  m_it = c_report->find(c2->Num);
-	  if( m_it != c_report->end() ){
+	  if(m_it != c_report->end()){
 	    Curve **c_rep_neg = (Curve **)Tree_PQuery(allNonDuplicatedCurves, &c2);
 	    m_it->second = (*c_rep_neg)->Num;
 	  }
@@ -2583,6 +2583,18 @@ static void ReplaceDuplicateCurves(std::map<int, int> * c_report = 0)
         End_Curve(*pc2);
       }
     }
+    // replace embedded curves
+    if (s->EmbeddedCurves){
+      for(int j = 0; j < List_Nbr(s->EmbeddedCurves); j++) {
+        pc = (Curve **)List_Pointer(s->EmbeddedCurves, j);
+        if(!(pc2 = (Curve **)Tree_PQuery(allNonDuplicatedCurves, pc)))
+          Msg::Error("Weird curve %d in Coherence", (*pc)->Num);
+        else {
+          List_Write(s->EmbeddedCurves, j, pc2);
+          End_Curve(*pc2);
+        }
+      }
+    }
     // replace extrusion sources
     if(s->Extrude && s->Extrude->geo.Mode == EXTRUDED_ENTITY){
       c2 = FindCurve(std::abs(s->Extrude->geo.Source), curves2delete);
@@ -2620,7 +2632,6 @@ static void ReplaceDuplicateCurves(std::map<int, int> * c_report = 0)
   Tree_Delete(allNonDuplicatedCurves);
 }
 
-// Modified By Trevor Strickler
 static void ReplaceDuplicateSurfaces(std::map<int, int> *s_report = 0)
 {
   Surface *s, *s2, **ps, **ps2;
@@ -2642,10 +2653,10 @@ static void ReplaceDuplicateSurfaces(std::map<int, int> *s_report = 0)
       else {
         Tree_Suppress(GModel::current()->getGEOInternals()->Surfaces, &s);
         Tree_Insert(surfaces2delete, &s);
-      // Trevor Strickler
-	if(s_report){
+
+	if(s_report){ // keep track of changes
 	  std::map<int, int>::iterator m_it = (*s_report).find(s->Num);
-	  if( m_it != s_report->end() ){
+	  if(m_it != s_report->end()){
 	    Surface **s_rep = (Surface **)Tree_PQuery(allNonDuplicatedSurfaces, &s);
 	    m_it->second = (*s_rep)->Num;
 	  }
@@ -2738,19 +2749,16 @@ static void ReplaceDuplicateSurfaces(std::map<int, int> *s_report = 0)
   Tree_Delete(allNonDuplicatedSurfaces);
 }
 
-// Trevor Strickler added argument to return select changed shape nums
-// this is needed to set chapeau correctly in situations where chapeau gets replaced!
-// report has a default argument of zero.
 static void ReplaceAllDuplicates(std::vector<std::map<int, int> > &report)
 {
-  std::map<int, int>  *vertex_report = 0;
-  std::map<int, int>  *curve_report = 0;
-  std::map<int, int>  *surface_report = 0;
-  if( report.size() >=1 && report[0].size() )
+  std::map<int, int> *vertex_report = 0;
+  std::map<int, int> *curve_report = 0;
+  std::map<int, int> *surface_report = 0;
+  if(report.size() >=1 && report[0].size())
     vertex_report = &(report[0]);
-  if( report.size() >=2 && report[1].size() )
+  if(report.size() >=2 && report[1].size())
     curve_report = &(report[1]);
-  if( report.size() >= 3 && report[2].size() )
+  if(report.size() >= 3 && report[2].size())
     surface_report = &(report[2]);
 
   ReplaceDuplicatePoints(vertex_report);
@@ -2758,16 +2766,12 @@ static void ReplaceAllDuplicates(std::vector<std::map<int, int> > &report)
   ReplaceDuplicateSurfaces(surface_report);
 }
 
-
-// overloaded ReplaceAllDuplicates to keep old functionality with no danger of
-// default pointer argument = 0
 void ReplaceAllDuplicates()
 {
   std::vector<std::map<int,int> > report;
   report.clear();
   ReplaceAllDuplicates(report);
 }
-
 
 // Extrusion routines
 
@@ -2947,9 +2951,6 @@ int Extrude_ProtudePoint(int type, int ip,
     }
     c->end = chapeau;
     break;
-//  case ANALYTICAL:
-//
-//    break;
   default:
     Msg::Error("Unknown extrusion type");
     return pv->Num;
@@ -2964,17 +2965,20 @@ int Extrude_ProtudePoint(int type, int ip,
   List_Reset(ListOfTransformedPoints);
 
   int chap_num = chapeau->Num;
+  int body_num = c->Num;
 
   if(CTX::instance()->geom.autoCoherence && final){
-    // Trevor Strickler added to fix replaced Chapeau
     std::vector<std::map<int, int> > report(3);
-    report[0][chapeau->Num] = chap_num;
+    report[0][chap_num] = chap_num;
+    report[1][body_num] = body_num;
     ReplaceAllDuplicates(report);
-    std::map<int, int>::iterator m_it = (report[0]).find(chap_num);
-    if( m_it != (report[0]).end() )
-      chap_num = (report[0])[chap_num];
+    std::map<int, int>::iterator m_it = report[0].find(chap_num);
+    if(m_it != report[0].end())
+      chap_num = report[0][chap_num];
     else
       chap_num = 0;
+    if(report[1][body_num] != body_num)
+      *pc = *prc = NULL;
   }
   return chap_num;
 }
@@ -3145,17 +3149,20 @@ int Extrude_ProtudeCurve(int type, int ic,
   *ps = s;
 
   int chap_num = chapeau->Num;
+  int body_num = s->Num;
 
   if(CTX::instance()->geom.autoCoherence && final){
-    // Trevor Strickler added to fix replaced Chapeau
     std::vector<std::map<int, int> > report(3);
-    (report[1])[chap_num] = chap_num;
+    report[1][chap_num] = chap_num;
+    report[2][body_num] = body_num;
     ReplaceAllDuplicates(report);
-    std::map<int, int>::iterator m_it = (report[1]).find(chap_num);
-    if( m_it != (report[1]).end() )
-      chap_num = (report[1])[chap_num];
+    std::map<int, int>::iterator m_it = report[1].find(chap_num);
+    if(m_it != report[1].end())
+      chap_num = report[1][chap_num];
     else
       chap_num = 0;
+    if(report[2][body_num] != body_num)
+      *ps = NULL;
   }
 
   return chap_num;
@@ -3347,13 +3354,12 @@ int Extrude_ProtudeSurface(int type, int is,
   int chap_num = chapeau->Num;
 
   if(CTX::instance()->geom.autoCoherence){
-    // Trevor Strickler added to fix replaced Chapeau
     std::vector<std::map<int, int> > report(3);
-    (report[2])[chap_num] = chap_num;
+    report[2][chap_num] = chap_num;
     ReplaceAllDuplicates(report);
     std::map<int, int>::iterator m_it = (report[2]).find(chap_num);
-    if( m_it != (report[2]).end() )
-      chap_num = (report[2])[chap_num];
+    if(m_it != report[2].end())
+      chap_num = report[2][chap_num];
     else
       chap_num = 0;
   }
@@ -3458,9 +3464,8 @@ void ExtrudeShapes(int type, List_T *list_in,
     case MSH_SURF_DISCRETE:
     case MSH_SURF_COMPOUND:
       {
-        // if statement by Trevor Strickler
-        if( shape.Type == MSH_SURF_COMPOUND ){
-          if( !(e && e->mesh.ExtrudeMesh) ){
+        if(shape.Type == MSH_SURF_COMPOUND){
+          if(!(e && e->mesh.ExtrudeMesh)){
             Msg::Error("Impossible to extrude compound entity %d without also extruding mesh!",
                        abs(shape.Num) );
             break;
@@ -3647,6 +3652,7 @@ bool SplitCurve(int line_id, List_T *vertices_id, List_T *shapes)
   bool first_periodic = true;
   bool last_periodic = false;
   List_T *new_list = List_Create(1, List_Nbr(c->Control_Points) / 10, sizeof(int));
+  List_T *num_shapes = List_Create(2, 1, sizeof(int));
   Vertex *pv;
   for (int i = 0; i < List_Nbr(c->Control_Points); i++){
     List_Read(c->Control_Points, i, &pv);
@@ -3657,6 +3663,7 @@ bool SplitCurve(int line_id, List_T *vertices_id, List_T *shapes)
       if(!(is_periodic&&first_periodic)){
         Curve *cnew = _create_splitted_curve(c, new_list);
         List_Add(shapes, &cnew);
+        List_Add(num_shapes, &cnew->Num);
       }
       first_periodic = false;
       List_Reset(new_list);
@@ -3670,6 +3677,7 @@ bool SplitCurve(int line_id, List_T *vertices_id, List_T *shapes)
   if(List_Nbr(new_list) > 1){
     Curve *cnew = _create_splitted_curve(c, new_list);
     List_Add(shapes, &cnew);
+    List_Add(num_shapes, &cnew->Num);
   }
   // replace original curve by the new curves in all surfaces (and for
   // the opposite curve)
@@ -3699,11 +3707,46 @@ bool SplitCurve(int line_id, List_T *vertices_id, List_T *shapes)
         j += List_Nbr(shapes) - 1;
       }
     }
+    if (s->EmbeddedCurves){
+      for(int j = 0; j < List_Nbr(s->EmbeddedCurves); j++) {
+        Curve *surface_curve;
+        List_Read(s->EmbeddedCurves, j, &surface_curve);
+        if(surface_curve->Num == c->Num){
+          List_Remove(s->EmbeddedCurves, j);
+          List_Insert_In_List(shapes, j, s->EmbeddedCurves);
+          j += List_Nbr(shapes) - 1;
+        }
+        else if(surface_curve->Num == -c->Num){
+          List_Remove(s->EmbeddedCurves, j);
+          List_Insert_In_List(rshapes, j, s->EmbeddedCurves);
+          j += List_Nbr(shapes) - 1;
+        }
+      }
+    }
   }
   List_Delete(Surfs);
+  
+  // replace original curve by the new curves in physical groups
+  for(int i = 0; i < List_Nbr(GModel::current()->getGEOInternals()->PhysicalGroups); i++){
+    PhysicalGroup *p = *(PhysicalGroup**)List_Pointer
+      (GModel::current()->getGEOInternals()->PhysicalGroups, i);
+    if(p->Typ == MSH_PHYSICAL_LINE){
+      for(int j = 0; j < List_Nbr(p->Entities); j++){
+        int num;
+        List_Read(p->Entities, j, &num);
+        if (num == c->Num){
+          List_Remove(p->Entities, j);
+          List_Insert_In_List(num_shapes, j, p->Entities);
+          j += List_Nbr(num_shapes) - 1;
+        }
+      }
+    }
+  }
+  
   DeleteShape(c->Typ, c->Num);
   List_Delete(new_list);
   List_Delete(rshapes);
+  List_Delete(num_shapes);
   return true;
 }
 
@@ -3846,17 +3889,188 @@ void setSurfaceEmbeddedPoints(Surface *s, List_T *points)
 
 void setSurfaceEmbeddedCurves(Surface *s, List_T *curves)
 {
+  double eps = CTX::instance()->geom.tolerance * CTX::instance()->lc;
   if (!s->EmbeddedCurves)
     s->EmbeddedCurves = List_Create(4, 4, sizeof(Curve *));
-  int nbCurves = List_Nbr(curves);
-  for(int i = 0; i < nbCurves; i++) {
+
+  for(int i = 0; i < List_Nbr(curves); i++) {
     double iCurve;
     List_Read(curves, i, &iCurve);
-    Curve *c = FindCurve((int)iCurve);
-    if(c)
-      List_Add(s->EmbeddedCurves, &c);
-    else
+    Curve *cToAddInSurf = FindCurve((int)iCurve);
+
+    if(!cToAddInSurf){
       Msg::Error("Unknown curve %d", (int)iCurve);
+      continue;
+    }
+
+    if (cToAddInSurf->Typ != MSH_SEGM_LINE){
+      // compute intersections only avalaible for straight lines
+      List_Add(s->EmbeddedCurves, &cToAddInSurf);
+      continue;
+    }
+
+    if(!cToAddInSurf->Control_Points)
+      continue;
+
+    for(int j = 0; j < List_Nbr(s->EmbeddedCurves) + List_Nbr(s->Generatrices); j++) {
+      Curve *cDejaInSurf;
+      if (j < s->EmbeddedCurves->n)
+        List_Read(s->EmbeddedCurves, j, &cDejaInSurf);
+      else
+        List_Read(s->Generatrices, j-s->EmbeddedCurves->n, &cDejaInSurf);
+      if (cDejaInSurf->Typ != MSH_SEGM_LINE)
+        // compute intersections only avalaible for straight lines
+        continue;
+
+      if(!cDejaInSurf->Control_Points)
+        continue;
+
+      // compute intersection between pair of control points of cDejaInSurf and
+      // pair of control points of cToAddInSurf
+      Vertex *v1;
+      Vertex *v2;
+      for(int k = 0; k < cDejaInSurf->Control_Points->n-1; k++) {
+        List_Read(cDejaInSurf->Control_Points, k, &v1);
+        List_Read(cDejaInSurf->Control_Points, k+1, &v2);
+
+        SPoint3 p1 = SPoint3(v1->Pos.X, v1->Pos.Y, v1->Pos.Z);
+        SPoint3 p2 = SPoint3(v2->Pos.X, v2->Pos.Y, v2->Pos.Z);
+
+        // to take into account geometrical tolerance
+        SVector3 sv = SVector3( p1, p2);
+        sv = sv.unit()*eps;
+        SPoint3 p3 = p1 - sv.point();
+        SPoint3 p4 = p2 + sv.point();
+
+        Vertex *w1;
+        Vertex *w2;
+        for(int l = 0; l < List_Nbr(cToAddInSurf->Control_Points) - 1; l++) {
+          List_Read(cToAddInSurf->Control_Points, l, &w1);
+          List_Read(cToAddInSurf->Control_Points, l+1, &w2);
+
+          SPoint3 q1 = SPoint3(w1->Pos.X, w1->Pos.Y, w1->Pos.Z);
+          SPoint3 q2 = SPoint3(w2->Pos.X, w2->Pos.Y, w2->Pos.Z);
+
+          // to take into account geometrical tolerance
+          SVector3 sw = SVector3( q1, q2);
+          sw = sw.unit()*eps;
+          SPoint3 q3 = q1 - sw.point();
+          SPoint3 q4 = q2 + sw.point();
+
+          double x[2];
+          int inters = intersection_segments(p3, p4, q3, q4, x);
+
+          if (inters && x[0] != 0. && x[1] != 0. && x[0] != 1. && x[1] != 1.){
+            SPoint3 p = SPoint3( (1.-x[0])*p3.x() + x[0]*p4.x() ,
+                                 (1.-x[0])*p3.y() + x[0]*p4.y() , 0);
+            // case to treat
+            bool createPoint = false, mergePoint = false;
+            bool splitcToAddInSurf = false, splitcDejaInSurf = false;
+            Vertex *v, *w;
+            {
+              double pp1 = p.distance(p1);
+              double pp2 = p.distance(p2);
+              double pp;
+              if (pp1 <= pp2){
+                pp = pp1;
+                v = v1;
+              }
+              else{
+                pp = pp2;
+                v = v2;
+              }
+              double pq1 = p.distance(q1);
+              double pq2 = p.distance(q2);
+              double pq;
+              if (pq1 <= pq2){
+                pq = pq1;
+                w = w1;
+              }
+              else{
+                pq = pq2;
+                w = w2;
+              }
+              if (pq < eps && pp < eps)
+                mergePoint = true;
+              else if (pq >= eps && pp < eps)
+                splitcToAddInSurf = true;
+              else if (pq < eps && pp >= eps)
+                splitcDejaInSurf = true;
+              else{
+                createPoint = true;
+                splitcToAddInSurf = true;
+                splitcDejaInSurf = true;
+              }
+            }
+            if (mergePoint){
+              if (v != w){
+                Msg::Debug("merge points %d, %d between embedded edges", v->Num, w->Num);
+                Tree_Suppress(GModel::current()->getGEOInternals()->Points, &w);
+                List_T *Curves = Tree2List(GModel::current()->getGEOInternals()->Curves);
+                for(int i = 0; i < List_Nbr(Curves); i++){
+                  Curve *c;
+                  List_Read(Curves, i, &c);
+                  if (c->beg == w)
+                    c->beg = v;
+                  if (c->end == w)
+                    c->end = v;
+                  for(int j = 0; j < List_Nbr(c->Control_Points); j++) {
+                    if(!compareVertex(List_Pointer(c->Control_Points, j), &w)){
+                      List_Write(c->Control_Points, j, &v);
+                    }
+                  }
+                }
+                DeletePoint(w->Num);
+                List_Delete(Curves);
+              }
+            }
+            if (splitcToAddInSurf || splitcDejaInSurf){
+              Msg::Debug("Intersect point between embedded edges at pos : (%g,%g)",
+                         p.x(), p.y());
+              Vertex *v3;
+              if (createPoint){
+                v3 = Create_Vertex(NEWPOINT(), p.x(), p.y(), p.z(), MAX_LC, 1.0);
+                Tree_Insert(GModel::current()->getGEOInternals()->Points, &v3);
+              }
+              else if (splitcDejaInSurf)
+                v3 = w;
+              else
+                v3 = v;
+              List_T *temp = List_Create(1, 1, sizeof(int));
+              List_Add(temp, v3->Num);
+              if (splitcDejaInSurf){
+                List_Put (cDejaInSurf->Control_Points, k+1, &v3);
+                List_T *shapes = List_Create(2, 1, sizeof(Shape*));
+                SplitCurve(cDejaInSurf->Num, temp, shapes);
+                // getting back cDejaInSurf because it was deleted by SplitCurve
+                if (j < s->EmbeddedCurves->n)
+                  List_Read(s->EmbeddedCurves, j, &cDejaInSurf);
+                else
+                  List_Read(s->Generatrices, j-s->EmbeddedCurves->n, &cDejaInSurf);
+                List_Delete(shapes);
+              }
+              if (splitcToAddInSurf){
+                List_Put (cToAddInSurf->Control_Points, l+1, &v3);
+                List_T *shapes = List_Create(2, 1, sizeof(Shape*));
+                SplitCurve(cToAddInSurf->Num, temp, shapes);
+                // replacing c with the first shape
+                List_Read (shapes, 0, &cToAddInSurf);
+                double d = (double)cToAddInSurf->Num;
+                List_Write(curves, i, &d);
+                // inserting the second shape in curves
+                Curve *c2;
+                List_Read (shapes, 1, &c2);
+                double d2 = (double)c2->Num;
+                List_Put (curves, i+1, &d2);
+                List_Delete(shapes);
+              }
+              List_Delete(temp);
+            }
+          }
+        }
+      }
+    }
+    List_Add(s->EmbeddedCurves, &cToAddInSurf);
   }
 }
 
@@ -3883,14 +4097,15 @@ void setSurfaceGeneratrices(Surface *s, List_T *loops)
   s->Generatrices = List_Create(4, 4, sizeof(Curve *));
   List_Delete(s->GeneratricesByTag);
   s->GeneratricesByTag = List_Create(4, 4, sizeof(int));
-  //trevor strickler
+
   if(s->Typ == MSH_SURF_COMPOUND){
     s->Generatrices = GetOrderedUniqueEdges(s);
     if(!List_Nbr(s->Generatrices)){
-      Msg::Error("Could not make generatrices list for compound surface %d.",s->Num);
+      Msg::Warning("Could not make generatrices list for compound surface %d", s->Num);
       return;
     }
   }
+
   for(int i = 0; i < nbLoop; i++) {
     int iLoop;
     List_Read(loops, i, &iLoop);

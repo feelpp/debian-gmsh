@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -76,8 +76,8 @@ class MPyramid : public MElement {
   {
     return MEdge(_v[edges_pyramid(num, 0)], _v[edges_pyramid(num, 1)]);
   }
-  virtual int getNumEdgesRep(){ return 8; }
-  virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n)
+  virtual int getNumEdgesRep(bool curved){ return 8; }
+  virtual void getEdgeRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n)
   {
     static const int f[8] = {0, 1, 1, 2, 0, 3, 2, 3};
     MEdge e(getEdge(num));
@@ -98,8 +98,8 @@ class MPyramid : public MElement {
     else
       return MFace(_v[0], _v[3], _v[2], _v[1]);
   }
-  virtual int getNumFacesRep(){ return 6; }
-  virtual void getFaceRep(int num, double *x, double *y, double *z, SVector3 *n)
+  virtual int getNumFacesRep(bool curved){ return 6; }
+  virtual void getFaceRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n)
   {
     static const int f[6][3] = {
       {0, 1, 4},
@@ -251,7 +251,10 @@ class MPyramidN : public MPyramid {
   virtual int getNumEdgeVertices() const { return 8 * (_order - 1); }
   virtual int getNumFaceVertices() const
   {
-    return (_order-1)*(_order-1) + 4 * ((_order - 1) * (_order - 2)) / 2;
+    if (ElementType::SerendipityFromTag(getTypeForMSH()) > 0)
+      return 0;
+    else
+      return (_order-1)*(_order-1) + 4 * ((_order - 1) * (_order - 2)) / 2;
   }
   virtual void getEdgeVertices(const int num, std::vector<MVertex*> &v) const
   {
@@ -263,15 +266,25 @@ class MPyramidN : public MPyramid {
   }
   virtual void getFaceVertices(const int num, std::vector<MVertex*> &v) const
   {
+    if (ElementType::SerendipityFromTag(getTypeForMSH()) > 0) {
+      num == 4 ? v.resize(4 * _order)
+               : v.resize(3 * _order);
+    }
+    else {
+      num == 4 ? v.resize((_order+1) * (_order+1))
+               : v.resize((_order+1) * (_order+2) / 2);
+    }
+
+    // FIXME continue fix serendipity
+
     int j = 3;
     if (num == 4) {
       j = 4;
-      v.resize(_order * _order);
     }
-    else {
-      v.resize(3 + 3 * (_order - 1) + (_order-1) * (_order - 2) /2);
-    }
+
     MPyramid::_getFaceVertices(num, v);
+    //int count = num == 4 ? 3 : 2;
+
     int nbVQ =  (_order-1)*(_order-1);
     int nbVT = (_order - 1) * (_order - 2) / 2;
     const int ie = (num == 4) ? 4*nbVT + nbVQ : (num+1)*nbVT;
@@ -279,16 +292,10 @@ class MPyramidN : public MPyramid {
   }
   virtual int getNumVolumeVertices() const
   {
-    switch(getTypeForMSH()){
-    case MSH_PYR_30 : return 1;
-    case MSH_PYR_55 : return 5;
-    case MSH_PYR_91 : return 14;
-    case MSH_PYR_140 : return 30;
-    case MSH_PYR_204 : return 55;
-    case MSH_PYR_285 : return 91;
-    case MSH_PYR_385 : return 140;
-    default : return 0;
-    }
+    if (ElementType::SerendipityFromTag(getTypeForMSH()) > 0)
+      return 0;
+    else
+      return (_order-2) * ((_order-2)+1) * (2*(_order-2)+1) / 6;
   }
   virtual int getTypeForMSH() const
   {
@@ -326,10 +333,10 @@ class MPyramidN : public MPyramid {
     Msg::Error("Reverse not implemented yet for MPyramidN");
 
   }
-  virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n);
-  virtual int getNumEdgesRep();
-  virtual void getFaceRep(int num, double *x, double *y, double *z, SVector3 *n);
-  virtual int getNumFacesRep();
+  virtual void getEdgeRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n);
+  virtual int getNumEdgesRep(bool curved);
+  virtual void getFaceRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n);
+  virtual int getNumFacesRep(bool curved);
   virtual void getNode(int num, double &u, double &v, double &w) const
   {
     num < 5 ? MPyramid::getNode(num, u, v, w) : MElement::getNode(num, u, v, w);

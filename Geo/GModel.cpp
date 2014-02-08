@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -450,7 +450,7 @@ int GModel::setPhysicalName(std::string name, int dim, int number)
   return number;
 }
 
-std::string GModel::getPhysicalName(int dim, int number)
+std::string GModel::getPhysicalName(int dim, int number) const
 {
   //Emi debug here
   // printf("getPhysName size %d \n", physicalNames.size());
@@ -460,7 +460,7 @@ std::string GModel::getPhysicalName(int dim, int number)
   //   printf("par (%d,%d) \n", itt->first.first, itt->first.second);
   // }
 
-  std::map<std::pair<int, int>, std::string>::iterator it =
+  std::map<std::pair<int, int>, std::string>::const_iterator it =
     physicalNames.find(std::pair<int, int>(dim, number));
   if(it != physicalNames.end()) return it->second;
   return "";
@@ -536,6 +536,16 @@ int GModel::mesh(int dimension)
   Msg::Error("Mesh module not compiled");
   return false;
 #endif
+}
+
+bool GModel::setAllVolumesPositive()
+{
+  bool ok = true;
+  for(riter it = regions.begin(); it != regions.end(); ++it)
+    for (unsigned int i = 0; i < (*it)->getNumMeshElements(); ++i)
+      if(!(*it)->getMeshElement(i)->setVolumePositive())
+        ok = false;
+  return ok;
 }
 
 int GModel::adaptMesh(std::vector<int> technique,
@@ -2648,6 +2658,15 @@ GEdge *GModel::addBezier(GVertex *start, GVertex *end,
 {
   if(_factory)
     return _factory->addSpline(this, GModelFactory::BEZIER, start, end,
+                               points);
+  return 0;
+}
+
+GEdge *GModel::addBSpline(GVertex *start, GVertex *end,
+			  std::vector<std::vector<double> > points)
+{
+  if(_factory)
+    return _factory->addSpline(this, GModelFactory::BSPLINE, start, end,
                                points);
   return 0;
 }

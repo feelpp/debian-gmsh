@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -20,9 +20,10 @@
 // Specialisation of fullVector/Matrix operations using BLAS and LAPACK
 
 #if defined(HAVE_BLAS)
-
 extern "C" {
   void F77NAME(daxpy)(int *n, double *alpha, double *x, int *incx, double *y, int *incy);
+  void F77NAME(dcopy)(int *n, double *a, int *inca, double *b, int *incb);
+  void F77NAME(zcopy)(int *n, std::complex<double> *a, int *inca, std::complex<double> *b, int *incb);
   void F77NAME(dgemm)(const char *transa, const char *transb, int *m, int *n, int *k,
                       double *alpha, double *a, int *lda,
                       double *b, int *ldb, double *beta,
@@ -48,6 +49,40 @@ void fullVector<double>::axpy(const fullVector<double> &x,double alpha)
 {
   int M = _r, INCX = 1, INCY = 1;
   F77NAME(daxpy)(&M, &alpha, x._data,&INCX, _data, &INCY);
+}
+
+template<>
+void fullVector<double>::setAll(const fullVector<double> &m)
+{
+  int stride = 1;
+  F77NAME(dcopy)(&_r, m._data, &stride, _data, &stride);
+}
+
+template<>
+void fullVector<std::complex<double> >::setAll(const fullVector<std::complex<double> > &m)
+{
+  int stride = 1;
+  F77NAME(zcopy)(&_r, m._data, &stride, _data, &stride);
+}
+
+template<>
+void fullMatrix<double>::setAll(const fullMatrix<double> &m)
+{
+  if (_r != m._r || _c != m._c )
+    Msg::Fatal("fullMatrix size does not match");
+  int N = _r * _c;
+  int stride = 1;
+  F77NAME(dcopy)(&N, m._data, &stride, _data, &stride);
+}
+
+template<>
+void fullMatrix<std::complex<double> >::setAll(const fullMatrix<std::complex<double > > &m)
+{
+  if (_r != m._r || _c != m._c )
+    Msg::Fatal("fullMatrix size does not match");
+  int N = _r * _c;
+  int stride = 1;
+  F77NAME(zcopy)(&N, m._data, &stride, _data, &stride);
 }
 
 template<>
@@ -91,11 +126,11 @@ void fullMatrix<std::complex<double> >::mult(const fullMatrix<std::complex<doubl
 
 template<>
 void fullMatrix<double>::gemm(const fullMatrix<double> &a, const fullMatrix<double> &b,
-                              double alpha, double beta)
+                              double alpha, double beta, bool transposeA, bool transposeB)
 {
-  int M = size1(), N = size2(), K = a.size2();
+  int M = size1(), N = size2(), K = transposeA ? a.size1() : a.size2();
   int LDA = a.size1(), LDB = b.size1(), LDC = size1();
-  F77NAME(dgemm)("N", "N", &M, &N, &K, &alpha, a._data, &LDA, b._data, &LDB,
+  F77NAME(dgemm)(transposeA ? "T" : "N", transposeB ? "T" :"N", &M, &N, &K, &alpha, a._data, &LDA, b._data, &LDB,
                  &beta, _data, &LDC);
 }
 
@@ -103,11 +138,13 @@ template<>
 void fullMatrix<std::complex<double> >::gemm(const fullMatrix<std::complex<double> > &a,
                                              const fullMatrix<std::complex<double> > &b,
                                              std::complex<double> alpha,
-                                             std::complex<double> beta)
+                                             std::complex<double> beta,
+                                             bool transposeA,
+                                             bool transposeB)
 {
-  int M = size1(), N = size2(), K = a.size2();
+  int M = size1(), N = size2(),  K = transposeA ? a.size1() : a.size2();
   int LDA = a.size1(), LDB = b.size1(), LDC = size1();
-  F77NAME(zgemm)("N", "N", &M, &N, &K, &alpha, a._data, &LDA, b._data, &LDB,
+  F77NAME(zgemm)(transposeA ? "T" : "N", transposeB ? "T" :"N", &M, &N, &K, &alpha, a._data, &LDA, b._data, &LDB,
                  &beta, _data, &LDC);
 }
 
@@ -175,29 +212,6 @@ void fullMatrix<double>::multWithATranspose(const fullVector<double> &x, double 
                  &beta, y._data, &INCY);
 
 }
-
-template<>
-void fullMatrix<double>::gemmWithAtranspose(const fullMatrix<double> &a, const fullMatrix<double> &b,
-                                             double alpha, double beta)
-{
-  int M = size2(), N = size2(), K = a.size1();
-  int LDA = a.size1(), LDB = b.size1(), LDC = size1();
-  F77NAME(dgemm)("T", "N", &M, &N, &K, &alpha, a._data, &LDA, b._data, &LDB,
-                 &beta, _data, &LDC);
-}
-
-template<>
-void fullMatrix<std::complex<double> >::gemmWithAtranspose(const fullMatrix<std::complex<double> > &a,
-                                                             const fullMatrix<std::complex<double> > &b,
-                                                             std::complex<double> alpha,
-                                                             std::complex<double> beta)
-{
-  int M = size2(), N = size2(), K = a.size1();
-  int LDA = a.size1(), LDB = b.size1(), LDC = size1();
-  F77NAME(zgemm)("T", "N", &M, &N, &K, &alpha, a._data, &LDA, b._data, &LDB,
-                 &beta, _data, &LDC);
-}
-
 #endif
 
 
@@ -208,6 +222,8 @@ extern "C" {
   void F77NAME(dgesv)(int *N, int *nrhs, double *A, int *lda, int *ipiv,
                       double *b, int *ldb, int *info);
   void F77NAME(dgetrf)(int *M, int *N, double *A, int *lda, int *ipiv, int *info);
+  void F77NAME(dgetrs)(char *trans, int *N, int *nrhs, double *A, int *lda, int *ipiv,
+                       double *b, int *ldb, int *info);
   void F77NAME(dgetri)(int *M, double *A, int *lda, int *ipiv, double *work,
                        int *lwork, int *info);
   void F77NAME(dgesvd)(const char* jobu, const char *jobvt, int *M, int *N,
@@ -284,10 +300,27 @@ bool fullMatrix<double>::luSolve(const fullVector<double> &rhs, fullVector<doubl
   F77NAME(dgesv)(&N, &nrhs, _data, &lda, ipiv, result._data, &ldb, &info);
   delete [] ipiv;
   if(info == 0) return true;
-  //  if(info > 0)
-  //    Msg::Error("U(%d,%d)=0 in LU decomposition", info, info);
-  //  else
-  //    Msg::Error("Wrong %d-th argument in LU decomposition", -info);
+  return false;
+}
+
+template<>
+bool fullMatrix<double>::luFactor(fullVector<int> &ipiv)
+{
+  int M = size1(), N = size2(), lda = size1(), info;
+  ipiv.resize(std::min(M, N));
+  F77NAME(dgetrf)(&M, &N, _data, &lda, &ipiv(0), &info);
+  if(info == 0) return true;
+  return false;
+}
+
+template<>
+bool fullMatrix<double>::luSubstitute(const fullVector<double> &rhs, fullVector<int> &ipiv, fullVector<double> &result)
+{
+  int N = size1(), nrhs=1, lda = N, ldb = N, info;
+  char trans = 'N';
+  for(int i = 0; i < N; i++) result(i) = rhs(i);
+  F77NAME(dgetrs)(&trans, &N, &nrhs, _data, &lda, &ipiv(0), result._data, &ldb, &info);
+  if(info == 0) return true;
   return false;
 }
 

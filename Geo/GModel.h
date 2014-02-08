@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -325,7 +325,7 @@ class GModel
 
   // get the name (if any) of a given physical group of dimension
   // "dim" and id number "num"
-  std::string getPhysicalName(int dim, int num);
+  std::string getPhysicalName(int dim, int num) const;
 
   // get the number of a given physical group of dimension
   // "dim" and name "name". return -1 if not found
@@ -455,6 +455,9 @@ class GModel
 		std::vector<std::vector<double> > parameters,
 		int niter, bool meshAll=false);
 
+  // Ensure that the Jacobian of all volume elements is positive
+  bool setAllVolumesPositive();
+
   // make the mesh a high order mesh at order N
   // linear is 1 if the high order points are not placed on the geometry of the model
   // incomplete is 1 if incomplete basis are used
@@ -489,6 +492,7 @@ class GModel
   GEdge *addCircleArcCenter(GVertex *start, GVertex *center, GVertex *end);
   GEdge *addCircleArc3Points(double x, double y, double z, GVertex *start, GVertex *end);
   GEdge *addBezier(GVertex *start, GVertex *end, std::vector<std::vector<double> > points);
+  GEdge *addBSpline(GVertex *start, GVertex *end, std::vector<std::vector<double> > points);
   GEdge *addNURBS(GVertex *start, GVertex *end,
 		  std::vector<std::vector<double> > points,
 		  std::vector<double> knots,

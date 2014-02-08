@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -223,7 +223,8 @@ int GModel::readMSH(const std::string &name)
           case 0:
             {
               GVertex *gv = getVertexByTag(entity);
-              if(gv) gv->deleteMesh();
+              // FIXME -- cannot call this: it destroys _vertexMapCache
+              //if(gv) gv->deleteMesh();
               vertex = new MVertex(xyz[0], xyz[1], xyz[2], gv, num);
             }
             break;

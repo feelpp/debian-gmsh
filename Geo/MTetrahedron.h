@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -67,8 +67,8 @@ class MTetrahedron : public MElement {
   {
     return MEdge(_v[edges_tetra(num, 0)], _v[edges_tetra(num, 1)]);
   }
-  virtual int getNumEdgesRep(){ return 6; }
-  virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n)
+  virtual int getNumEdgesRep(bool curved){ return 6; }
+  virtual void getEdgeRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n)
   {
     static const int f[6] = {0, 0, 0, 1, 2, 3};
     MEdge e(getEdge(num));
@@ -87,8 +87,8 @@ class MTetrahedron : public MElement {
                  _v[faces_tetra(num, 2)]);
   }
   virtual void getFaceInfo(const MFace & face, int &ithFace, int &sign, int &rot) const;
-  virtual int getNumFacesRep(){ return 4; }
-  virtual void getFaceRep(int num, double *x, double *y, double *z, SVector3 *n)
+  virtual int getNumFacesRep(bool curved){ return 4; }
+  virtual void getFaceRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n)
   {
     MFace f(getFace(num));
     _getFaceRep(f.getVertex(0), f.getVertex(1), f.getVertex(2), x, y, z, n);
@@ -128,7 +128,7 @@ class MTetrahedron : public MElement {
   virtual double getInnerRadius();
   virtual double getCircumRadius();
   virtual double etaShapeMeasure();
-  void xyz2uvw(double xyz[3], double uvw[3]) const;
+  virtual void xyz2uvw(double xyz[3], double uvw[3]) const;
   virtual const nodalBasis* getFunctionSpace(int o=-1) const;
   virtual const JacobianBasis* getJacobianFuncSpace(int o=-1) const;
   virtual void getNode(int num, double &u, double &v, double &w) const
@@ -175,6 +175,18 @@ class MTetrahedron : public MElement {
       {3, 1, 2}
     };
     return f[face][vert];
+  }
+  static int faces2edge_tetra(const int face, const int vert)
+  {
+    // return -iedge - 1 if edge is inverted
+    //         iedge + 1 otherwise
+    static const int e[4][3] = {
+      {-3, -2, -1},
+      { 1, -6,  4},
+      {-4,  5,  3},
+      { 6,  2, -5}
+    };
+    return e[face][vert];
   }
 };
 
@@ -231,10 +243,10 @@ class MTetrahedron10 : public MTetrahedron {
   virtual MVertex *getVertexDIFF(int num){ return getVertexBDF(num); }
   virtual MVertex *getVertexINP(int num){ return getVertexBDF(num); }
   virtual int getNumEdgeVertices() const { return 6; }
-  virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n);
-  virtual int getNumEdgesRep();
-  virtual void getFaceRep(int num, double *x, double *y, double *z, SVector3 *n);
-  virtual int getNumFacesRep();
+  virtual void getEdgeRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n);
+  virtual int getNumEdgesRep(bool curved);
+  virtual void getFaceRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n);
+  virtual int getNumFacesRep(bool curved);
   virtual void getEdgeVertices(const int num, std::vector<MVertex*> &v) const
   {
     v.resize(3);
@@ -272,6 +284,10 @@ class MTetrahedron10 : public MTetrahedron {
   virtual void getNode(int num, double &u, double &v, double &w) const
   {
     num < 4 ? MTetrahedron::getNode(num, u, v, w) : MElement::getNode(num, u, v, w);
+  }
+  void xyz2uvw(double xyz[3], double uvw[3]) const
+  {
+    return MElement::xyz2uvw(xyz,uvw);
   }
 };
 
@@ -318,7 +334,10 @@ class MTetrahedronN : public MTetrahedron {
   virtual int getNumEdgeVertices() const { return 6 * (_order - 1); }
   virtual int getNumFaceVertices() const
   {
-    return 4 * ((_order - 1) * (_order - 2)) / 2;
+    if (ElementType::SerendipityFromTag(getTypeForMSH()) > 0)
+      return 0;
+    else
+      return  4 * ((_order - 1) * (_order - 2)) / 2;
   }
   virtual void getEdgeVertices(const int num, std::vector<MVertex*> &v) const
   {
@@ -330,25 +349,41 @@ class MTetrahedronN : public MTetrahedron {
   }
   virtual void getFaceVertices(const int num, std::vector<MVertex*> &v) const
   {
-    v.resize(3 + 3 * (_order - 1) + (_order-1) * (_order - 2) /2);
+    if (ElementType::SerendipityFromTag(getTypeForMSH()) > 0) {
+      v.resize(3 * _order);
+    }
+    else {
+      v.resize((_order+1) * (_order+2) / 2);
+    }
+
     MTetrahedron::_getFaceVertices(num, v);
-    int j = 3;
-    int nbV = (_order - 1) * (_order - 2) / 2;
-    const int ie = (num+1)*nbV;
-    for(int i = num*nbV; i != ie; ++i) v[j++] = _vs[i];
+    int count = 2;
+
+    int n = _order - 1;
+    for (int i = 0; i < 3; i++) {
+      if(faces2edge_tetra(num, i) > 0){
+        int edge_num = faces2edge_tetra(num, i) - 1;
+        for (int j = 0; j < n; j++) v[++count] = _vs[n*edge_num + j];
+      }
+      else{
+        int edge_num = -faces2edge_tetra(num, i) - 1;
+        for (int j = n-1; j >= 0; j--) v[++count] = _vs[n*edge_num + j];
+      }
+    }
+
+    if ((int)v.size() > count + 1) {
+      int start = 6 * n + num * (n-1)*n/2;
+      for (int i = 0; i < (n-1)*n/2; i++){
+        v[++count] = _vs[start + i];
+      }
+    }
   }
   virtual int getNumVolumeVertices() const
   {
-    switch(getTypeForMSH()){
-    case MSH_TET_35 : return 1;
-    case MSH_TET_56 : return 4;
-    case MSH_TET_84 : return 10;
-    case MSH_TET_120 : return 20;
-    case MSH_TET_165 : return 35;
-    case MSH_TET_220 : return 56;
-    case MSH_TET_286 : return 84;
-    default : return 0;
-    }
+    if (ElementType::SerendipityFromTag(getTypeForMSH()) > 0)
+      return 0;
+    else
+      return ((_order - 1) * (_order - 2) * (_order - 3)) / 6;
   }
   virtual int getTypeForMSH() const
   {
@@ -385,13 +420,17 @@ class MTetrahedronN : public MTetrahedron {
       inv[i] = _vs[reverseIndices[i + 4] - 4];
     _vs = inv;
   }
-  virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n);
-  virtual int getNumEdgesRep();
-  virtual void getFaceRep(int num, double *x, double *y, double *z, SVector3 *n);
-  virtual int getNumFacesRep();
+  virtual void getEdgeRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n);
+  virtual int getNumEdgesRep(bool curved);
+  virtual void getFaceRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n);
+  virtual int getNumFacesRep(bool curved);
   virtual void getNode(int num, double &u, double &v, double &w) const
   {
     num < 4 ? MTetrahedron::getNode(num, u, v, w) : MElement::getNode(num, u, v, w);
+  }
+  void xyz2uvw(double xyz[3], double uvw[3]) const
+  {
+    return MElement::xyz2uvw(xyz,uvw);
   }
 };
 

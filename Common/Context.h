@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -36,13 +36,14 @@ struct contextMeshOptions {
   //-- for recombination test (amaury) --
     int doRecombinationTest, recombinationTestStart;
     int recombinationTestNoGreedyStrat, recombinationTestNewStrat;
+    int nProc, nbProc;
     std::string recTestName;
   //-------------------------------------
   int remeshParam, remeshAlgo;
   int order, secondOrderLinear, secondOrderIncomplete;
   int secondOrderExperimental, meshOnlyVisible;
   int minCircPoints, minCurvPoints;
-  int hoOptimize, hoNLayers;
+  int hoOptimize, hoNLayers, hoOptPrimSurfMesh;
   double hoThresholdMin, hoThresholdMax, hoPoissonRatio;
   int saveAll, saveTri, saveGroupsOfNodes, binary, bdfFieldFormat, saveParametric;
   int smoothNormals, reverseAllNormals, zoneDefinition, clip;
@@ -54,6 +55,7 @@ struct contextMeshOptions {
   std::map<int,int> curvature_control_per_face;
   int bunin;
   int ignorePartBound;
+  int NewtonConvergenceTestXYZ;
 };
 
 struct contextGeometryOptions {
@@ -229,7 +231,7 @@ class CTX {
   struct{
     int draw, link, horizontalScales;
     int smooth, animCycle, animStep, combineTime, combineRemoveOrig;
-    int fileFormat, plugins;
+    int fileFormat, plugins, forceNodeData;
     double animDelay;
   }post;
   // solver options
@@ -239,7 +241,7 @@ class CTX {
     std::string socketName;
     std::string name[NUM_SOLVERS], executable[NUM_SOLVERS], remoteLogin[NUM_SOLVERS];
     int autoSaveDatabase, autoArchiveOutputFiles, autoMesh, autoMergeFile;
-    int autoHideNewViews, autoShowLastStep, autoCheck;
+    int autoHideNewViews, autoShowLastStep, autoCheck, showInvisibleParameters;
   }solver;
   // print options
   struct{

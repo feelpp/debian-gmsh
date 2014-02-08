@@ -5,6 +5,7 @@
 %include std_vector.i
 %include std_map.i
 %include cpointer.i 
+%import "gmshtypemaps.i"
 
 %{
   #include "GmshConfig.h"
@@ -22,7 +23,7 @@
       // don't output anything special if we're running in a gui
       if(FlGui::available()) return;
 #endif
-      std::cout<<level<<" : "<<message<<std::endl;
+      (level == "Info" ? std::cout : std::cerr) <<level<<" : "<<message<<std::endl;
       if (level == "Fatal") 
         Msg::Exit(1);
     }

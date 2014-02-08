@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -112,7 +112,30 @@ double MElement::rhoShapeMeasure()
     return 0.;
 }
 
-void MElement::scaledJacRange(double &jmin, double &jmax)
+double MElement::maxDistToStraight()
+{
+  const nodalBasis *lagBasis = getFunctionSpace();
+  const fullMatrix<double> &uvw = lagBasis->points;
+  const int &nV = uvw.size1();
+  const int &dim = uvw.size2();
+  const nodalBasis *lagBasis1 = getFunctionSpace(1);
+  const int &nV1 = lagBasis1->points.size1();
+  std::vector<SPoint3> xyz1(nV1);
+  for (int iV = 0; iV < nV1; ++iV) xyz1[iV] = getVertex(iV)->point();
+  double maxdx = 0.;
+  for (int iV = nV1; iV < nV; ++iV) {
+    double f[256];
+    lagBasis1->f(uvw(iV, 0), (dim > 1) ? uvw(iV, 1) : 0., (dim > 2) ? uvw(iV, 2) : 0., f);
+    SPoint3 xyzS(0.,0.,0.);
+    for (int iSF = 0; iSF < nV1; ++iSF) xyzS += xyz1[iSF]*f[iSF];
+    SVector3 vec(xyzS,getVertex(iV)->point());
+    double dx = vec.norm();
+    if (dx > maxdx) maxdx = dx;
+  }
+  return maxdx;
+}
+
+void MElement::scaledJacRange(double &jmin, double &jmax, GEntity *ge)
 {
   jmin = jmax = 1.0;
 #if defined(HAVE_MESH)
@@ -122,6 +145,30 @@ void MElement::scaledJacRange(double &jmin, double &jmax)
   getNodesCoord(nodesXYZ);
   fullVector<double> SJi(numJacNodes), Bi(numJacNodes);
   jac->getScaledJacobian(nodesXYZ,SJi);
+  if (ge && (ge->dim() == 2) && ge->haveParametrization()) {
+    // If parametrized surface entity provided...
+    SVector3 geoNorm(0.,0.,0.);
+    // ... correct Jacobian sign with geometrical normal
+    for (int i=0; i<jac->getNumPrimMapNodes(); i++) {
+      MVertex *vert = getVertex(i);
+      if (vert->onWhat() == ge) {
+        double u, v;
+        vert->getParameter(0,u);
+        vert->getParameter(1,v);
+        geoNorm += ((GFace*)ge)->normal(SPoint2(u,v));
+      }
+    }
+    if (geoNorm.normSq() == 0.) {
+      // If no vertex on surface or average is zero, take normal at barycenter
+      SPoint2 param = ((GFace*)ge)->parFromPoint(barycenter(true),false);
+      geoNorm = ((GFace*)ge)->normal(param);
+    }
+    fullMatrix<double> elNorm(1,3);
+    jac->getPrimNormal2D(nodesXYZ,elNorm);
+    const double scal = geoNorm(0) * elNorm(0,0) + geoNorm(1) * elNorm(0,1) +
+      geoNorm(2) * elNorm(0,2);
+    if (scal < 0.) SJi.scale(-1.);
+  }
   jac->lag2Bez(SJi,Bi);
   jmin = *std::min_element(Bi.getDataPtr(),Bi.getDataPtr()+Bi.size());
   jmax = *std::max_element(Bi.getDataPtr(),Bi.getDataPtr()+Bi.size());
@@ -690,9 +737,6 @@ void MElement::writeMSH(FILE *fp, bool binary, int entity,
   int type = getTypeForMSH();
   if(!type) return;
 
-  // if necessary, change the ordering of the vertices to get positive volume
-  setVolumePositive();
-
   std::vector<int> verts;
   getVerticesIdForMSH(verts);
 
@@ -738,9 +782,6 @@ void MElement::writeMSH2(FILE *fp, double version, bool binary, int num,
 
   if(!type) return;
 
-  // if necessary, change the ordering of the vertices to get positive
-  // volume
-  setVolumePositive();
   int n = getNumVerticesForMSH();
   int par = (parentNum) ? 1 : 0;
   int dom = (dom1Num) ? 2 : 0;
@@ -840,7 +881,6 @@ void MElement::writePOS(FILE *fp, bool printElementary, bool printElementNumber,
   const char *str = getStringForPOS();
   if(!str) return;
 
-  setVolumePositive();
   int n = getNumVertices();
   fprintf(fp, "%s(", str);
   for(int i = 0; i < n; i++){
@@ -946,7 +986,6 @@ void MElement::writeSTL(FILE *fp, bool binary, double scalingFactor)
 
 void MElement::writePLY2(FILE *fp)
 {
-  setVolumePositive();
   fprintf(fp, "3 ");
   for(int i = 0; i < getNumVertices(); i++)
     fprintf(fp, " %d", getVertex(i)->getIndex() - 1);
@@ -955,7 +994,6 @@ void MElement::writePLY2(FILE *fp)
 
 void MElement::writeVRML(FILE *fp)
 {
-  setVolumePositive();
   for(int i = 0; i < getNumVertices(); i++)
     fprintf(fp, "%d,", getVertex(i)->getIndex() - 1);
   fprintf(fp, "-1,\n");
@@ -964,8 +1002,6 @@ void MElement::writeVRML(FILE *fp)
 void MElement::writeVTK(FILE *fp, bool binary, bool bigEndian)
 {
   if(!getTypeForVTK()) return;
-
-  setVolumePositive();
 
   int n = getNumVertices();
   if(binary){
@@ -990,7 +1026,6 @@ void MElement::writeUNV(FILE *fp, int num, int elementary, int physical)
   int type = getTypeForUNV();
   if(!type) return;
 
-  setVolumePositive();
   int n = getNumVertices();
   int physical_property = elementary;
   int material_property = abs(physical);
@@ -1016,7 +1051,6 @@ void MElement::writeUNV(FILE *fp, int num, int elementary, int physical)
 void MElement::writeMESH(FILE *fp, int elementTagType, int elementary,
                          int physical)
 {
-  setVolumePositive();
   for(int i = 0; i < getNumVertices(); i++)
     if (getTypeForMSH() == MSH_TET_10 && i == 8)
       fprintf(fp, " %d", getVertex(9)->getIndex());
@@ -1032,8 +1066,6 @@ void MElement::writeIR3(FILE *fp, int elementTagType, int num, int elementary,
                         int physical)
 {
   int numVert = getNumVertices();
-  bool ok = setVolumePositive();
-  if(getDim() == 3 && !ok) Msg::Error("Element %d has zero volume", num);
   fprintf(fp, "%d %d %d", num, (elementTagType == 3) ? _partition :
           (elementTagType == 2) ? physical : elementary, numVert);
   for(int i = 0; i < numVert; i++)
@@ -1047,7 +1079,6 @@ void MElement::writeBDF(FILE *fp, int format, int elementTagType, int elementary
   const char *str = getStringForBDF();
   if(!str) return;
 
-  setVolumePositive();
   int n = getNumVertices();
   const char *cont[4] = {"E", "F", "G", "H"};
   int ncont = 0;
@@ -1088,8 +1119,6 @@ void MElement::writeDIFF(FILE *fp, int num, bool binary, int physical_property)
   const char *str = getStringForDIFF();
   if(!str) return;
 
-  setVolumePositive();
-
   int n = getNumVertices();
   if(binary){
     // TODO
@@ -1104,7 +1133,6 @@ void MElement::writeDIFF(FILE *fp, int num, bool binary, int physical_property)
 
 void MElement::writeINP(FILE *fp, int num)
 {
-  setVolumePositive();
   fprintf(fp, "%d, ", num);
   int n = getNumVertices();
   for(int i = 0; i < n; i++){
@@ -1119,7 +1147,6 @@ void MElement::writeINP(FILE *fp, int num)
 
 void MElement::writeSU2(FILE *fp, int num)
 {
-  setVolumePositive();
   fprintf(fp, "%d ", getTypeForVTK());
   for(int i = 0; i < getNumVertices(); i++)
     fprintf(fp, "%d ", getVertexVTK(i)->getIndex() - 1);
@@ -1417,11 +1444,11 @@ MElement *MElementFactory::create(int type, std::vector<MVertex*> &v,
   case MSH_PRI_18:  return new MPrism18(v, num, part);
   case MSH_PRI_40:  return new MPrismN(v, 3, num, part);
   case MSH_PRI_75:  return new MPrismN(v, 4, num, part);
-  case MSH_PRI_126:  return new MPrismN(v, 5, num, part);
-  case MSH_PRI_196:  return new MPrismN(v, 6, num, part);
-  case MSH_PRI_288:  return new MPrismN(v, 7, num, part);
-  case MSH_PRI_405:  return new MPrismN(v, 8, num, part);
-  case MSH_PRI_550:  return new MPrismN(v, 9, num, part);
+  case MSH_PRI_126: return new MPrismN(v, 5, num, part);
+  case MSH_PRI_196: return new MPrismN(v, 6, num, part);
+  case MSH_PRI_288: return new MPrismN(v, 7, num, part);
+  case MSH_PRI_405: return new MPrismN(v, 8, num, part);
+  case MSH_PRI_550: return new MPrismN(v, 9, num, part);
   case MSH_PRI_24:  return new MPrismN(v, 3, num, part);
   case MSH_PRI_33:  return new MPrismN(v, 4, num, part);
   case MSH_PRI_42:  return new MPrismN(v, 5, num, part);
@@ -1429,7 +1456,7 @@ MElement *MElementFactory::create(int type, std::vector<MVertex*> &v,
   case MSH_PRI_60:  return new MPrismN(v, 7, num, part);
   case MSH_PRI_69:  return new MPrismN(v, 8, num, part);
   case MSH_PRI_78:  return new MPrismN(v, 9, num, part);
-  case MSH_PRI_1:  return new MPrismN(v, 0, num, part);
+  case MSH_PRI_1:   return new MPrismN(v, 0, num, part);
   case MSH_TET_20:  return new MTetrahedronN(v, 3, num, part);
   case MSH_TET_35:  return new MTetrahedronN(v, 4, num, part);
   case MSH_TET_56:  return new MTetrahedronN(v, 5, num, part);

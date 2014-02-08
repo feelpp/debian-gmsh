@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -98,7 +98,6 @@ int ElementType::ParentTypeFromTag(int tag)
 
 int ElementType::OrderFromTag(int tag)
 {
-
   switch (tag) {
   case MSH_PNT     : return 0;
   case MSH_LIN_1   : return 0;
@@ -228,7 +227,6 @@ int ElementType::OrderFromTag(int tag)
     Msg::Error("Unknown element tag %d, assuming order 1.",tag);
     return 1;
   }
-
 }
 
 int ElementType::DimensionFromTag(int tag)
@@ -322,6 +320,9 @@ int ElementType::DimensionFromTag(int tag)
   }
 }
 
+// Gives > 0 if element tag is in Serendipity Family.
+// Gives < 2 if element tag is in 'Normal' Family.
+// 1 is for element that is either Serendipity or not !
 int ElementType::SerendipityFromTag(int tag)
 {
   switch (tag) {
@@ -338,7 +339,7 @@ int ElementType::SerendipityFromTag(int tag)
   case MSH_QUA_1   : case MSH_QUA_4   :
 
   case MSH_TET_1   : case MSH_TET_4   :
-  case MSH_TET_10  : case MSH_TET_20  :
+  case MSH_TET_10  :
 
   case MSH_PRI_1   : case MSH_PRI_6   :
 
@@ -360,10 +361,10 @@ int ElementType::SerendipityFromTag(int tag)
   case MSH_QUA_81  : case MSH_QUA_100 :
   case MSH_QUA_121 :
 
-  case MSH_TET_35  : case MSH_TET_56  :
-  case MSH_TET_84  : case MSH_TET_120 :
-  case MSH_TET_165 : case MSH_TET_220 :
-  case MSH_TET_286 :
+  case MSH_TET_20  : case MSH_TET_35  :
+  case MSH_TET_56  : case MSH_TET_84  :
+  case MSH_TET_120 : case MSH_TET_165 :
+  case MSH_TET_220 : case MSH_TET_286 :
 
   case MSH_PRI_18  : case MSH_PRI_40  :
   case MSH_PRI_75  : case MSH_PRI_126 :
@@ -480,7 +481,7 @@ int ElementType::getTag(int parentTag, int order, bool serendip)
     case 0 : return MSH_TET_1;
     case 1 : return MSH_TET_4;
     case 2 : return MSH_TET_10;
-    case 3 : return serendip ? MSH_TET_20 : MSH_TET_16;
+    case 3 : return serendip ? MSH_TET_16 : MSH_TET_20;
     case 4 : return serendip ? MSH_TET_22 : MSH_TET_35;
     case 5 : return serendip ? MSH_TET_28 : MSH_TET_56;
     case 6 : return serendip ? MSH_TET_34 : MSH_TET_84;

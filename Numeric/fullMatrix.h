@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -277,10 +277,13 @@ class fullVector
 
      m.size() must be greater or equal to @f$ N @f$.
   */
-  inline void setAll(const fullVector<scalar> &m)
+  void setAll(const fullVector<scalar> &m)
+#if !defined(HAVE_BLAS)
   {
     for(int i = 0; i < _r; i++) _data[i] = m._data[i];
   }
+#endif
+  ;
 
   /**
      @param other A fullVector.
@@ -404,11 +407,12 @@ class fullMatrix
     _own_data = false;
     _data = original._data + c_start * _r;
   }
-  fullMatrix(int r, int c) : _r(r), _c(c)
+  fullMatrix(int r, int c, bool init0 = true) : _r(r), _c(c)
   {
     _data = new scalar[_r * _c];
     _own_data = true;
-    setAll(scalar(0.));
+    if (init0)
+      setAll(scalar(0.));
   }
   fullMatrix(int r, int c, double *data)
     : _r(r), _c(c), _data(data), _own_data(false)
@@ -476,6 +480,10 @@ class fullMatrix
     return false; // no reallocation
   }
   void reshape(int nbRows, int nbColumns){
+    if (nbRows == -1 && nbColumns != -1)
+      nbRows = _r * _c / nbColumns;
+    if (nbRows != -1 && nbColumns == -1)
+      nbColumns = _r * _c / nbRows;
     if (nbRows*nbColumns != size1()*size2())
       Msg::Error("Invalid reshape, total number of entries must be equal");
     _r = nbRows;
@@ -595,10 +603,10 @@ class fullMatrix
     add(temp);
   }
   void gemm(const fullMatrix<scalar> &a, const fullMatrix<scalar> &b,
-            scalar alpha=1., scalar beta=1.)
+            scalar alpha=1., scalar beta=1., bool transposeA = false, bool transposeB = false)
 #if !defined(HAVE_BLAS)
   {
-    gemm_naive(a,b,alpha,beta);
+    gemm_naive(transposeA ? a.transpose() : a, transposeB ? b.transpose() : b, alpha, beta);
   }
 #endif
   ;
@@ -606,12 +614,15 @@ class fullMatrix
   {
     for(int i = 0; i < _r * _c; i++) _data[i] = m;
   }
-  inline void setAll(const fullMatrix<scalar> &m)
+  void setAll(const fullMatrix<scalar> &m)
+#if !defined(HAVE_BLAS)
   {
     if (_r != m._r || _c != m._c )
       Msg::Fatal("fullMatrix size does not match");
     for(int i = 0; i < _r * _c; i++) _data[i] = m._data[i];
   }
+#endif
+  ;
   void scale(const double s)
 #if !defined(HAVE_BLAS)
   {
@@ -681,7 +692,23 @@ class fullMatrix
   bool luSolve(const fullVector<scalar> &rhs, fullVector<scalar> &result)
 #if !defined(HAVE_LAPACK)
   {
+    Msg::Error("LU factorization and substitution requires LAPACK");
+    return false;
+  }
+#endif
+  ;
+ bool luFactor(fullVector<int> &ipiv)
+#if !defined(HAVE_LAPACK)
+  {
     Msg::Error("LU factorization requires LAPACK");
+    return false;
+  }
+#endif
+  ;
+ bool luSubstitute(const fullVector<scalar> &rhs, fullVector<int> &ipiv, fullVector<scalar> &result)
+#if !defined(HAVE_LAPACK)
+  {
+    Msg::Error("LU substitution requires LAPACK");
     return false;
   }
 #endif
@@ -745,6 +772,15 @@ class fullMatrix
     printf("};\n");
   }
 
+  void binarySave (FILE *f) const
+  {
+    fwrite (_data, sizeof(scalar), _r*_c, f);
+  }
+  void binaryLoad (FILE *f)
+  {
+    if(fread (_data, sizeof(scalar), _r*_c, f) != (size_t)_r) return;
+  }
+
   // specific functions for dgshell
   void mult_naiveBlock(const fullMatrix<scalar> &b, const int ncol, const int fcol,
                        const int alpha, const int beta, fullVector<scalar> &c,
@@ -784,15 +820,7 @@ class fullMatrix
      _data[cind+i] = x(i);
   }
 
-  void gemmWithAtranspose(const fullMatrix<scalar> &a, const fullMatrix<scalar> &b,
-            scalar alpha=1., scalar beta=1.)
-#if !defined(HAVE_BLAS)
-  {
-    Msg::Error("gemmWithAtranspose is only available with blas. If blas is not "
-               "installed please transpose a before used gemm_naive");
-  }
-#endif
-  ;
-
+  bool getOwnData() {return _own_data;};
+  void setOwnData(bool ownData) {_own_data = ownData;};
 };
 #endif

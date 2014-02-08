@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -129,6 +129,22 @@ void List_Write(List_T * liste, int index, void *data)
   else {
     liste->isorder = 0;
     memcpy(&liste->array[index * liste->size], data, liste->size);
+  }
+}
+
+void List_Put(List_T * liste, int index, void *data)
+{
+  if(index < 0)
+    Msg::Error("Wrong list index (put)");
+  else {
+    if(index >= liste->n) {
+      liste->n = index + 1;
+      List_Realloc(liste, liste->n);
+      List_Write(liste, index, data);
+    }
+    else {
+      List_Write(liste, index, data);
+    }
   }
 }
 

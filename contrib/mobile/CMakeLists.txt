@@ -32,27 +32,36 @@ endmacro(copy_headers)
 
 if(ENABLE_BUILD_IOS_EMULATOR OR ENABLE_BUILD_IOS)
   # we need getdp framework
-  find_path(GETDP_FRAMEWORK "GetDP" GetDP.framework)
-  if(NOT GETDP_FRAMEWORK)
-    message(SEND_ERROR "Cannot compile onelab for iOS without GetDP")
-  endif(NOT GETDP_FRAMEWORK)
+  find_path(GETDP_FRAMEWORK GetDP.framework)
+  if(GETDP_FRAMEWORK)
+    set(GETDP_FRAMEWORK ${GETDP_FRAMEWORK}/GetDP.framework)
+    message(STATUS "Found " ${GETDP_FRAMEWORK})
+  else(GETDP_FRAMEWORK)
+    message(SEND_ERROR "Could not find GetDP.framework")
+  endif(GETDP_FRAMEWORK)
   # we also need gmsh framework
-  find_path(GMSH_FRAMEWORK "Gmsh" Gmsh.framework)
-  if(NOT GMSH_FRAMEWORK)
-    message(SEND_ERROR "Cannot compile onelab for iOS without Gmsh")
-  endif(NOT GMSH_FRAMEWORK)
+  find_path(GMSH_FRAMEWORK Gmsh.framework)
+  if(GMSH_FRAMEWORK)
+    set(GMSH_FRAMEWORK ${GMSH_FRAMEWORK}/Gmsh.framework)
+    message(STATUS "Found " ${GMSH_FRAMEWORK})
+  else(GMSH_FRAMEWORK)
+    message(SEND_ERROR "Could not find Gmsh.framework")
+  endif(GMSH_FRAMEWORK)
   # and we also need PETSc
-  find_path(PETSC_FRAMEWORK "petsc" petsc.framework)
-  if(NOT PETSC_FRAMEWORK)
-    message(SEND_ERROR "Cannot compile onelab for iOS without PETSc")
-  endif(NOT PETSC_FRAMEWORK)
+  find_path(PETSC_FRAMEWORK petsc.framework)
+  if(PETSC_FRAMEWORK)
+    set(PETSC_FRAMEWORK ${PETSC_FRAMEWORK}/petsc.framework)
+    message(STATUS "Found " ${PETSC_FRAMEWORK})
+  else(PETSC_FRAMEWORK)
+    message(SEND_ERROR "Could not find petsc.framework")
+  endif(PETSC_FRAMEWORK)
   # add target
   add_custom_target(xcodeProject
+    cd ${CMAKE_CURRENT_SOURCE_DIR}/utils/ && ${CMAKE_CURRENT_SOURCE_DIR}/utils/make_icon_ios.sh
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/Onelab/
-    COMMAND ${CMAKE_COMMAND} -E copy_directory  ${CMAKE_CURRENT_SOURCE_DIR}/iOS/Onelab/ ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/utils/ios.iconset/ ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/iOS/Onelab/ ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/iOS/Onelab.xcodeproj/ ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab.xcodeproj/
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/iOS/ic_launcher.png ${CMAKE_CURRENT_BINARY_DIR}/Onelab/
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/iOS/ic_launcher_retina.png ${CMAKE_CURRENT_BINARY_DIR}/Onelab/
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/drawContext.cpp ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/drawContext.h ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/drawGeom.cpp ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/
@@ -72,8 +81,15 @@ if(ENABLE_BUILD_IOS_EMULATOR OR ENABLE_BUILD_IOS)
     COMMAND ${CMAKE_COMMAND} -E copy ${PETSC_FRAMEWORK}/petsc ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/frameworks/petsc.framework/
   )
   copy_headers(${GETDP_FRAMEWORK}/Headers/ ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/frameworks/GetDP.framework/Headers/)
-  copy_headers(${GMSH_FRAMEWORK}/Headers/gmsh/ ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/frameworks/Gmsh.framework/Headers/)
+  copy_headers(${GMSH_FRAMEWORK}/Headers/ ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/frameworks/Gmsh.framework/Headers/)
   copy_headers(${PETSC_FRAMEWORK}/Headers/ ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/frameworks/petsc.framework/Headers/)
+
+  message(STATUS "")
+  message(STATUS "ONELAB for iOS successfully configured:")
+  message(STATUS " * Run `make xcodeProject' to create the XCode project")
+  message(STATUS " * Then run `open Onelab/Onelab.xcodeproj' to launch XCode")
+  message(STATUS "")
+
 endif(ENABLE_BUILD_IOS_EMULATOR OR ENABLE_BUILD_IOS)
 
 if(ENABLE_BUILD_ANDROID)

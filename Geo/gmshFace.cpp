@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -15,7 +15,10 @@
 #include "Context.h"
 #include "MTriangle.h"
 #include "VertexArray.h"
+
+#if defined(HAVE_MESH)
 #include "Field.h"
+#endif
 
 gmshFace::gmshFace(GModel *m, Surface *face)
   : GFace(m, face->Num), s(face)
@@ -82,7 +85,7 @@ gmshFace::gmshFace(GModel *m, Surface *face)
       List_Read(s->EmbeddedCurves, i, &c);
       GEdge *e = m->getEdgeByTag(abs(c->Num));
       if(e)
-        embedded_edges.push_back(e);
+        addEmbeddedEdge(e);
       else
         Msg::Error("Unknown curve %d", c->Num);
     }
@@ -375,6 +378,7 @@ bool gmshFace::buildSTLTriangulation(bool force)
   stl_vertices.clear();
   stl_triangles.clear();
 
+#if defined(HAVE_MESH)
   if (!triangles.size()){
     contextMeshOptions _temp = CTX::instance()->mesh;
     FieldManager *fields = model()->getFields();
@@ -392,6 +396,7 @@ bool gmshFace::buildSTLTriangulation(bool force)
     CTX::instance()->mesh = _temp;
     fields->setBackgroundField(fields->get(BGM));
   }
+#endif
 
   std::map<MVertex*,int> _v;
   int COUNT =0;

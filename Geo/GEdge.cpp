@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -502,4 +502,18 @@ std::list<GRegion*> GEdge::regions() const
   std::list<GRegion*> ret;
   ret.insert (ret.begin(), _r.begin(), _r.end());
   return ret;
+}
+
+void GEdge::relocateMeshVertices()
+{
+  for(unsigned int i = 0; i < mesh_vertices.size(); i++){
+    MVertex *v = mesh_vertices[i];
+    double u0 = 0;
+    if(v->getParameter(0, u0)){
+      GPoint p = point(u0);
+      v->x() = p.x();
+      v->y() = p.y();
+      v->z() = p.z();
+    }
+  }
 }

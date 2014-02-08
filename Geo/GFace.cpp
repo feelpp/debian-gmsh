@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -877,11 +877,22 @@ void GFace::XYZtoUV(double X, double Y, double Z, double &U, double &V,
       if(iter < MaxIter && err <= tol &&
          Unew <= umax && Vnew <= vmax &&
          Unew >= umin && Vnew >= vmin){
-        if (onSurface && err2 > 1.e-4 * CTX::instance()->lc)
+
+        if (onSurface && err2 > 1.e-4 * CTX::instance()->lc &&
+            !CTX::instance()->mesh.NewtonConvergenceTestXYZ){
           Msg::Warning("Converged for i=%d j=%d (err=%g iter=%d) BUT "
                        "xyz error = %g in point (%e,%e,%e) on surface %d",
                        i, j, err, iter, err2, X, Y, Z, tag());
-        return;
+        }
+
+        if(onSurface && err2 > 1.e-4 * CTX::instance()->lc &&
+           CTX::instance()->mesh.NewtonConvergenceTestXYZ){
+          // not converged in XYZ coordinates
+        }
+        else{
+          return;
+        }
+
       }
     }
   }
@@ -966,8 +977,7 @@ GPoint GFace::closestPoint(const SPoint3 &queryPoint, const double initialGuess[
   {
     GPoint pnt = point(initialGuess[0], initialGuess[1]);
     SPoint3 spnt(pnt.x(), pnt.y(), pnt.z());
-    double dist = queryPoint.distance(spnt);
-    printf("dist = %12.5E\n",dist);
+    //double dist = queryPoint.distance(spnt);
   }
 
   // FILE *F = Fopen ("hop.pos","w");
@@ -1467,3 +1477,19 @@ void GFace::addLayersOfQuads(int nLayers, GVertex *gv, double hmin, double ratio
     }
   }
 }
+
+void GFace::relocateMeshVertices()
+{
+  for(unsigned int i = 0; i < mesh_vertices.size(); i++){
+    MVertex *v = mesh_vertices[i];
+    double u0 = 0., u1 = 0.;
+    if(v->getParameter(0, u0) && v->getParameter(1, u1)){
+      GPoint p = point(u0, u1);
+      v->x() = p.x();
+      v->y() = p.y();
+      v->z() = p.z();
+    }
+  }
+}
+
+

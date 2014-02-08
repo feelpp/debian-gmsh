@@ -1,4 +1,4 @@
-# Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+# Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 #
 # See the LICENSE.txt file for license information. Please report all
 # bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -10,7 +10,8 @@ set(SRC
     GVertex.cpp GEdge.cpp GFace.cpp GRegion.cpp
     GEdgeLoop.cpp GEdgeCompound.cpp GFaceCompound.cpp
   GRegionCompound.cpp GRbf.cpp
-    gmshVertex.cpp gmshEdge.cpp gmshFace.cpp gmshRegion.cpp gmshSurface.cpp
+    gmshVertex.cpp gmshEdge.cpp gmshFace.cpp gmshRegion.cpp
+   gmshSurface.cpp
     OCCVertex.cpp OCCEdge.cpp OCCFace.cpp OCCRegion.cpp
     discreteEdge.cpp discreteFace.cpp discreteRegion.cpp
     fourierEdge.cpp fourierFace.cpp fourierProjectionFace.cpp

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -375,15 +375,16 @@ static void getAllParameters(MVertex *v, GFace *gf, std::vector<SPoint2> &params
     for(std::list<GEdge*>::iterator it = ed.begin(); it != ed.end(); it++){
       if((*it)->isSeam(gf)) {
         Range<double> range = (*it)->parBounds(0);
+	//	printf("%d %d %d\n",gv->tag(),(*it)->getBeginVertex()->tag(),(*it)->getEndVertex()->tag());
         if (gv == (*it)->getBeginVertex()){
           params.push_back((*it)->reparamOnFace(gf, range.low(),-1));
           params.push_back((*it)->reparamOnFace(gf, range.low(), 1));
         }
-        else if (gv == (*it)->getEndVertex()){
+        if (gv == (*it)->getEndVertex()){
           params.push_back((*it)->reparamOnFace(gf, range.high(),-1));
           params.push_back((*it)->reparamOnFace(gf, range.high(), 1));
         }
-        else{
+        if (gv != (*it)->getBeginVertex() && gv != (*it)->getEndVertex()){
           Msg::Warning("Strange!");
         }
         seam = true;
@@ -419,48 +420,48 @@ bool reparamMeshEdgeOnFace(MVertex *v1, MVertex *v2, GFace *gf,
   if (p1.size() == 1 && p2.size() == 1){
     param1 = p1[0];
     param2 = p2[0];
-    return true;
   }
-  else if (p1.size() == 1 && p2.size() == 2){
-    double d1 =
-      (p1[0].x() - p2[0].x()) * (p1[0].x() - p2[0].x()) +
-      (p1[0].y() - p2[0].y()) * (p1[0].y() - p2[0].y());
-    double d2 =
-      (p1[0].x() - p2[1].x()) * (p1[0].x() - p2[1].x()) +
-      (p1[0].y() - p2[1].y()) * (p1[0].y() - p2[1].y());
-    param1 = p1[0];
-    param2 = d2 < d1 ? p2[1] : p2[0];
-    return true;
-  }
-  else if (p2.size() == 1 && p1.size() == 2){
-    double d1 =
-      (p2[0].x() - p1[0].x()) * (p2[0].x() - p1[0].x()) +
-      (p2[0].y() - p1[0].y()) * (p2[0].y() - p1[0].y());
-    double d2 =
-      (p2[0].x() - p1[1].x()) * (p2[0].x() - p1[1].x()) +
-      (p2[0].y() - p1[1].y()) * (p2[0].y() - p1[1].y());
-    param1 = d2 < d1 ? p1[1] : p1[0];
-    param2 = p2[0];
-    return true;
-  }
-  else if(p1.size() > 1 && p2.size() > 1){
-    param1 = p1[0];
-    param2 = p2[0];
-
-    printf("NO WAY : TWO VERTICES ON THE SEAM, CANNOT CHOOSE\n");
-
-    // shout, both vertices are on seams
-    return false;
+  else if(p1.size() >= 1 && p2.size() >= 1){
+    int imin = 0;
+    int jmin = 0;
+    {
+      double d =
+	(p2[0].x() - p1[0].x()) * (p2[0].x() - p1[0].x()) +
+	(p2[0].y() - p1[0].y()) * (p2[0].y() - p1[0].y());
+      for (unsigned int i=0;i<p2.size();i++){
+	double d1 =
+	  (p2[i].x() - p1[0].x()) * (p2[i].x() - p1[0].x()) +
+	  (p2[i].y() - p1[0].y()) * (p2[i].y() - p1[0].y());
+	if (d1 < d){
+	  imin = i;
+	  d = d1;
+	}
+      }
+    }
+    {
+      double d =
+	(p2[0].x() - p1[0].x()) * (p2[0].x() - p1[0].x()) +
+	(p2[0].y() - p1[0].y()) * (p2[0].y() - p1[0].y());
+      for (unsigned int i=0;i<p1.size();i++){
+	double d1 =
+	  (p2[0].x() - p1[i].x()) * (p2[0].x() - p1[i].x()) +
+	  (p2[0].y() - p1[i].y()) * (p2[0].y() - p1[i].y());
+	if (d1 < d){
+	  jmin = i;
+	  d = d1;
+	}
+      }
+    }
+    param1 = p1[jmin];
+    param2 = p2[imin];
   }
   else{
     // brute force!
     param1 = gf->parFromPoint(SPoint3(v1->x(), v1->y(), v1->z()));
     param2 = gf->parFromPoint(SPoint3(v2->x(), v2->y(), v2->z()));
-    return true;
   }
+  return true;
 }
-
-
 
 bool reparamMeshVertexOnFace(MVertex *v, const GFace *gf, SPoint2 &param,
                              bool onSurface)

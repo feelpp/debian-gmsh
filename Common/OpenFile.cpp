@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -262,7 +262,7 @@ static int defineSolver(const std::string &name)
   return NUM_SOLVERS - 1;
 }
 
-int MergeFile(const std::string &fileName, bool warnIfMissing)
+int MergeFile(const std::string &fileName, bool warnIfMissing, bool setWindowTitle)
 {
   if(GModel::current()->getName() == ""){
     GModel::current()->setFileName(fileName);
@@ -270,7 +270,7 @@ int MergeFile(const std::string &fileName, bool warnIfMissing)
   }
 
 #if defined(HAVE_FLTK)
-  if(FlGui::available())
+  if(FlGui::available() && setWindowTitle)
     FlGui::instance()->setGraphicTitle(GModel::current()->getFileName());
 #endif
 
@@ -303,7 +303,7 @@ int MergeFile(const std::string &fileName, bool warnIfMissing)
         Msg::Error("Failed to uncompress `%s': check directory permissions",
                    fileName.c_str());
       GModel::current()->setFileName(noExt);
-      return MergeFile(noExt);
+      return MergeFile(noExt, false, setWindowTitle);
     }
   }
 
@@ -451,11 +451,11 @@ int MergeFile(const std::string &fileName, bool warnIfMissing)
         tmp->readMSH(fileName);
         status = GeomMeshMatcher::instance()->match(tmp2, tmp);
         delete tmp;
-	GModel::setCurrent(tmp2);
-	tmp2->setVisibility(1);
+        GModel::setCurrent(tmp2);
+        tmp2->setVisibility(1);
       }
       else
-	status = GModel::current()->readMSH(fileName);
+        status = GModel::current()->readMSH(fileName);
 #if defined(HAVE_POST)
       if(status > 1) status = PView::readMSH(fileName);
 #endif
@@ -497,8 +497,10 @@ int MergeFile(const std::string &fileName, bool warnIfMissing)
 
   if(!status) Msg::Error("Error loading '%s'", fileName.c_str());
   Msg::StatusBar(true, "Done reading '%s'", fileName.c_str());
-  CTX::instance()->fileread=true;
-   // merge the associated option file if there is one
+
+  CTX::instance()->fileread = true;
+
+  // merge the associated option file if there is one
   if(!StatFile(fileName + ".opt"))
     MergeFile(fileName + ".opt");
 
@@ -593,6 +595,7 @@ void ClearProject()
 #endif
 #if defined(HAVE_PARSER)
   gmsh_yysymbols.clear();
+  gmsh_yystringsymbols.clear();
 #endif
   for(int i = GModel::list.size() - 1; i >= 0; i--)
     delete GModel::list[i];
@@ -620,7 +623,7 @@ void ClearProject()
   Msg::ResetErrorCounter();
 }
 
-void OpenProject(const std::string &fileName)
+void OpenProject(const std::string &fileName, bool setWindowTitle)
 {
   if(CTX::instance()->lock) {
     Msg::Info("I'm busy! Ask me that later...");
@@ -636,11 +639,15 @@ void OpenProject(const std::string &fileName)
     GModel::current()->destroy();
     GModel::current()->getGEOInternals()->destroy();
     // don't clear the parser variables if we just launched gmsh with the
-    // -string command line option
+    // -string, -setstring or -setnumber command line options
 #if defined(HAVE_PARSER)
     std::string c = Msg::GetCommandLineArgs();
-    if(c.find("-string") == std::string::npos)
+    if(c.find("-string") == std::string::npos &&
+       c.find("-setstring") == std::string::npos &&
+       c.find("-setnumber") == std::string::npos){
       gmsh_yysymbols.clear();
+      gmsh_yystringsymbols.clear();
+    }
 #endif
   }
   else{
@@ -648,6 +655,7 @@ void OpenProject(const std::string &fileName)
     // variables and add a new model
 #if defined(HAVE_PARSER)
     gmsh_yysymbols.clear();
+    gmsh_yystringsymbols.clear();
 #endif
     new GModel();
     GModel::current(GModel::list.size() - 1);
@@ -657,7 +665,7 @@ void OpenProject(const std::string &fileName)
   ResetTemporaryBoundingBox();
 
   // merge the file
-  if(MergeFile(fileName)) {
+  if(MergeFile(fileName, false, setWindowTitle)) {
     if(fileName != CTX::instance()->recentFiles.front())
       CTX::instance()->recentFiles.insert
         (CTX::instance()->recentFiles.begin(), fileName);

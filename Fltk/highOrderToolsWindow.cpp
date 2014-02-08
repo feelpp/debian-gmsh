@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -132,6 +132,12 @@ static void highordertools_runopti_cb(Fl_Widget *w, void *data)
   int nbLayers = (int) o->value[2]->value();
   double threshold_max = o->value[8]->value();
 
+  int NE = 0;
+  for (GModel::riter it = GModel::current()->firstRegion(); it != GModel::current()->lastRegion(); ++it){
+    NE += (*it)->getNumMeshElements();
+  }
+
+
 #if defined(HAVE_OPTHOM)
   switch(algo) {
   case 0: {                                                               // Optimization
@@ -140,7 +146,9 @@ static void highordertools_runopti_cb(Fl_Widget *w, void *data)
     p.BARRIER_MIN = threshold_min;
     p.BARRIER_MAX = threshold_max;
     p.onlyVisible = onlyVisible;
-    p.dim = GModel::current()->getDim();
+    // change dim if no 3D elements are there
+    p.dim = GModel::current()->getDim() == 3 ? ( NE ? 3 : 2 ) :  GModel::current()->getDim();
+    printf("%d %d\n",NE,p.dim);
     p.itMax = (int) o->value[3]->value();
     p.optPassMax = (int) o->value[4]->value();
     p.weightFixed =  o->value[5]->value();
@@ -151,6 +159,7 @@ static void highordertools_runopti_cb(Fl_Widget *w, void *data)
     p.maxAdaptBlob = o->value[9]->value();
     p.adaptBlobLayerFact = (int) o->value[10]->value();
     p.adaptBlobDistFact = o->value[11]->value();
+    p.optPrimSurfMesh = false;
     HighOrderMeshOptimizer(GModel::current(), p);
     break;
   }
@@ -163,7 +172,7 @@ static void highordertools_runopti_cb(Fl_Widget *w, void *data)
     p.BARRIER_MIN = threshold_min;
     p.BARRIER_MAX = threshold_max;
     p.onlyVisible = onlyVisible;
-    p.dim = GModel::current()->getDim();
+    p.dim = GModel::current()->getDim() == 3 ? ( NE ? 3 : 2 ) :  GModel::current()->getDim();
     p.distanceFactor =  o->value[7]->value();
     HighOrderMeshFastCurving(GModel::current(), p);
     break;
@@ -334,11 +343,11 @@ highOrderToolsWindow::highOrderToolsWindow(int deltaFontSize)
   value[5] = new Fl_Value_Input
     (x, y, IW/2, BH);
   value[5]->align(FL_ALIGN_RIGHT);
-  value[5]->value(1.e+5);
+  value[5]->value(1000.);
   value[6] = new Fl_Value_Input
     (x+IW/2,y, IW/2, BH, "W fixed / W free");
   value[6]->align(FL_ALIGN_RIGHT);
-  value[6]->value(1.e+2);
+  value[6]->value(1.);
 
   y += BH;
   value[3] = new Fl_Value_Input

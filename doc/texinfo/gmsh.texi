@@ -1,5 +1,5 @@
 \input texinfo.tex @c -*-texinfo-*-
-@c Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+@c Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 @c
 @c See the LICENSE.txt file for license information. Please report all
 @c bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -986,10 +986,10 @@ parsing of the script file:
 @end example
 
 Such @w{@var{expression}s} are used in most of Gmsh's scripting
-commands. When @code{~@{@var{expression-cst}@}} is appended to a string
+commands. When @code{~@{@var{expression}@}} is appended to a string
 @var{string}, the result is a new string formed by the concatenation of
 @var{string}, @code{_} (an underscore) and the value of the
-@var{expression-cst}. This is most useful in loops (@pxref{Loops and
+@var{expression}. This is most useful in loops (@pxref{Loops and
 conditionals}), where it permits to define unique strings
 automatically. For example,
 @example
@@ -1718,6 +1718,11 @@ geometry.
 @item AdaptMesh @{ @var{expression-list} @} @{ @var{expression-list} @} @{ @{ @var{expression-list} < , @dots{} >  @} @};
 Performs adaptive mesh generation. Documentation not yet available.
 
+@item RelocateMesh Point | Line | Surface @{ @var{expression-list} @} | "*";
+Relocates the mesh vertices on the given entities using the parametric
+coordinates stored in the vertices. Useful for creating perturbation of
+meshes e.g. for sensitivity analyzes.
+
 @item SetOrder @var{expression};
 Changes the order of the elements in the current mesh.
 
@@ -1786,8 +1791,9 @@ Surface} or @code{Ruled Surface} commands, or by extruding lines), and
 finally volumes (using the @code{Volume} command or by extruding
 surfaces).
 
-These geometrical entities are called ``elementary'' in Gmsh's jargon, and
-are assigned identification numbers when they are created:
+These geometrical entities are called ``elementary'' in Gmsh's jargon,
+and are assigned identification numbers (stricly positive) when they are
+created:
 
 @enumerate
 @item each elementary point must possess a unique identification number;
@@ -1800,7 +1806,8 @@ are assigned identification numbers when they are created:
 ways, for example using the @code{Translate}, @code{Rotate},
 @code{Scale} or @code{Symmetry} commands. They can be deleted with the
 @code{Delete} command, provided that no higher-dimension entity
-references them.
+references them. Zero or negative identification numbers are reserved by
+the system for special uses: do not use them in your scripts.
 
 Groups of elementary geometrical entities can also be defined and
 are called ``physical'' entities. These physical entities cannot be modified
@@ -2840,7 +2847,7 @@ quadrangle and a right angle (a value of 0 would only accept quadrangles
 with right angles; a value of 90 would allow degenerate quadrangles;
 default value is 45).
 
-@item Reverse Line | Surface @{ @var{expression-list} @} ;
+@item Reverse Line | Surface @{ @var{expression-list} @} | "*" ;
 Reverses the mesh of the given line(s) or surface(s).
 
 @item Save @var{char-expression};
@@ -3038,6 +3045,10 @@ just merge the file containing the post-processing view multiple times.
 @item AliasWithOptions View[@var{expression}];
 Creates an alias of the @var{expression}-th post-processing view and copies
 all the options of the @var{expression}-th view to the new aliased view.
+
+@item CopyOptions View[@var{expression}, @var{expression}];
+Copy all the options from the first @var{expression}-th post-processing
+view to the second one.
 
 @item Combine ElementsByViewName;
 Combines all the post-processing views having the same name into new views.
@@ -3383,6 +3394,13 @@ can be put into separate files (e.g. one file per time step).  Nodes are
 assumed to be defined before elements.
 
 The format is defined as follows:
+
+@c For MSH3:
+@c $Nodes
+@c node_num x y z entity_id < dimension parameter ... >
+@c If entity_id == 0, no dimension and no parameters are given (there's no parametric info)
+@c If entity_id != 0, the next integer is the dimension of the entity (==
+@c the number of parameters that follow), followed by the parameters.
 
 @example
 $MeshFormat
@@ -3766,7 +3784,7 @@ Here is a pseudo C code to write @var{nodes-binary}:
 for(i = 0; i < number_of_nodes; i++)@{
   fwrite(&num_i, sizeof(int), 1, file);
   double xyz[3] = @{node_i_x, node_i_y, node_i_z@};
-  fwrite(&xyz, sizeof(double), 3, file);
+  fwrite(xyz, sizeof(double), 3, file);
 @}
 @end example
 
@@ -3783,7 +3801,7 @@ per element (same as @var{number-of-tags} in the ASCII format).
 Here is a pseudo C code to write @var{element-header-binary}:
 @example
 int header[3] = @{elm_type, num_elm_follow, num_tags@};
-fwrite(&header, sizeof(int), 2, file);
+fwrite(header, sizeof(int), 3, file);
 @end example
 
 @item @var{elements-binary}
@@ -5049,9 +5067,9 @@ image file.
 
 You can create simple MPEG animations by choosing MPEG as the format in
 `File->Save As': this allows you to loop over time steps or
-post-processing data sets. To create more complicated animations
-(flyovers, animated clipping or modification of meshes, etc.) or to use
-different output formats (AVI, MP4, etc.), you should write a
+post-processing data sets, or to change parameters according to
+@code{Print.Parameter}. To create fully customized animations or to use
+different output formats (AVI, MP4, etc.) you should write a
 script. Have a look at @file{tutorial/t8.geo} or
 @file{demos/anim.script} for some examples.
 
@@ -5177,7 +5195,7 @@ hexahedra instead of tetrahedra.
 
 @item Does Gmsh automatically couple unstructured tetrahedral meshes and structured hexahedral meshed using pyramids?
 
-No. We need your help to implement this.
+Only in simple geometrical cases. We need your help to improve this.
 
 @item Can I explicitly assign region numbers to extruded layers?
 
@@ -5357,9 +5375,8 @@ Evaluate plugin.
 @item Is there a way to save animations?
 
 You can save simple MPEG animations directly from the `File->Save As'
-menu. For more other formats or more complex animations, you should
-write a script. Have a look at @file{tutorial/t8.geo} or
-@file{demos/anim.script} for some examples.
+menu. For other formats you should write a script. Have a look at
+@file{tutorial/t8.geo} or @file{demos/anim.script} for some examples.
 
 @item Is there a way to visualize only certain components of vector/tensor fields?
 

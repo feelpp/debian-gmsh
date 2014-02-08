@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -425,6 +425,12 @@ void Filler::treat_region(GRegion* gr){
   }*/
 
   for(it=temp.begin();it!=temp.end();it++){
+    if((*it)->onWhat()->dim()==0){
+	  boundary_vertices.push_back(*it);
+	}
+  }
+	
+  for(it=temp.begin();it!=temp.end();it++){
     if((*it)->onWhat()->dim()==1){
 	  boundary_vertices.push_back(*it);
 	}
@@ -513,7 +519,9 @@ void Filler::treat_region(GRegion* gr){
 	  if(!ok2) delete individual;
 	}
 	
-	//printf("%d\n",count);
+	if(count%100==0){
+	  printf("%d\n",count);
+	}
 	count++;
   }
   

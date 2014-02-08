@@ -52,28 +52,28 @@ int GModel::writeCELUM(const std::string &name, bool saveAll,
 
   int idf = 1, ids = 1;
   /*
-   * un fichier de facettes
-     - nombre de facettes
-     - ligne vide
-     ... pour chaque facette
-     - numéro de la facette (commence à 1 : utilisé dans les erreurs de lectures)
-     - chaîne de caractères (nom de la partie géométrique, matériau,... )
-     - la liste des 3 numéros de sommets
-     - ligne vide
+   * a file with faces
+     - number of faces
+     - empty line
+     ... for each face
+     - number of the face (starts at 1 : used for read errors)
+     - char string (name of geom part, material,... )
+     - list of 3 vertex nums
+     - empty line
      ...
-   * un fichier de sommets
-     - nombre de sommets
-     - facteur de conversion
-     - ligne vide
-     ... pour chaque sommet
-     - numéro du sommet (commence à 1 : utilisé dans les erreurs de lectures)
-     - coordonnées cartésiennes du sommet
-     - composantes de la normale extérieure orientée
-     - valeur de la 1ière courbure principale
-     - valeur de la 2ième courbure principale
-     - composantes de la 1ière direction principale
-     - composantes de la 2ième direction principale
-     - ligne blanche
+   * a file with vertices
+     - number of vertices
+     - conversion factor
+     - empty line
+     ... for each vertex
+     - number of the vertex (starts at 1 : used for read errors)
+     - cartesian coordinates of the vertex
+     - componants of the exterior oriented normal
+     - value of 1st principal curvature
+     - value of second princpal curvature
+     - components of 1st principal direction
+     - components of 2nd principal direction
+     - empty line
      ...
   */
   fprintf(fpf, "%d\n\n", numf);

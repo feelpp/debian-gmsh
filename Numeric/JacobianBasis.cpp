@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -101,7 +101,7 @@ JacobianBasis::JacobianBasis(int tag)
   double xBar = 0., yBar = 0., zBar = 0.;
   double barycenter[3] = {0., 0., 0.};
   for (int i = 0; i < numPrimMapNodes; i++) {
-    for (int j = 0; i < primMapBasis->points.size2(); ++i) {
+    for (int j = 0; j < primMapBasis->points.size2(); ++j) {
       barycenter[j] += primMapBasis->points(i, j);
     }
   }
@@ -124,16 +124,13 @@ JacobianBasis::JacobianBasis(int tag)
   delete[] barDPsi;
 
   // Compute "fast" Jacobian evaluation matrices (at 1st order nodes + barycenter)
-//  numJacNodesFast = numPrimMapNodes+1;
-//  fullMatrix<double> lagPointsFast(numJacNodesFast,3);                                  // Sampling points
-//  lagPointsFast.copy(primMapBasis->points,0,numPrimMapNodes,0,3,0,0);                   // 1st order nodes
-//  lagPointsFast(numPrimMapNodes,0) = barycenter[0];                                     // Last point = barycenter
-//  lagPointsFast(numPrimMapNodes,1) = barycenter[1];
-//  lagPointsFast(numPrimMapNodes,2) = barycenter[2];
+  numJacNodesFast = numPrimMapNodes+1;
   fullMatrix<double> lagPointsFast(numJacNodesFast,3);                                  // Sampling points
-  lagPointsFast(0,0) = barycenter[0];                                     // Last point = barycenter
-  lagPointsFast(0,1) = barycenter[1];
-  lagPointsFast(0,2) = barycenter[2];
+  lagPointsFast.copy(primMapBasis->points,0,numPrimMapNodes,
+                     0,primMapBasis->points.size2(),0,0);                               // 1st order nodes
+  lagPointsFast(numPrimMapNodes,0) = barycenter[0];                                     // Last point = barycenter
+  lagPointsFast(numPrimMapNodes,1) = barycenter[1];
+  lagPointsFast(numPrimMapNodes,2) = barycenter[2];
 
   fullMatrix<double> allDPsiFast;
   mapBasis->df(lagPointsFast, allDPsiFast);

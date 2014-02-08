@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -592,7 +592,7 @@ void collapseEdgePassUnSorted(GFace *gf, BDS_Mesh &m, double MINE_, int MAXNP,
 void smoothVertexPass(GFace *gf, BDS_Mesh &m, int &nb_smooth, bool q)
 {
   // FIXME SUPER HACK
-  //    return;
+  // return;
   std::set<BDS_Point*,PointLessThan>::iterator itp = m.points.begin();
   while(itp != m.points.end()){
     if(m.smooth_point_centroid(*itp, gf,q))
@@ -746,7 +746,7 @@ void allowAppearanceofEdge (BDS_Point *p1, BDS_Point *p2)
 {
 }
 
-void invalidEdgesPeriodic(BDS_Mesh &m, std::map<BDS_Point*, MVertex*> *recoverMap,
+void invalidEdgesPeriodic(BDS_Mesh &m, std::map<BDS_Point*, MVertex*,PointLessThan> *recoverMap,
                           std::set<BDS_Edge*> &toSplit)
 {
   // first look for degenerated vertices
@@ -755,8 +755,8 @@ void invalidEdgesPeriodic(BDS_Mesh &m, std::map<BDS_Point*, MVertex*> *recoverMa
   while (it != m.edges.end()){
     BDS_Edge *e = *it;
     if (!e->deleted && e->numfaces() == 1){
-      std::map<BDS_Point*, MVertex*>::iterator itp1 = recoverMap->find(e->p1);
-      std::map<BDS_Point*, MVertex*>::iterator itp2 = recoverMap->find(e->p2);
+      std::map<BDS_Point*, MVertex*,PointLessThan>::iterator itp1 = recoverMap->find(e->p1);
+      std::map<BDS_Point*, MVertex*,PointLessThan>::iterator itp2 = recoverMap->find(e->p2);
       if (itp1 != recoverMap->end() && itp2 != recoverMap->end() &&
           itp1->second == itp2->second){
         degenerated.insert(itp1->second);
@@ -807,7 +807,7 @@ void invalidEdgesPeriodic(BDS_Mesh &m, std::map<BDS_Point*, MVertex*> *recoverMa
 // if p1 p2 exists and it is internal, split it
 
 int solveInvalidPeriodic(GFace *gf, BDS_Mesh &m,
-                         std::map<BDS_Point*, MVertex*> *recoverMap)
+                         std::map<BDS_Point*, MVertex*,PointLessThan> *recoverMap)
 {
   std::set<BDS_Edge*> toSplit;
   invalidEdgesPeriodic(m, recoverMap, toSplit);
@@ -836,7 +836,7 @@ int solveInvalidPeriodic(GFace *gf, BDS_Mesh &m,
 }
 
 void optimizeMeshBDS(GFace *gf, BDS_Mesh &m, const int NIT,
-                     std::map<BDS_Point*,MVertex*> *recoverMap=0)
+                     std::map<BDS_Point*,MVertex*,PointLessThan> *recoverMap=0)
 {
   int nb_swap;
   delaunayizeBDS(gf, m, nb_swap);

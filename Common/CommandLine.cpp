@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -36,6 +36,10 @@
 #include "periodical.h"
 #endif
 
+#if defined(HAVE_PARSER)
+#include "Parser.h"
+#endif
+
 int GetGmshMajorVersion(){ return GMSH_MAJOR_VERSION; }
 int GetGmshMinorVersion(){ return GMSH_MINOR_VERSION; }
 int GetGmshPatchVersion(){ return GMSH_PATCH_VERSION; }
@@ -53,7 +57,7 @@ std::vector<std::pair<std::string, std::string> > GetUsage()
   typedef std::pair<std::string, std::string> mp;
   std::vector<mp> s;
   s.push_back(mp("Geometry options:", ""));
-  s.push_back(mp("-0",                 "Output unrolled geometry, then exit"));
+  s.push_back(mp("-0",                 "Output model, then exit"));
   s.push_back(mp("-tol float",         "Set geometrical tolerance"));
   s.push_back(mp("-match",             "Match geometries and meshes"));
   s.push_back(mp("Mesh options:", ""));
@@ -90,7 +94,7 @@ std::vector<std::pair<std::string, std::string> > GetUsage()
   s.push_back(mp("-rand float",        "Set random perturbation factor"));
   s.push_back(mp("-bgm file",          "Load background mesh from file"));
   s.push_back(mp("-check",             "Perform various consistency checks on mesh"));
-  s.push_back(mp("-mpass int",         "Do several passes on the mesh for complex backround fields"));
+  s.push_back(mp("-mpass int",         "Do several passes on the mesh for complex background fields"));
   s.push_back(mp("-ignorePartBound",   "Ignore partitions boundaries"));
 #if defined(HAVE_FLTK)
   s.push_back(mp("Post-processing options:", ""));
@@ -123,7 +127,9 @@ std::vector<std::pair<std::string, std::string> > GetUsage()
   s.push_back(mp("-watch pattern",     "Pattern of files to merge as they become available"));
   s.push_back(mp("-v int",             "Set verbosity level"));
   s.push_back(mp("-nopopup",           "Don't popup dialog windows in scripts"));
-  s.push_back(mp("-string \"string\"", "Parse option string at startup"));
+  s.push_back(mp("-string \"string\"", "Parse command string at startup"));
+  s.push_back(mp("-setnumber name value", "Set constant number name=value"));
+  s.push_back(mp("-setstring name value", "Set constant string name=value"));
   s.push_back(mp("-option file",       "Parse option file at startup"));
   s.push_back(mp("-convert files",     "Convert files into latest binary formats, then exit"));
   s.push_back(mp("-version",           "Show version number"));
@@ -492,11 +498,17 @@ void GetOptions(int argc, char *argv[])
         int j;
         int radical;
         double max;
+        double xMax;
+        double yMax;
+        double zMax;
         std::vector<double> properties;
         if(argv[i]){
           std::ifstream file(argv[i++]);
           file >> max;
           file >> radical;
+          file >> xMax;
+          file >> yMax;
+          file >> zMax;
           properties.clear();
           properties.resize(4*max);
           for(j=0;j<max;j++){
@@ -506,10 +518,10 @@ void GetOptions(int argc, char *argv[])
             file >> properties[4*j+3];
           }
           voroMetal3D vm1;
-          vm1.execute(properties,radical,0.1);
+          vm1.execute(properties,radical,0.1,xMax,yMax,zMax);
           GModel::current()->load("MicrostructurePolycrystal3D.geo");
           voroMetal3D vm2;
-          vm2.correspondance(0.00001);
+          vm2.correspondance(0.00001,xMax,yMax,zMax);
         }
       }
 #endif
@@ -536,6 +548,27 @@ void GetOptions(int argc, char *argv[])
         else
           Msg::Fatal("Missing string");
       }
+#if defined(HAVE_PARSER)
+      else if(!strcmp(argv[i] + 1, "setstring")) {
+        i++;
+	if (i + 1 < argc && argv[i][0] != '-' && argv[i + 1][0] != '-') {
+          gmsh_yystringsymbols[argv[i]] = argv[i + 1];
+          i += 2;
+	}
+        else
+          Msg::Fatal("Missing name and/or value for string definition");
+      }
+      else if (!strcmp(argv[i]+1, "setnumber")) {
+        i++;
+	if (i + 1 < argc && argv[i][0] != '-' && argv[i + 1][0] != '-') {
+          std::vector<double> val(1, atof(argv[i + 1]));
+          gmsh_yysymbols[argv[i]].value = val;
+          i += 2;
+	}
+        else
+          Msg::Error("Missing name and/or value for number definition");
+      }
+#endif
       else if(!strcmp(argv[i] + 1, "option")) {
         i++;
         if(argv[i])
@@ -792,8 +825,6 @@ void GetOptions(int argc, char *argv[])
             CTX::instance()->mesh.algo2d = ALGO_2D_FRONTAL_QUAD;
           else if(!strncmp(argv[i], "pack", 4))
             CTX::instance()->mesh.algo2d = ALGO_2D_PACK_PRLGRMS;
-          else if(!strncmp(argv[i], "ruppert", 7))
-            CTX::instance()->mesh.algo2d = ALGO_2D_RUPPERT;
           else if(!strncmp(argv[i], "front2d", 7) || !strncmp(argv[i], "frontal", 7))
             CTX::instance()->mesh.algo2d = ALGO_2D_FRONTAL;
           else if(!strncmp(argv[i], "bamg",4))
@@ -819,13 +850,11 @@ void GetOptions(int argc, char *argv[])
       }
       else if(!strcmp(argv[i] + 1, "rec")) {
         i++;
-        if(argv[i]) {
-          CTX::instance()->mesh.doRecombinationTest = 1;
-          CTX::instance()->mesh.recTestName = argv[i];
-          i++;
-        }
-        else
-          Msg::Fatal("Missing file name for recomb");
+        if (argc - i < 3) Msg::Fatal("pas assez argument");
+        CTX::instance()->mesh.doRecombinationTest = 1;
+        CTX::instance()->mesh.recTestName = argv[i]; i++;
+        CTX::instance()->mesh.nProc = atoi(argv[i]); i++;
+        CTX::instance()->mesh.nbProc = atoi(argv[i]); i++;
       }
       else if(!strcmp(argv[i] + 1, "beg")) {
         i++;
@@ -908,7 +937,7 @@ void GetOptions(int argc, char *argv[])
       }
       else if(!strcmp(argv[i] + 1, "help") || !strcmp(argv[i] + 1, "-help")) {
         fprintf(stderr, "Gmsh, a 3D mesh generator with pre- and post-processing facilities\n");
-        fprintf(stderr, "Copyright (C) 1997-2013 Christophe Geuzaine and Jean-Francois Remacle\n");
+        fprintf(stderr, "Copyright (C) 1997-2014 Christophe Geuzaine and Jean-Francois Remacle\n");
         PrintUsage(argv[0]);
         Msg::Exit(0);
       }

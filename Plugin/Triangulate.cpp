@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -124,7 +124,7 @@ PView *GMSH_TriangulatePlugin::execute(PView *v)
   // get lc
   SBoundingBox3d bbox;
   for(unsigned int i = 0; i < points.size(); i++) bbox += points[i]->point();
-  double lc = norm(SVector3(bbox.max(), bbox.min()));
+  double lc = 10 * norm(SVector3(bbox.max(), bbox.min()));
 
   // build a point record structure for the divide and conquer algorithm
   DocRecord doc(points.size());
@@ -144,6 +144,14 @@ PView *GMSH_TriangulatePlugin::execute(PView *v)
   PView *v2 = new PView();
   PViewDataList *data2 = getDataList(v2);
   for(int i = 0; i < doc.numTriangles; i++){
+    int a = doc.triangles[i].a;
+    int b = doc.triangles[i].b;
+    int c = doc.triangles[i].c;
+    int n = doc.numPoints;
+    if(a < 0 || a >= n || b < 0 || b >= n || c < 0 || c >= n){
+      Msg::Warning("Skipping bad triangle %d", i);
+      continue;
+    }
     PointData *p[3];
     p[0] = (PointData*)doc.points[doc.triangles[i].a].data;
     p[1] = (PointData*)doc.points[doc.triangles[i].b].data;

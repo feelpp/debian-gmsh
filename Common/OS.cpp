@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -16,6 +16,14 @@
 #include <math.h>
 #include "GmshConfig.h"
 #include "StringUtils.h"
+
+#if defined(__APPLE__)
+#include <sys/sysctl.h>
+#endif
+
+#if defined(__linux__)
+#include <sys/sysinfo.h>
+#endif
 
 #if !defined(WIN32) || defined(__CYGWIN__)
 #include <unistd.h>
@@ -262,6 +270,28 @@ double Cpu()
   return s;
 }
 
+double TotalRam()
+{
+  double ram = 0;
+#if defined(__APPLE__)
+  int name[] = {CTL_HW, HW_MEMSIZE};
+  int64_t value;
+  size_t len = sizeof(value);
+  if(sysctl(name, 2, &value, &len, NULL, 0) != -1)
+    ram = value / (1024 * 1024);
+#elif defined (WIN32)
+  MEMORYSTATUSEX status;
+  status.dwLength = sizeof(status);
+  GlobalMemoryStatusEx(&status);
+  ram = status.ullTotalPhys  / ((double)1024 * 1024);
+#elif defined(__linux__)
+  struct sysinfo infos;
+  if(sysinfo(&infos) != -1)
+    ram = infos.totalram * (unsigned long)infos.mem_unit / ((double)1024 * 1024);
+#endif
+  return ram;
+}
+
 long GetMemoryUsage()
 {
   long mem = 0;
@@ -318,6 +348,18 @@ int CreateDirectory(const std::string &dirName)
   if(mkdir(dirName.c_str(), 0777)) return 0;
 #endif
   return 1;
+}
+
+void CreatePath(const std::string &fullPath)
+{
+  size_t lastp = fullPath.find_last_of('/'); // TODO: handle backslash for win?
+  if(lastp == std::string::npos) return;
+  std::string dirname = std::string(fullPath, 0, lastp);
+  size_t cur = 0;
+  while(cur != std::string::npos) {
+    cur = dirname.find("/", cur + 1);
+    CreateDirectory(dirname.substr(0, cur));
+  }
 }
 
 int KillProcess(int pid)

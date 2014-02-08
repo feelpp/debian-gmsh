@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -692,10 +692,17 @@ GRegion* OCC_Internals::addRegionToModel(GModel *model, TopoDS_Solid region)
 {
   GRegion *gr  = getOCCRegionByNativePtr(model, region);
   if(gr) return gr;
-  addShapeToLists(region);
+
   buildShapeFromLists(region);
+  model->destroy();
+  buildLists();
   buildGModel(model);
   return getOCCRegionByNativePtr(model, region);
+
+  //  addShapeToLists(region);
+  //  buildShapeFromLists(region);
+  //  buildGModel(model);
+  //  return getOCCRegionByNativePtr(model, region);
 }
 
 /* I needed getGTagOfOCC*ByNativePtr whithin setPhysicalNumToEntitiesInBox */

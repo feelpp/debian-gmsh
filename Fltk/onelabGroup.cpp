@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -113,7 +113,8 @@ class onelabGmshServer : public GmshServer{
   {
     std::string sockname;
     std::ostringstream tmp;
-    if(!strstr(CTX::instance()->solver.socketName.c_str(), ":")){
+    const char *port = strstr(CTX::instance()->solver.socketName.c_str(), ":");
+    if(!port){
       // Unix socket
       tmp << CTX::instance()->homeDir << CTX::instance()->solver.socketName
           << _client->getId();
@@ -124,7 +125,9 @@ class onelabGmshServer : public GmshServer{
       if(CTX::instance()->solver.socketName.size() &&
          CTX::instance()->solver.socketName[0] == ':')
         tmp << GetHostName(); // prepend hostname if only the port number is given
-      tmp << CTX::instance()->solver.socketName << _client->getId();
+      tmp << CTX::instance()->solver.socketName;
+      if(atoi(port + 1)) // nonzero port is given - append client id
+        tmp << _client->getId();
       sockname = tmp.str();
     }
 
@@ -447,6 +450,7 @@ bool gmshLocalNetworkClient::run()
     // spawned subclients) and check if data is available for one of them
     bool stop = false, haveData = false;
     gmshLocalNetworkClient *c = 0;
+    std::vector<gmshLocalNetworkClient*> toDelete;
     for(int i = 0; i < getNumClients(); i++){
       c = getClient(i);
       if(c->getPid() < 0){
@@ -454,7 +458,17 @@ bool gmshLocalNetworkClient::run()
           stop = true;
           break;
         }
-        else{ // this subclient is not active anymore: pass to the next client
+        else{
+          // this subclient is not active anymore: shut down and delete its
+          // server and mark the client for deletion
+          GmshServer *s = c->getGmshServer();
+          c->setGmshServer(0);
+          c->setFather(0);
+          if(s){
+            s->Shutdown();
+            delete s;
+          }
+          toDelete.push_back(c);
           continue;
         }
       }
@@ -479,6 +493,11 @@ bool gmshLocalNetworkClient::run()
         }
       }
     }
+    for(unsigned int i = 0; i < toDelete.size(); i++){
+      removeClient(toDelete[i]);
+      delete toDelete[i];
+    }
+
     // break the while(1) if the master client has stopped or if we encountered
     // a problem
     if(stop) break;
@@ -492,9 +511,7 @@ bool gmshLocalNetworkClient::run()
   }
 
   // we are done running the (master) client: delete the servers and the
-  // subclients, if any. The servers are not deleted upon GMSH_STOP in
-  // receiveMessage() to make sure we always delete them, even when the
-  // disconnect was not clean.
+  // subclients, if any remain (they should have been deleted already).
   std::vector<gmshLocalNetworkClient*> toDelete;
   for(int i = 0; i < getNumClients(); i++){
     gmshLocalNetworkClient *c = getClient(i);
@@ -861,6 +878,10 @@ void onelab_option_cb(Fl_Widget *w, void *data)
     CTX::instance()->solver.autoHideNewViews = val;
   else if(what == "step")
     CTX::instance()->solver.autoShowLastStep = val;
+  else if(what == "invisible"){
+    CTX::instance()->solver.showInvisibleParameters = val;
+    FlGui::instance()->onelab->rebuildTree(true);
+  }
 }
 
 static void onelab_choose_executable_cb(Fl_Widget *w, void *data)
@@ -1074,7 +1095,9 @@ onelabGroup::onelabGroup(int x, int y, int w, int h, const char *l)
              FL_MENU_TOGGLE);
   _gear->add("Hide new views", 0, onelab_option_cb, (void*)"hide",
              FL_MENU_TOGGLE);
-  _gear->add("_Always show last step", 0, onelab_option_cb, (void*)"step",
+  _gear->add("Always show last step", 0, onelab_option_cb, (void*)"step",
+             FL_MENU_TOGGLE);
+  _gear->add("_Show hidden parameters", 0, onelab_option_cb, (void*)"invisible",
              FL_MENU_TOGGLE);
 
   _gearOptionsEnd = _gear->menu()->size();
@@ -1624,7 +1647,8 @@ void onelabGroup::rebuildTree(bool deleteWidgets)
   std::vector<onelab::number> numbers;
   onelab::server::instance()->get(numbers);
   for(unsigned int i = 0; i < numbers.size(); i++){
-    if(!numbers[i].getVisible()) continue;
+    if(!numbers[i].getVisible() && !CTX::instance()->solver.showInvisibleParameters)
+      continue;
     if(numbers[i].getAttribute("Closed") == "1")
       closed.insert(numbers[i].getPath());
     _addParameter(numbers[i]);
@@ -1633,7 +1657,8 @@ void onelabGroup::rebuildTree(bool deleteWidgets)
   std::vector<onelab::string> strings;
   onelab::server::instance()->get(strings);
   for(unsigned int i = 0; i < strings.size(); i++){
-    if(!strings[i].getVisible()) continue;
+    if(!strings[i].getVisible() && !CTX::instance()->solver.showInvisibleParameters)
+      continue;
     if(strings[i].getAttribute("Closed") == "1")
       closed.insert(strings[i].getPath());
     _addParameter(strings[i]);
@@ -1642,7 +1667,8 @@ void onelabGroup::rebuildTree(bool deleteWidgets)
   std::vector<onelab::region> regions;
   onelab::server::instance()->get(regions);
   for(unsigned int i = 0; i < regions.size(); i++){
-    if(!regions[i].getVisible()) continue;
+    if(!regions[i].getVisible() && !CTX::instance()->solver.showInvisibleParameters)
+      continue;
     if(regions[i].getAttribute("Closed") == "1")
       closed.insert(regions[i].getPath());
     _addParameter(regions[i]);
@@ -1651,7 +1677,8 @@ void onelabGroup::rebuildTree(bool deleteWidgets)
   std::vector<onelab::function> functions;
   onelab::server::instance()->get(functions);
   for(unsigned int i = 0; i < functions.size(); i++){
-    if(!functions[i].getVisible()) continue;
+    if(!functions[i].getVisible() && !CTX::instance()->solver.showInvisibleParameters)
+      continue;
     if(functions[i].getAttribute("Closed") == "1")
       closed.insert(functions[i].getPath());
     _addParameter(functions[i]);
@@ -1682,8 +1709,9 @@ void onelabGroup::rebuildTree(bool deleteWidgets)
     }
   }
 
-  for(std::set<std::string>::iterator it = closed.begin(); it != closed.end(); it++)
+  for(std::set<std::string>::iterator it = closed.begin(); it != closed.end(); it++){
     if(it->size()) _tree->close(it->c_str(), 0);
+  }
 
   _tree->redraw();
 
@@ -1812,14 +1840,15 @@ void onelabGroup::rebuildSolverList()
 {
   // update gear menu
   Fl_Menu_Item* menu = (Fl_Menu_Item*)_gear->menu();
-  int values[7] = {CTX::instance()->solver.autoSaveDatabase,
+  int values[8] = {CTX::instance()->solver.autoSaveDatabase,
                    CTX::instance()->solver.autoArchiveOutputFiles,
                    CTX::instance()->solver.autoCheck,
                    CTX::instance()->solver.autoMesh,
                    CTX::instance()->solver.autoMergeFile,
                    CTX::instance()->solver.autoHideNewViews,
-                   CTX::instance()->solver.autoShowLastStep};
-  for(int i = 0; i < 7; i++){
+                   CTX::instance()->solver.autoShowLastStep,
+                   CTX::instance()->solver.showInvisibleParameters};
+  for(int i = 0; i < 8; i++){
     int idx = _gearOptionsStart - 1 + i;
     if(values[i])
       menu[idx].set();

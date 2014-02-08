@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -127,14 +127,8 @@ class MElement
   }
 
   // get an edge representation for drawing
-  virtual int getNumEdgesRep() = 0;
-  virtual void getEdgeRep(int num, double *x, double *y, double *z, SVector3 *n) = 0;
-
-  // get all the vertices on an edge
-  virtual void getEdgeVertices(const int num, std::vector<MVertex*> &v) const
-  {
-    v.resize(0);
-  }
+  virtual int getNumEdgesRep(bool curved) = 0;
+  virtual void getEdgeRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n) = 0;
 
   // get the faces
   virtual int getNumFaces() = 0;
@@ -147,10 +141,14 @@ class MElement
   }
 
   // get a face representation for drawing
-  virtual int getNumFacesRep() = 0;
-  virtual void getFaceRep(int num, double *x, double *y, double *z, SVector3 *n) = 0;
+  virtual int getNumFacesRep(bool curved) = 0;
+  virtual void getFaceRep(bool curved, int num, double *x, double *y, double *z, SVector3 *n) = 0;
 
-  // get all the vertices on a face
+  // get all the vertices on a edge or a face
+  virtual void getEdgeVertices(const int num, std::vector<MVertex*> &v) const
+  {
+    v.resize(0);
+  }
   virtual void getFaceVertices(const int num, std::vector<MVertex*> &v) const
   {
     v.resize(0);
@@ -177,6 +175,9 @@ class MElement
   virtual double maxEdge();
   virtual double minEdge();
 
+  // Max. distance between curved and straight element among all high-order nodes
+  double maxDistToStraight();
+
   // get the quality measures
   virtual double rhoShapeMeasure();
   virtual double gammaShapeMeasure(){ return 0.; }
@@ -188,7 +189,7 @@ class MElement
     return jmin;
   }
   virtual double angleShapeMeasure() { return 1.0; }
-  virtual void scaledJacRange(double &jmin, double &jmax);
+  virtual void scaledJacRange(double &jmin, double &jmax, GEntity *ge = 0);
 
   // get the radius of the inscribed circle/sphere if it exists,
   // otherwise get the minimum radius of all the circles/spheres

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -9,7 +9,7 @@
 #include "Octree.h"
 #include "Context.h"
 
-static void MElementBB(void *a, double *min, double *max)
+void MElementBB(void *a, double *min, double *max)
 {
   MElement *e = (MElement*)a;
   MVertex *v = e->getVertex(0);
@@ -47,7 +47,7 @@ static void MElementCentroid(void *a, double *x)
   x[2] *= oc;
 }
 
-static int MElementInEle(void *a, double *x)
+int MElementInEle(void *a, double *x)
 {
   MElement *e = (MElement*)a;
   double uvw[3];
@@ -187,7 +187,7 @@ std::vector<MElement *> MElementOctree::findAll(double x, double y, double z,
   return e;
 }
 
-MElement *MElementOctree::find(double x, double y, double z, int dim, bool strict)
+MElement *MElementOctree::find(double x, double y, double z, int dim, bool strict) const
 {
   double P[3] = {x, y, z};
   MElement *e = (MElement*)Octree_Search(P, _octree);

@@ -1,4 +1,4 @@
-// Gmsh - Copyright (C) 1997-2013 C. Geuzaine, J.-F. Remacle
+// Gmsh - Copyright (C) 1997-2014 C. Geuzaine, J.-F. Remacle
 //
 // See the LICENSE.txt file for license information. Please report all
 // bugs and problems to the public mailing list <gmsh@geuz.org>.
@@ -5250,6 +5250,13 @@ double opt_mesh_file_format(OPT_ARGS_NUM)
   return CTX::instance()->mesh.fileFormat;
 }
 
+double opt_mesh_newton_convergence_test_xyz(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->mesh.NewtonConvergenceTestXYZ = (int)val;
+  return CTX::instance()->mesh.NewtonConvergenceTestXYZ;
+}
+
 double opt_mesh_msh_file_version(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
@@ -5636,6 +5643,13 @@ double opt_mesh_ho_threshold_max(OPT_ARGS_NUM)
   if(action & GMSH_SET)
     CTX::instance()->mesh.hoThresholdMax = val;
   return CTX::instance()->mesh.hoThresholdMax;
+}
+
+double opt_mesh_ho_opt_prim_surf_mesh(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->mesh.hoOptPrimSurfMesh = (int)val;
+  return CTX::instance()->mesh.hoOptPrimSurfMesh;
 }
 
 double opt_mesh_ho_poisson(OPT_ARGS_NUM)
@@ -6173,6 +6187,13 @@ double opt_solver_auto_show_last_step(OPT_ARGS_NUM)
   return CTX::instance()->solver.autoShowLastStep;
 }
 
+double opt_solver_show_invisible_parameters(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->solver.showInvisibleParameters = (int)val;
+  return CTX::instance()->solver.showInvisibleParameters;
+}
+
 double opt_post_horizontal_scales(OPT_ARGS_NUM)
 {
   if(action & GMSH_SET)
@@ -6284,6 +6305,13 @@ double opt_post_file_format(OPT_ARGS_NUM)
   if(action & GMSH_SET)
     CTX::instance()->post.fileFormat = (int)val;
   return CTX::instance()->post.fileFormat;
+}
+
+double opt_post_force_node_data(OPT_ARGS_NUM)
+{
+  if(action & GMSH_SET)
+    CTX::instance()->post.forceNodeData = (int)val;
+  return CTX::instance()->post.forceNodeData;
 }
 
 double opt_view_nb_timestep(OPT_ARGS_NUM)
