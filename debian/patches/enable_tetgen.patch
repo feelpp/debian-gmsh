@@ -1,0 +1,61 @@
+Description: <short summary of the patch>
+ TODO: Put a short summary on the line above and replace this paragraph
+ with a longer explanation of this change. Complete the meta-information
+ with other relevant fields (see below for details). To make it easier, the
+ information below has been extracted from the changelog. Adjust it or drop
+ it.
+ .
+ gmsh (2.8.4+dfsg-1) unstable; urgency=medium
+ .
+   * [6168e45] Return back python-gmsh and gmsh-doc removed accidentally
+               in last uploads. (Closes: #729653)
+   * [a6c5815] Use wrap-and-sort.
+   * [e1cb0a0] Set Standards-Version: 3.9.5. No changes.
+   * [7a492a8] Remove fopenmp option to escape race condition. (Closes: #737103)
+   * [cfdec5c] Enable powerpcspe arch. (Closes: #735018)
+Author: Anton Gladky <gladk@debian.org>
+Bug-Debian: http://bugs.debian.org/729653
+Bug-Debian: http://bugs.debian.org/735018
+Bug-Debian: http://bugs.debian.org/737103
+
+---
+The information above should follow the Patch Tagging Guidelines, please
+checkout http://dep.debian.net/deps/dep3/ to learn about the format. Here
+are templates for supplementary fields that you might want to add:
+
+Origin: <vendor|upstream|other>, <url of original patch>
+Bug: <url in upstream bugtracker>
+Bug-Debian: http://bugs.debian.org/<bugnumber>
+Bug-Ubuntu: https://launchpad.net/bugs/<bugnumber>
+Forwarded: <no|not-needed|url proving that it has been forwarded>
+Reviewed-By: <name and email of someone who approved the patch>
+Last-Update: <YYYY-MM-DD>
+
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -760,6 +760,7 @@
+       list(APPEND EXTERNAL_LIBRARIES ${TETGEN_LIB})
+       list(APPEND EXTERNAL_INCLUDES ${TETGEN_INC})
+       set_config_option(HAVE_TETGEN "Tetgen")
++      add_definitions(-DTETLIBRARY)
+     endif(TETGEN_LIB AND TETGEN_INC)
+   endif(ENABLE_TETGEN AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/contrib/Tetgen1.5/tetgen.h)
+   if(HAVE_TETGEN)
+@@ -1314,7 +1315,7 @@
+     message(STATUS "Note: By enabling ENABLE_MSVC_STATIC_RUNTIME, shared library "
+             "won't link. In MSVC change /MT to /MD in the shared project properties")
+   endif(MSVC AND ENABLE_MSVC_STATIC_RUNTIME)		  
+-  target_link_libraries(shared ${LINK_LIBRARIES} -shared -lgl2ps -lGL -lglut)
++  target_link_libraries(shared ${LINK_LIBRARIES} -shared -lgl2ps -lGL -lglut -ltet)
+ endif(ENABLE_BUILD_SHARED OR ENABLE_BUILD_DYNAMIC OR 
+       ENABLE_WRAP_PYTHON OR ENABLE_WRAP_JAVA)
+ 
+@@ -1337,7 +1338,7 @@
+     add_executable(gmsh Common/Main.cpp ${GMSH_SRC})
+   endif(ENABLE_BUILD_DYNAMIC)
+ endif(HAVE_FLTK)
+-target_link_libraries(gmsh ${LINK_LIBRARIES} -lgl2ps -lGL -lglut)
++target_link_libraries(gmsh ${LINK_LIBRARIES} -lgl2ps -lGL -lglut -ltet)
+ 
+ # Windows specific linker options
+ if(WIN32 AND NOT MSVC OR CYGWIN)
