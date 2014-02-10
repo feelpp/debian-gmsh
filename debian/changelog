@@ -1,3 +1,12 @@
+gmsh (2.8.4+dfsg-1) unstable; urgency=medium
+
+  * [09d4b69] Imported Upstream version 2.8.4+dfsg
+  * [85f9ea7] Refresh patches.
+  * [df66b87] Enable tetgen. Thanks to Christophe Trophime.
+  * [3d7eed8] Update package description.
+
+ -- Anton Gladky <gladk@debian.org>  Mon, 10 Feb 2014 21:24:32 +0100
+
 gmsh (2.8.3+dfsg-5) unstable; urgency=medium
 
   * [6168e45] Return back python-gmsh and gmsh-doc removed accidentally 
