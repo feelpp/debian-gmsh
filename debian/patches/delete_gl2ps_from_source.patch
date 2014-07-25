@@ -2,9 +2,11 @@ Description: delete gl2ps and use packaged version.
 Author: Anton Gladky <gladky.anton@gmail.com>, Julian Taylor <jtaylor.debian@googlemail.com>
 Last-Update: 2012-11-28
 
---- a/Graphics/CMakeLists.txt
-+++ b/Graphics/CMakeLists.txt
-@@ -15,7 +15,6 @@
+Index: gmsh-2.8.5-source/Graphics/CMakeLists.txt
+===================================================================
+--- gmsh-2.8.5-source.orig/Graphics/CMakeLists.txt
++++ gmsh-2.8.5-source/Graphics/CMakeLists.txt
+@@ -15,7 +15,6 @@ set(SRC
    drawScales.cpp 
    drawGraph2d.cpp 
    drawGlyph.cpp 
@@ -12,9 +14,11 @@ Last-Update: 2012-11-28
    gl2gif.cpp
    gl2jpeg.cpp
    gl2png.cpp
---- a/CMakeLists.txt
-+++ b/CMakeLists.txt
-@@ -1321,7 +1321,7 @@
+Index: gmsh-2.8.5-source/CMakeLists.txt
+===================================================================
+--- gmsh-2.8.5-source.orig/CMakeLists.txt
++++ gmsh-2.8.5-source/CMakeLists.txt
+@@ -1360,7 +1360,7 @@ else(HAVE_FLTK)
      add_executable(gmsh Common/Main.cpp ${GMSH_SRC})
    endif(ENABLE_BUILD_DYNAMIC)
  endif(HAVE_FLTK)

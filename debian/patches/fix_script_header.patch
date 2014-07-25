@@ -2,14 +2,16 @@ Description: add header into onelab
 Author: Anton Gladky <gladk@debian.org>
 Last-Update: 2013-05-12
 
---- a/contrib/onelab/python/onelab.py
-+++ b/contrib/onelab/python/onelab.py
-@@ -27,6 +27,8 @@
+Index: gmsh-2.8.5-source/contrib/onelab/python/onelab.py
+===================================================================
+--- gmsh-2.8.5-source.orig/contrib/onelab/python/onelab.py
++++ gmsh-2.8.5-source/contrib/onelab/python/onelab.py
+@@ -27,6 +27,8 @@ Please report all bugs and problems to t
  <gmsh@geuz.org>.
  """
  
 +#!/usr/bin/env python
 +
  import socket, struct, os, sys, subprocess
- _VERSION = '1.05'
+ _VERSION = '1.1'
  

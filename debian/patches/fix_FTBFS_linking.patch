@@ -2,9 +2,11 @@ Description: this linking causes a FTBFS
 Author: Anton Gladky <gladky.anton@gmail.com>
 Last-Update: 2012-11-28
 
---- a/CMakeLists.txt
-+++ b/CMakeLists.txt
-@@ -1314,7 +1314,7 @@
+Index: gmsh-2.8.5-source/CMakeLists.txt
+===================================================================
+--- gmsh-2.8.5-source.orig/CMakeLists.txt
++++ gmsh-2.8.5-source/CMakeLists.txt
+@@ -1353,7 +1353,7 @@ if(ENABLE_BUILD_SHARED OR ENABLE_BUILD_D
      message(STATUS "Note: By enabling ENABLE_MSVC_STATIC_RUNTIME, shared library "
              "won't link. In MSVC change /MT to /MD in the shared project properties")
    endif(MSVC AND ENABLE_MSVC_STATIC_RUNTIME)		  

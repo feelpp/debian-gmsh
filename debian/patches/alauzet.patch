@@ -1,6 +1,8 @@
---- a/Mesh/Field.cpp
-+++ b/Mesh/Field.cpp
-@@ -485,6 +485,55 @@
+Index: gmsh-2.8.5-source/Mesh/Field.cpp
+===================================================================
+--- gmsh-2.8.5-source.orig/Mesh/Field.cpp
++++ gmsh-2.8.5-source/Mesh/Field.cpp
+@@ -534,6 +534,55 @@ class SphereField : public Field
    }
  };
  
@@ -56,7 +58,7 @@
  class FrustumField : public Field
  {
    double x1,y1,z1;
-@@ -1286,17 +1335,21 @@
+@@ -1340,17 +1389,21 @@ class MinAnisoField : public Field
    }
    virtual void operator() (double x, double y, double z, SMetric3 &metr, GEntity *ge=0)
    {
@@ -78,10 +80,19 @@
  	}
  	v = intersection_conserve_mostaniso(v,ff);
        }
-@@ -1334,6 +1387,77 @@
-   }
- };
- 
+@@ -1449,6 +1502,77 @@ class IntersectAnisoField : public Field
+     }
+     fullMatrix<double> V(3,3);
+     fullVector<double> S(3);
++    metr.eig(V, S, 1);
++    return sqrt(1./S(2)); //S(2) is largest eigenvalue
++  }
++  const char *getName()
++  {
++    return "IntersectAniso";
++  }
++};
++
 +class IntersectAnisoField : public Field
 +{
 +  std::list<int> idlist;
@@ -144,88 +155,14 @@
 +    }
 +    fullMatrix<double> V(3,3);
 +    fullVector<double> S(3);
-+    metr.eig(V, S, 1);
-+    return sqrt(1./S(2)); //S(2) is largest eigenvalue
-+  }
-+  const char *getName()
-+  {
-+    return "IntersectAniso";
-+  }
-+};
-+
- class MinField : public Field
- {
-   std::list<int> idlist;
-@@ -1352,7 +1476,18 @@
-     double v = MAX_LC;
-     for(std::list<int>::iterator it = idlist.begin(); it != idlist.end(); it++) {
-       Field *f = (GModel::current()->getFields()->get(*it));
--      if(f && *it != id) v = std::min(v, (*f) (x, y, z, ge));
-+      if(f && *it != id) {
-+        if (f->isotropic())
-+	   v = std::min(v, (*f) (x, y, z, ge));
-+	else{
-+	   SMetric3 ff;
-+	   (*f) (x, y, z, ff, ge);
-+	   fullMatrix<double> V(3,3);
-+	   fullVector<double> S(3);
-+	   ff.eig(V, S, 1);
-+	   v = std::min(v, sqrt(1./S(2))); //S(2) is largest eigenvalue
-+	}
-+      }	
-     }
-     return v;
+     metr.eig(V, S, 1);
+     return sqrt(1./S(2)); //S(2) is largest eigenvalue
    }
-@@ -1380,7 +1515,18 @@
-     double v = -MAX_LC;
-     for(std::list<int>::iterator it = idlist.begin(); it != idlist.end(); it++) {
-       Field *f = (GModel::current()->getFields()->get(*it));
--      if(f && *it != id) v = std::max(v, (*f) (x, y, z, ge));
-+      if(f && *it != id) {
-+        if (f->isotropic())
-+	   v = std::max(v, (*f) (x, y, z, ge));
-+	else{
-+	   SMetric3 ff;
-+	   (*f) (x, y, z, ff, ge);
-+	   fullMatrix<double> V(3,3);
-+	   fullVector<double> S(3);
-+	   ff.eig(V, S, 1);
-+	   v = std::max(v, sqrt(1./S(0))); //S(0) is smallest eigenvalue
-+	}
-+      }
-     }
-     return v;
-   }
-@@ -2154,6 +2300,7 @@
- #endif
-   map_type_name["Box"] = new FieldFactoryT<BoxField>();
-   map_type_name["Cylinder"] = new FieldFactoryT<CylinderField>();
-+  map_type_name["Sphere"] = new FieldFactoryT<SphereField>();
-   map_type_name["Frustum"] = new FieldFactoryT<FrustumField>();
-   map_type_name["LonLat"] = new FieldFactoryT<LonLatField>();
- #if defined(HAVE_POST)
-@@ -2163,6 +2310,7 @@
-   map_type_name["Restrict"] = new FieldFactoryT<RestrictField>();
-   map_type_name["Min"] = new FieldFactoryT<MinField>();
-   map_type_name["MinAniso"] = new FieldFactoryT<MinAnisoField>();
-+  map_type_name["IntersectAniso"] = new FieldFactoryT<IntersectAnisoField>();
-   map_type_name["Max"] = new FieldFactoryT<MaxField>();
-   map_type_name["Laplacian"] = new FieldFactoryT<LaplacianField>();
-   map_type_name["Mean"] = new FieldFactoryT<MeanField>();
---- a/Geo/STensor3.h
-+++ b/Geo/STensor3.h
-@@ -173,6 +173,8 @@
- // compute the largest inscribed ellipsoid...
- SMetric3 intersection (const SMetric3 &m1,
-                        const SMetric3 &m2);
-+SMetric3 intersection_alauzet (const SMetric3 &m1,
-+                       const SMetric3 &m2);
- SMetric3 interpolation (const SMetric3 &m1,
-                         const SMetric3 &m2,
-                         const double t);
---- a/Geo/STensor3.cpp
-+++ b/Geo/STensor3.cpp
-@@ -48,6 +48,27 @@
+Index: gmsh-2.8.5-source/Geo/STensor3.cpp
+===================================================================
+--- gmsh-2.8.5-source.orig/Geo/STensor3.cpp
++++ gmsh-2.8.5-source/Geo/STensor3.cpp
+@@ -69,6 +69,27 @@ SMetric3 intersection_alauzet (const SMe
    return iv;
  }
  

@@ -2,9 +2,11 @@ Description: Enable TetGen
 Author: Anton Gladky <gladk@debian.org>
 Last-Update: 2014-02-10
 
---- a/CMakeLists.txt
-+++ b/CMakeLists.txt
-@@ -760,6 +760,7 @@
+Index: gmsh-2.8.5-source/CMakeLists.txt
+===================================================================
+--- gmsh-2.8.5-source.orig/CMakeLists.txt
++++ gmsh-2.8.5-source/CMakeLists.txt
+@@ -764,6 +764,7 @@ if(HAVE_MESH)
        list(APPEND EXTERNAL_LIBRARIES ${TETGEN_LIB})
        list(APPEND EXTERNAL_INCLUDES ${TETGEN_INC})
        set_config_option(HAVE_TETGEN "Tetgen")
@@ -12,7 +14,7 @@ Last-Update: 2014-02-10
      endif(TETGEN_LIB AND TETGEN_INC)
    endif(ENABLE_TETGEN AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/contrib/Tetgen1.5/tetgen.h)
    if(HAVE_TETGEN)
-@@ -1314,7 +1315,7 @@
+@@ -1353,7 +1354,7 @@ if(ENABLE_BUILD_SHARED OR ENABLE_BUILD_D
      message(STATUS "Note: By enabling ENABLE_MSVC_STATIC_RUNTIME, shared library "
              "won't link. In MSVC change /MT to /MD in the shared project properties")
    endif(MSVC AND ENABLE_MSVC_STATIC_RUNTIME)		  
@@ -21,7 +23,7 @@ Last-Update: 2014-02-10
  endif(ENABLE_BUILD_SHARED OR ENABLE_BUILD_DYNAMIC OR 
        ENABLE_WRAP_PYTHON OR ENABLE_WRAP_JAVA)
  
-@@ -1337,7 +1338,7 @@
+@@ -1376,7 +1377,7 @@ else(HAVE_FLTK)
      add_executable(gmsh Common/Main.cpp ${GMSH_SRC})
    endif(ENABLE_BUILD_DYNAMIC)
  endif(HAVE_FLTK)

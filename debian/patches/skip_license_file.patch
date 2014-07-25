@@ -2,9 +2,11 @@ Description: skips LICENSE.txt during installation. All information is in debian
 Author: Anton Gladky <gladky.anton@gmail.com>
 Last-Update: 2012-11-28
 
---- a/CMakeLists.txt
-+++ b/CMakeLists.txt
-@@ -1371,7 +1371,7 @@
+Index: gmsh-2.8.5-source/CMakeLists.txt
+===================================================================
+--- gmsh-2.8.5-source.orig/CMakeLists.txt
++++ gmsh-2.8.5-source/CMakeLists.txt
+@@ -1411,7 +1411,7 @@ if(UNIX)
  endif(UNIX)
  
  set(WELCOME_FILE ${CMAKE_CURRENT_SOURCE_DIR}/doc/WELCOME.txt)
@@ -13,7 +15,7 @@ Last-Update: 2012-11-28
  set(CREDITS_FILE ${CMAKE_CURRENT_SOURCE_DIR}/doc/CREDITS.txt)
  set(ONELAB_PY ${CMAKE_CURRENT_SOURCE_DIR}/contrib/onelab/python/onelab.py)
  file(GLOB TUTORIAL_FILES ${CMAKE_CURRENT_SOURCE_DIR}/tutorial/?*.*)
-@@ -1535,7 +1535,7 @@
+@@ -1576,7 +1576,7 @@ execute_process(COMMAND ${CMAKE_COMMAND}
  if(MAKEINFO AND TEXI2PDF)
    add_custom_target(doc COMMAND ${CMAKE_COMMAND} -E tar zcf 
                      ${CMAKE_CURRENT_BINARY_DIR}/gmsh-${GMSH_VERSION}-doc.tgz

@@ -2,9 +2,11 @@ Description: install libs into ${INSTALL_LIB_DIR}, needed for multiarch
 Author: Anton Gladky <gladk@debian.org>
 Last-Update: 2013-03-15
 
---- a/wrappers/java/CMakeLists.txt
-+++ b/wrappers/java/CMakeLists.txt
-@@ -73,6 +73,6 @@
+Index: gmsh-2.8.5-source/wrappers/java/CMakeLists.txt
+===================================================================
+--- gmsh-2.8.5-source.orig/wrappers/java/CMakeLists.txt
++++ gmsh-2.8.5-source/wrappers/java/CMakeLists.txt
+@@ -73,6 +73,6 @@ POST_BUILD # do the rest of the command
    COMMAND ${CMAKE_COMMAND} -E copy 
      ${CMAKE_CURRENT_SOURCE_DIR}/WrappingJava/build.xml 
      ${CMAKE_CURRENT_BINARY_DIR}/WrappingJava/)
@@ -13,9 +15,11 @@ Last-Update: 2013-03-15
  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/WrappingJava/WrapGmsh.jar 
 -        DESTINATION lib)
 +  DESTINATION ${INSTALL_LIB_DIR})
---- a/CMakeLists.txt
-+++ b/CMakeLists.txt
-@@ -1454,7 +1454,7 @@
+Index: gmsh-2.8.5-source/CMakeLists.txt
+===================================================================
+--- gmsh-2.8.5-source.orig/CMakeLists.txt
++++ gmsh-2.8.5-source/CMakeLists.txt
+@@ -1494,7 +1494,7 @@ endif(WIN32 OR CYGWIN)
  # (e.g. "make lib" or "make shared" followed by "make install/fast")
  install(TARGETS gmsh DESTINATION ${GMSH_BIN} OPTIONAL)
  if(ENABLE_BUILD_LIB)
@@ -24,7 +28,7 @@ Last-Update: 2013-03-15
  endif(ENABLE_BUILD_LIB)
  if(ENABLE_BUILD_SHARED OR ENABLE_BUILD_DYNAMIC)
    if(WIN32 AND NOT MSVC OR CYGWIN)
-@@ -1490,7 +1490,7 @@
+@@ -1530,7 +1530,7 @@ if(ENABLE_BUILD_SHARED OR ENABLE_BUILD_D
        install(FILES ${GCC_DLL} ${STDC_DLL} DESTINATION ${GMSH_LIB})
      endif(GCC_DLL AND STDC_DLL)
    else(WIN32 AND NOT MSVC OR CYGWIN)
