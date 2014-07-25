@@ -1,8 +1,12 @@
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Source: http://www.geuz.org/gmsh/
+Files-Excluded:
+ contrib/Tetgen1.4/*
+ contrib/Tetgen1.5/*
+ contrib/Metis/*
 
 Files: *
-Copyright: 1997-2013 Christophe Geuzaine <geuzaine@acm.caltech.edu>
+Copyright: 1997-2014 Christophe Geuzaine <geuzaine@acm.caltech.edu>
                      Jean-Francois Remacle <remacle@gce.ucl.ac.be>
 License: GPL-2+, with the following exception:
  The copyright holders of Gmsh give you permission to combine Gmsh
