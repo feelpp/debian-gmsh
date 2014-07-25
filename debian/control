@@ -41,6 +41,7 @@ Build-Depends:
  zlib1g-dev
 Standards-Version: 3.9.5
 X-Python-Version: current
+XS-Testsuite: autopkgtest
 Vcs-Git: git://anonscm.debian.org/debian-science/packages/gmsh.git
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=debian-science/packages/gmsh.git
 Homepage: http://www.geuz.org/gmsh/

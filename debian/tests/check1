@@ -1,0 +1,53 @@
+#!/bin/sh
+# autopkgtest check for gmsh
+# (C) 2014 Anton Gladky
+
+set -e
+
+export OMPI_MCA_orte_rsh_agent=/bin/false
+
+WORKDIR=$(mktemp -d)
+trap "rm -rf $WORKDIR" 0 INT QUIT ABRT PIPE TERM
+cd $WORKDIR
+
+cat <<EOF > tetrahedra.geo
+acc = 0.2;
+Point(1) = {0.0, 0.0, 0.0, acc};
+Point(2) = {2.0, 0.0, 0.0, acc};
+Point(3) = {2.0, 2.0, 0.0, acc};
+Point(4) = {0.0, 2.0, 0.0, acc};
+Point(5) = {1.0, 1.0, 5.0, acc};
+Line(1) = {1, 2};
+Line(2) = {2, 3};
+Line(3) = {3, 4};
+Line(4) = {4, 1};
+Line(5) = {1, 5};
+Line(6) = {2, 5};
+Line(7) = {3, 5};
+Line(8) = {4, 5};
+Line Loop(9) = {5, -6, -1};
+Plane Surface(10) = {9};
+Line Loop(11) = {6, -7, -2};
+Plane Surface(12) = {11};
+Line Loop(13) = {7, -8, -3};
+Plane Surface(14) = {13};
+Line Loop(15) = {8, -5, -4};
+Plane Surface(16) = {15};
+Line Loop(17) = {4, 1, 2, 3};
+Plane Surface(18) = {17};
+Surface Loop(19) = {12, 10, 16, 14, 18};
+Volume(20) = {19};
+EOF
+
+gmsh tetrahedra.geo -2 -o tetrahedra2d.mesh
+gmsh tetrahedra.geo -3 -o tetrahedra3d.mesh
+gmsh tetrahedra.geo -2 -o tetrahedra2d.msh
+gmsh tetrahedra.geo -3 -o tetrahedra3d.msh
+gmsh tetrahedra.geo -2 -o tetrahedra2d.stl
+gmsh tetrahedra.geo -3 -o tetrahedra3d.stl
+gmsh tetrahedra.geo -2 -o tetrahedra2d.vtk
+gmsh tetrahedra.geo -3 -o tetrahedra3d.vtk
+
+ls -ln
+ 
+echo "run: OK"
