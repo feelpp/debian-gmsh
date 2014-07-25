@@ -5,7 +5,7 @@
 
 @ftable @code
 @item Geometry.AutoCoherence
-Should all duplicate entities be automatically removed?@*
+Should all duplicate entities be automatically removed? (if ==2, also remove degenerate entities)@*
 Default value: @code{1}@*
 Saved in: @code{General.OptionsFileName}
 
@@ -16,6 +16,11 @@ Saved in: @code{-}
 
 @item Geometry.CopyMeshingMethod
 Copy meshing method (unstructured or transfinite) when duplicating geometrical entities?@*
+Default value: @code{0}@*
+Saved in: @code{General.OptionsFileName}
+
+@item Geometry.CopyDisplayAttributes
+Copy display attributes (visibiliy, color) when duplicating geometrical entities?@*
 Default value: @code{0}@*
 Saved in: @code{General.OptionsFileName}
 

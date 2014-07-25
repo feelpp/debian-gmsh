@@ -22,7 +22,7 @@
 @c %**start of header
 @setfilename gmsh.info
 @set GMSH-VERSION 2.8
-@set COPYRIGHT @copyright{} 1997-2013 Christophe Geuzaine, Jean-Fran@,{c}ois Remacle
+@set COPYRIGHT @copyright{} 1997-2014 Christophe Geuzaine, Jean-Fran@,{c}ois Remacle
 @settitle Gmsh @value{GMSH-VERSION}
 @footnotestyle separate
 @setchapternewpage odd
@@ -982,7 +982,10 @@ parsing of the script file:
   StrFind(@var{char-expression}, @var{char-expression}) |
   StrCmp(@var{char-expression}, @var{char-expression}) |
   TextAttributes(@var{char-expression}<,@var{char-expression}@dots{}>) |
-  GetValue("@var{string}", @var{expression})
+  Exists(@var{string}) | Exists(@var{string}~@{ @var{expression} @}) |
+  FileExists(@var{char-expression}) |
+  DefineNumber(@var{expression}, @var{onelab-options})
+  GetValue("@var{string}", @var{expression}) |
 @end example
 
 Such @w{@var{expression}s} are used in most of Gmsh's scripting
@@ -1004,8 +1007,8 @@ x_2 = 2;
 x_3 = 3;
 @end example
 
-The brackets @code{[]} permit to extract one item from a list and to get
-the size of a list, respectively. The operators
+The brackets @code{[]} permit to extract one item from a list. The
+@code{#} permits to get the size of a list. The operators
 @var{operator-unary-left}, @var{operator-unary-right},
 @var{operator-binary}, @var{operator-ternary-left} and
 @var{operator-ternary-right} are defined in @ref{Operators}. For the
@@ -1016,7 +1019,15 @@ for any occurrence of the second @var{char-expression}. @code{StrCmp}
 compares the two strings (returns an integer greater than, equal to, or
 less than 0, according as the first string is greater than, equal to, or
 less than the second string).  @code{TextAttributes} creates attributes
-for text strings.
+for text strings. @code{Exists} checks if a variable with the given name
+exists (i.e., has been defined previously), and @code{FileExists} checks
+if the file with the given name exists.
+
+@code{DefineNumber} allows to define a ONELAB variable in-line. The
+@var{expression} given as the first argument is the default value; this
+is followed by the various ONELAB options. See
+@uref{http://onelab.info/wiki/ONELAB_Syntax_for_Gmsh_and_GetDP} for more
+information.
 
 The last case in the definition allows to ask the user for a value
 interactively. For example, inserting @code{GetValue("Value of parameter
@@ -1095,7 +1106,7 @@ Character expressions are defined as:
 @example
 @var{char-expression}:
   "@var{string}" |
-  Today |
+  Today | OnelabAction |
   StrPrefix ( @var{char-expression} ) |
   StrRelative ( @var{char-expression} ) |
   StrCat ( @var{char-expression} , @var{char-expression} ) |
@@ -1106,6 +1117,7 @@ Character expressions are defined as:
   GetEnv ( @var{char-expression} ) |
   GetString ( @var{char-expression} , @var{char-expression} ) | 
   StrReplace ( @var{char-expression} , @var{char-expression} , @var{char-expression} ) 
+  DefineString(@var{char-expression}, @var{onelab-options})
 @end example
 
 @noindent @code{StrPrefix} and @code{StrRelative} permit to take the
@@ -1122,6 +1134,12 @@ user for a value interactively. @code{StrReplace}'s arguments are: input
 string, old substring, new substring.@footnote{For compatibility with GetDP
 (@uref{http://geuz.org/getdp/}), parentheses can be replaced by brackets
 @code{[]} in @code{Str} and @code{Sprintf}.}
+
+@code{DefineString} allows to define a ONELAB variable in-line. The
+@var{char-expression} given as the first argument is the default value; this
+is followed by the various ONELAB options. See
+@uref{http://onelab.info/wiki/ONELAB_Syntax_for_Gmsh_and_GetDP} for more
+information.
 
 Character expressions are mostly used to specify non-numeric options and
 input/output file names. See @ref{t8.geo}, for an interesting usage of
@@ -1516,6 +1534,9 @@ Returns the current CPU time (in seconds).
 @item Memory
 Returns the current memory usage (in Mb).
 
+@item TotalMemory
+Returns the total memory available (in Mb).
+
 @item newp
 Returns the next available point number. As explained in @ref{Geometry
 module}, a unique number must be associated with every geometrical point:
@@ -1606,6 +1627,16 @@ Divides and affects, item per item, the right hand side
 @item @var{string} = @var{char-expression};
 Creates a new character expression identifier @code{@var{string}} with a
 given @var{char-expression}.
+
+@item DefineConstant[ @var{string} = @var{expression}|@var{char-expression} <, ...>];
+Creates a new expression identifier @var{string}, with value
+@var{expression}, only if has not been defined before.
+
+@item DefineConstant[ @var{string} = @{ @var{expression}|@var{char-expression}, @var{onelab-options} @} <, ...>];
+Same as the previous case, except that the variable is also exchanged
+with the ONELAB database if it has not been defined before. See
+@uref{http://onelab.info/wiki/ONELAB_Syntax_for_Gmsh_and_GetDP} for more
+information.
 
 @item @var{real-option} = @var{expression};
 Affects @var{expression} to a real option.
@@ -2855,6 +2886,9 @@ Saves the mesh in a file named @var{char-expression}, using the current
 @code{Mesh.Format} (@pxref{Mesh options list}). If the path in
 @var{char-expression} is not absolute, @var{char-expression} is appended
 to the path of the current file.
+
+@item CreateDir @var{char-expression};
+Create the directory @var{char-expression}.
 
 @item < Recursive > Show @{ Point | Line | Surface | Volume @{ @var{expression-list} @}; @dots{} @}
 Shows the mesh of the entities in @var{expression-list}, if
@@ -4672,6 +4706,23 @@ repository, go in the gmsh directory and type:
 
 @example
 svn commit
+@end example
+
+@item
+If you want to remove part of the tree from being downloaded, you can
+change its ``ambiant'' depth to ``empty''. For example, if you don't
+want to upate the ``projects'' subdirectory (as well as its
+subdirectories), type:
+
+@example
+cd projects
+svn update --set-depth empty
+@end example
+
+To later restore the projects for recursive updating, type:
+@example
+cd projects
+svn update --set-depth infinity
 @end example
 
 @end enumerate

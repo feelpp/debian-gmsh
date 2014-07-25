@@ -62,12 +62,13 @@ void elasticitySolver::setMesh(const std::string &meshFileName)
 
   if (LagSpace) delete LagSpace;
   if (_dim==3) LagSpace=new VectorLagrangeFunctionSpace(_tag);
-  if (_dim==2) LagSpace=new VectorLagrangeFunctionSpace(_tag,VectorLagrangeFunctionSpace::VECTOR_X,VectorLagrangeFunctionSpace::VECTOR_Y);
+  if (_dim==2) LagSpace=new VectorLagrangeFunctionSpace
+                 (_tag,VectorLagrangeFunctionSpace::VECTOR_X,
+                  VectorLagrangeFunctionSpace::VECTOR_Y);
 
   if (LagrangeMultiplierSpace) delete LagrangeMultiplierSpace;
   LagrangeMultiplierSpace = new ScalarLagrangeFunctionSpace(_tag+1);
 }
-
 
 void elasticitySolver::exportKb()
 {
@@ -123,7 +124,8 @@ void elasticitySolver::solve()
     SolverField<SVector3> Field(pAssembler, LagSpace);
     IsotropicElasticTerm Eterm(Field,elasticFields[i]._E,elasticFields[i]._nu);
     BilinearTermToScalarTerm Elastic_Energy_Term(Eterm);
-    Assemble(Elastic_Energy_Term,elasticFields[i].g->begin(),elasticFields[i].g->end(),Integ_Bulk,energ);
+    Assemble(Elastic_Energy_Term,elasticFields[i].g->begin(),elasticFields[i].g->end(),
+             Integ_Bulk,energ);
   }
   printf("elastic energy=%f\n",energ);
 }
@@ -149,7 +151,10 @@ void elasticitySolver::readInputFile(const std::string &fn)
   FILE *f = Fopen(fn.c_str(), "r");
   char what[256];
   while(!feof(f)){
-    if(fscanf(f, "%s", what) != 1) return;
+    if(fscanf(f, "%s", what) != 1){
+      fclose(f);
+      return;
+    }
     if(what[0]=='#'){
       /*
       char *line=NULL;
@@ -161,7 +166,10 @@ void elasticitySolver::readInputFile(const std::string &fn)
     else if (!strcmp(what, "ElasticDomain")){
       elasticField field;
       int physical;
-      if(fscanf(f, "%d %lf %lf", &physical, &field._E, &field._nu) != 3) return;
+      if(fscanf(f, "%d %lf %lf", &physical, &field._E, &field._nu) != 3){
+        fclose(f);
+        return;
+      }
       field._tag = _tag;
       field.g = new groupOfElements (_dim, physical);
       elasticFields.push_back(field);
@@ -171,7 +179,10 @@ void elasticitySolver::readInputFile(const std::string &fn)
       int physical;
       double d1, d2, d3, val;
       if(fscanf(f, "%d %lf %lf %lf %lf %lf %d", &physical, &field._tau,
-        &d1, &d2, &d3, &val, &field._tag) != 7) return;
+                &d1, &d2, &d3, &val, &field._tag) != 7){
+        fclose(f);
+        return;
+      }
       field._tag = _tag;
       field._d = SVector3(d1, d2, d3);
       field._f = simpleFunction<double>(val);
@@ -181,7 +192,10 @@ void elasticitySolver::readInputFile(const std::string &fn)
     else if (!strcmp(what, "Void")){
       elasticField field;
       int physical;
-      if(fscanf(f, "%d", &physical) != 1) return;
+      if(fscanf(f, "%d", &physical) != 1){
+        fclose(f);
+        return;
+      }
       field._E = field._nu = 0;
       field.g = new groupOfElements (_dim, physical);
       field._tag = 0;
@@ -190,7 +204,10 @@ void elasticitySolver::readInputFile(const std::string &fn)
     else if (!strcmp(what, "NodeDisplacement")){
       double val;
       int node, comp;
-      if(fscanf(f, "%d %d %lf", &node, &comp, &val) != 3) return;
+      if(fscanf(f, "%d %d %lf", &node, &comp, &val) != 3){
+        fclose(f);
+        return;
+      }
       dirichletBC diri;
       diri.g = new groupOfElements (0, node);
       diri._f= new simpleFunction<double>(val);
@@ -202,7 +219,10 @@ void elasticitySolver::readInputFile(const std::string &fn)
     else if (!strcmp(what, "EdgeDisplacement")){
       double val;
       int edge, comp;
-      if(fscanf(f, "%d %d %lf", &edge, &comp, &val) != 3) return;
+      if(fscanf(f, "%d %d %lf", &edge, &comp, &val) != 3){
+        fclose(f);
+        return;
+      }
       dirichletBC diri;
       diri.g = new groupOfElements (1, edge);
       diri._f= new simpleFunction<double>(val);
@@ -214,7 +234,10 @@ void elasticitySolver::readInputFile(const std::string &fn)
     else if (!strcmp(what, "FaceDisplacement")){
       double val;
       int face, comp;
-      if(fscanf(f, "%d %d %lf", &face, &comp, &val) != 3) return;
+      if(fscanf(f, "%d %d %lf", &face, &comp, &val) != 3){
+        fclose(f);
+        return;
+      }
       dirichletBC diri;
       diri.g = new groupOfElements (2, face);
       diri._f= new simpleFunction<double>(val);
@@ -226,7 +249,10 @@ void elasticitySolver::readInputFile(const std::string &fn)
     else if (!strcmp(what, "NodeForce")){
       double val1, val2, val3;
       int node;
-      if(fscanf(f, "%d %lf %lf %lf", &node, &val1, &val2, &val3) != 4) return;
+      if(fscanf(f, "%d %lf %lf %lf", &node, &val1, &val2, &val3) != 4){
+        fclose(f);
+        return;
+      }
       neumannBC neu;
       neu.g = new groupOfElements (0, node);
       neu._f= new simpleFunction<SVector3>(SVector3(val1, val2, val3));
@@ -237,7 +263,10 @@ void elasticitySolver::readInputFile(const std::string &fn)
     else if (!strcmp(what, "EdgeForce")){
       double val1, val2, val3;
       int edge;
-      if(fscanf(f, "%d %lf %lf %lf", &edge, &val1, &val2, &val3) != 4) return;
+      if(fscanf(f, "%d %lf %lf %lf", &edge, &val1, &val2, &val3) != 4){
+        fclose(f);
+        return;
+      }
       neumannBC neu;
       neu.g = new groupOfElements (1, edge);
       neu._f= new simpleFunction<SVector3>(SVector3(val1, val2, val3));
@@ -248,7 +277,10 @@ void elasticitySolver::readInputFile(const std::string &fn)
     else if (!strcmp(what, "FaceForce")){
       double val1, val2, val3;
       int face;
-      if(fscanf(f, "%d %lf %lf %lf", &face, &val1, &val2, &val3) != 4) return;
+      if(fscanf(f, "%d %lf %lf %lf", &face, &val1, &val2, &val3) != 4){
+        fclose(f);
+        return;
+      }
       neumannBC neu;
       neu.g = new groupOfElements (2, face);
       neu._f= new simpleFunction<SVector3>(SVector3(val1, val2, val3));
@@ -259,7 +291,10 @@ void elasticitySolver::readInputFile(const std::string &fn)
     else if (!strcmp(what, "VolumeForce")){
       double val1, val2, val3;
       int volume;
-      if(fscanf(f, "%d %lf %lf %lf", &volume, &val1, &val2, &val3) != 4) return;
+      if(fscanf(f, "%d %lf %lf %lf", &volume, &val1, &val2, &val3) != 4){
+        fclose(f);
+        return;
+      }
       neumannBC neu;
       neu.g = new groupOfElements (3, volume);
       neu._f= new simpleFunction<SVector3>(SVector3(val1, val2, val3));
@@ -269,26 +304,34 @@ void elasticitySolver::readInputFile(const std::string &fn)
     }
     else if (!strcmp(what, "MeshFile")){
       char name[245];
-      if(fscanf(f, "%s", name) != 1) return;
+      if(fscanf(f, "%s", name) != 1){
+        fclose(f);
+        return;
+      }
       setMesh(name);
     }
     else if (!strcmp(what, "CutMeshPlane")){
       double a, b, c, d;
-      if(fscanf(f, "%lf %lf %lf %lf", &a, &b, &c, &d) != 4) return;
+      if(fscanf(f, "%lf %lf %lf %lf", &a, &b, &c, &d) != 4){
+        fclose(f);
+        return;
+      }
       int tag=1;
       gLevelsetPlane ls(a,b,c,d,tag);
       pModel = pModel->buildCutGModel(&ls);
     }
     else if (!strcmp(what, "CutMeshSphere")){
       double x, y, z, r;
-      if(fscanf(f, "%lf %lf %lf %lf", &x, &y, &z, &r) != 4) return;
+      if(fscanf(f, "%lf %lf %lf %lf", &x, &y, &z, &r) != 4){
+        fclose(f);
+        return;
+      }
       int tag=1;
       gLevelsetSphere ls(x,y,z,r,tag);
       pModel = pModel->buildCutGModel(&ls);
     }
     else {
       Msg::Error("Invalid input : '%s'", what);
-//      return;
     }
   }
   fclose(f);
@@ -361,24 +404,28 @@ void elasticitySolver::assemble(linearSystem<double> *lsys)
   for (unsigned int i = 0; i < allDirichlet.size(); i++)
   {
     FilterDofComponent filter(allDirichlet[i]._comp);
-    FixNodalDofs(*LagSpace,allDirichlet[i].g->begin(),allDirichlet[i].g->end(),*pAssembler,*allDirichlet[i]._f,filter);
+    FixNodalDofs(*LagSpace,allDirichlet[i].g->begin(),allDirichlet[i].g->end(),
+                 *pAssembler,*allDirichlet[i]._f,filter);
   }
   // LagrangeMultipliers
   for (unsigned int i = 0; i < LagrangeMultiplierFields.size(); ++i)
   {
-    NumberDofs(*LagrangeMultiplierSpace, LagrangeMultiplierFields[i].g->begin(), LagrangeMultiplierFields[i].g->end(), *pAssembler);
+    NumberDofs(*LagrangeMultiplierSpace, LagrangeMultiplierFields[i].g->begin(),
+               LagrangeMultiplierFields[i].g->end(), *pAssembler);
   }
   // Elastic Fields
   for (unsigned int i = 0; i < elasticFields.size(); ++i)
   {
     if(elasticFields[i]._E != 0.)
-      NumberDofs(*LagSpace, elasticFields[i].g->begin(), elasticFields[i].g->end(),*pAssembler);
+      NumberDofs(*LagSpace, elasticFields[i].g->begin(), elasticFields[i].g->end(),
+                 *pAssembler);
   }
   // Voids
   for (unsigned int i = 0; i < elasticFields.size(); ++i)
   {
     if(elasticFields[i]._E == 0.)
-      FixVoidNodalDofs(*LagSpace, elasticFields[i].g->begin(), elasticFields[i].g->end(), *pAssembler);
+      FixVoidNodalDofs(*LagSpace, elasticFields[i].g->begin(), elasticFields[i].g->end(),
+                       *pAssembler);
   }
   // Neumann conditions
   GaussQuadrature Integ_Boundary(GaussQuadrature::Val);
@@ -386,29 +433,36 @@ void elasticitySolver::assemble(linearSystem<double> *lsys)
   for (unsigned int i = 0; i < allNeumann.size(); i++)
   {
     LoadTerm<SVector3> Lterm(*LagSpace,*allNeumann[i]._f);
-    Assemble(Lterm,*LagSpace,allNeumann[i].g->begin(),allNeumann[i].g->end(),Integ_Boundary,*pAssembler);
+    Assemble(Lterm,*LagSpace,allNeumann[i].g->begin(),allNeumann[i].g->end(),
+             Integ_Boundary,*pAssembler);
   }
   // Assemble cross term, laplace term and rhs term for LM
   GaussQuadrature Integ_LagrangeMult(GaussQuadrature::ValVal);
   GaussQuadrature Integ_Laplace(GaussQuadrature::GradGrad);
   for (unsigned int i = 0; i < LagrangeMultiplierFields.size(); i++)
   {
-    LagrangeMultiplierTerm LagTerm(*LagSpace, *LagrangeMultiplierSpace, LagrangeMultiplierFields[i]._d);
+    LagrangeMultiplierTerm LagTerm(*LagSpace, *LagrangeMultiplierSpace,
+                                   LagrangeMultiplierFields[i]._d);
     Assemble(LagTerm, *LagSpace, *LagrangeMultiplierSpace,
-             LagrangeMultiplierFields[i].g->begin(), LagrangeMultiplierFields[i].g->end(), Integ_LagrangeMult, *pAssembler);
+             LagrangeMultiplierFields[i].g->begin(),
+             LagrangeMultiplierFields[i].g->end(), Integ_LagrangeMult, *pAssembler);
 
-    LaplaceTerm<double,double> LapTerm(*LagrangeMultiplierSpace, LagrangeMultiplierFields[i]._tau);
-    Assemble(LapTerm, *LagrangeMultiplierSpace, LagrangeMultiplierFields[i].g->begin(), LagrangeMultiplierFields[i].g->end(), Integ_Laplace, *pAssembler);
+    LaplaceTerm<double,double> LapTerm(*LagrangeMultiplierSpace,
+                                       LagrangeMultiplierFields[i]._tau);
+    Assemble(LapTerm, *LagrangeMultiplierSpace, LagrangeMultiplierFields[i].g->begin(),
+             LagrangeMultiplierFields[i].g->end(), Integ_Laplace, *pAssembler);
 
     LoadTerm<double> Lterm(*LagrangeMultiplierSpace, LagrangeMultiplierFields[i]._f);
-    Assemble(Lterm, *LagrangeMultiplierSpace, LagrangeMultiplierFields[i].g->begin(), LagrangeMultiplierFields[i].g->end(), Integ_Boundary, *pAssembler);
+    Assemble(Lterm, *LagrangeMultiplierSpace, LagrangeMultiplierFields[i].g->begin(),
+             LagrangeMultiplierFields[i].g->end(), Integ_Boundary, *pAssembler);
   }
   // Assemble elastic term for
   GaussQuadrature Integ_Bulk(GaussQuadrature::GradGrad);
   for (unsigned int i = 0; i < elasticFields.size(); i++)
   {
     IsotropicElasticTerm Eterm(*LagSpace,elasticFields[i]._E,elasticFields[i]._nu);
-    Assemble(Eterm,*LagSpace,elasticFields[i].g->begin(),elasticFields[i].g->end(),Integ_Bulk,*pAssembler);
+    Assemble(Eterm,*LagSpace,elasticFields[i].g->begin(),elasticFields[i].g->end(),
+             Integ_Bulk,*pAssembler);
   }
 
   /*for (int i=0;i<pAssembler->sizeOfR();i++){
@@ -503,7 +557,8 @@ PView* elasticitySolver::buildDisplacementView (const std::string postFileName)
   for (unsigned int i = 0; i < elasticFields.size(); ++i)
   {
     if(elasticFields[i]._E == 0.) continue;
-    for (groupOfElements::elementContainer::const_iterator it = elasticFields[i].g->begin(); it != elasticFields[i].g->end(); ++it){
+    for (groupOfElements::elementContainer::const_iterator it = elasticFields[i].g->begin();
+         it != elasticFields[i].g->end(); ++it){
       MElement *e=*it;
       if(e->getParent()) {
         for (int j = 0; j < e->getNumVertices(); ++j) {
@@ -551,7 +606,8 @@ PView* elasticitySolver::buildStressesView (const std::string postFileName)
     SolverField<SVector3> Field(pAssembler, LagSpace);
     IsotropicElasticTerm Eterm(Field,elasticFields[i]._E,elasticFields[i]._nu);
     BilinearTermToScalarTerm Elastic_Energy_Term(Eterm);
-    for (groupOfElements::elementContainer::const_iterator it = elasticFields[i].g->begin(); it != elasticFields[i].g->end(); ++it)
+    for (groupOfElements::elementContainer::const_iterator it = elasticFields[i].g->begin();
+         it != elasticFields[i].g->end(); ++it)
     {
       MElement *e=*it;
       int nbVertex = e->getNumVertices();
@@ -594,7 +650,8 @@ PView* elasticitySolver::buildStressesView (const std::string postFileName)
       double syz = A * eps[5];
 
       std::vector<double> vec(9);
-      vec[0]=sxx; vec[1]=sxy; vec[2]=sxz; vec[3]=sxy; vec[4]=syy; vec[5]=syz; vec[6]=sxz; vec[7]=syz; vec[8]=szz;
+      vec[0]=sxx; vec[1]=sxy; vec[2]=sxz; vec[3]=sxy; vec[4]=syy;
+      vec[5]=syz; vec[6]=sxz; vec[7]=syz; vec[8]=szz;
 
       data[e->getNum()]=vec;
     }
@@ -611,7 +668,9 @@ PView* elasticitySolver::buildLagrangeMultiplierView (const std::string postFile
   std::set<MVertex*> v;
   for (unsigned int i = 0; i < LagrangeMultiplierFields.size(); ++i)
   {
-    for(groupOfElements::elementContainer::const_iterator it = LagrangeMultiplierFields[i].g->begin(); it != LagrangeMultiplierFields[i].g->end(); ++it)
+    for(groupOfElements::elementContainer::const_iterator it =
+          LagrangeMultiplierFields[i].g->begin();
+        it != LagrangeMultiplierFields[i].g->end(); ++it)
     {
       MElement *e = *it;
       for (int j = 0; j < e->getNumVertices(); ++j) v.insert(e->getVertex(j));
@@ -645,7 +704,8 @@ PView *elasticitySolver::buildElasticEnergyView(const std::string postFileName)
     IsotropicElasticTerm Eterm(Field,elasticFields[i]._E,elasticFields[i]._nu);
     BilinearTermToScalarTerm Elastic_Energy_Term(Eterm);
     ScalarTermConstant<double> One(1.0);
-    for (groupOfElements::elementContainer::const_iterator it = elasticFields[i].g->begin(); it != elasticFields[i].g->end(); ++it)
+    for (groupOfElements::elementContainer::const_iterator it =
+           elasticFields[i].g->begin(); it != elasticFields[i].g->end(); ++it)
     {
       MElement *e = *it;
       double energ;
@@ -673,7 +733,8 @@ PView *elasticitySolver::buildVonMisesView(const std::string postFileName)
     SolverField<SVector3> Field(pAssembler, LagSpace);
     IsotropicElasticTerm Eterm(Field,elasticFields[i]._E,elasticFields[i]._nu);
     BilinearTermToScalarTerm Elastic_Energy_Term(Eterm);
-    for (groupOfElements::elementContainer::const_iterator it = elasticFields[i].g->begin(); it != elasticFields[i].g->end(); ++it)
+    for (groupOfElements::elementContainer::const_iterator it = elasticFields[i].g->begin();
+         it != elasticFields[i].g->end(); ++it)
     {
       MElement *e=*it;
       double energ;
@@ -691,6 +752,7 @@ PView *elasticitySolver::buildVonMisesView(const std::string postFileName)
 
 
 #else
+
 PView* elasticitySolver::buildDisplacementView(const std::string postFileName)
 {
   Msg::Error("Post-pro module not available");
@@ -714,9 +776,11 @@ PView* elasticitySolver::buildVonMisesView(const std::string postFileName)
   Msg::Error("Post-pro module not available");
   return 0;
 }
+
 PView* elasticitySolver::buildStressesView (const std::string postFileName)
 {
   Msg::Error("Post-pro module not available");
   return 0;
 }
+
 #endif

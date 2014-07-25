@@ -302,6 +302,8 @@ static int _save_pdf(const char *name){ return gl2psFileDialog
     (name, "PDF Options", FORMAT_PDF); }
 static int _save_png(const char *name){ return genericBitmapFileDialog
     (name, "PNG Options", FORMAT_PNG); }
+static int _save_pgf(const char *name){ return pgfBitmapFileDialog
+    (name, "PGF Options", FORMAT_PGF); }
 static int _save_ps(const char *name){ return gl2psFileDialog
     (name, "PS Options", FORMAT_PS); }
 static int _save_ppm(const char *name){ return genericBitmapFileDialog
@@ -350,6 +352,7 @@ static int _save_auto(const char *name)
   case FORMAT_TEX  : return _save_tex(name);
   case FORMAT_PDF  : return _save_pdf(name);
   case FORMAT_PNG  : return _save_png(name);
+  case FORMAT_PGF  : return _save_pgf(name);
   case FORMAT_PS   : return _save_ps(name);
   case FORMAT_PPM  : return _save_ppm(name);
   case FORMAT_SVG  : return _save_svg(name);
@@ -411,6 +414,7 @@ static void file_save_as_cb(Fl_Widget *w, void *data)
     {"Image - PDF" TT "*.pdf", _save_pdf},
 #if defined(HAVE_LIBPNG)
     {"Image - PNG" TT "*.png", _save_png},
+    {"Image - PGF" TT "*.pgf", _save_pgf},
 #endif
     {"Image - PostScript" TT "*.ps", _save_ps},
     {"Image - PPM" TT "*.ppm", _save_ppm},
@@ -1988,7 +1992,7 @@ static Fl_Menu_Item bar_table[] = {
   {"&Help", 0, 0, 0, FL_SUBMENU},
     {"On&line Documentation", 0, (Fl_Callback *)help_online_cb, 0, FL_MENU_DIVIDER},
     {"&Keyboard and Mouse Usage",  FL_CTRL+'h', (Fl_Callback *)help_basic_cb, 0, FL_MENU_DIVIDER},
-    {"&Current Options",      0, (Fl_Callback *)status_options_cb, (void*)"?", 0},
+    {"&Current Options and Workspace", FL_CTRL+FL_SHIFT+'h', (Fl_Callback *)status_options_cb, (void*)"?", 0},
     {"&Restore all Options to Default Settings", 0, (Fl_Callback *)options_restore_defaults_cb, 0, FL_MENU_DIVIDER},
     {"&About Gmsh",           0, (Fl_Callback *)help_about_cb, 0},
     {0},
@@ -2051,8 +2055,8 @@ static Fl_Menu_Item sysbar_table[] = {
     {0},
   {"Help", 0, 0, 0, FL_SUBMENU},
     {"Online Documentation", 0, (Fl_Callback *)help_online_cb, 0, FL_MENU_DIVIDER},
-    {"Keyboard and Mouse Usage",        0, (Fl_Callback *)help_basic_cb, 0, FL_MENU_DIVIDER},
-    {"Current Options",      0, (Fl_Callback *)status_options_cb, (void*)"?"},
+    {"Keyboard and Mouse Usage", 0, (Fl_Callback *)help_basic_cb, 0, FL_MENU_DIVIDER},
+    {"Current Options and Workspace", FL_META+FL_SHIFT+'h', (Fl_Callback *)status_options_cb, (void*)"?"},
     {"Restore all Options to Default Settings", 0, (Fl_Callback *)options_restore_defaults_cb, 0},
     {0},
   {0}
@@ -2448,49 +2452,49 @@ void status_options_cb(Fl_Widget *w, void *data)
   }
   else if(what == "quick_access"){ // quick access menu
     static Fl_Menu_Item menu[] = {
-      { "Axes", 0, quick_access_cb, (void*)"axes",
+      { "Axes", FL_ALT + 'a', quick_access_cb, (void*)"axes",
         FL_MENU_TOGGLE },
       { "Projection mode", 0, 0, 0, FL_SUBMENU },
-         { "Orthographic", 0, quick_access_cb, (void*)"orthographic"},
+         { "Orthographic", FL_ALT + 'o', quick_access_cb, (void*)"orthographic"},
          { "Perspective", 0, quick_access_cb, (void*)"perspective"},
          { 0 },
       { "All general options...", 0, quick_access_cb, (void*)"general",
         FL_MENU_DIVIDER, 0, FL_ITALIC },
       { "Geometry visibility", 0, 0, 0, FL_SUBMENU },
-         { "Points", 0, quick_access_cb, (void*)"geometry_points",
+         { "Points", FL_ALT + 'p', quick_access_cb, (void*)"geometry_points",
            FL_MENU_TOGGLE },
-         { "Lines", 0, quick_access_cb, (void*)"geometry_lines",
+         { "Lines", FL_ALT + 'l', quick_access_cb, (void*)"geometry_lines",
            FL_MENU_TOGGLE },
-         { "Surfaces ", 0, quick_access_cb, (void*)"geometry_surfaces",
+         { "Surfaces ", FL_ALT + 's', quick_access_cb, (void*)"geometry_surfaces",
          FL_MENU_TOGGLE },
-         { "Volumes", 0, quick_access_cb, (void*)"geometry_volumes",
+         { "Volumes", FL_ALT + 'v', quick_access_cb, (void*)"geometry_volumes",
            FL_MENU_TOGGLE },
          { 0 },
       { "All geometry options...", 0, quick_access_cb, (void*)"geometry",
         FL_MENU_DIVIDER, 0, FL_ITALIC },
       { "Mesh visibility", 0, 0, 0, FL_SUBMENU },
-         { "Nodes", 0, quick_access_cb, (void*)"mesh_points",
+         { "Nodes", FL_ALT + FL_SHIFT + 'p', quick_access_cb, (void*)"mesh_points",
            FL_MENU_TOGGLE },
-         { "Lines", 0, quick_access_cb, (void*)"mesh_lines",
+         { "Lines", FL_ALT + FL_SHIFT + 'l', quick_access_cb, (void*)"mesh_lines",
            FL_MENU_TOGGLE },
-         { "Surface edges ", 0, quick_access_cb, (void*)"mesh_surfaces_edges",
-           FL_MENU_TOGGLE },
-         { "Surface faces", 0, quick_access_cb, (void*)"mesh_surfaces_faces",
-           FL_MENU_TOGGLE },
-         { "Volume edges", 0, quick_access_cb, (void*)"mesh_volumes_edges",
-           FL_MENU_TOGGLE },
-         { "Volume faces", 0, quick_access_cb, (void*)"mesh_volumes_faces",
-           FL_MENU_TOGGLE },
+         { "Surface edges ", FL_ALT + FL_SHIFT + 's', quick_access_cb,
+           (void*)"mesh_surfaces_edges", FL_MENU_TOGGLE },
+         { "Surface faces", FL_ALT + FL_SHIFT + 'd', quick_access_cb,
+           (void*)"mesh_surfaces_faces", FL_MENU_TOGGLE },
+         { "Volume edges", FL_ALT + FL_SHIFT + 'v', quick_access_cb,
+           (void*)"mesh_volumes_edges", FL_MENU_TOGGLE },
+         { "Volume faces", FL_ALT + FL_SHIFT + 'b', quick_access_cb,
+           (void*)"mesh_volumes_faces", FL_MENU_TOGGLE },
          { 0 },
-      { "Toggle mesh display", 0, quick_access_cb, (void*)"mesh_toggle" },
+      { "Toggle mesh display", FL_ALT + 'm', quick_access_cb, (void*)"mesh_toggle" },
       { "Global mesh size factor", 0, quick_access_cb, (void*)"mesh_size" },
       { "All mesh options...", 0, quick_access_cb, (void*)"mesh",
         FL_MENU_DIVIDER, 0, FL_ITALIC },
-      { "View element outlines ", 0, quick_access_cb, (void*)"view_element_outlines",
-        FL_MENU_TOGGLE },
+      { "View element outlines ", FL_ALT + 'e', quick_access_cb,
+        (void*)"view_element_outlines", FL_MENU_TOGGLE },
       { "View normal raise", 0, quick_access_cb, (void*)"view_normal_raise" },
       { "View intervals", 0, 0, 0, FL_SUBMENU },
-         { "Iso-values", 0, quick_access_cb, (void*)"view_iso"},
+         { "Iso-values", FL_ALT + 't', quick_access_cb, (void*)"view_iso"},
          { "Continuous map", 0, quick_access_cb, (void*)"view_continous"},
          { "Filled iso-values", 0, quick_access_cb, (void*)"view_filled"},
          { "Numeric values", 0, quick_access_cb, (void*)"view_numeric"},
@@ -2739,6 +2743,14 @@ static void message_browser_cb(Fl_Widget *w, void *data)
   }
   else
     g->copySelectedMessagesToClipboard();
+}
+
+static void tile_cb(Fl_Widget *w, void *data)
+{
+  if(Fl::event() == FL_RELEASE){
+    // rebuild the tree when we relase the mouse after resizing
+    FlGui::instance()->rebuildTree(true);
+  }
 }
 
 // This dummy box class permits to define a box widget that will not eat the
@@ -2992,12 +3004,18 @@ graphicWindow::graphicWindow(bool main, int numTiles, bool detachedMenu)
   }
 
   if(main && !detachedMenu){
+#if defined(HAVE_ONELAB2)
+    // Hey Maxime, this is for you!
+#else
     _onelab = new onelabGroup(0, mh, twidth, height - mh - sh);
+    _onelab->enableTreeWidgetResize(false);
+#endif
   }
   else{
     _onelab = 0;
   }
 
+  _tile->callback(tile_cb);
   _tile->end();
 
   // resize the tiles to match the prescribed sizes
@@ -3019,6 +3037,7 @@ graphicWindow::graphicWindow(bool main, int numTiles, bool detachedMenu)
     _menuwin->callback(file_quit_cb);
     _menuwin->box(GMSH_WINDOW_BOX);
     _onelab = new onelabGroup(0, 0, _menuwin->w(), _menuwin->h());
+    _onelab->enableTreeWidgetResize(true);
     _menuwin->position(CTX::instance()->menuPosition[0],
                        CTX::instance()->menuPosition[1]);
     _menuwin->resizable(_onelab);
@@ -3075,6 +3094,9 @@ void graphicWindow::detachMenu()
   _menuwin->size_range(_onelab->getMinWindowWidth(), _onelab->getMinWindowHeight());
   _menuwin->end();
   _menuwin->show();
+
+  _onelab->enableTreeWidgetResize(true);
+  _onelab->rebuildTree(true);
 }
 
 void graphicWindow::attachMenu()
@@ -3099,6 +3121,9 @@ void graphicWindow::attachMenu()
   _tile->add(_onelab);
   _onelab->resize(_tile->x(), _tile->y(), w, _tile->h());
   _tile->redraw();
+
+  _onelab->enableTreeWidgetResize(false);
+  _onelab->rebuildTree(true);
 }
 
 void graphicWindow::attachDetachMenu()
@@ -3116,6 +3141,8 @@ void graphicWindow::showMenu()
     int maxw = _win->w();
     if(width > maxw) width = maxw / 2;
     setMenuWidth(width);
+    // necessary until resizing of 0-sized groups works
+    _onelab->rebuildTree(true);
   }
 }
 
@@ -3266,12 +3293,13 @@ void graphicWindow::checkAnimButtons()
 
 void graphicWindow::setMenuWidth(int w)
 {
+  if(!_onelab) return;
   if(_menuwin){
     _menuwin->size(std::max(w, _onelab->getMinWindowWidth()), _menuwin->h());
     _menuwin->redraw();
     return;
   }
-  if(!_onelab || !_browser) return;
+  if(!_browser) return;
   double dw = w - _onelab->w();
   if(!dw) return;
   for(unsigned int i = 0; i < gl.size(); i++){

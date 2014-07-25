@@ -44,6 +44,7 @@ opt(BUILD_IOS "Enable iOS (ARM) library target (experimental)" OFF)
 opt(CGNS "Enable CGNS mesh export (experimental)" OFF)
 opt(CAIRO "Enable Cairo to render fonts (experimental)" ${DEFAULT})
 opt(CHACO "Enable Chaco mesh partitioner (alternative to Metis)" ${DEFAULT})
+opt(COMPRESSED_IO "Enable compressed (gzip) input/output using zlib" OFF)
 opt(DINTEGRATION "Enable discrete integration (needed for levelsets)" ${DEFAULT})
 opt(FLTK "Enable FLTK graphical user interface (requires mesh/post)" ${DEFAULT})
 opt(FOURIER_MODEL "Enable Fourier geometrical models (experimental)" OFF)
@@ -63,8 +64,9 @@ opt(NATIVE_FILE_CHOOSER "Enable native file chooser in GUI" ${DEFAULT})
 opt(NETGEN "Enable Netgen 3D frontal mesh generator" ${DEFAULT})
 opt(NUMPY "Enable conversion between fullMatrix and numpy array (requires SWIG)" OFF)
 opt(OCC "Enable Open CASCADE geometrical models" ${DEFAULT})
-opt(ONELAB "Enable OneLab solver interface" ${DEFAULT})
-opt(ONELAB_METAMODEL "Enable OneLab metamodels (experimental)" ${DEFAULT})
+opt(ONELAB "Enable ONELAB solver interface" ${DEFAULT})
+opt(ONELAB2 "Enable experimental ONELAB-Cloud solver interface" OFF)
+opt(ONELAB_METAMODEL "Enable ONELAB metamodels (experimental)" ${DEFAULT})
 opt(OPENMP "Enable OpenMP (experimental)" OFF)
 opt(OPTHOM "Enable high-order mesh optimization tools" ${DEFAULT})
 opt(OS_SPECIFIC_INSTALL "Enable OS-specific (e.g. app bundle) installation" ${DEFAULT})
@@ -81,6 +83,7 @@ opt(SGEOM "Enable SGEOM interface to OCC (experimental)" OFF)
 opt(SLEPC "Enable SLEPc eigensolvers (required for conformal compounds)" ${DEFAULT})
 opt(SOLVER "Enable built-in finite element solvers (required for compounds)" ${DEFAULT})
 opt(TAUCS "Enable Taucs linear solver (alternative to PETSc)" ${DEFAULT})
+opt(TCMALLOC "Enable libtcmalloc, a fast malloc implementation but that does not release memory" OFF)
 opt(TETGEN "Enable Tetgen 3D initial mesh generator" ${DEFAULT})
 opt(TETGEN_OLD "Enable older version of Tetgen" OFF)
 opt(VORO3D "Enable Voro3D (for hex meshing, experimental)" ${DEFAULT})
@@ -89,7 +92,7 @@ opt(WRAP_PYTHON "Enable generation of Python wrappers" OFF)
 
 set(GMSH_MAJOR_VERSION 2)
 set(GMSH_MINOR_VERSION 8)
-set(GMSH_PATCH_VERSION 4)
+set(GMSH_PATCH_VERSION 5)
 set(GMSH_EXTRA_VERSION "" CACHE STRING "Gmsh extra version string")
 
 set(GMSH_VERSION "${GMSH_MAJOR_VERSION}.${GMSH_MINOR_VERSION}")
@@ -104,7 +107,7 @@ set(GMSH_API
     Common/OS.h Common/StringUtils.h Common/OpenFile.h
     Common/onelab.h Common/GmshSocket.h Common/onelabUtils.h
   Numeric/Numeric.h Numeric/GaussIntegration.h Numeric/polynomialBasis.h
-    Numeric/JacobianBasis.h Numeric/bezierBasis.h Numeric/fullMatrix.h
+    Numeric/JacobianBasis.h Numeric/MetricBasis.h Numeric/bezierBasis.h Numeric/fullMatrix.h
     Numeric/simpleFunction.h Numeric/cartesian.h Numeric/ElementType.h
   Geo/GModel.h Geo/GEntity.h Geo/GPoint.h Geo/GVertex.h Geo/GEdge.h 
     Geo/GFace.h Geo/GRegion.h Geo/GEdgeLoop.h Geo/GEdgeCompound.h 
@@ -336,6 +339,8 @@ if(ENABLE_BLAS_LAPACK)
         list(APPEND EXTERNAL_LIBRARIES ${LAPACK_LIB})
         set_config_option(HAVE_LAPACK "Lapack")
       endif(LAPACK_LIB)
+      # for isnan/isinf
+      add_definitions(-D_GLIBCXX_USE_C99_MATH=1)
     endif(ENABLE_BUILD_ANDROID)
 
     if(NOT HAVE_BLAS OR NOT HAVE_LAPACK)
@@ -384,6 +389,14 @@ if(ENABLE_BLAS_LAPACK)
 
   endif(BLAS_LAPACK_LIBRARIES)
 endif(ENABLE_BLAS_LAPACK)
+
+if(ENABLE_TCMALLOC)
+  find_library(TCMALLOC tcmalloc)
+  if(TCMALLOC)
+    set_config_option(HAVE_TCMALLOC "TCMalloc")
+    list(APPEND EXTERNAL_LIBRARIES ${TCMALLOC})
+  endif(TCMALLOC)
+endif(ENABLE_TCMALLOC)
 
 add_subdirectory(Common)
 add_subdirectory(Numeric)
@@ -489,15 +502,19 @@ if(ENABLE_NATIVE_FILE_CHOOSER)
 endif(ENABLE_NATIVE_FILE_CHOOSER)
 
 if(ENABLE_ONELAB)
-  set_config_option(HAVE_ONELAB "OneLab")
+  set_config_option(HAVE_ONELAB "ONELAB")
   if(ENABLE_ONELAB_METAMODEL)
     add_subdirectory(contrib/onelab)
     include_directories(contrib/onelab)
-    set_config_option(HAVE_ONELAB_METAMODEL "OneLabMetamodel")
+    set_config_option(HAVE_ONELAB_METAMODEL "ONELABMetamodel")
   endif(ENABLE_ONELAB_METAMODEL)
   file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/contrib/onelab/python/onelab.py
             DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 endif(ENABLE_ONELAB)
+
+if(ENABLE_ONELAB2)
+  set_config_option(HAVE_ONELAB2 "ONELAB2")
+endif(ENABLE_ONELAB2)
 
 if(ENABLE_BUILD_IOS)
   find_file(CMAKE_TOOLCHAIN_FILE "ios.cmake")
@@ -506,22 +523,9 @@ if(ENABLE_BUILD_IOS)
   endif(NOT CMAKE_TOOLCHAIN_FILE)
 endif(ENABLE_BUILD_IOS)
 
-if(ENABLE_BUILD_ANDROID)
-  find_file(CMAKE_TOOLCHAIN_FILE "android.toolchain.cmake")
-  if(NOT CMAKE_TOOLCHAIN_FILE)
-    message(FATAL_ERROR "Cannot compile Gmsh for android without android-cmake")
-  endif(NOT CMAKE_TOOLCHAIN_FILE)
-  set(CMAKE_BUILD_TYPE Release)
-  set(LIBRARY_OUTPUT_PATH_ROOT ${CMAKE_CURRENT_BINARY_DIR})
-  set(LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/libs/)
-  add_library(androidGmsh SHARED ${GMSH_SRC})
-  set_target_properties(androidGmsh PROPERTIES OUTPUT_NAME Gmsh)
-  target_link_libraries(androidGmsh ${EXTERNAL_LIBRARIES})
-endif(ENABLE_BUILD_ANDROID)
-
 if(HAVE_FLTK OR HAVE_QT OR ENABLE_GRAPHICS)
   if(NOT HAVE_MESH OR NOT HAVE_POST OR NOT HAVE_PLUGINS OR NOT HAVE_ONELAB)
-    message(SEND_ERROR "Cannot compile GUI without Mesh, Post, Plugin and OneLab")
+    message(SEND_ERROR "Cannot compile GUI without Mesh, Post, Plugin and ONELAB")
   endif(NOT HAVE_MESH OR NOT HAVE_POST OR NOT HAVE_PLUGINS OR NOT HAVE_ONELAB)
 
   if(FLTK_JPEG)
@@ -654,16 +658,16 @@ if(ENABLE_MATHEX)
 endif(ENABLE_MATHEX)
 
 if(ENABLE_MPI)
-   find_package(MPI)
-   if(MPI_FOUND)
-     set_config_option(HAVE_MPI "MPI")
-     list(APPEND EXTERNAL_INCLUDES ${MPI_INCLUDE_DIR})
-     list(APPEND EXTERNAL_LIBRARIES ${MPI_LIBRARIES})
-     include(CMakeForceCompiler)
-     # Warning: this actually requires cmake >= 2.8.5
-     cmake_force_c_compiler(${MPI_C_COMPILER} "MPI C Compiler")
-     cmake_force_cxx_compiler(${MPI_CXX_COMPILER} "MPI C++ Compiler")
-   endif(MPI_FOUND)
+  find_package(MPI)
+  if(MPI_FOUND)
+    set_config_option(HAVE_MPI "MPI")
+    list(APPEND EXTERNAL_INCLUDES ${MPI_INCLUDE_DIR})
+    list(APPEND EXTERNAL_LIBRARIES ${MPI_LIBRARIES})
+    include(CMakeForceCompiler)
+    # Warning: this actually requires cmake >= 2.8.5
+    cmake_force_c_compiler(${MPI_C_COMPILER} "MPI C Compiler")
+    cmake_force_cxx_compiler(${MPI_CXX_COMPILER} "MPI C++ Compiler")
+  endif(MPI_FOUND)
 endif(ENABLE_MPI)
 
 if(ENABLE_POPPLER)
@@ -671,10 +675,10 @@ if(ENABLE_POPPLER)
   find_library(POPPLER_CPP_LIB poppler-cpp)
   find_path(POPPLER_INC "poppler/cpp/poppler-document.h" PATH_SUFFIXES src include)
   if(POPPLER_LIB AND POPPLER_INC)
-     set_config_option(HAVE_POPPLER "Poppler")
-     list(APPEND EXTERNAL_LIBRARIES ${POPPLER_LIB})
-     list(APPEND EXTERNAL_LIBRARIES ${POPPLER_CPP_LIB})
-     list(APPEND EXTERNAL_INCLUDES ${POPPLER_INC})
+    set_config_option(HAVE_POPPLER "Poppler")
+    list(APPEND EXTERNAL_LIBRARIES ${POPPLER_LIB})
+    list(APPEND EXTERNAL_LIBRARIES ${POPPLER_CPP_LIB})
+    list(APPEND EXTERNAL_INCLUDES ${POPPLER_INC})
   endif(POPPLER_LIB AND POPPLER_INC)
 endif(ENABLE_POPPLER)
 
@@ -921,6 +925,12 @@ if(HAVE_SOLVER)
       endif(NOT PETSC_LIBS)
       if(PETSC_LIBS)
         set_config_option(HAVE_PETSC "PETSc")
+	if(NOT HAVE_BLAS)
+          set_config_option(HAVE_BLAS "Blas(PETSc)")
+        endif(NOT HAVE_BLAS)
+	if(NOT HAVE_LAPACK)
+          set_config_option(HAVE_LAPACK "Lapack(PETSc)")
+        endif(NOT HAVE_LAPACK)
       endif(PETSC_LIBS)
       # find slepc (needs to be linked in before petsc)
       if(ENABLE_SLEPC)
@@ -1078,8 +1088,13 @@ if(ENABLE_ACIS)
   endif(ACIS_LIB)
 endif(ENABLE_ACIS)
 
+if(HAVE_ZLIB AND ENABLE_COMPRESSED_IO)
+  set_config_option(HAVE_COMPRESSED_IO "CompressedIO")
+endif(HAVE_ZLIB AND ENABLE_COMPRESSED_IO)
+
 if(ENABLE_WRAP_PYTHON)
   find_package(SWIG)
+  find_package(PythonInterp)
   find_package(PythonLibs)
   if(SWIG_FOUND AND PYTHONLIBS_FOUND)
     message(STATUS "Found SWIG version " ${SWIG_VERSION})
@@ -1094,7 +1109,10 @@ endif(ENABLE_WRAP_PYTHON)
 
 if(HAVE_PYTHON)
   if(ENABLE_NUMPY)
-    find_path(NUMPY_INC "numpyconfig.h" HINTS ${PYTHON_INCLUDE_PATH} PATH_SUFFIXES /numpy)
+    EXEC_PROGRAM (${PYTHON_EXECUTABLE}
+      ARGS "-c \"import numpy; print(numpy.get_include())\""
+      OUTPUT_VARIABLE NUMPY_INC
+      RETURN_VALUE NUMPY_NOT_FOUND)
     if(NUMPY_INC)
       list(APPEND EXTERNAL_INCLUDES ${NUMPY_INC})
       set_config_option(HAVE_NUMPY "Numpy")
@@ -1103,9 +1121,9 @@ if(HAVE_PYTHON)
 endif(HAVE_PYTHON)
 
 check_function_exists(vsnprintf HAVE_VSNPRINTF)
-if(NOT HAVE_VSNPRINTF AND NOT ENABLE_BUILD_IOS)
+if(NOT HAVE_VSNPRINTF AND NOT ENABLE_BUILD_IOS AND NOT ENABLE_BUILD_ANDROID)
   set_config_option(HAVE_NO_VSNPRINTF "NoVsnprintf")
-endif(NOT HAVE_VSNPRINTF AND NOT ENABLE_BUILD_IOS)
+endif(NOT HAVE_VSNPRINTF AND NOT ENABLE_BUILD_IOS AND NOT ENABLE_BUILD_ANDROID)
 
 check_include_file(sys/socket.h HAVE_SYS_SOCKET_H)
 if(HAVE_SYS_SOCKET_H)
@@ -1113,9 +1131,9 @@ if(HAVE_SYS_SOCKET_H)
 endif(HAVE_SYS_SOCKET_H)
 check_type_size(socklen_t SOCKLEN_T_SIZE)
 set(CMAKE_EXTRA_INCLUDE_FILES)
-if(NOT SOCKLEN_T_SIZE AND NOT ENABLE_BUILD_IOS)
+if(NOT SOCKLEN_T_SIZE AND NOT ENABLE_BUILD_IOS AND NOT ENABLE_BUILD_ANDROID)
   set_config_option(HAVE_NO_SOCKLEN_T "NoSocklenT")
-endif(NOT SOCKLEN_T_SIZE AND NOT ENABLE_BUILD_IOS)
+endif(NOT SOCKLEN_T_SIZE AND NOT ENABLE_BUILD_IOS AND NOT ENABLE_BUILD_ANDROID)
 
 check_include_file(stdint.h HAVE_STDINT_H)
 if(HAVE_STDINT_H)
@@ -1125,9 +1143,9 @@ else(HAVE_STDINT_H)
 endif(HAVE_STDINT_H)
 check_type_size(intptr_t INTPTR_T_SIZE)
 set(CMAKE_EXTRA_INCLUDE_FILES)
-if(NOT INTPTR_T_SIZE AND NOT ENABLE_BUILD_IOS)
+if(NOT INTPTR_T_SIZE AND NOT ENABLE_BUILD_IOS AND NOT ENABLE_BUILD_ANDROID)
   set_config_option(HAVE_NO_INTPTR_T "NoIntptrT")
-endif(NOT INTPTR_T_SIZE AND NOT ENABLE_BUILD_IOS)
+endif(NOT INTPTR_T_SIZE AND NOT ENABLE_BUILD_IOS AND NOT ENABLE_BUILD_ANDROID)
 
 check_include_file(dlfcn.h DLFCN_H)
 if(DLFCN_H)
@@ -1181,7 +1199,7 @@ endif(NOWARN)
 check_cxx_compiler_flag("-O0" NOOPT)
 if(NOOPT)
   file(GLOB_RECURSE NOOPT_SRC Numeric/robustPredicates.cpp Mesh/BDS.cpp
-                              Parser/Gmsh.tab.cpp contrib/Tetgen*/*.cxx)
+                              Parser/Gmsh.tab.cpp contrib/Tetgen*/predicates.cxx)
   foreach(FILE ${NOOPT_SRC})
     get_source_file_property(PROP ${FILE} COMPILE_FLAGS)
     if(PROP)
@@ -1240,9 +1258,10 @@ else(HAVE_FLTK)
   set(LINK_LIBRARIES ${EXTERNAL_LIBRARIES} ${LAPACK_LIBRARIES})
 endif(HAVE_FLTK)
 
-# try to use static gfortran on static Linux builds
+# Linux-specific linking
 if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-  if(NOT ENABLE_BUILD_DYNAMIC)
+  # try to use static gfortran on static Linux builds
+  if(NOT ENABLE_BUILD_DYNAMIC AND NOT ENABLE_BUILD_SHARED)
     find_library(GFORTRAN_STATIC libgfortran.a)
     if(GFORTRAN_STATIC)
       message(STATUS "Using static libgfortran")
@@ -1252,7 +1271,13 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
       endforeach(STR)
       set(LINK_LIBRARIES ${LINK_LIBRARIES2})
     endif(GFORTRAN_STATIC)
-  endif(NOT ENABLE_BUILD_DYNAMIC)
+  endif(NOT ENABLE_BUILD_DYNAMIC AND NOT ENABLE_BUILD_SHARED)
+  if(HAVE_OCC)
+    find_library(RT_LIB rt)
+    if(RT_LIB)
+      list(APPEND LINK_LIBRARIES ${RT_LIB})
+    endif(RT_LIB)
+  endif(HAVE_OCC)
 endif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 
 # we could specify include dirs more selectively, but this is simpler
@@ -1282,6 +1307,20 @@ if(ENABLE_BUILD_LIB)
     endif(ENABLE_MSVC_STATIC_RUNTIME)
   endif(MSVC)
 endif(ENABLE_BUILD_LIB)
+
+if(ENABLE_BUILD_ANDROID)
+  find_file(CMAKE_TOOLCHAIN_FILE "android.toolchain.cmake")
+  if(NOT CMAKE_TOOLCHAIN_FILE)
+    message(FATAL_ERROR "Cannot compile Gmsh for android without android-cmake")
+  endif(NOT CMAKE_TOOLCHAIN_FILE)
+  set(CMAKE_BUILD_TYPE Release)
+  set(LIBRARY_OUTPUT_PATH_ROOT ${CMAKE_CURRENT_BINARY_DIR})
+  set(LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/libs/)
+  add_definitions(-DBUILD_ANDROID)
+  add_library(androidGmsh SHARED ${GMSH_SRC})
+  set_target_properties(androidGmsh PROPERTIES OUTPUT_NAME Gmsh)
+  target_link_libraries(androidGmsh ${EXTERNAL_LIBRARIES})
+endif(ENABLE_BUILD_ANDROID)
 
 # shared library target
 if(ENABLE_BUILD_SHARED OR ENABLE_BUILD_DYNAMIC OR 
@@ -1346,7 +1385,8 @@ if(WIN32 AND NOT MSVC OR CYGWIN)
     set(CMAKE_EXE_LINK_DYNAMIC_CXX_FLAGS)
   endif(ENABLE_BUILD_DYNAMIC)
 elseif(MSVC)
-  set_target_properties(gmsh PROPERTIES LINK_FLAGS "/STACK:16777216")
+  set_target_properties(gmsh PROPERTIES LINK_FLAGS
+    "/STACK:16777216 /SAFESEH:NO")
 endif(WIN32 AND NOT MSVC OR CYGWIN)
 
 # parser target
@@ -1493,15 +1533,14 @@ if(UNIX AND NOT CYGWIN)
   install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/doc/gmsh.1 DESTINATION ${GMSH_MAN})
 endif(UNIX AND NOT CYGWIN)
 
-add_custom_target(getHeaders
-  COMMAND ${CMAKE_COMMAND} -E remove_directory Headers
+add_custom_target(get_headers
   COMMAND ${CMAKE_COMMAND} -E make_directory Headers/gmsh
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-  foreach(FILE ${GMSH_API})
-    add_custom_command(TARGET getHeaders POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy
-        ${FILE} ${CMAKE_CURRENT_BINARY_DIR}/Headers/gmsh/
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-  endforeach(FILE)
+foreach(FILE ${GMSH_API})
+  add_custom_command(TARGET get_headers POST_BUILD COMMAND ${CMAKE_COMMAND} 
+    -E copy_if_different ${FILE} ${CMAKE_CURRENT_BINARY_DIR}/Headers/gmsh/
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+endforeach(FILE)
 
 find_program(MAKEINFO makeinfo)
 if(MAKEINFO)
@@ -1518,6 +1557,8 @@ if(MAKEINFO)
                      ARGS ${TEX_DIR}/gmsh.texi WORKING_DIRECTORY ${TEX_DIR})
   add_custom_target(html DEPENDS ${TEX_DIR}/gmsh.html)
   install(FILES ${TEX_DIR}/gmsh.html DESTINATION ${GMSH_DOC} OPTIONAL)
+else(MAKEINFO)
+  add_custom_target(html COMMAND ${CMAKE_COMMAND} -E touch ${TEX_DIR}/gmsh.html)
 endif(MAKEINFO)
 
 find_program(TEXI2PDF texi2pdf)
@@ -1555,22 +1596,16 @@ if(APPLE AND ENABLE_BUILD_LIB)
   get_target_property(LIBNAME lib LOCATION)
   add_custom_target(framework DEPENDS lib
     COMMAND ${CMAKE_COMMAND} -E remove_directory Gmsh.framework
-    COMMAND ${CMAKE_COMMAND} -E make_directory Gmsh.framework/Versions/A/Headers
-    COMMAND ${CMAKE_COMMAND} -E make_directory Gmsh.framework/Versions/A/Resources
-    COMMAND ${CMAKE_COMMAND} -E copy ${LIBNAME} Gmsh.framework/Versions/A/Gmsh
+    COMMAND ${CMAKE_COMMAND} -E make_directory Gmsh.framework/Headers
+    COMMAND ${CMAKE_COMMAND} -E make_directory Gmsh.framework/Resources
+    COMMAND ${CMAKE_COMMAND} -E copy ${LIBNAME} Gmsh.framework/Gmsh
     COMMAND ${CMAKE_COMMAND} -E copy Info_framework.plist 
-                                     Gmsh.framework/Versions/A/Resources/Info.plist
-    COMMAND ${CMAKE_COMMAND} -E create_symlink A Gmsh.framework/Versions/Current
-    COMMAND ${CMAKE_COMMAND} -E create_symlink Versions/Current/Gmsh 
-                                               Gmsh.framework/Gmsh
-    COMMAND ${CMAKE_COMMAND} -E create_symlink Versions/Current/Headers
-                                               Gmsh.framework/Headers
-    COMMAND ${CMAKE_COMMAND} -E create_symlink Versions/Current/Resources
-                                               Gmsh.framework/Resources 
+                                     Gmsh.framework/Resources/Info.plist
+    COMMAND ${CMAKE_COMMAND} -E create_symlink . Gmsh.framework/Headers/gmsh
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
   foreach(FILE ${GMSH_API})
     add_custom_command(TARGET framework POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy
-        ${FILE} ${CMAKE_CURRENT_BINARY_DIR}/Gmsh.framework/Versions/A/Headers/
+        ${FILE} ${CMAKE_CURRENT_BINARY_DIR}/Gmsh.framework/Headers/
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
   endforeach(FILE)
 endif(APPLE AND ENABLE_BUILD_LIB)
@@ -1628,7 +1663,7 @@ else(APPLE AND ENABLE_OS_SPECIFIC_INSTALL)
   set(CPACK_GENERATOR TGZ)
 endif(APPLE AND ENABLE_OS_SPECIFIC_INSTALL)
 
-if (HAVE_PYTHON)
+if(HAVE_PYTHON)
   add_subdirectory(wrappers/gmshpy)
 endif(HAVE_PYTHON)
 
@@ -1642,10 +1677,23 @@ endif(ENABLE_WRAP_JAVA)
 include(CPack)
 
 include(CTest)
-file(GLOB_RECURSE TESTFILES tutorial/*.geo)
+file(GLOB_RECURSE TESTFILES 
+     tutorial/*.geo demos/*.geo benchmarks/?d/*.geo benchmarks/extrude/*.geo)
 foreach(TESTFILE ${TESTFILES})
-  add_test(${TESTFILE} ./gmsh ${TESTFILE} -3 -o ./tmp.msh)
+  # use relative path for cygwin/mingw (the pure win exe built with the mingw 
+  # compilers does not understand a full cygwin-style path)
+  FILE(RELATIVE_PATH TEST ${CMAKE_CURRENT_BINARY_DIR} ${TESTFILE})
+  add_test(${TEST} ./gmsh ${TEST} -3 -nopopup -o ./tmp.msh)
 endforeach()
+# if(HAVE_PYTHON)
+#   file(GLOB_RECURSE TESTFILES tutorial/*.py)
+#   foreach(TESTFILE ${TESTFILES})
+#     add_test(NAME ${TESTFILE} 
+#              COMMAND ${PYTHON_EXECUTABLE}
+#                      ${TESTFILE} $<CONFIGURATION>)
+#     # sys.path.insert(0, "path/to/your/package")
+#   endforeach()
+# endif(HAVE_PYTHON)
 
 message(STATUS "")
 message(STATUS "Gmsh ${GMSH_VERSION} has been configured for ${GMSH_OS}")
@@ -1655,8 +1703,6 @@ message(STATUS " * Build type: " ${CMAKE_BUILD_TYPE})
 message(STATUS " * C compiler: " ${CMAKE_C_COMPILER})
 message(STATUS " * C++ compiler: " ${CMAKE_CXX_COMPILER})
 message(STATUS " * Install prefix: " ${CMAKE_INSTALL_PREFIX})
-message(STATUS "")
-message(STATUS "Run 'ccmake ${CMAKE_CURRENT_SOURCE_DIR}' to fine-tune the configuration.")
 message(STATUS "")
 
 mark_as_advanced(GMSH_EXTRA_VERSION 

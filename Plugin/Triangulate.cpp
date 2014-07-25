@@ -15,6 +15,7 @@
 
 #if defined(HAVE_MESH)
 #include "DivideAndConquer.h"
+#include "meshGFaceDelaunayInsertion.h"
 #endif
 
 StringXNumber TriangulateOptions_Number[] = {
@@ -64,16 +65,6 @@ class PointData : public MVertex {
   }
 };
 
-static void project(MVertex *v, double mat[3][3])
-{
-  double X = v->x() * mat[0][0] + v->y() * mat[0][1] + v->z() * mat[0][2];
-  double Y = v->x() * mat[1][0] + v->y() * mat[1][1] + v->z() * mat[1][2];
-  double Z = v->x() * mat[2][0] + v->y() * mat[2][1] + v->z() * mat[2][2];
-  v->x() = X;
-  v->y() = Y;
-  v->z() = Z;
-}
-
 PView *GMSH_TriangulatePlugin::execute(PView *v)
 {
   int iView = (int)TriangulateOptions_Number[0].def;
@@ -107,24 +98,32 @@ PView *GMSH_TriangulatePlugin::execute(PView *v)
 
   if(points.size() < 3){
     Msg::Error("Need at least 3 points to triangulate");
-    for(unsigned int i = 0; i < points.size(); i++)
-      delete points[i];
+    for(unsigned int i = 0; i < points.size(); i++) delete points[i];
     return v1;
   }
+
+  // get bounding box
+  SBoundingBox3d bbox;
+  for(unsigned int i = 0; i < points.size(); i++) bbox += points[i]->point();
+  double lc = 10 * norm(SVector3(bbox.max(), bbox.min()));
 
   // project points onto plane
   discreteFace *s = new discreteFace
     (GModel::current(), GModel::current()->getNumFaces() + 1);
   s->computeMeanPlane(points);
-  double plan[3][3];
-  s->getMeanPlaneData(plan);
-  for(unsigned int i = 0; i < points.size(); i++) project(points[i], plan);
+  double x, y, z, VX[3], VY[3];
+  s->getMeanPlaneData(VX, VY, x, y, z);
+  for(unsigned int i = 0; i < points.size(); i++) {
+    double vec[3] = {points[i]->x() - x, points[i]->y() - y, points[i]->z() - z}, u, v;
+    prosca(vec, VX, &u);
+    prosca(vec, VY, &v);
+    points[i]->x() = u;
+    points[i]->y() = v;
+    points[i]->z() = 0.;
+  }
   delete s;
 
-  // get lc
-  SBoundingBox3d bbox;
-  for(unsigned int i = 0; i < points.size(); i++) bbox += points[i]->point();
-  double lc = 10 * norm(SVector3(bbox.max(), bbox.min()));
+#if 0 // old code
 
   // build a point record structure for the divide and conquer algorithm
   DocRecord doc(points.size());
@@ -138,7 +137,12 @@ PView *GMSH_TriangulatePlugin::execute(PView *v)
   }
 
   // triangulate
-  doc.MakeMeshWithPoints();
+  try{
+    doc.MakeMeshWithPoints();
+  }
+  catch(const char *err){
+    Msg::Error("%s", err);
+  }
 
   // create output (using unperturbed data)
   PView *v2 = new PView();
@@ -179,6 +183,50 @@ PView *GMSH_TriangulatePlugin::execute(PView *v)
         for(int comp = 0; comp < numComp; comp++)
           vec->push_back(p[nod]->v[3 + numComp * step + comp]);
   }
+
+#else // new code
+  Msg::Info("Using new triangulation code");
+  std::vector<MTriangle*> tris;
+  for(unsigned int i = 0; i < points.size(); i++) {
+    double XX = 1.e-12 * lc * (double)rand() / (double)RAND_MAX;
+    double YY = 1.e-12 * lc * (double)rand() / (double)RAND_MAX;
+    points[i]->x() += XX;
+    points[i]->y() += YY;
+  }
+  delaunayMeshIn2D(points, tris);
+
+  PView *v2 = new PView();
+  PViewDataList *data2 = getDataList(v2);
+  for(unsigned int i = 0; i < tris.size(); i++){
+    PointData *p[3];
+    p[0] = (PointData*)tris[i]->getVertex(0);
+    p[1] = (PointData*)tris[i]->getVertex(1);
+    p[2] = (PointData*)tris[i]->getVertex(2);
+    int numComp = 0;
+    std::vector<double> *vec = 0;
+    if((int)p[0]->v.size() == 3 + 9 * numSteps &&
+       (int)p[1]->v.size() == 3 + 9 * numSteps &&
+       (int)p[2]->v.size() == 3 + 9 * numSteps){
+      numComp = 9; data2->NbTT++; vec = &data2->TT;
+    }
+    else if((int)p[0]->v.size() == 3 + 3 * numSteps &&
+            (int)p[1]->v.size() == 3 + 3 * numSteps &&
+            (int)p[2]->v.size() == 3 + 3 * numSteps){
+      numComp = 3; data2->NbVT++; vec = &data2->VT;
+    }
+    else{
+      numComp = 1; data2->NbST++; vec = &data2->ST;
+    }
+    for(int nod = 0; nod < 3; nod++) vec->push_back(p[nod]->v[0]);
+    for(int nod = 0; nod < 3; nod++) vec->push_back(p[nod]->v[1]);
+    for(int nod = 0; nod < 3; nod++) vec->push_back(p[nod]->v[2]);
+    for(int step = 0; step < numSteps; step++)
+      for(int nod = 0; nod < 3; nod++)
+        for(int comp = 0; comp < numComp; comp++)
+          vec->push_back(p[nod]->v[3 + numComp * step + comp]);
+    delete tris[i];
+  }
+#endif
 
   for(unsigned int i = 0; i < points.size(); i++)
     delete points[i];

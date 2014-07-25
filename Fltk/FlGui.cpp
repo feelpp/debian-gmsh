@@ -198,9 +198,39 @@ static void gamepad_handler(void *data)
   }
 }
 
+static void error_handler(const char *fmt, ...)
+{
+  char str[5000];
+  va_list args;
+  va_start(args, fmt);
+  vsnprintf(str, sizeof(str), fmt, args);
+  va_end(args);
+  if(!strcmp(str, "Insufficient GL support")){ // this should be fatal
+    CTX::instance()->terminal = 1;
+    Msg::Error("%s (FLTK internal error)", str);
+    Msg::Fatal("Your system does not seem to support OpenGL - aborting");
+  }
+  else{
+    Msg::Error("%s (FLTK internal error)", str);
+  }
+}
+
+static void fatal_error_handler(const char *fmt, ...)
+{
+  char str[5000];
+  va_list args;
+  va_start(args, fmt);
+  vsnprintf(str, sizeof(str), fmt, args);
+  va_end(args);
+  CTX::instance()->terminal = 1;
+  Msg::Fatal("%s (FLTK internal error)", str);
+}
 
 FlGui::FlGui(int argc, char **argv)
 {
+  Fl::error = error_handler;
+  Fl::fatal = fatal_error_handler;
+
   // set X display
   if(CTX::instance()->display.size())
     Fl::display(CTX::instance()->display.c_str());
@@ -761,7 +791,7 @@ void FlGui::updateViews(bool numberOfViewsHasChanged, bool deleteWidgets)
   for(unsigned int i = 0; i < graph.size(); i++)
     graph[i]->checkAnimButtons();
   if(numberOfViewsHasChanged){
-    onelab->rebuildTree(deleteWidgets);
+    if(onelab) onelab->rebuildTree(deleteWidgets);
     options->resetBrowser();
     options->resetExternalViewList();
     fields->loadFieldViewList();
@@ -779,6 +809,8 @@ void FlGui::resetVisibility()
 {
   if(visibility->win->shown())
     visibility_cb(NULL, NULL);
+  if(help->options->shown())
+    help_options_cb(NULL, NULL);
 }
 
 openglWindow *FlGui::getCurrentOpenglWindow()
@@ -1103,11 +1135,12 @@ void FlGui::saveMessages(const char *fileName)
 
 void FlGui::rebuildTree(bool deleteWidgets)
 {
-  onelab->rebuildTree(deleteWidgets);
+  if(onelab) onelab->rebuildTree(deleteWidgets);
 }
 
 void FlGui::openModule(const std::string &name)
 {
+  if(!onelab) return;
   if(!onelab->isManuallyClosed("0Modules/" + name))
     onelab->openTreeItem("0Modules/" + name);
 }

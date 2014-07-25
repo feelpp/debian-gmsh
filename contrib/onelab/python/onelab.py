@@ -1,5 +1,5 @@
 """
-OneLab - Copyright (C) 2011-2013 ULg-UCL
+OneLab - Copyright (C) 2011-2014 ULg-UCL
 
 Permission is hereby granted, free of charge, to any person
 obtaining a copy of this software and associated documentation
@@ -28,7 +28,7 @@ Please report all bugs and problems to the public mailing list
 """
 
 import socket, struct, os, sys, subprocess
-_VERSION = '1.05'
+_VERSION = '1.1'
 
 def file_exist(filename):
   try:
@@ -56,9 +56,9 @@ def path(ref,inp=''):
 class _parameter() :
   _membersbase = [
     ('name', 'string'), ('label', 'string', ''), ('help', 'string', ''),
-    ('neverChanged', 'int', 0), ('changed', 'int', 1), ('visible', 'int', 1),
-    ('readOnly', 'int', 0), ('attributes', ('dict', 'string', 'string'), {}),
-    ('clients', ('list', 'string'), [])
+    ('neverChanged', 'int', 0), ('visible', 'int', 1), ('readOnly', 'int', 0), 
+    ('attributes', ('dict', 'string', 'string'), {}),
+    ('clients', ('dict', 'string', 'int'), {})
   ]
   _members = {
     'string' : _membersbase + [
@@ -114,9 +114,13 @@ class _parameter() :
     return self
 
   def modify(self, **param) :
+    ## updates the parameter with the content of param, attributes are merged
     for i in _parameter._members[self.type] :
       if i[0] in param :
-        setattr(self, i[0], param[i[0]]) #NB: no else statement => update
+        if i[0] == 'attributes' :
+          self.attributes.update(param['attributes'])
+        else :
+          setattr(self, i[0], param[i[0]])
 
 
 class client :
@@ -135,6 +139,18 @@ class client :
   _GMSH_PARAMETER_NOT_FOUND = 29
   _GMSH_PARAMETER_CLEAR = 31
   _GMSH_PARAMETER_UPDATE = 32
+  _GMSH_OPEN_PROJECT = 33
+  _GMSH_CLIENT_CHANGED = 34
+
+  def _createSocket(self) :
+    addr = self.addr
+    if '/' in addr or '\\' in addr or ':' not in addr :
+      self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+      self.socket.connect(addr)
+    else :
+      self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+      s = addr.split(':')
+      self.socket.connect((s[0], int(s[1])))
 
   def _receive(self) :
     def buffered_receive(l) :
@@ -164,33 +180,37 @@ class client :
       self._createSocket()
       self.socket.send(struct.pack('ii%is' %len(m), t, len(m), m))
 
-  def _defineParameter(self, param) :
+  def _defineParameter(self, p) :
     if not self.socket :
-      return param.value
+      return p.value
+    self._send(self._GMSH_PARAMETER_QUERY, p.tochar())
+    (t, msg) = self._receive() 
+    if t == self._GMSH_PARAMETER :
+      self._send(self._GMSH_PARAMETER_UPDATE, p.tochar())
+      return p.fromchar(msg).value
+    elif t == self._GMSH_PARAMETER_NOT_FOUND :
+      self._send(self._GMSH_PARAMETER, p.tochar())
+      return p.value
+        
+  def _getParameter(self, param, warn_if_not_found=True) :
+    if not self.socket :
+      return
     self._send(self._GMSH_PARAMETER_QUERY, param.tochar())
     (t, msg) = self._receive() 
     if t == self._GMSH_PARAMETER :
-      self._send(self._GMSH_PARAMETER_UPDATE, param.tochar()) #enrich a previous decl.
-      return param.fromchar(msg).value # use value from server
-    elif t == self._GMSH_PARAMETER_NOT_FOUND :
-      self._send(self._GMSH_PARAMETER, param.tochar()) #declaration
-      return param.value
-    
+      param.fromchar(msg)
+    elif t == self._GMSH_PARAMETER_NOT_FOUND and warn_if_not_found :
+      print ('Unknown parameter %s' %(param.name))
+
   def defineNumber(self, name, **param):
     if 'labels' in param :
       param["choices"] = param["labels"].keys()
     p = _parameter('number', name=name, **param)
-    if 'value' not in param : #make the parameter readOnly
-      p.readOnly = 1
-      p.attributes={'Highlight':'AliceBlue'}
     value = self._defineParameter(p)
     return value
 
   def defineString(self, name, **param):
     p = _parameter('string', name=name, **param)
-    if 'value' not in param : #make the parameter readOnly
-      p.readOnly = 1
-      p.attributes={'Highlight':'AliceBlue'}
     value = self._defineParameter(p)
     return value
   
@@ -218,27 +238,32 @@ class client :
       p.modify(**param)
     self._send(self._GMSH_PARAMETER, p.tochar())
 
-  def addNumberChoice(self, name, value):
+  def clear(self, name) :
+    if not self.socket :
+      return
+    self._send(self._GMSH_PARAMETER_CLEAR, str(name))
+
+  def _setNumberChoices(self, name, val):
     if not self.socket :
       return
     p = _parameter('number', name=name)
     self._send(self._GMSH_PARAMETER_QUERY, p.tochar())
     (t, msg) = self._receive() 
     if t == self._GMSH_PARAMETER :
-      p.fromchar(msg).choices.append(value)
+      if len(val) : # add new choices
+        p.fromchar(msg).value = val[0]
+        p.choices.extend(val)
+      else : # reset choices list
+        p.fromchar(msg).choices = ()
     elif t == self._GMSH_PARAMETER_NOT_FOUND :
       print ('Unknown parameter %s' %(param.name))
     self._send(self._GMSH_PARAMETER, p.tochar())
+    
+  def resetNumberChoices(self, name):
+    self._setNumberChoices(name,[])
 
-  def _getParameter(self, param, warn_if_not_found=True) :
-    if not self.socket :
-      return
-    self._send(self._GMSH_PARAMETER_QUERY, param.tochar())
-    (t, msg) = self._receive() 
-    if t == self._GMSH_PARAMETER :
-      param.fromchar(msg)
-    elif t == self._GMSH_PARAMETER_NOT_FOUND and warn_if_not_found :
-      print ('Unknown parameter %s' %(param.name))
+  def addNumberChoice(self, name, value):
+    self._setNumberChoices(name,[value])
 
   def getNumber(self, name, warn_if_not_found=True):
     param = _parameter('number', name=name)
@@ -250,16 +275,32 @@ class client :
     self._getParameter(param, warn_if_not_found)
     return param.value
 
+  def getNumberChoices(self, name, warn_if_not_found=True):
+    param = _parameter('number', name=name)
+    self._getParameter(param, warn_if_not_found)
+    return param.choices
+
+  def getStringChoices(self, name, warn_if_not_found=True):
+    param = _parameter('string', name=name)
+    self._getParameter(param, warn_if_not_found)
+    return param.choices
+
   def show(self, name) :
-    if not self.socket :
+    if not self.socket or not name:
       return
     param = _parameter('number', name=name)
     self._send(self._GMSH_PARAMETER_QUERY, param.tochar())
     (t, msg) = self._receive() 
     if t == self._GMSH_PARAMETER :
-      print (msg)
+      print (msg.replace('\0','|'))
     elif t == self._GMSH_PARAMETER_NOT_FOUND :
-      print ('Unknown parameter %s' %(name))
+      param = _parameter('string', name=name)
+      self._send(self._GMSH_PARAMETER_QUERY, param.tochar())
+      (t, msg) = self._receive() 
+      if t == self._GMSH_PARAMETER :
+        print (msg.replace('\0','|'))
+      elif t == self._GMSH_PARAMETER_NOT_FOUND :
+        print('Unknown parameter %s' %(name))
 
   def sendCommand(self, command) :
     if not self.socket :
@@ -271,18 +312,10 @@ class client :
       return
     self._send(self._GMSH_MERGE_FILE, filename)
 
-  def reloadGeometry(self, filename) :
+  def openProject(self, filename) :
     if not self.socket or not filename :
       return
-    if os.path.splitext(filename)[1] == '.geo' :
-      self._send(self._GMSH_PARSE_STRING, "Delete All;")
-      self._send(self._GMSH_MERGE_FILE, filename)
-
-  def mesh(self, filename) :
-    if not self.socket or not filename :
-      return
-    self._send(self._GMSH_PARSE_STRING, 'Mesh 3; Save "' + filename + ' ;')
-    self._send(self._GMSH_MERGE_FILE, filename)
+    self._send(self._GMSH_OPEN_PROJECT, filename)
     
   def sendInfo(self, msg) :
     if not self.socket :
@@ -302,23 +335,33 @@ class client :
       return
     self._send(self._GMSH_ERROR, str(msg))
 
-  def preProcess(self, filename) :
+  def preProcess(self, name, filename) :
     if not self.socket :
       return
-    self._send(self._GMSH_OLPARSE, filename)
+    msg = [name, filename]
+    self._send(self._GMSH_OLPARSE, '\0'.join(msg))
     (t, msg) = self._receive() 
     if t == self._GMSH_OLPARSE :
-      print (msg)
+      if msg == "true" :
+          return True
+    return False
 
-  def _createSocket(self) :
-    addr = self.addr
-    if '/' in addr or '\\' in addr or ':' not in addr :
-      self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-      self.socket.connect(addr)
-    else :
-      self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-      s = addr.split(':')
-      self.socket.connect((s[0], int(s[1])))
+  def isChanged(self, name) :
+    if not self.socket :
+      return
+    msg = ["get", name]
+    self._send(self._GMSH_CLIENT_CHANGED, '\0'.join(msg))
+    (t, msg) = self._receive() 
+    if t == self._GMSH_CLIENT_CHANGED :
+      if msg == "true" :
+          return True
+    return False
+
+  def setChanged(self, name, changed) :
+    if not self.socket :
+      return
+    msg = ["set", name, 'true' if changed else 'false']
+    self._send(self._GMSH_CLIENT_CHANGED, '\0'.join(msg))
 
   def waitOnSubClients(self):
     if not self.socket :
@@ -329,8 +372,7 @@ class client :
         self._numSubClients -= 1
 
   def runNonBlockingSubClient(self, name, command, arguments=''):
-    # create command line
-    if self.action == "check":
+    if self.action == 'check':
       cmd = command
     else:
       cmd = command + ' ' + arguments
@@ -343,6 +385,8 @@ class client :
   def runSubClient(self, name, command, arguments=''):
     self.runNonBlockingSubClient(name, command, arguments)
     self.waitOnSubClients() # makes the subclient blocking
+    if self.action == 'compute': 
+      self.setChanged(name, False)
 
   def run(self, name, command, arguments=''):
     self.runSubClient(name, command, arguments)
@@ -358,8 +402,12 @@ class client :
         self.addr = sys.argv[i + 2]
         self._createSocket()
         self._send(self._GMSH_START, str(os.getpid()))
-    self.action = self.getString(self.name + '/Action')
+    self.action = "compute" # default (subclients have no client.Action defined)
+    self.action = self.getString(self.name + '/Action', False)
     self.setNumber('IsPyMetamodel',value=1,visible=0)
+    #self.defineNumber('0Metamodel/Loop',value=0,visible=0)
+    self.loop = self.getNumber('0Metamodel/Loop', warn_if_not_found=False)
+    self.batch = self.getNumber('0Metamodel/Batch', warn_if_not_found=False)
     self.sendInfo("Performing OneLab '" + self.action + "'")
     if self.action == "initialize": 
       self.finalize()
@@ -377,7 +425,7 @@ class client :
   def __del__(self):
     self.finalize()
 
-  def call(self, cmdline, remote='', rundir='', logfile=''):
+  def call(self, name, cmdline, remote='', rundir='', logfile=''):
     cwd = None
     if not remote :
       argv = cmdline.rsplit(' ')
@@ -398,9 +446,13 @@ class client :
         print(line.rstrip())
     result = call.wait()
     if result == 0 :
-      self._send(self._GMSH_INFO, 'call \"' + ''.join(argv) + '\"')
+      self._send(self._GMSH_INFO, 'call \"' + ' '.join(argv) + '\"')
+      if self.action == 'compute':
+        self.setChanged(name, False)
     else :
-      self._send(self._GMSH_ERROR, 'call failed !!\n' + call.stderr.read().encode('utf-8'))
+      for line in iter(call.stderr.readline, b''):
+        self._send(self._GMSH_ERROR, line.rstrip().encode('utf-8'))
+      sys.exit(1)
       
   def upload(self, here, there, remote='') :
     if not here or not there :
@@ -416,9 +468,8 @@ class client :
       self._send(self._GMSH_INFO, 'upload: ' + ' '.join(argv))
     else :
       print(call.stderr.read())
-      ## self._send(self._GMSH_ERROR, 'upload failed !!\n' + call.stderr.read().encode('utf-8'))
 
-  def download(self, here, there, remote='') :
+  def download(self, there, here, remote='') :
     if not here or not there :
       return
     if remote :
@@ -432,5 +483,33 @@ class client :
       self._send(self._GMSH_INFO, 'download: ' + ' '.join(argv))
     else :
       print(call.stderr.read())
-      ##self._send(self._GMSH_ERROR, 'download failed !!\n' + call.stderr.read().encode('utf-8'))
       
+  def solutionFiles(self, list) :
+    self.defineNumber('0Metamodel/9Use restored solution', value=0, choices=[0,1])
+    self.defineString('0Metamodel/9Tag', value='')
+    if list :
+      if self.getNumber('0Metamodel/9Use restored solution') :
+        return self.getStringChoices('0Metamodel/9Solution files')  
+      else :
+        self.setString('0Metamodel/9Solution files', value=list[0],
+                       choices=list, readOnly=1)      
+    return list
+
+  def restoreSolution(self) :
+    return self.getNumber('0Metamodel/9Use restored solution')
+
+  def outputFiles(self, list) :
+    if list :
+      self.setString(self.name+'/9Output files', value=list[0],
+                     choices=list, visible=0)
+
+# tool to extract the (i, j)th element in an array file
+from rlcompleter import readline
+def extract(filename,i,j):
+    input = open(filename,'r')
+    all_lines = input.readlines()
+    input.close()
+    if i == -1:
+        i = len(all_lines) # last line
+    items = all_lines[i-1].split()
+    return float(items[j-1])

@@ -677,7 +677,8 @@ static void addScalarPolygon(PView *p, double **xyz,
         ite != edges.end(); ite++){
       int i = (int) (*ite).second / 100;
       int j = (*ite).second % 100;
-      addScalarLine(p, xyz, val, pre, 3*i+il[j][0], 3*i+il[j][0], true);
+      if(j < 3)
+        addScalarLine(p, xyz, val, pre, 3*i+il[j][0], 3*i+il[j][0], true);
     }
     opt->boundary++;
 
@@ -772,8 +773,10 @@ static void addScalarHexahedron(PView *p, double **xyz,
 
   const int iq[6][4] = {{0, 3, 2, 1}, {0, 1, 5, 4}, {0, 4, 7, 3},
                         {1, 2, 6, 5}, {2, 3, 7, 6}, {4, 5, 6, 7}};
-  const int is[6][4] = {{0, 1, 3, 4}, {1, 3, 4, 5}, {3, 4, 5, 7},
-                        {1, 2, 3, 6}, {3, 1, 6, 5}, {6, 3, 5, 7}};
+  //const int is[6][4] = {{0, 1, 3, 4}, {1, 3, 4, 5}, {3, 4, 5, 7},
+  //                      {1, 2, 3, 6}, {3, 1, 6, 5}, {6, 3, 5, 7}};
+  const int is[6][4] = {{0,1,3,7}, {0,4,1,7}, {1,4,5,7},
+                        {1,2,3,7}, {1,6,2,7}, {1,5,6,7}};
 
   if(opt->boundary > 0){
     opt->boundary--;
@@ -804,7 +807,8 @@ static void addScalarPrism(PView *p, double **xyz, double **val, bool pre)
   PViewOptions *opt = p->getOptions();
   const int iq[3][4] = {{0, 1, 4, 3}, {0, 3, 5, 2}, {1, 2, 5, 4}};
   const int it[2][3] = {{0, 2, 1}, {3, 4, 5}};
-  const int is[3][4] = {{0, 1, 2, 3}, {3, 4, 5, 2}, {1, 2, 4, 3}};
+  // const int is[3][4] = {{0, 1, 2, 3}, {3, 4, 5, 2}, {1, 2, 4, 3}};
+  const int is[3][4] = {{0,1,2,4}, {0,2,4,5}, {0,3,4,5}};
 
   if(opt->boundary > 0){
     opt->boundary--;
@@ -836,7 +840,8 @@ static void addScalarPyramid(PView *p, double **xyz,
   PViewOptions *opt = p->getOptions();
 
   const int it[4][3] = {{0, 1, 4}, {3, 0, 4}, {1, 2, 4}, {2, 3, 4}};
-  const int is[2][4] = {{0, 1, 2, 4}, {2, 3, 0, 4}};
+  //const int is[2][4] = {{0, 1, 2, 4}, {2, 3, 0, 4}};
+  const int is[2][4] = {{0,1,3,4}, {1,2,3,4}};
 
   if(opt->boundary > 0){
     opt->boundary--;
@@ -854,6 +859,7 @@ static void addScalarPyramid(PView *p, double **xyz,
 static void addOutlinePolyhedron(PView *p, double **xyz,
                                  unsigned int color, bool pre, int numNodes)
 {
+  // FIXME: this code is horribly slow
   const int it[4][3] = {{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {3, 1, 2}};
   std::map<MFace, int, Less_Face> triFaces;
   std::vector<MVertex *> verts;
@@ -874,7 +880,8 @@ static void addOutlinePolyhedron(PView *p, double **xyz,
       ite != triFaces.end(); ite++){
     int i = (int) (*ite).second / 100;
     int j = (*ite).second % 100;
-    addOutlineTriangle(p, xyz, color, pre, 4*i+it[j][0], 4*i+it[j][1], 4*i+it[j][2]);
+    if(j < 4)
+      addOutlineTriangle(p, xyz, color, pre, 4*i+it[j][0], 4*i+it[j][1], 4*i+it[j][2]);
   }
   for(int i = 0; i < numNodes; i++)
     delete verts[i];

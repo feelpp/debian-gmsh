@@ -57,6 +57,7 @@ public:
 
   void metricMinAndGradients(int iEl, std::vector<double> &sJ, std::vector<double> &gSJ);
   void scaledJacAndGradients(int iEl, std::vector<double> &sJ, std::vector<double> &gSJ);
+  bool bndDistAndGradients(int iEl, double &f , std::vector<double> &gradF, double eps);
   inline int indGSJ(int iEl, int l, int iPC) { return iPC*_nBezEl[iEl]+l; }
 
   inline double distSq(int iFV);
@@ -69,6 +70,7 @@ public:
   void updateMesh(const double *it);
   void distSqToStraight(std::vector<double> &dSq);
   void elSizeSq(std::vector<double> &sSq);
+  void elInSize(std::vector<double> &s);
 
   void updateGEntityPositions();
   void writeMSH(const char *filename);

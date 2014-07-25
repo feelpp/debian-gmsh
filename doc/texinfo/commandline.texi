@@ -35,7 +35,7 @@ Save all elements (discard physical group definitions)
 @item -parametric
 Save vertices with their parametric coordinates
 @item -algo string
-Select mesh algorithm (meshadapt, del2d, front2d, delquad, del3d, front3d, mmg3d)
+Select mesh algorithm (meshadapt, del2d, front2d, delquad, del3d, front3d, mmg3d, pack)
 @item -smooth int
 Set number of mesh smoothing steps
 @item -order int
@@ -71,7 +71,7 @@ Load background mesh from file
 @item -check
 Perform various consistency checks on mesh
 @item -mpass int
-Do several passes on the mesh for complex backround fields
+Do several passes on the mesh for complex background fields
 @item -ignorePartBound
 Ignore partitions boundaries
 @end ftable
@@ -121,6 +121,8 @@ Print process id on stdout
 Always listen to incoming connection requests
 @item -watch pattern
 Pattern of files to merge as they become available
+@item -bg file
+Load background (image or PDF) file
 @item -v int
 Set verbosity level
 @item -nopopup

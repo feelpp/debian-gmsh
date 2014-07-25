@@ -16,6 +16,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <sys/time.h>
+#include <time.h>
 
 int getrlimit$UNIX2003( int resource, struct rlimit *rlp)
 {
@@ -25,6 +26,11 @@ int getrlimit$UNIX2003( int resource, struct rlimit *rlp)
 FILE *fopen$UNIX2003(const char * filename, const char *mode)
 {
     return fopen(filename, mode);
+}
+
+int fputs$UNIX2003(const char * filename, FILE *file)
+{
+  return fputs(filename, file);
 }
 
 int stat$INODE64(const char * filename, struct stat *buff)
@@ -128,4 +134,9 @@ int fstat$INODE64(int fildes, struct stat *buf)
 ssize_t send$UNIX2003(int socket, const void *buffer, size_t length, int flags)
 {
     return send(socket, buffer, length, flags);
+}
+
+clock_t clock$UNIX2003()
+{
+    return clock();
 }

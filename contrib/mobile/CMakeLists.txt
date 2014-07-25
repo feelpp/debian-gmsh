@@ -10,6 +10,19 @@ else(APPLE)
   option(ENABLE_BUILD_ANDROID "Build library for Android NDK (ARMv7)" ON)
 endif(APPLE)
 
+# find all benchmarks who provide infos.xml
+find_path(BENCHMARKSDIR benchmarks/)
+file(GLOB BENCHMARKSDIR ${BENCHMARKSDIR}/benchmarks/*)
+foreach(SUBDIR ${BENCHMARKSDIR})
+  if(IS_DIRECTORY ${SUBDIR})
+    file(GLOB INFOSFILE ${SUBDIR}/infos.xml)
+    if(INFOSFILE)
+      message(STATUS "Found benchmark ${SUBDIR}")
+      list(APPEND BENCHMARKS ${SUBDIR})
+    endif()
+  endif()
+endforeach()
+
 macro(set_config_option VARNAME STRING)
   set(${VARNAME} TRUE)
   list(APPEND CONFIG_OPTIONS ${STRING})
@@ -23,19 +36,12 @@ macro(append_src FILES)
   set(ONELAB_SRC ${ONELAB_SRC};${LIST})
 endmacro(append_src)
 
-macro(copy_headers SOURCE DEST)
-  file(GLOB hfiles "${SOURCE}/*.h")
-  foreach(file ${hfiles})
-    add_custom_command(TARGET xcodeProject POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy ${file} ${DEST})
-  endforeach(file ${hfiles})
-endmacro(copy_headers)
-
 if(ENABLE_BUILD_IOS_EMULATOR OR ENABLE_BUILD_IOS)
   # we need getdp framework
   find_path(GETDP_FRAMEWORK GetDP.framework)
   if(GETDP_FRAMEWORK)
     set(GETDP_FRAMEWORK ${GETDP_FRAMEWORK}/GetDP.framework)
-    message(STATUS "Found " ${GETDP_FRAMEWORK})
+    message(STATUS "Found framework " ${GETDP_FRAMEWORK})
   else(GETDP_FRAMEWORK)
     message(SEND_ERROR "Could not find GetDP.framework")
   endif(GETDP_FRAMEWORK)
@@ -43,7 +49,7 @@ if(ENABLE_BUILD_IOS_EMULATOR OR ENABLE_BUILD_IOS)
   find_path(GMSH_FRAMEWORK Gmsh.framework)
   if(GMSH_FRAMEWORK)
     set(GMSH_FRAMEWORK ${GMSH_FRAMEWORK}/Gmsh.framework)
-    message(STATUS "Found " ${GMSH_FRAMEWORK})
+    message(STATUS "Found framework " ${GMSH_FRAMEWORK})
   else(GMSH_FRAMEWORK)
     message(SEND_ERROR "Could not find Gmsh.framework")
   endif(GMSH_FRAMEWORK)
@@ -51,17 +57,26 @@ if(ENABLE_BUILD_IOS_EMULATOR OR ENABLE_BUILD_IOS)
   find_path(PETSC_FRAMEWORK petsc.framework)
   if(PETSC_FRAMEWORK)
     set(PETSC_FRAMEWORK ${PETSC_FRAMEWORK}/petsc.framework)
-    message(STATUS "Found " ${PETSC_FRAMEWORK})
+    message(STATUS "Found framework " ${PETSC_FRAMEWORK})
   else(PETSC_FRAMEWORK)
     message(SEND_ERROR "Could not find petsc.framework")
   endif(PETSC_FRAMEWORK)
+  # and we also need SLEPc
+  find_path(SLEPC_FRAMEWORK slepc.framework)
+  if(SLEPC_FRAMEWORK)
+    set(SLEPC_FRAMEWORK ${SLEPC_FRAMEWORK}/slepc.framework)
+    message(STATUS "Found framework " ${SLEPC_FRAMEWORK})
+  else(SLEPC_FRAMEWORK)
+    message(SEND_ERROR "Could not find slepc.framework")
+  endif(SLEPC_FRAMEWORK)
   # add target
   add_custom_target(xcodeProject
-    cd ${CMAKE_CURRENT_SOURCE_DIR}/utils/ && ${CMAKE_CURRENT_SOURCE_DIR}/utils/make_icon_ios.sh
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/models/
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/Onelab/
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/utils/ios.iconset/ ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/iOS/Onelab/ ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/iOS/Onelab.xcodeproj/ ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab.xcodeproj/
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/iOS/Onelab/ 
+                                               ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/iOS/Onelab.xcodeproj/
+                                               ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab.xcodeproj/
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/drawContext.cpp ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/drawContext.h ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/drawGeom.cpp ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/
@@ -73,16 +88,20 @@ if(ENABLE_BUILD_IOS_EMULATOR OR ENABLE_BUILD_IOS)
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/movePosition.h ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/iosGModel.h ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/iosGModel.cpp ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/frameworks/GetDP.framework/Headers/
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/frameworks/Gmsh.framework/Headers/
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/frameworks/petsc.framework/Headers/
-    COMMAND ${CMAKE_COMMAND} -E copy ${GETDP_FRAMEWORK}/GetDP ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/frameworks/GetDP.framework/
-    COMMAND ${CMAKE_COMMAND} -E copy ${GMSH_FRAMEWORK}/Gmsh ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/frameworks/Gmsh.framework/
-    COMMAND ${CMAKE_COMMAND} -E copy ${PETSC_FRAMEWORK}/petsc ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/frameworks/petsc.framework/
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/frameworks/
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${GETDP_FRAMEWORK}/ ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/frameworks/GetDP.framework/
+    COMMAND ${CMAKE_COMMAND} -E remove ${GMSH_FRAMEWORK}/Headers/gmsh
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${GMSH_FRAMEWORK}/ ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/frameworks/Gmsh.framework/
+    COMMAND ${CMAKE_COMMAND} -E create_symlink . ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/frameworks/Gmsh.framework/Headers/gmsh
+    COMMAND ${CMAKE_COMMAND} -E create_symlink . ${GMSH_FRAMEWORK}/Headers/gmsh
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${PETSC_FRAMEWORK}/ ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/frameworks/petsc.framework/
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${SLEPC_FRAMEWORK}/ ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/frameworks/slepc.framework/
   )
-  copy_headers(${GETDP_FRAMEWORK}/Headers/ ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/frameworks/GetDP.framework/Headers/)
-  copy_headers(${GMSH_FRAMEWORK}/Headers/ ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/frameworks/Gmsh.framework/Headers/)
-  copy_headers(${PETSC_FRAMEWORK}/Headers/ ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/frameworks/petsc.framework/Headers/)
+  foreach(DIR ${BENCHMARKS})
+    get_filename_component(DIRNAME ${DIR} NAME)
+    add_custom_command(TARGET xcodeProject POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    ${DIR} ${CMAKE_CURRENT_BINARY_DIR}/Onelab/Onelab/files/${DIRNAME})
+  endforeach(DIR)
 
   message(STATUS "")
   message(STATUS "ONELAB for iOS successfully configured:")
@@ -142,6 +161,7 @@ if(ENABLE_BUILD_ANDROID)
   if(PETSC_LIB AND BLAS_LIB AND LAPACK_LIB AND ONELAB_LIB)
     add_custom_target(androidProject
       COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/Onelab/
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/models/
       COMMAND ${CMAKE_COMMAND} -E copy_directory  ${CMAKE_CURRENT_SOURCE_DIR}/Android/ ${CMAKE_CURRENT_BINARY_DIR}/Onelab/
       COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/Onelab/libs/armeabi-v7a/
       COMMAND ${CMAKE_COMMAND} -E copy ${GMSH_LIB} ${CMAKE_CURRENT_BINARY_DIR}/Onelab/libs/armeabi-v7a/
@@ -150,7 +170,23 @@ if(ENABLE_BUILD_ANDROID)
       COMMAND ${CMAKE_COMMAND} -E copy ${PETSC_LIB} ${CMAKE_CURRENT_BINARY_DIR}/Onelab/libs/armeabi-v7a/
       COMMAND ${CMAKE_COMMAND} -E copy ${LAPACK_LIB} ${CMAKE_CURRENT_BINARY_DIR}/Onelab/libs/armeabi-v7a/
       COMMAND ${CMAKE_COMMAND} -E copy ${BLAS_LIB} ${CMAKE_CURRENT_BINARY_DIR}/Onelab/libs/armeabi-v7a/
-  )
+    )
+    foreach(DIR ${BENCHMARKS})
+      get_filename_component(DIRNAME ${DIR} NAME)
+      add_custom_command(TARGET androidProject POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory
+                      ${DIR} ${CMAKE_CURRENT_BINARY_DIR}/models/${DIRNAME})
+    endforeach(DIR)
+    find_program(ZIP_COMMAND zip)
+    add_custom_command(TARGET androidProject POST_BUILD COMMAND cd ${CMAKE_CURRENT_BINARY_DIR}/models/ && zip -r
+                     ${CMAKE_CURRENT_BINARY_DIR}/Onelab/res/raw/models.zip * --exclude=*.svn*)
+
+  message(STATUS "")
+  message(STATUS "ONELAB for Android successfully configured:")
+  message(STATUS " * Run `make androidProject' to create the project")
+  message(STATUS " * Then update android project with 'android update project --name Onelab --path Onelab --target [id] --subprojects'")
+  message(STATUS " * Finally you can build the app with ant 'ant debug'")
+  message(STATUS "")
+ 
   else(PETSC_LIB AND BLAS_LIB AND LAPACK_LIB AND ONELAB_LIB)
     message(STATUS "Cannot make Android project without PETSc or without BLAS or without LAPACK or without \"Onelab library\"")
   endif(PETSC_LIB AND BLAS_LIB AND LAPACK_LIB AND ONELAB_LIB)

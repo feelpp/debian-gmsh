@@ -18,6 +18,7 @@ typedef unsigned long intptr_t;
 #include "GmshDefines.h"
 #include "GmshMessage.h"
 #include "FlGui.h"
+#include "inputValue.h"
 #include "optionWindow.h"
 #include "gamepadWindow.h"
 #include "graphicWindow.h"
@@ -46,14 +47,6 @@ extern StringXColor SolverOptions_Color[] ;
 extern StringXColor PostProcessingOptions_Color[] ;
 extern StringXColor ViewOptions_Color[] ;
 extern StringXColor PrintOptions_Color[] ;
-
-class engineeringValueInput : public Fl_Value_Input
-{
- public:
-  engineeringValueInput(int x, int y, int w, int h, const char *l=0) :
-    Fl_Value_Input(x, y, w, h, l) {}
-  virtual int format(char *buffer){ return sprintf(buffer, "%g", value()); }
-};
 
 static Fl_Menu_Item menu_point_display[] = {
   {"Color dot",   0, 0, 0},
@@ -130,6 +123,7 @@ Fl_Menu_Item menu_font_names[] = {
   {"Courier-BoldOblique",   0, 0, (void*)FL_COURIER_BOLD_ITALIC},
   {"Symbol",                0, 0, (void*)FL_SYMBOL},
   {"ZapfDingbats",          0, 0, (void*)FL_ZAPF_DINGBATS},
+  {"Screen",                0, 0, (void*)FL_SCREEN},
   {0}
 };
 
@@ -358,7 +352,6 @@ static void general_options_ok_cb(Fl_Widget *w, void *data)
   opt_general_axes(0, GMSH_SET, o->general.choice[4]->value());
   opt_general_background_gradient(0, GMSH_SET, o->general.choice[5]->value());
 
-
   if( (opt_general_gamepad(0, GMSH_GET, 0) !=  o->general.butt[19]->value() )
       || ( opt_general_camera_mode(0, GMSH_GET, 0) !=  o->general.butt[18]->value() )){
     if((opt_general_gamepad(0, GMSH_GET, 0) == 1 )
@@ -380,9 +373,9 @@ static void general_options_ok_cb(Fl_Widget *w, void *data)
   opt_general_camera_aperture(0, GMSH_SET, o->general.value[31]->value());
   if(opt_general_stereo_mode(0, GMSH_GET, 0) != o->general.butt[17]->value()) {
     opt_general_stereo_mode(0, GMSH_SET, o->general.butt[17]->value());
-    for(unsigned int i = 0; i < FlGui::instance()->graph.size(); i++) FlGui::instance()->graph[i]->setStereo((bool)CTX::instance()->stereo);
+    for(unsigned int i = 0; i < FlGui::instance()->graph.size(); i++)
+      FlGui::instance()->graph[i]->setStereo((bool)CTX::instance()->stereo);
   }
-
 
   if(CTX::instance()->fastRedraw)
     CTX::instance()->post.draw = CTX::instance()->mesh.draw = 0;
@@ -534,7 +527,8 @@ static void mesh_options_ok_cb(Fl_Widget *w, void *data)
   opt_mesh_angle_smooth_normals(0, GMSH_SET, o->mesh.value[18]->value());
 
   opt_mesh_recombine3d_all(0, GMSH_SET, o->mesh.butt[22]->value());
-  opt_mesh_point_type(0, GMSH_SET, o->mesh.choice[0]->value());  opt_mesh_algo2d(0, GMSH_SET,
+  opt_mesh_point_type(0, GMSH_SET, o->mesh.choice[0]->value());
+  opt_mesh_algo2d(0, GMSH_SET,
                   (o->mesh.choice[2]->value() == 1) ? ALGO_2D_MESHADAPT :
                   (o->mesh.choice[2]->value() == 2) ? ALGO_2D_DELAUNAY :
                   (o->mesh.choice[2]->value() == 3) ? ALGO_2D_FRONTAL :
@@ -1799,7 +1793,6 @@ optionWindow::optionWindow(int deltaFontSize)
         {"Vertical", 0, 0, 0},
         {"Horizontal", 0, 0, 0},
         {"Radial", 0, 0, 0},
-        {"Image", 0, 0, 0},
         {0}
       };
 
@@ -3213,7 +3206,7 @@ optionWindow::optionWindow(int deltaFontSize)
         (L + 2 * WB + ss  , 2 * WB + 2 * BH, ss, BH);
       view.value[53] = new Fl_Value_Input
         (L + 2 * WB + 2*ss, 2 * WB + 2 * BH, ss, BH, " X");
-      view.value[40] = new engineeringValueInput
+      view.value[40] = new inputValueFloat
         (L + 2 * WB + IW  , 2 * WB + 2 * BH, 7*IW/10, BH);
 
       view.value[54] = new Fl_Value_Input
@@ -3222,7 +3215,7 @@ optionWindow::optionWindow(int deltaFontSize)
         (L + 2 * WB + ss  , 2 * WB + 3 * BH, ss, BH);
       view.value[56] = new Fl_Value_Input
         (L + 2 * WB + 2*ss, 2 * WB + 3 * BH, ss, BH, " Y +");
-      view.value[41] = new engineeringValueInput
+      view.value[41] = new inputValueFloat
         (L + 2 * WB + IW  , 2 * WB + 3 * BH, 7*IW/10, BH);
 
       view.value[57] = new Fl_Value_Input
@@ -3231,21 +3224,21 @@ optionWindow::optionWindow(int deltaFontSize)
         (L + 2 * WB + ss  , 2 * WB + 4 * BH, ss, BH);
       view.value[59] = new Fl_Value_Input
         (L + 2 * WB + 2*ss, 2 * WB + 4 * BH, ss, BH, " Z");
-      view.value[42] = new engineeringValueInput
+      view.value[42] = new inputValueFloat
         (L + 2 * WB + IW  , 2 * WB + 4 * BH, 7*IW/10, BH);
 
       Fl_Box *b2 = new Fl_Box
         (FL_NO_BOX, L + 2 * WB + 2 * IW-3*WB, 2 * WB + 1 * BH, 7*IW/10, BH, "Raise:");
       b2->align(FL_ALIGN_INSIDE|FL_ALIGN_LEFT);
 
-      view.value[43] = new engineeringValueInput
+      view.value[43] = new inputValueFloat
         (L + 2 * WB + 2 * IW-3*WB, 2 * WB + 2 * BH, 7*IW/10, BH);
-      view.value[44] = new engineeringValueInput
+      view.value[44] = new inputValueFloat
         (L + 2 * WB + 2 * IW-3*WB, 2 * WB + 3 * BH, 7*IW/10, BH);
-      view.value[45] = new engineeringValueInput
+      view.value[45] = new inputValueFloat
         (L + 2 * WB + 2 * IW-3*WB, 2 * WB + 4 * BH, 7*IW/10, BH);
 
-      view.value[46] = new engineeringValueInput
+      view.value[46] = new inputValueFloat
         (L + 2 * WB, 2 * WB + 5 * BH, 3*ss, BH, "Normal raise");
 
       for(int i = 40; i <= 46; i++){
@@ -3273,7 +3266,7 @@ optionWindow::optionWindow(int deltaFontSize)
       view.choice[11]->add("Self");
       view.choice[11]->callback(view_options_ok_cb);
 
-      view.value[2] = new engineeringValueInput
+      view.value[2] = new inputValueFloat
         (L + 2 * WB, 2 * WB + 8 * BH, IW, BH, "Factor");
       view.value[2]->align(FL_ALIGN_RIGHT);
       view.value[2]->when(FL_WHEN_RELEASE);
@@ -3375,7 +3368,7 @@ optionWindow::optionWindow(int deltaFontSize)
         view.value[60]->align(FL_ALIGN_RIGHT);
         view.value[60]->callback(view_options_ok_cb);
 
-        view.value[63] = new engineeringValueInput
+        view.value[63] = new inputValueFloat
           (L + 2 * WB, 2 * WB + 8 * BH, IW, BH, "Displacement factor");
         view.value[63]->minimum(0.);
         view.value[63]->maximum(1.);
@@ -3635,7 +3628,7 @@ void optionWindow::updateViewGroup(int index)
   opt_view_axes_zmin(index, GMSH_GUI, 0);
   opt_view_axes_zmax(index, GMSH_GUI, 0);
   for(int i = 13; i <= 18; i++){
-    view.value[i]->step(CTX::instance()->lc / 200.);
+    view.value[i]->step(CTX::instance()->lc / 200., 1);
     view.value[i]->minimum(-CTX::instance()->lc);
     view.value[i]->maximum(CTX::instance()->lc);
   }
@@ -3684,7 +3677,7 @@ void optionWindow::updateViewGroup(int index)
   opt_view_offset1(index, GMSH_GUI, 0);
   opt_view_offset2(index, GMSH_GUI, 0);
   for(int i = 40; i <= 42; i++) {
-    view.value[i]->step(val1 / 200.);
+    view.value[i]->step(val1 / 200., 1);
     view.value[i]->minimum(-val1);
     view.value[i]->maximum(val1);
   }
@@ -3702,7 +3695,7 @@ void optionWindow::updateViewGroup(int index)
   opt_view_raise2(index, GMSH_GUI, 0);
   opt_view_normal_raise(index, GMSH_GUI, 0);
   for(int i = 43; i <= 46; i++) {
-    view.value[i]->step(val2 / 200.);
+    view.value[i]->step(val2 / 200., 1);
     view.value[i]->minimum(-val2);
     view.value[i]->maximum(val2);
   }
@@ -3712,7 +3705,7 @@ void optionWindow::updateViewGroup(int index)
   opt_view_gen_raise0(index, GMSH_GUI, "");
   opt_view_gen_raise1(index, GMSH_GUI, "");
   opt_view_gen_raise2(index, GMSH_GUI, "");
-  view.value[2]->step(val2 / 200.);
+  view.value[2]->step(val2 / 200., 1);
   view.value[2]->minimum(-val2);
   view.value[2]->maximum(val2);
 
@@ -3752,7 +3745,7 @@ void optionWindow::updateViewGroup(int index)
 
   opt_view_displacement_factor(index, GMSH_GUI, 0);
   double val3 = 2. * CTX::instance()->lc / maxval;
-  view.value[63]->step(val3 / 100.);
+  view.value[63]->step(val3 / 100., 1);
   view.value[63]->maximum(val3);
 
   opt_view_external_view(index, GMSH_GUI, 0);
@@ -3868,7 +3861,8 @@ void optionWindow::activate(const char *what)
   }
   else if(!strcmp(what, "general_camera")){
     if(general.butt[19]->value()){
-      if(CTX::instance()->gamepad && CTX::instance()->gamepad->active ) general.gamepadconfig->activate();
+      if(CTX::instance()->gamepad && CTX::instance()->gamepad->active)
+        general.gamepadconfig->activate();
     }
     else{
       general.gamepadconfig->deactivate();

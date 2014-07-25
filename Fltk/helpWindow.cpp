@@ -8,17 +8,23 @@
 #include <FL/Fl_Help_View.H>
 #include <FL/Fl_Check_Button.H>
 #include <FL/Fl_Input.H>
-#include <FL/Fl_Value_Input.H>
 #include <FL/Fl_Color_Chooser.H>
+#include "GmshConfig.h"
 #include "FlGui.h"
+#include "inputValue.h"
 #include "helpWindow.h"
 #include "paletteWindow.h"
 #include "CommandLine.h"
 #include "StringUtils.h"
 #include "OS.h"
 #include "Options.h"
+#include "Parser.h"
 #include "Context.h"
 #include "drawContext.h"
+
+#if defined(HAVE_PETSC)
+#include "petsc.h"
+#endif
 
 static const char *help_link(Fl_Widget *w, const char *uri)
 {
@@ -35,7 +41,7 @@ struct opt_data{
 static void interactive_cb(Fl_Widget* w, void* data)
 {
   if(!data) return;
-  Fl_Value_Input *v = (Fl_Value_Input*)w;
+  inputValueFloat *v = (inputValueFloat*)w;
   opt_data *d = (opt_data*)data;
   double val = v->value();
   NumberOption(GMSH_SET|GMSH_GUI, d->category.c_str(), d->index,
@@ -63,10 +69,10 @@ double numberOrStringOptionChooser(const std::string &category, int index,
   Fl_Window *win = new paletteWindow(width, height, false, t.c_str());
   win->set_modal();
   win->hotspot(win);
-  Fl_Value_Input *number = 0;
+  inputValueFloat *number = 0;
   Fl_Input *string = 0;
   if(isNumber){
-    number = new Fl_Value_Input(WB, WB, width - 2 * WB, BH);
+    number = new inputValueFloat(WB, WB, width - 2 * WB, BH);
     number->value(valn);
     if(isInteractive){
       static opt_data d;
@@ -75,7 +81,7 @@ double numberOrStringOptionChooser(const std::string &category, int index,
       d.name = name;
       number->minimum(minimum);
       number->maximum(maximum);
-      number->step(step);
+      number->step(step, 1);
       number->callback(interactive_cb, (void*)&d);
       number->when(FL_WHEN_RELEASE);
     }
@@ -243,26 +249,30 @@ void help_options_cb(Fl_Widget *w, void *data)
   std::transform(search.begin(), search.end(), search.begin(), ::tolower);
 
   PrintOptions(0, GMSH_FULLRC, diff, help, 0, &s0);
+  PrintParserSymbols(help, s0);
+
+  int top = FlGui::instance()->help->browser->topline();
   FlGui::instance()->help->browser->clear();
   for(unsigned int i = 0; i < s0.size(); i++){
     std::string::size_type sep = s0[i].rfind('\0');
-    void *data = 0;
+    void *d = 0;
     if(sep != std::string::npos){
       std::string tmp = s0[i].substr(sep + 1);
-      if(tmp == "number") data = (void*)"number";
-      else if(tmp == "string") data = (void*)"string";
-      else if(tmp == "color") data = (void*)"color";
+      if(tmp == "number") d = (void*)"number";
+      else if(tmp == "string") d = (void*)"string";
+      else if(tmp == "color") d = (void*)"color";
     }
     if(search.empty()){
-      FlGui::instance()->help->browser->add(s0[i].c_str(), data);
+      FlGui::instance()->help->browser->add(s0[i].c_str(), d);
     }
     else{
       std::string tmp(s0[i]);
       std::transform(tmp.begin(), tmp.end(), tmp.begin(), ::tolower);
       if(tmp.find(search) != std::string::npos)
-        FlGui::instance()->help->browser->add(s0[i].c_str(), data);
+        FlGui::instance()->help->browser->add(s0[i].c_str(), d);
     }
   }
+  FlGui::instance()->help->browser->topline(top);
 }
 
 helpWindow::helpWindow()
@@ -289,12 +299,21 @@ helpWindow::helpWindow()
             << "<p>Please send all questions and bug reports to "
             << "<a href=\"mailto:gmsh@geuz.org\">gmsh@geuz.org</a></center>"
             << "<ul>"
-            << "<li><i>GUI toolkit:</i> FLTK "
-            << FL_MAJOR_VERSION << "." << FL_MINOR_VERSION << "." << FL_PATCH_VERSION
             << "<li><i>Build OS:</i> " << GetGmshBuildOS()
             << "<li><i>Build date:</i> " << GetGmshBuildDate()
             << "<li><i>Build host:</i> " << GetGmshBuildHost()
             << "<li><i>Build options:</i>" << GetGmshBuildOptions()
+            << "<li><i>FLTK version:</i> "
+            << FL_MAJOR_VERSION << "." << FL_MINOR_VERSION << "." << FL_PATCH_VERSION
+#if defined(HAVE_PETSC)
+            << "<li><i>PETSc version:</i> " << PETSC_VERSION_MAJOR << "."
+            << PETSC_VERSION_MINOR << "." << PETSC_VERSION_SUBMINOR
+#if defined(PETSC_USE_COMPLEX)
+            << "<li><i>PETSc arithmetic:</i> Complex"
+#else
+            << "<li><i>PETSc arithmetic:</i> Real"
+#endif
+#endif
             << "<li><i>Packaged by:</i> " << GetGmshPackager()
             << "</ul>"
             << "<center>Visit <a href=\"http://geuz.org/gmsh/\">http://geuz.org/gmsh/</a> "
@@ -369,25 +388,25 @@ helpWindow::helpWindow()
 
     options = new paletteWindow
       (width, height, CTX::instance()->nonModalWindows ? true : false,
-       "Current Options");
+       "Current Options and Worskspace");
     options->box(GMSH_WINDOW_BOX);
 
     int BW = (width - 4 * WB) / 3;
 
     modified = new Fl_Check_Button
-      (WB, WB, BW, BH, "Show modified");
+      (WB, WB, BW, BH, "Only show modified");
     modified->type(FL_TOGGLE_BUTTON);
     modified->callback(help_options_cb);
-    modified->tooltip("Show options with values different from defaults");
+    modified->tooltip("Show only values different from defaults");
 
     showhelp = new Fl_Check_Button
       (2 * WB + BW, WB, BW, BH, "Show help");
     showhelp->type(FL_TOGGLE_BUTTON);
     showhelp->callback(help_options_cb);
-    showhelp->tooltip("Show help string for each option");
+    showhelp->tooltip("Show help strings");
 
     Fl_Group* o = new Fl_Group(3 * WB + 2 * BW, WB, BW, BH);
-    o->tooltip("Filter options");
+    o->tooltip("Filter values");
     o->box(FL_DOWN_BOX);
     o->color(FL_BACKGROUND2_COLOR);
     search = new Fl_Input
@@ -405,12 +424,12 @@ helpWindow::helpWindow()
     browser->textsize(FL_NORMAL_SIZE - 2);
     browser->type(FL_MULTI_BROWSER);
     browser->callback(browser_cb);
-    browser->tooltip("Double-click to edit option");
+    browser->tooltip("Double-click to edit value");
 
     options->resizable(browser);
     options->position(Fl::x() + Fl::w()/2 - width / 2,
                       Fl::y() + Fl::h()/2 - height / 2);
-    options->size_range(about->w(), about->h());
+    options->size_range(width, height);
     options->end();
   }
 

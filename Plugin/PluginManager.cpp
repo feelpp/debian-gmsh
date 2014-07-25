@@ -20,6 +20,7 @@
 #include "CutBox.h"
 #include "Skin.h"
 #include "AnalyseCurvedMesh.h"
+#include "CurvedBndDist.h"
 #include "MathEval.h"
 #include "ExtractElements.h"
 #include "SimplePartition.h"
@@ -55,6 +56,7 @@
 #include "Bubbles.h"
 #include "NearToFarField.h"
 #include "DiscretizationError.h"
+#include "Scal2Tens.h"
 #include "Scal2Vec.h"
 #include "CutMesh.h"
 #include "NewView.h"
@@ -186,6 +188,8 @@ void PluginManager::registerDefaultPlugins()
                       ("AnalyseCurvedMesh", GMSH_RegisterAnalyseCurvedMeshPlugin()));
 #endif
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
+                      ("CurvedBndDist", GMSH_RegisterCurvedBndDistPlugin()));
+    allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("ModifyComponent", GMSH_RegisterModifyComponentPlugin()));
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("ExtractElements", GMSH_RegisterExtractElementsPlugin()));
@@ -241,6 +245,8 @@ void PluginManager::registerDefaultPlugins()
                       ("Bubbles", GMSH_RegisterBubblesPlugin()));
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("DiscretizationError", GMSH_RegisterDiscretizationErrorPlugin()));
+    allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
+                      ("Scal2Tens", GMSH_RegisterScal2TensPlugin()));
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>
                       ("Scal2Vec", GMSH_RegisterScal2VecPlugin()));
     allPlugins.insert(std::pair<std::string, GMSH_Plugin*>

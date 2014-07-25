@@ -35,7 +35,7 @@ Default value: @code{""}@*
 Saved in: @code{General.OptionsFileName}
 
 @item General.BackgroundImageFileName
-Background image file in JPEG or PNG format@*
+Background image file in JPEG, PNG or PDF format@*
 Default value: @code{""}@*
 Saved in: @code{General.OptionsFileName}
 
@@ -254,14 +254,39 @@ Draw background gradient (0=none, 1=vertical, 2=horizontal, 3=radial)@*
 Default value: @code{1}@*
 Saved in: @code{General.OptionsFileName}
 
+@item General.BackgroundImage3D
+Create background image in the 3D model (units = model units) or as 2D background (units = pixels)@*
+Default value: @code{0}@*
+Saved in: @code{General.OptionsFileName}
+
+@item General.BackgroundImagePage
+Page to render in the background image (for multi-page PDFs)@*
+Default value: @code{0}@*
+Saved in: @code{General.OptionsFileName}
+
 @item General.BackgroundImagePositionX
-X position (in pixels) of background image (< 0: measure from right edge; >= 1e5: centered)@*
-Default value: @code{100000}@*
+X position of background image (for 2D background: < 0: measure from right window edge; >= 1e5: centered)@*
+Default value: @code{0}@*
 Saved in: @code{General.OptionsFileName}
 
 @item General.BackgroundImagePositionY
-Y position (in pixels) of background image (< 0: measure from bottom edge; >= 1e5: centered)@*
-Default value: @code{100000}@*
+Y position of background image (for 2D background: < 0: measure from bottom window edge; >= 1e5: centered)@*
+Default value: @code{0}@*
+Saved in: @code{General.OptionsFileName}
+
+@item General.BackgroundImageWidth
+Width of background image (0: actual width if height = 0, natural scaling if not; -1: graphic window width)@*
+Default value: @code{-1}@*
+Saved in: @code{General.OptionsFileName}
+
+@item General.BackgroundImageHeight
+Height of background image (0: actual height if width = 0, natural scaling if not; -1: graphic window height)@*
+Default value: @code{-1}@*
+Saved in: @code{General.OptionsFileName}
+
+@item General.BoundingBoxSize
+Overall bounding box size (read-only)@*
+Default value: @code{1}@*
 Saved in: @code{General.OptionsFileName}
 
 @item General.Camera
@@ -965,12 +990,12 @@ Default value: @code{1}@*
 Saved in: @code{General.OptionsFileName}
 
 @item General.SmallAxesPositionX
-X position (in pixels) of small axes (< 0: measure from right edge; >= 1e5: centered)@*
+X position (in pixels) of small axes (< 0: measure from right window edge; >= 1e5: centered)@*
 Default value: @code{-60}@*
 Saved in: @code{General.OptionsFileName}
 
 @item General.SmallAxesPositionY
-Y position (in pixels) of small axes (< 0: measure from bottom edge; >= 1e5: centered)@*
+Y position (in pixels) of small axes (< 0: measure from bottom window edge; >= 1e5: centered)@*
 Default value: @code{-40}@*
 Saved in: @code{General.OptionsFileName}
 
